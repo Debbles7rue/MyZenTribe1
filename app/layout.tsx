@@ -12,7 +12,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gradient-to-br from-[#faf6ff] via-[#f8fff6] to-[#f0f9ff] text-neutral-900">
+      <body className="bg-purple-100 text-neutral-900">
         <header className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur">
           <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
             <Link href="/" className="flex items-center gap-3">
@@ -29,7 +29,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </span>
             </Link>
 
-            {/* Keep nav minimal until features are ready */}
             <nav className="ml-auto flex gap-4 text-sm">
               <Link href="/" className="hover:opacity-80">Home</Link>
               <Link href="/auth" className="hover:opacity-80">Sign up / Sign in</Link>
