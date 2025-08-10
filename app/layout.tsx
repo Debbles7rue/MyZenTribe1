@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import BrandLogo from "@/components/brand-logo"; // ← uses /public/logo.svg (or .png)
+import BrandLogo from "@/components/brand-logo"; // uses /public/MyZenTribe_Corrected.png
 
 export const metadata = {
   title: "MyZenTribe",
