@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { MotionDiv } from "@/components/motion";
-import LogoAura from "@/components/logo-aura";
+import BrandLogo from "@/components/brand-logo";
 
 export default function HomePage() {
   return (
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <MotionDiv className="space-y-6">
-        <LogoAura />
+        <BrandLogo />
         <h1 className="text-4xl font-bold tracking-tight">
           Feel the vibe, find your tribe.
         </h1>
