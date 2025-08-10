@@ -8,22 +8,19 @@ export const metadata = {
 
 export default function HomePage() {
   return (
-    <section className="mx-auto max-w-4xl space-y-6 py-10">
-      <h1 className="text-4xl font-bold tracking-tight">
-        Welcome to <span className="italic">My</span>Zen<span className="italic">Tribe</span>
-      </h1>
+    <section className="grid gap-10 md:grid-cols-2 items-center">
+      <div className="space-y-6">
+        <h1 className="text-4xl font-bold tracking-tight">
+          Welcome to <span className="italic">My</span>Zen
+          <span className="italic">Tribe</span>
+        </h1>
 
-      <p className="text-lg opacity-80">
-        MyZenTribe is a spiritual wellness community. We host uplifting events,
-        support daily meditation and gratitude, and connect kind people who want
-        to send healing energy into the world.
-      </p>
-
-      <div className="grid gap-4 rounded-2xl border p-6 bg-white/70">
-        <h2 className="text-xl font-semibold">Join the Tribe</h2>
-        <p className="opacity-80">
-          Create an account or sign in to access events, groups, journaling, and more.
+        <p className="text-lg opacity-85">
+          We bring kind people together for healing, growth, and joy—with
+          community events, meditation, and gratitude practices that radiate
+          good energy into the world.
         </p>
+
         <div className="flex flex-wrap gap-3">
           <Link
             href="/auth"
@@ -32,21 +29,26 @@ export default function HomePage() {
             Sign up / Sign in
           </Link>
           <Link
-            href="/events"
+            href="/auth#about"
             className="px-4 py-2 rounded-2xl border"
           >
-            Explore Events
+            Learn more
           </Link>
         </div>
+
+        <ul className="list-disc pl-5 space-y-1 text-sm opacity-80">
+          <li>Gentle, inclusive community spaces</li>
+          <li>Support for daily meditation & gratitude</li>
+          <li>Events that uplift and connect</li>
+        </ul>
       </div>
 
-      <div className="space-y-3">
-        <h3 className="text-lg font-semibold">What is MyZenTribe?</h3>
-        <ul className="list-disc pl-5 space-y-1 opacity-90">
-          <li>Community-led events for growth, healing, and joy.</li>
-          <li>Meditation and gratitude tools to support daily practice.</li>
-          <li>Gentle, inclusive spaces to connect with kind people.</li>
-        </ul>
+      <div className="rounded-3xl border bg-white/70 p-6 shadow-md">
+        <h2 className="font-semibold mb-2">Our Intention</h2>
+        <p className="opacity-80">
+          A continuous flow of kindness and healing energy shared across our
+          community—near and far. Join us and add your light.
+        </p>
       </div>
     </section>
   );
