@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: theme(colors.brand.500);
+  --gold: theme(colors.gold);
+  --jade: theme(colors.jade);
+}
+
+body {
+  @apply bg-white text-gray-900 dark:bg-zinc-950 dark:text-zinc-100;
+  background-image: theme(backgroundImage.protection-watermark);
+  background-attachment: fixed;
+}
