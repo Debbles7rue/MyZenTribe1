@@ -1,41 +1,46 @@
 import "./globals.css";
-import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
 import Link from "next/link";
-import BrandLogo from "@/components/brand-logo"; // uses /public/MyZenTribe_Corrected.png
+import Image from "next/image";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: "MyZenTribe",
-  description: "Feel the vibe, find your tribe.",
+  description:
+    "A spiritual wellness community for events, meditation, gratitude, and kind connections.",
 };
 
-// Dedication: bringing people together for healing, love, support, and fun. ✨
-
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <header className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur">
-          <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-3">
-              <BrandLogo />
+      <body className={inter.className}>
+        <header className="flex items-center justify-between px-6 py-4 shadow-md">
+          <div className="flex items-center space-x-3">
+            <Link href="/">
+              <Image
+                src="/logo-myzentribe.png"
+                alt="MyZenTribe logo"
+                width={50}
+                height={50}
+                priority
+              />
             </Link>
-            <nav className="ml-auto flex gap-4 text-sm">
-              <Link href="/events">Events</Link>
-              <Link href="/communities">Communities</Link>
-              <Link href="/meditation">Meditation</Link>
-              <Link href="/journal">Gratitude</Link>
-              <Link href="/karma">Karma Corner</Link>
-              <Link href="/whats-new">What’s New</Link>
-              <Link href="/auth">Login</Link>
-            </nav>
+            <Link href="/" className="text-2xl font-semibold italic">
+              MyZenTribe
+            </Link>
           </div>
+          <nav className="flex space-x-6">
+            <Link href="/events">Events</Link>
+            <Link href="/communities">Communities</Link>
+            <Link href="/meditation">Meditation</Link>
+            <Link href="/gratitude">Gratitude</Link>
+            <Link href="/karma-corner">Karma Corner</Link>
+            <Link href="/whats-new">What’s New</Link>
+            <Link href="/login">Login</Link>
+          </nav>
         </header>
-
-        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
-
-        <footer className="mt-20 border-t py-8 text-center text-xs opacity-70">
-          © {new Date().getFullYear()} MyZenTribe — All love, no spam.
-        </footer>
+        <main className="px-6 py-8">{children}</main>
       </body>
     </html>
   );
