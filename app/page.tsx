@@ -5,3 +5,4 @@ export default function HomePage() {
       <p className="mt-2 opacity-80">Feel the vibe, find your tribe.</p>
     </main>
   );
+}
