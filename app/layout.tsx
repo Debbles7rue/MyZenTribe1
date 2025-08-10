@@ -1,9 +1,7 @@
 import "./globals.css";
-import { Inter } from "next/font/google";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: "MyZenTribe",
@@ -11,36 +9,39 @@ export const metadata = {
     "A spiritual wellness community for events, meditation, gratitude, and kind connections.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <header className="flex items-center justify-between px-6 py-4 shadow-md">
-          <div className="flex items-center space-x-3">
-            <Link href="/">
+      <body className="bg-gradient-to-br from-[#faf6ff] via-[#f8fff6] to-[#f0f9ff] text-neutral-900">
+        <header className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur">
+          <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-3">
               <Image
                 src="/logo-myzentribe.png"
                 alt="MyZenTribe logo"
-                width={50}
-                height={50}
+                width={44}
+                height={44}
                 priority
               />
+              <span className="text-xl font-semibold italic">
+                My<span className="not-italic">Zen</span>
+                <span className="italic">Tribe</span>
+              </span>
             </Link>
-            <Link href="/" className="text-2xl font-semibold italic">
-              MyZenTribe
-            </Link>
+
+            {/* Keep nav minimal until features are ready */}
+            <nav className="ml-auto flex gap-4 text-sm">
+              <Link href="/" className="hover:opacity-80">Home</Link>
+              <Link href="/auth" className="hover:opacity-80">Sign up / Sign in</Link>
+            </nav>
           </div>
-          <nav className="flex space-x-6">
-            <Link href="/events">Events</Link>
-            <Link href="/communities">Communities</Link>
-            <Link href="/meditation">Meditation</Link>
-            <Link href="/gratitude">Gratitude</Link>
-            <Link href="/karma-corner">Karma Corner</Link>
-            <Link href="/whats-new">What’s New</Link>
-            <Link href="/login">Login</Link>
-          </nav>
         </header>
-        <main className="px-6 py-8">{children}</main>
+
+        <main className="mx-auto max-w-6xl px-4 py-10">{children}</main>
+
+        <footer className="mt-20 border-t py-8 text-center text-xs opacity-70">
+          © {new Date().getFullYear()} MyZenTribe — All love, no spam.
+        </footer>
       </body>
     </html>
   );
