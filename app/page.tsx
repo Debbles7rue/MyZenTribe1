@@ -15,7 +15,7 @@ export default function HomePage() {
         <Image
           src="/logo-myzentribe.png"
           alt="MyZenTribe Logo"
-          width={250} // increase this number for bigger logo
+          width={250}
           height={250}
           priority
         />
@@ -37,27 +37,32 @@ export default function HomePage() {
           MyZenTribe makes it easy to find your people and build something good together.
         </p>
 
-        <div className="flex flex-wrap justify-center gap-3">
-          <Link href="/auth" className="rounded-2xl bg-black px-4 py-2 text-white">
+        {/* Primary CTA only */}
+        <div className="flex justify-center">
+          <Link href="/auth" className="rounded-2xl bg-black px-5 py-2.5 text-white">
             Sign up / Sign in
-          </Link>
-          <Link href="#intention" className="rounded-2xl border px-4 py-2">
-            Our Intention
           </Link>
         </div>
       </section>
 
-      {/* Intention box */}
+      {/* Intention box + secondary CTA */}
       <section
         id="intention"
-        className="mt-10 max-w-3xl rounded-3xl border bg-white/80 p-6 shadow-md"
+        className="mt-10 max-w-3xl rounded-3xl border bg-white/80 p-6 shadow-md text-center"
       >
         <h2 className="mb-2 text-xl font-semibold">Our Intention</h2>
-        <p>
+        <p className="mb-5">
           To bring people together across local and global communities, support
           talented small businesses, and encourage every member to play a part
           in making the world a better place.
         </p>
+
+        <Link
+          href="/commitment"
+          className="inline-block rounded-2xl border px-4 py-2 hover:bg-white"
+        >
+          Our Commitment
+        </Link>
       </section>
     </main>
   );
