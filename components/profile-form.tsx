@@ -21,7 +21,7 @@ export default function ProfileForm({ initial }: Props) {
     setMessage("");
 
     try {
-      const res = await fetch("/profile", {
+      const res = await fetch("/profile/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
