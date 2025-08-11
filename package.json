@@ -9,7 +9,14 @@
     "lint": "next lint",
     "postinstall": "next telemetry disable || true"
   },
-  "dependencies": {
+  "dependencies":{
+    "date-fns": "^3.6.0",
+    "@headlessui/react": "^1.7.19",
+    "react-big-calendar": "^1.11.3",
+    "@supabase/supabase-js": "^2.45.4"
+  }
+} 
+  {
     "@supabase/ssr": "0.5.1",
     "@supabase/supabase-js": "2.45.4",
     "clsx": "2.1.1",
