@@ -9,6 +9,10 @@ export default function AuthPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [msg, setMsg] = useState("");
 
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
@@ -17,7 +21,7 @@ export default function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/profile` },
+        options: { emailRedirectTo: `${siteUrl}/profile` },
       });
       if (error) throw error;
       setStatus("sent");
