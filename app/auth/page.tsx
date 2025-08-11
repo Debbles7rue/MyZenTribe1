@@ -3,11 +3,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export const metadata = {
-  title: "Sign in — MyZenTribe",
-  description: "Sign in with a magic link to MyZenTribe.",
-};
-
 export default function AuthPage() {
   const supabase = createClient();
   const [email, setEmail] = useState("");
@@ -22,9 +17,7 @@ export default function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/profile`,
-        },
+        options: { emailRedirectTo: `${window.location.origin}/profile` },
       });
       if (error) throw error;
       setStatus("sent");
@@ -39,6 +32,7 @@ export default function AuthPage() {
     <main className="min-h-[60vh] grid place-items-center">
       <form onSubmit={sendMagicLink} className="w-full max-w-md rounded-3xl border bg-white/90 p-6 shadow">
         <h1 className="mb-4 text-2xl font-semibold">Sign up / Sign in</h1>
+
         <label className="block text-sm font-medium">
           Email
           <input
