@@ -1,4 +1,6 @@
 import "./globals.css";
+import "react-big-calendar/lib/css/react-big-calendar.css"; // ⬅️ add this line
+import React from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
