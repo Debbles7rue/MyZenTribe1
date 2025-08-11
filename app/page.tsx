@@ -1,8 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Lora } from "next/font/google";
+import { Playfair_Display } from "next/font/google";
 
-const lora = Lora({ subsets: ["latin"] });
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  style: ["normal", "italic"],
+});
 
 export default function HomePage() {
   return (
@@ -10,7 +14,7 @@ export default function HomePage() {
       {/* Logo */}
       <div className="mb-8 grid place-items-center">
         <Image
-          src="/logo-myzentribe.png"
+          src="/logo-myzentribe.png"     // keep this name; swap the file in /public if needed
           alt="MyZenTribe logo"
           width={520}
           height={520}
@@ -19,9 +23,9 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Title */}
-      <h1 className="text-center text-4xl md:text-5xl font-extrabold tracking-tight">
-        <span className={lora.className}>
+      {/* Wordmark — only Zen italic */}
+      <h1 className="text-center text-4xl md:text-5xl tracking-tight">
+        <span className={`${playfair.className} font-black`}>
           <span className="not-italic">My</span>
           <span className="italic">Zen</span>
           <span className="not-italic">Tribe</span>
@@ -32,33 +36,23 @@ export default function HomePage() {
       <p className="mx-auto mt-4 max-w-2xl text-center text-lg opacity-80">
         A space to connect, recharge, and share what matters.
       </p>
-
       <p className="mx-auto mt-2 max-w-3xl text-center text-base md:text-lg opacity-80">
         From daily mindfulness and gratitude practices to meaningful events,
         MyZenTribe makes it easy to find your people and build something good
         together.
       </p>
 
-      {/* CTA buttons */}
-      <div className="mt-8 flex items-center justify-center gap-3">
+      {/* Primary CTA only (no commitment button here) */}
+      <div className="mt-8 flex items-center justify-center">
         <Link
           href="/auth"
           className="rounded-2xl bg-black px-5 py-2.5 text-white shadow hover:opacity-90"
         >
           Sign up / Sign in
         </Link>
-
-        <Link
-          href="#commitment"
-          className="rounded-2xl px-5 py-2.5 text-gray-900 shadow border
-                     bg-[#EDE6F5] hover:bg-[#E2D4F0] transition"
-          aria-label="Read our commitment"
-        >
-          Our commitment
-        </Link>
       </div>
 
-      {/* Intent / Commitment card */}
+      {/* Our Intention card with the "Our commitment" button INSIDE */}
       <section
         id="commitment"
         className="mx-auto mt-10 max-w-4xl rounded-3xl border bg-white/90 p-6 shadow"
@@ -69,6 +63,17 @@ export default function HomePage() {
           talented small businesses, and encourage every member to play a part
           in making the world a better place.
         </p>
+
+        {/* Commitment button INSIDE the card with soft lavender fill */}
+        <div className="mt-4">
+          <Link
+            href="/commitment"
+            className="inline-flex items-center rounded-2xl border px-4 py-2
+                       text-gray-900 shadow bg-[#EDE6F5] hover:bg-[#E2D4F0] transition"
+          >
+            Our commitment
+          </Link>
+        </div>
       </section>
     </main>
   );
