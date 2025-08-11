@@ -1,71 +1,49 @@
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import ProfileForm from "@/components/profile-form";
+"use client";
 
-export const metadata = {
-  title: "My Profile — MyZenTribe",
-  description: "View and edit your MyZenTribe profile.",
-};
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
-export default async function ProfilePage() {
-  const supabase = createClient();
+export default function ProfilePage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
 
-  // Who's logged in?
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    // Get current user from Supabase
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        router.push("/login"); // redirect if not logged in
+      } else {
+        setUser(data.user);
+      }
+    });
+  }, [router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   if (!user) {
     return (
-      <main className="min-h-[60vh] grid place-items-center">
-        <div className="text-center space-y-4">
-          <h1 className="text-3xl font-bold">You’re not signed in</h1>
-          <p className="opacity-80">
-            Please sign in to view and edit your profile.
-          </p>
-          <Link href="/auth" className="inline-block rounded-2xl bg-black px-4 py-2 text-white">
-            Sign up / Sign in
-          </Link>
-        </div>
-      </main>
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading profile...</p>
+      </div>
     );
   }
 
-  // Fetch profile row (creates later if missing)
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, bio, location")
-    .eq("id", user.id)
-    .maybeSingle();
-
   return (
-    <main className="mx-auto max-w-3xl space-y-8">
-      <header className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/80 border text-lg font-semibold">
-          {initials(user.email)}
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold">My Profile</h1>
-          <p className="text-sm opacity-70">{user.email}</p>
-        </div>
-      </header>
-
-      <section className="rounded-3xl border bg-white/90 p-6 shadow">
-        <h2 className="mb-4 text-xl font-semibold">Edit Details</h2>
-        <ProfileForm
-          initial={{
-            full_name: profile?.full_name ?? "",
-            bio: profile?.bio ?? "",
-            location: profile?.location ?? "",
-          }}
-        />
-      </section>
-    </main>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h1 className="text-xl font-semibold mb-4">Profile</h1>
+        <p className="mb-6">Signed in as <strong>{user.email}</strong></p>
+        <button
+          onClick={handleLogout}
+          className="btn btn-neutral w-full"
+        >
+          Log out
+        </button>
+      </div>
+    </div>
   );
-}
-
-function initials(email?: string | null) {
-  if (!email) return "U";
-  const name = email.split("@")[0] ?? "u";
-  return name.slice(0, 2).toUpperCase();
 }
