@@ -44,7 +44,11 @@ export default function LoginPage() {
               className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-brand"
             />
           </label>
-
+<p className="text-sm text-gray-500 mt-2">
+  <a href="/forgot-password" className="text-indigo-600 hover:underline">
+    Forgot password?
+  </a>
+</p>
           <label className="block">
             <span className="text-sm">Password</span>
             <input
