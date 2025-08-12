@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+// ...
+await supabase.auth.signInWithPassword({ email, password });
 
 export default function LoginPage() {
   const router = useRouter();
