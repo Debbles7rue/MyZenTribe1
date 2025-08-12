@@ -14,9 +14,9 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 
-import { supabase } from "../../lib/supabaseClient";
-import Legend from "../../components/Legend";
-import EventDetails from "../../components/EventDetails";
+import { supabase } from "@/lib/supabaseClient";
+import Legend from "@/components/Legend";
+import EventDetails from "@/components/EventDetails";
 
 // --- Local helper mini component (keeps this file self-contained)
 function VisibilityPill({ v }: { v: "public" | "friends" | "private" | "community" }) {
