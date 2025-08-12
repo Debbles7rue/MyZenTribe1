@@ -1,9 +1,11 @@
 import "./globals.css";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css"; // ← add this
 import React from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
+
 
 export const metadata = {
   title: "MyZenTribe",
