@@ -53,3 +53,11 @@
 [data-theme="summer"] { --brand-bg:#fff7ed; --brand-accent:#f59e0b; }
 [data-theme="autumn"] { --brand-bg:#fff1f2; --brand-accent:#ef4444; }
 [data-theme="winter"] { --brand-bg:#f5f3ff; --brand-accent:#6366f1; }
+
+/* Brand polish */
+.brand-name { font-weight:700; font-size:20px; color:#111827; letter-spacing:-0.2px; }
+.brand-name .brand-zen { font-style: italic; }
+
+/* (Optional) if you re-enable the logo later, keep it subtle */
+.brand-logo { width:24px; height:24px; border-radius:6px; }
+.brand { gap:8px; }
