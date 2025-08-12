@@ -61,3 +61,9 @@
 /* (Optional) if you re-enable the logo later, keep it subtle */
 .brand-logo { width:24px; height:24px; border-radius:6px; }
 .brand { gap:8px; }
+
+/* Profile tweaks */
+input[disabled], textarea[disabled] {
+  background: #f9fafb;
+  color: #6b7280;
+}
