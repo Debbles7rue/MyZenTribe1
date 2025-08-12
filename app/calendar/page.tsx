@@ -11,11 +11,18 @@ import {
   View,
 } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import { format, parse, startOfWeek, getDay, startOfYear, endOfYear, addDays } from "date-fns";
+import {
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  startOfYear,
+  endOfYear,
+  addDays,
+} from "date-fns";
 import enUS from "date-fns/locale/en-US";
 
 import { supabase } from "@/lib/supabaseClient";
-import Legend from "@/components/Legend";
 import EventDetails from "@/components/EventDetails";
 
 type Visibility = "public" | "friends" | "private" | "community";
@@ -68,13 +75,18 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   const yearStart = startOfYear(new Date(Date.UTC(year, 0, 1)));
   const yearEnd = endOfYear(new Date(Date.UTC(year, 11, 31)));
 
-  const daysBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 86400000;
+  const daysBetween = (a: Date, b: Date) =>
+    (b.getTime() - a.getTime()) / 86400000;
   let k = Math.floor(daysBetween(epoch, yearStart) / SYNODIC) - 1;
 
   const events: UiEvent[] = [];
   const pushPhase = (d: Date, title: string, key: string) => {
     const local = new Date(d);
-    const start = new Date(local.getFullYear(), local.getMonth(), local.getDate());
+    const start = new Date(
+      local.getFullYear(),
+      local.getMonth(),
+      local.getDate()
+    );
     const end = addDays(start, 1);
     events.push({
       id: `${key}-${start.toISOString()}`,
@@ -95,7 +107,8 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
     const lastQuarter = new Date(newMoon.getTime() + LAST_Q * 86400000);
 
     const maybeAdd = (d: Date, title: string, key: string) => {
-      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2)) pushPhase(d, title, key);
+      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2))
+        pushPhase(d, title, key);
     };
 
     maybeAdd(newMoon, "New Moon", "moon-new");
@@ -104,17 +117,6 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
     maybeAdd(lastQuarter, "Last Quarter", "moon-last");
   }
   return events;
-}
-
-function VisibilityPill({ v }: { v: Visibility }) {
-  const map = {
-    public: "bg-green-100 text-green-700",
-    friends: "bg-blue-100 text-blue-700",
-    private: "bg-rose-100 text-rose-700",
-    community: "bg-violet-100 text-violet-700",
-  } as const;
-  const label = { public: "Public", friends: "Friends", private: "Private", community: "Community" }[v];
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${map[v]}`}>{label}</span>;
 }
 
 const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
@@ -130,7 +132,9 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [friendGoingIds, setFriendGoingIds] = useState<Set<string>>(new Set());
   const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
-  const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(new Set());
+  const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(
+    new Set()
+  );
   const [myEventIds, setMyEventIds] = useState<Set<string>>(new Set());
 
   // UI bits
@@ -168,6 +172,7 @@ export default function CalendarPage() {
       .from("event_rsvps")
       .select("event_id,status")
       .eq("user_id", sessionUser);
+
     const myEvents = new Set<string>();
     const interested = new Set<string>();
     if (!myRsvpRes.error && myRsvpRes.data) {
@@ -179,7 +184,7 @@ export default function CalendarPage() {
     setMyEventIds(myEvents);
     setInterestedIds(interested);
 
-    // 2) Friends
+    // 2) Friends (accepted)
     const friendsRes = await supabase
       .from("friends")
       .select("friend_user_id,user_id,status")
@@ -189,7 +194,8 @@ export default function CalendarPage() {
     const friendIds = new Set<string>();
     if (!friendsRes.error && friendsRes.data) {
       for (const row of friendsRes.data) {
-        const other = row.user_id === sessionUser ? row.friend_user_id : row.user_id;
+        const other =
+          row.user_id === sessionUser ? row.friend_user_id : row.user_id;
         friendIds.add(other);
       }
     }
@@ -236,36 +242,38 @@ export default function CalendarPage() {
     let all: DBEvent[] = [];
     if (mode === "mine") {
       if (myEvents.size) {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("events")
           .select("*")
           .in("id", Array.from(myEvents))
           .order("start_time", { ascending: true });
-        if (!error && data) all = data as DBEvent[];
+        if (data) all = data as DBEvent[];
       }
     } else {
       const orClauses: string[] = [];
-      if (followedIds.size) orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
-      if (friendsGoing.size) orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
-
-      if (myCommunityIds.size) orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
+      if (followedIds.size)
+        orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
+      if (friendsGoing.size)
+        orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
+      if (myCommunityIds.size)
+        orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
 
       if (!orClauses.length) {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("events")
           .select("*")
           .eq("visibility", "public")
           .gte("end_time", new Date().toISOString())
           .order("start_time", { ascending: true });
-        if (!error && data) all = data as DBEvent[];
+        if (data) all = data as DBEvent[];
       } else {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("events")
           .select("*")
           .or(orClauses.join(","))
           .gte("end_time", new Date().toISOString())
           .order("start_time", { ascending: true });
-        if (!error && data) all = data as DBEvent[];
+        if (data) all = data as DBEvent[];
       }
     }
 
@@ -299,7 +307,10 @@ export default function CalendarPage() {
     return generateLunarEventsForYear(y);
   }, [date, showMoon]);
 
-  const allUiEvents = useMemo<UiEvent[]>(() => [...rbcDbEvents, ...lunarEvents], [rbcDbEvents, lunarEvents]);
+  const allUiEvents = useMemo<UiEvent[]>(
+    () => [...rbcDbEvents, ...lunarEvents],
+    [rbcDbEvents, lunarEvents]
+  );
 
   const onSelectEvent = (evt: UiEvent) => {
     if (evt.resource?.moonPhase) return;
@@ -307,9 +318,17 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   };
 
+  // NEW: single-click a day in Month view switches to that Day (no auto-create)
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+    if (view === Views.MONTH) {
+      setDate(start);
+      setView(Views.DAY);
+      return;
+    }
     const toLocal = (d: Date) =>
-      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
     setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
     setOpenCreate(true);
   };
@@ -324,21 +343,32 @@ export default function CalendarPage() {
         "moon-first": "#DBEAFE",
         "moon-last": "#EDE9FE",
       };
-      return { style: { backgroundColor: colors[r.moonPhase] || "#E5E7EB", border: "1px dashed #CBD5E1", borderRadius: 10, fontStyle: "italic" } };
+      return {
+        style: {
+          backgroundColor: colors[r.moonPhase] || "#E5E7EB",
+          border: "1px dashed #CBD5E1",
+          borderRadius: 10,
+          fontStyle: "italic",
+        },
+      };
     }
     const e: DBEvent = r;
     let backgroundColor = "#9ca3af";
     if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
     else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";
     else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa";
-    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa";
-    return { style: { backgroundColor, border: "1px solid #e5e7eb", borderRadius: 10 } };
+    else if (e.visibility === "community" || e.community_id)
+      backgroundColor = "#a78bfa";
+    return {
+      style: { backgroundColor, border: "1px solid #e5e7eb", borderRadius: 10 },
+    };
   };
 
   // Create event
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
-    if (!form.title || !form.start || !form.end) return alert("Missing fields.");
+    if (!form.title || !form.start || !form.end)
+      return alert("Missing fields.");
     const payload: Partial<DBEvent> & { start_time: Date; end_time: Date } = {
       title: form.title,
       description: form.description || null,
@@ -346,7 +376,7 @@ export default function CalendarPage() {
       start_time: new Date(form.start),
       end_time: new Date(form.end),
       visibility: form.visibility,
-      created_by: sessionUser,
+      created_by: sessionUser, // trigger will also set this if omitted
       latitude: form.latitude ? Number(form.latitude) : null,
       longitude: form.longitude ? Number(form.longitude) : null,
       rrule: null,
@@ -357,17 +387,37 @@ export default function CalendarPage() {
     const { error } = await supabase.from("events").insert(payload);
     if (error) return alert(error.message);
     setOpenCreate(false);
+    // switch to "Only my events" so you see it immediately
+    setMode("mine");
+    setDate(new Date(form.start));
+    setView(Views.DAY);
     setForm({
-      title: "", description: "", location: "", start: "", end: "",
-      visibility: "public", latitude: "", longitude: "", event_type: "", community_id: "",
+      title: "",
+      description: "",
+      location: "",
+      start: "",
+      end: "",
+      visibility: "public",
+      latitude: "",
+      longitude: "",
+      event_type: "",
+      community_id: "",
     });
     loadData();
   };
 
-  // --- Drag & Drop handlers (update your own events only) ---
+  // Drag & Drop handlers
   const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
 
-  const onEventDrop = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
+  const onEventDrop = async ({
+    event,
+    start,
+    end,
+  }: {
+    event: UiEvent;
+    start: Date;
+    end: Date;
+  }) => {
     const db: DBEvent = event.resource;
     if (!canEdit(db)) return alert("You can only move events you created.");
     const { error } = await supabase
@@ -378,7 +428,15 @@ export default function CalendarPage() {
     loadData();
   };
 
-  const onEventResize = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
+  const onEventResize = async ({
+    event,
+    start,
+    end,
+  }: {
+    event: UiEvent;
+    start: Date;
+    end: Date;
+  }) => {
     const db: DBEvent = event.resource;
     if (!canEdit(db)) return alert("You can only resize events you created.");
     const { error } = await supabase
@@ -393,26 +451,47 @@ export default function CalendarPage() {
     <div className="min-h-screen">
       <div className="container-app py-6">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-2xl font-semibold logoText">What’s happening</h1>
+          <h1 className="text-2xl font-semibold logoText">Calendar</h1>
+
+          {/* CLEAR BUTTONS */}
           <div className="flex flex-wrap items-center gap-2">
-            <button className={`btn ${mode === "whats" ? "btn-brand" : "btn-neutral"}`} onClick={() => setMode("whats")}>
-              What’s happening
-            </button>
-            <button className={`btn ${mode === "mine" ? "btn-brand" : "btn-neutral"}`} onClick={() => setMode("mine")}>
-              Only my events
-            </button>
+            <div className="inline-flex rounded-xl overflow-hidden border border-neutral-300">
+              <button
+                className={`px-4 py-2 text-sm ${
+                  mode === "whats" ? "bg-black text-white" : "bg-white"
+                }`}
+                onClick={() => setMode("whats")}
+              >
+                What’s happening
+              </button>
+              <button
+                className={`px-4 py-2 text-sm ${
+                  mode === "mine" ? "bg-black text-white" : "bg-white"
+                }`}
+                onClick={() => setMode("mine")}
+              >
+                Only my events
+              </button>
+            </div>
 
             <label className="ml-2 inline-flex items-center gap-2 text-sm border rounded-xl px-3 py-2">
-              <input type="checkbox" checked={showMoon} onChange={(e) => setShowMoon(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={showMoon}
+                onChange={(e) => setShowMoon(e.target.checked)}
+              />
               Show moon phases
             </label>
 
-            <Link href="/" className="btn btn-neutral">Home</Link>
-            <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>Create event</button>
+            <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
+              Create event
+            </button>
+
+            <Link href="/" className="btn btn-neutral">
+              Home
+            </Link>
           </div>
         </div>
-
-        <Legend />
 
         <div className="card p-3 mt-3">
           <DnDCalendar
@@ -436,12 +515,15 @@ export default function CalendarPage() {
             components={{
               event: ({ event }) => {
                 if ((event as UiEvent).resource?.moonPhase) {
-                  return <div className="text-[11px] leading-tight italic">{(event as UiEvent).resource?.title ?? "Moon"}</div>;
+                  return (
+                    <div className="text-[11px] leading-tight italic">
+                      {(event as UiEvent).resource?.title ?? "Moon"}
+                    </div>
+                  );
                 }
                 return (
                   <div className="text-[11px] leading-tight">
                     <div className="font-medium">{event.title}</div>
-                    <VisibilityPill v={(event as UiEvent).resource.visibility} />
                   </div>
                 );
               },
@@ -449,7 +531,9 @@ export default function CalendarPage() {
           />
         </div>
 
-        {loading && <p className="mt-3 text-sm text-neutral-500">Loading…</p>}
+        {loading && (
+          <p className="mt-3 text-sm text-neutral-500">Loading…</p>
+        )}
       </div>
 
       {/* Create Event Dialog */}
@@ -457,50 +541,84 @@ export default function CalendarPage() {
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white p-6 shadow-lg">
-            <Dialog.Title className="text-lg font-semibold mb-4">Create event</Dialog.Title>
+            <Dialog.Title className="text-lg font-semibold mb-4">
+              Create event
+            </Dialog.Title>
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block md:col-span-2">
                 <span className="text-sm">Title</span>
-                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
               </label>
 
               <label className="block md:col-span-2">
                 <span className="text-sm">Description</span>
-                <textarea className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <textarea
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                />
               </label>
 
               <label className="block">
                 <span className="text-sm">Location</span>
-                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                <input
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.location}
+                  onChange={(e) =>
+                    setForm({ ...form, location: e.target.value })
+                  }
+                />
               </label>
 
               <label className="block">
                 <span className="text-sm">Type</span>
-                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.event_type} onChange={(e) => setForm({ ...form, event_type: e.target.value })} placeholder="Coffee, Yoga, etc." />
+                <input
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.event_type}
+                  onChange={(e) =>
+                    setForm({ ...form, event_type: e.target.value })
+                  }
+                  placeholder="Coffee, Yoga, etc."
+                />
               </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:col-span-2">
                 <label className="block">
                   <span className="text-sm">Start</span>
-                  <input type="datetime-local" className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} />
+                  <input
+                    type="datetime-local"
+                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                    value={form.start}
+                    onChange={(e) => setForm({ ...form, start: e.target.value })}
+                  />
                 </label>
                 <label className="block">
                   <span className="text-sm">End</span>
-                  <input type="datetime-local" className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.end} onChange={(e) => setForm({ ...form, end: e.target.value })} />
+                  <input
+                    type="datetime-local"
+                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                    value={form.end}
+                    onChange={(e) => setForm({ ...form, end: e.target.value })}
+                  />
                 </label>
               </div>
 
               <label className="block">
                 <span className="text-sm">Visibility</span>
-                <select className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value as Visibility })}>
+                <select
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.visibility}
+                  onChange={(e) =>
+                    setForm({ ...form, visibility: e.target.value as Visibility })
+                  }
+                >
                   <option value="public">Public</option>
                   <option value="friends">Friends & acquaintances</option>
                   <option value="private">Private (invite only)</option>
@@ -510,25 +628,41 @@ export default function CalendarPage() {
 
               <label className="block">
                 <span className="text-sm">Community (optional)</span>
-                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.community_id} onChange={(e) => setForm({ ...form, community_id: e.target.value })}
-                  placeholder="Community UUID (picker later)" />
+                <input
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.community_id}
+                  onChange={(e) =>
+                    setForm({ ...form, community_id: e.target.value })
+                  }
+                  placeholder="Community UUID (picker later)"
+                />
               </label>
 
               <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-                <button className="btn btn-neutral" onClick={() => setOpenCreate(false)}>Cancel</button>
-                <button className="btn btn-brand" onClick={createEvent}>Save</button>
+                <button
+                  className="btn btn-neutral"
+                  onClick={() => setOpenCreate(false)}
+                >
+                  Cancel
+                </button>
+                <button className="btn btn-brand" onClick={createEvent}>
+                  Save
+                </button>
               </div>
             </div>
 
             <p className="mt-4 text-xs text-neutral-500">
-              Drag to move; resize to change duration. You can only edit events you created.
+              Tip: In Month view, click a day to zoom into it. Drag events to
+              reschedule. Resize edges to change duration.
             </p>
           </Dialog.Panel>
         </div>
       </Dialog>
 
-      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
+      <EventDetails
+        event={detailsOpen ? selected : null}
+        onClose={() => setDetailsOpen(false)}
+      />
     </div>
   );
 }
