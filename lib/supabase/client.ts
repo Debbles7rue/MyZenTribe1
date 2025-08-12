@@ -1,6 +1,12 @@
 // lib/supabase/client.ts
-// Thin wrapper so imports like "@/lib/supabase/client" work.
+// Client-side wrapper. Exposes a createClient() function for compatibility.
 import { supabase } from "../supabaseClient";
 
-export { supabase };      // named export
-export default supabase;  // default export (in case some files use default)
+// Some parts of the app import { createClient } from "@/lib/supabase/client"
+export function createClient() {
+  return supabase;
+}
+
+// Also export the raw client (in case other code uses it)
+export { supabase };
+export default supabase;
