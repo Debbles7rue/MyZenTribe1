@@ -6,9 +6,9 @@ import { Dialog } from "@headlessui/react";
 import {
   Calendar,
   dateFnsLocalizer,
-  Event as RBCEvent,
   Views,
   View,
+  Event as RBCEvent,
 } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import {
@@ -21,10 +21,10 @@ import {
   addDays,
 } from "date-fns";
 import enUS from "date-fns/locale/en-US";
-
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
 
+// ---------------- Types ----------------
 type Visibility = "public" | "friends" | "private" | "community";
 
 type DBEvent = {
@@ -56,6 +56,7 @@ type RSVP = {
 
 type UiEvent = RBCEvent & { resource: any };
 
+// --------------- Calendar setup ---------------
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
   format,
@@ -64,8 +65,9 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
+const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 
-// ---- Moon phases (approximate) ----
+// --------------- Moon phases (approximate) ---------------
 function generateLunarEventsForYear(year: number): UiEvent[] {
   const SYNODIC = 29.530588;
   const FIRST_Q = 7.382647;
@@ -119,32 +121,45 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   return events;
 }
 
-const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
-
+// ---------------- Component ----------------
 export default function CalendarPage() {
+  // session
   const [sessionUser, setSessionUser] = useState<string | null>(null);
 
-  // Modes & toggles
+  // modes & toggles
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [showMoon, setShowMoon] = useState(true);
 
-  // Data
+  // themes + quote
+  const [theme, setTheme] =
+    useState<"spring" | "summer" | "autumn" | "winter">("winter");
+  const quotes = useMemo(
+    () => [
+      "Small steps every day.",
+      "Be where your feet are.",
+      "Energy flows where attention goes.",
+      "Breathe in peace, breathe out stress.",
+    ],
+    []
+  );
+  const quote = quotes[new Date().getDate() % quotes.length];
+
+  // data
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [friendGoingIds, setFriendGoingIds] = useState<Set<string>>(new Set());
   const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
   const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(
     new Set()
   );
-  const [myEventIds, setMyEventIds] = useState<Set<string>>(new Set());
 
-  // UI bits
+  // ui state
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
-  // Create dialog state
+  // create dialog state
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -159,32 +174,37 @@ export default function CalendarPage() {
     community_id: "",
   });
 
+  // session + theme
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    return () => document.documentElement.removeAttribute("data-theme");
+  }, [theme]);
 
+  // -------------- Data loader (shows my created items even w/out RSVP) --------------
   const loadData = async () => {
     if (!sessionUser) return;
     setLoading(true);
 
-    // 1) My RSVPs
+    // 1) my RSVPs
     const myRsvpRes = await supabase
       .from("event_rsvps")
       .select("event_id,status")
       .eq("user_id", sessionUser);
 
-    const myEvents = new Set<string>();
+    const rsvpEventIds = new Set<string>();
     const interested = new Set<string>();
     if (!myRsvpRes.error && myRsvpRes.data) {
       for (const r of myRsvpRes.data as RSVP[]) {
-        myEvents.add(r.event_id);
+        rsvpEventIds.add(r.event_id);
         if (r.status === "interested") interested.add(r.event_id);
       }
     }
-    setMyEventIds(myEvents);
     setInterestedIds(interested);
 
-    // 2) Friends (accepted)
+    // 2) friends (accepted)
     const friendsRes = await supabase
       .from("friends")
       .select("friend_user_id,user_id,status")
@@ -200,14 +220,13 @@ export default function CalendarPage() {
       }
     }
 
-    // 3) Friends' shareable RSVPs
+    // 3) friends’ shareable RSVPs
     let friendsGoing = new Set<string>();
     if (friendIds.size) {
-      const friendList = Array.from(friendIds);
       const rsvpFriends = await supabase
         .from("event_rsvps")
         .select("event_id")
-        .in("user_id", friendList)
+        .in("user_id", Array.from(friendIds))
         .in("status", ["yes", "maybe", "interested"])
         .eq("shareable", true);
 
@@ -217,7 +236,7 @@ export default function CalendarPage() {
     }
     setFriendGoingIds(friendsGoing);
 
-    // 4) Followed creators
+    // 4) followed creators
     const followsRes = await supabase
       .from("follows")
       .select("followed_id")
@@ -228,7 +247,7 @@ export default function CalendarPage() {
     }
     setFollowedCreatorIds(followedIds);
 
-    // 5) My communities
+    // 5) my communities
     const cmRes = await supabase
       .from("community_members")
       .select("community_id")
@@ -238,43 +257,33 @@ export default function CalendarPage() {
       for (const c of cmRes.data) myCommunityIds.add(c.community_id);
     }
 
-    // 6) Load events
+    // 6) pull events
     let all: DBEvent[] = [];
     if (mode === "mine") {
-      if (myEvents.size) {
-        const { data } = await supabase
-          .from("events")
-          .select("*")
-          .in("id", Array.from(myEvents))
-          .order("start_time", { ascending: true });
-        if (data) all = data as DBEvent[];
-      }
+      // include events I created OR RSVPed to
+      const ors: string[] = [`created_by.eq.${sessionUser}`];
+      if (rsvpEventIds.size) ors.push(`id.in.(${Array.from(rsvpEventIds).join(",")})`);
+      const { data } = await supabase
+        .from("events")
+        .select("*")
+        .or(ors.join(","))
+        .order("start_time", { ascending: true });
+      all = (data ?? []) as DBEvent[];
     } else {
-      const orClauses: string[] = [];
+      // what's happening = followed creators, friends going, my communities + my own
+      const orClauses: string[] = [`created_by.eq.${sessionUser}`];
       if (followedIds.size)
         orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
       if (friendsGoing.size)
         orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
       if (myCommunityIds.size)
         orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
-
-      if (!orClauses.length) {
-        const { data } = await supabase
-          .from("events")
-          .select("*")
-          .eq("visibility", "public")
-          .gte("end_time", new Date().toISOString())
-          .order("start_time", { ascending: true });
-        if (data) all = data as DBEvent[];
-      } else {
-        const { data } = await supabase
-          .from("events")
-          .select("*")
-          .or(orClauses.join(","))
-          .gte("end_time", new Date().toISOString())
-          .order("start_time", { ascending: true });
-        if (data) all = data as DBEvent[];
-      }
+      const { data } = await supabase
+        .from("events")
+        .select("*")
+        .or(orClauses.join(","))
+        .order("start_time", { ascending: true });
+      all = (data ?? []) as DBEvent[];
     }
 
     setEvents(all);
@@ -286,7 +295,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode]);
 
-  // Map DB -> calendar events
+  // map DB -> calendar events
   const rbcDbEvents = useMemo<UiEvent[]>(
     () =>
       events.map((e) => ({
@@ -300,11 +309,10 @@ export default function CalendarPage() {
     [events]
   );
 
-  // Moon overlay
+  // moon overlay
   const lunarEvents = useMemo<UiEvent[]>(() => {
     if (!showMoon) return [];
-    const y = date.getFullYear();
-    return generateLunarEventsForYear(y);
+    return generateLunarEventsForYear(date.getFullYear());
   }, [date, showMoon]);
 
   const allUiEvents = useMemo<UiEvent[]>(
@@ -312,13 +320,14 @@ export default function CalendarPage() {
     [rbcDbEvents, lunarEvents]
   );
 
+  // event click
   const onSelectEvent = (evt: UiEvent) => {
     if (evt.resource?.moonPhase) return;
     setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
 
-  // NEW: single-click a day in Month view switches to that Day (no auto-create)
+  // day click: month -> day (no auto-create)
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
     if (view === Views.MONTH) {
       setDate(start);
@@ -333,7 +342,7 @@ export default function CalendarPage() {
     setOpenCreate(true);
   };
 
-  // Color rules
+  // colors
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
     if (r.moonPhase) {
@@ -364,51 +373,10 @@ export default function CalendarPage() {
     };
   };
 
-  // Create event
-  const createEvent = async () => {
-    if (!sessionUser) return alert("Please log in.");
-    if (!form.title || !form.start || !form.end)
-      return alert("Missing fields.");
-    const payload: Partial<DBEvent> & { start_time: Date; end_time: Date } = {
-      title: form.title,
-      description: form.description || null,
-      location: form.location || null,
-      start_time: new Date(form.start),
-      end_time: new Date(form.end),
-      visibility: form.visibility,
-      created_by: sessionUser, // trigger will also set this if omitted
-      latitude: form.latitude ? Number(form.latitude) : null,
-      longitude: form.longitude ? Number(form.longitude) : null,
-      rrule: null,
-      event_type: form.event_type || null,
-      rsvp_public: true,
-      community_id: form.community_id || null,
-    };
-    const { error } = await supabase.from("events").insert(payload);
-    if (error) return alert(error.message);
-    setOpenCreate(false);
-    // switch to "Only my events" so you see it immediately
-    setMode("mine");
-    setDate(new Date(form.start));
-    setView(Views.DAY);
-    setForm({
-      title: "",
-      description: "",
-      location: "",
-      start: "",
-      end: "",
-      visibility: "public",
-      latitude: "",
-      longitude: "",
-      event_type: "",
-      community_id: "",
-    });
-    loadData();
-  };
-
-  // Drag & Drop handlers
+  // edit rights
   const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
 
+  // drag / resize
   const onEventDrop = async ({
     event,
     start,
@@ -447,14 +415,58 @@ export default function CalendarPage() {
     loadData();
   };
 
+  // create event
+  const createEvent = async () => {
+    if (!sessionUser) return alert("Please log in.");
+    if (!form.title || !form.start || !form.end)
+      return alert("Missing fields.");
+
+    const payload: Partial<DBEvent> & { start_time: Date; end_time: Date } = {
+      title: form.title,
+      description: form.description || null,
+      location: form.location || null,
+      start_time: new Date(form.start),
+      end_time: new Date(form.end),
+      visibility: form.visibility,
+      created_by: sessionUser, // DB trigger also sets this if omitted
+      latitude: form.latitude ? Number(form.latitude) : null,
+      longitude: form.longitude ? Number(form.longitude) : null,
+      rrule: null,
+      event_type: form.event_type || null,
+      rsvp_public: true,
+      community_id: form.community_id || null,
+    };
+
+    const { error } = await supabase.from("events").insert(payload);
+    if (error) return alert(error.message);
+
+    setOpenCreate(false);
+    setMode("mine");
+    setDate(new Date(form.start));
+    setView(Views.DAY);
+    setForm({
+      title: "",
+      description: "",
+      location: "",
+      start: "",
+      end: "",
+      visibility: "public",
+      latitude: "",
+      longitude: "",
+      event_type: "",
+      community_id: "",
+    });
+    loadData();
+  };
+
   return (
     <div className="min-h-screen">
       <div className="container-app py-6">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl font-semibold logoText">Calendar</h1>
 
-          {/* CLEAR BUTTONS */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Toggle buttons */}
             <div className="inline-flex rounded-xl overflow-hidden border border-neutral-300">
               <button
                 className={`px-4 py-2 text-sm ${
@@ -483,6 +495,18 @@ export default function CalendarPage() {
               Show moon phases
             </label>
 
+            <select
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as any)}
+              className="border rounded-xl px-3 py-2 text-sm"
+              title="Theme"
+            >
+              <option value="spring">Spring</option>
+              <option value="summer">Summer</option>
+              <option value="autumn">Autumn</option>
+              <option value="winter">Winter</option>
+            </select>
+
             <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
               Create event
             </button>
@@ -502,16 +526,16 @@ export default function CalendarPage() {
             style={{ height: 680 }}
             selectable
             resizable
-            onSelectSlot={onSelectSlot}
-            onSelectEvent={onSelectEvent}
             popup
             view={view}
             onView={setView}
             date={date}
             onNavigate={setDate}
-            eventPropGetter={eventPropGetter}
+            onSelectSlot={onSelectSlot}
+            onSelectEvent={onSelectEvent}
             onEventDrop={onEventDrop}
             onEventResize={onEventResize}
+            eventPropGetter={eventPropGetter}
             components={{
               event: ({ event }) => {
                 if ((event as UiEvent).resource?.moonPhase) {
@@ -531,9 +555,9 @@ export default function CalendarPage() {
           />
         </div>
 
-        {loading && (
-          <p className="mt-3 text-sm text-neutral-500">Loading…</p>
-        )}
+        {loading && <p className="mt-3 text-sm text-neutral-500">Loading…</p>}
+
+        <p className="mt-4 text-sm italic text-neutral-600">“{quote}”</p>
       </div>
 
       {/* Create Event Dialog */}
@@ -560,9 +584,7 @@ export default function CalendarPage() {
                 <textarea
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
               </label>
 
@@ -571,9 +593,7 @@ export default function CalendarPage() {
                 <input
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.location}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
                 />
               </label>
 
@@ -582,9 +602,7 @@ export default function CalendarPage() {
                 <input
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.event_type}
-                  onChange={(e) =>
-                    setForm({ ...form, event_type: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, event_type: e.target.value })}
                   placeholder="Coffee, Yoga, etc."
                 />
               </label>
@@ -639,10 +657,7 @@ export default function CalendarPage() {
               </label>
 
               <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-                <button
-                  className="btn btn-neutral"
-                  onClick={() => setOpenCreate(false)}
-                >
+                <button className="btn btn-neutral" onClick={() => setOpenCreate(false)}>
                   Cancel
                 </button>
                 <button className="btn btn-brand" onClick={createEvent}>
@@ -652,17 +667,14 @@ export default function CalendarPage() {
             </div>
 
             <p className="mt-4 text-xs text-neutral-500">
-              Tip: In Month view, click a day to zoom into it. Drag events to
-              reschedule. Resize edges to change duration.
+              Tip: In Month view, click a day to zoom into it. Drag events to reschedule.
+              Resize edges to change duration.
             </p>
           </Dialog.Panel>
         </div>
       </Dialog>
 
-      <EventDetails
-        event={detailsOpen ? selected : null}
-        onClose={() => setDetailsOpen(false)}
-      />
+      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
 }
