@@ -10,6 +10,7 @@ import {
   Views,
   View,
 } from "react-big-calendar";
+import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { format, parse, startOfWeek, getDay, startOfYear, endOfYear, addDays } from "date-fns";
 import enUS from "date-fns/locale/en-US";
 
@@ -46,11 +47,8 @@ type RSVP = {
   shareable: boolean | null;
 };
 
-type UiEvent = RBCEvent & {
-  resource: any;
-};
+type UiEvent = RBCEvent & { resource: any };
 
-// ---- date-fns localizer
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
   format,
@@ -60,30 +58,22 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// =========================================================
-// Moon phase overlay (approximate; ±1 day).
-// Based on synodic month ~29.530588 days from a known new moon epoch.
-// We derive New, First Quarter (+7.38d), Full (+14.77d), Last Quarter (+22.15d).
-// =========================================================
+// ---- Moon phases (approximate) ----
 function generateLunarEventsForYear(year: number): UiEvent[] {
-  const SYNODIC = 29.530588; // days
+  const SYNODIC = 29.530588;
   const FIRST_Q = 7.382647;
   const FULL = 14.765294;
   const LAST_Q = 22.147941;
-
-  // Known new moon epoch near J2000 (UTC): 2000-01-06 18:14
   const epoch = new Date(Date.UTC(2000, 0, 6, 18, 14));
   const yearStart = startOfYear(new Date(Date.UTC(year, 0, 1)));
   const yearEnd = endOfYear(new Date(Date.UTC(year, 11, 31)));
 
-  // find k such that epoch + k*synodic enters this year
   const daysBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 86400000;
   let k = Math.floor(daysBetween(epoch, yearStart) / SYNODIC) - 1;
 
   const events: UiEvent[] = [];
-  const pushPhase = (d: Date, title: string, key: string, color: string) => {
-    // Render as all-day marker (00:00 to 23:59 local)
-    const local = new Date(d); // approximate is fine
+  const pushPhase = (d: Date, title: string, key: string) => {
+    const local = new Date(d);
     const start = new Date(local.getFullYear(), local.getMonth(), local.getDate());
     const end = addDays(start, 1);
     events.push({
@@ -96,34 +86,25 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
     });
   };
 
-  // Generate until we pass the year end
-  // Safety cap on iterations
   for (let i = 0; i < 20; i++) {
     const newMoon = new Date(epoch.getTime() + (k + i) * SYNODIC * 86400000);
-
     if (newMoon > addDays(yearEnd, 2)) break;
 
     const firstQuarter = new Date(newMoon.getTime() + FIRST_Q * 86400000);
     const fullMoon = new Date(newMoon.getTime() + FULL * 86400000);
     const lastQuarter = new Date(newMoon.getTime() + LAST_Q * 86400000);
 
-    // Only include phases that land within the year window (with a small buffer)
-    const maybeAdd = (d: Date, title: string, key: string, color: string) => {
-      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2)) {
-        pushPhase(d, title, key, color);
-      }
+    const maybeAdd = (d: Date, title: string, key: string) => {
+      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2)) pushPhase(d, title, key);
     };
 
-    maybeAdd(newMoon, "New Moon", "moon-new", "#E5E7EB");
-    maybeAdd(firstQuarter, "First Quarter", "moon-first", "#DBEAFE");
-    maybeAdd(fullMoon, "Full Moon", "moon-full", "#FEF3C7");
-    maybeAdd(lastQuarter, "Last Quarter", "moon-last", "#EDE9FE");
+    maybeAdd(newMoon, "New Moon", "moon-new");
+    maybeAdd(firstQuarter, "First Quarter", "moon-first");
+    maybeAdd(fullMoon, "Full Moon", "moon-full");
+    maybeAdd(lastQuarter, "Last Quarter", "moon-last");
   }
-
   return events;
 }
-
-// =========================================================
 
 function VisibilityPill({ v }: { v: Visibility }) {
   const map = {
@@ -133,12 +114,10 @@ function VisibilityPill({ v }: { v: Visibility }) {
     community: "bg-violet-100 text-violet-700",
   } as const;
   const label = { public: "Public", friends: "Friends", private: "Private", community: "Community" }[v];
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${map[v]}`}>
-      {label}
-    </span>
-  );
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${map[v]}`}>{label}</span>;
 }
+
+const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 
 export default function CalendarPage() {
   const [sessionUser, setSessionUser] = useState<string | null>(null);
@@ -200,7 +179,7 @@ export default function CalendarPage() {
     setMyEventIds(myEvents);
     setInterestedIds(interested);
 
-    // 2) Friends (accepted)
+    // 2) Friends
     const friendsRes = await supabase
       .from("friends")
       .select("friend_user_id,user_id,status")
@@ -210,13 +189,12 @@ export default function CalendarPage() {
     const friendIds = new Set<string>();
     if (!friendsRes.error && friendsRes.data) {
       for (const row of friendsRes.data) {
-        const other =
-          row.user_id === sessionUser ? row.friend_user_id : row.user_id;
+        const other = row.user_id === sessionUser ? row.friend_user_id : row.user_id;
         friendIds.add(other);
       }
     }
 
-    // 3) RSVPs by friends (shareable only)
+    // 3) Friends' shareable RSVPs
     let friendsGoing = new Set<string>();
     if (friendIds.size) {
       const friendList = Array.from(friendIds);
@@ -254,11 +232,9 @@ export default function CalendarPage() {
       for (const c of cmRes.data) myCommunityIds.add(c.community_id);
     }
 
-    // 6) Load events depending on mode
+    // 6) Load events
     let all: DBEvent[] = [];
-
     if (mode === "mine") {
-      // Only events I responded to (any status, including private)
       if (myEvents.size) {
         const { data, error } = await supabase
           .from("events")
@@ -268,18 +244,11 @@ export default function CalendarPage() {
         if (!error && data) all = data as DBEvent[];
       }
     } else {
-      // "What's happening"
       const orClauses: string[] = [];
+      if (followedIds.size) orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
+      if (friendsGoing.size) orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
 
-      if (followedIds.size) {
-        orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
-      }
-      if (friendsGoing.size) {
-        orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
-      }
-      if (myCommunityIds.size) {
-        orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
-      }
+      if (myCommunityIds.size) orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
 
       if (!orClauses.length) {
         const { data, error } = await supabase
@@ -309,7 +278,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode]);
 
-  // RBC mapping for DB events
+  // Map DB -> calendar events
   const rbcDbEvents = useMemo<UiEvent[]>(
     () =>
       events.map((e) => ({
@@ -323,72 +292,50 @@ export default function CalendarPage() {
     [events]
   );
 
-  // Moon events for the current calendar year (toggle)
+  // Moon overlay
   const lunarEvents = useMemo<UiEvent[]>(() => {
     if (!showMoon) return [];
     const y = date.getFullYear();
     return generateLunarEventsForYear(y);
   }, [date, showMoon]);
 
-  // Combined events for display
-  const allUiEvents = useMemo<UiEvent[]>(
-    () => [...rbcDbEvents, ...lunarEvents],
-    [rbcDbEvents, lunarEvents]
-  );
+  const allUiEvents = useMemo<UiEvent[]>(() => [...rbcDbEvents, ...lunarEvents], [rbcDbEvents, lunarEvents]);
 
   const onSelectEvent = (evt: UiEvent) => {
-    if (evt.resource?.moonPhase) return; // do nothing for moon markers
-    const e: DBEvent = evt.resource;
-    setSelected(e);
+    if (evt.resource?.moonPhase) return;
+    setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
 
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
     const toLocal = (d: Date) =>
-      new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16);
+      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
     setOpenCreate(true);
   };
 
-  // Coloring rule (priority): moon phases (distinct) > friends-going > interested (me) > followed orgs > community > other
+  // Color rules
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
     if (r.moonPhase) {
       const colors: Record<string, string> = {
-        "moon-full": "#FEF3C7",   // amber-100
-        "moon-new": "#E5E7EB",    // gray-200
-        "moon-first": "#DBEAFE",  // blue-100
-        "moon-last": "#EDE9FE",   // violet-100
+        "moon-full": "#FEF3C7",
+        "moon-new": "#E5E7EB",
+        "moon-first": "#DBEAFE",
+        "moon-last": "#EDE9FE",
       };
-      const bg = colors[r.moonPhase] || "#E5E7EB";
-      return {
-        style: {
-          backgroundColor: bg,
-          border: "1px dashed #CBD5E1",
-          borderRadius: "10px",
-          fontStyle: "italic",
-        },
-      };
+      return { style: { backgroundColor: colors[r.moonPhase] || "#E5E7EB", border: "1px dashed #CBD5E1", borderRadius: 10, fontStyle: "italic" } };
     }
-
     const e: DBEvent = r;
-    let backgroundColor = "#9ca3af"; // other
-    if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";          // green-500
-    else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";      // amber-200
-    else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa"; // blue-400
-    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa"; // violet-400
-
-    return {
-      style: {
-        backgroundColor,
-        border: "1px solid #e5e7eb",
-        borderRadius: "10px",
-      },
-    };
+    let backgroundColor = "#9ca3af";
+    if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
+    else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";
+    else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa";
+    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa";
+    return { style: { backgroundColor, border: "1px solid #e5e7eb", borderRadius: 10 } };
   };
 
+  // Create event
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
     if (!form.title || !form.start || !form.end) return alert("Missing fields.");
@@ -411,17 +358,34 @@ export default function CalendarPage() {
     if (error) return alert(error.message);
     setOpenCreate(false);
     setForm({
-      title: "",
-      description: "",
-      location: "",
-      start: "",
-      end: "",
-      visibility: "public",
-      latitude: "",
-      longitude: "",
-      event_type: "",
-      community_id: "",
+      title: "", description: "", location: "", start: "", end: "",
+      visibility: "public", latitude: "", longitude: "", event_type: "", community_id: "",
     });
+    loadData();
+  };
+
+  // --- Drag & Drop handlers (update your own events only) ---
+  const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
+
+  const onEventDrop = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
+    const db: DBEvent = event.resource;
+    if (!canEdit(db)) return alert("You can only move events you created.");
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+      .eq("id", db.id);
+    if (error) return alert(error.message);
+    loadData();
+  };
+
+  const onEventResize = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
+    const db: DBEvent = event.resource;
+    if (!canEdit(db)) return alert("You can only resize events you created.");
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+      .eq("id", db.id);
+    if (error) return alert(error.message);
     loadData();
   };
 
@@ -431,16 +395,10 @@ export default function CalendarPage() {
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl font-semibold logoText">What’s happening</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              className={`btn ${mode === "whats" ? "btn-brand" : "btn-neutral"}`}
-              onClick={() => setMode("whats")}
-            >
+            <button className={`btn ${mode === "whats" ? "btn-brand" : "btn-neutral"}`} onClick={() => setMode("whats")}>
               What’s happening
             </button>
-            <button
-              className={`btn ${mode === "mine" ? "btn-brand" : "btn-neutral"}`}
-              onClick={() => setMode("mine")}
-            >
+            <button className={`btn ${mode === "mine" ? "btn-brand" : "btn-neutral"}`} onClick={() => setMode("mine")}>
               Only my events
             </button>
 
@@ -450,22 +408,21 @@ export default function CalendarPage() {
             </label>
 
             <Link href="/" className="btn btn-neutral">Home</Link>
-            <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
-              Create event
-            </button>
+            <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>Create event</button>
           </div>
         </div>
 
         <Legend />
 
         <div className="card p-3 mt-3">
-          <Calendar
+          <DnDCalendar
             localizer={localizer}
             events={allUiEvents}
             startAccessor="start"
             endAccessor="end"
             style={{ height: 680 }}
             selectable
+            resizable
             onSelectSlot={onSelectSlot}
             onSelectEvent={onSelectEvent}
             popup
@@ -474,14 +431,12 @@ export default function CalendarPage() {
             date={date}
             onNavigate={setDate}
             eventPropGetter={eventPropGetter}
+            onEventDrop={onEventDrop}
+            onEventResize={onEventResize}
             components={{
               event: ({ event }) => {
                 if ((event as UiEvent).resource?.moonPhase) {
-                  return (
-                    <div className="text-[11px] leading-tight italic">
-                      {(event as UiEvent).resource?.title ?? "Moon"}
-                    </div>
-                  );
+                  return <div className="text-[11px] leading-tight italic">{(event as UiEvent).resource?.title ?? "Moon"}</div>;
                 }
                 return (
                   <div className="text-[11px] leading-tight">
@@ -507,69 +462,45 @@ export default function CalendarPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block md:col-span-2">
                 <span className="text-sm">Title</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                />
+                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </label>
 
               <label className="block md:col-span-2">
                 <span className="text-sm">Description</span>
-                <textarea
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
+                <textarea className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               </label>
 
               <label className="block">
                 <span className="text-sm">Location</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                />
+                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
               </label>
 
               <label className="block">
                 <span className="text-sm">Type</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.event_type}
-                  onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-                  placeholder="Coffee, Yoga, etc."
-                />
+                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.event_type} onChange={(e) => setForm({ ...form, event_type: e.target.value })} placeholder="Coffee, Yoga, etc." />
               </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:col-span-2">
                 <label className="block">
                   <span className="text-sm">Start</span>
-                  <input
-                    type="datetime-local"
-                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.start}
-                    onChange={(e) => setForm({ ...form, start: e.target.value })}
-                  />
+                  <input type="datetime-local" className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                    value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} />
                 </label>
                 <label className="block">
                   <span className="text-sm">End</span>
-                  <input
-                    type="datetime-local"
-                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.end}
-                    onChange={(e) => setForm({ ...form, end: e.target.value })}
-                  />
+                  <input type="datetime-local" className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                    value={form.end} onChange={(e) => setForm({ ...form, end: e.target.value })} />
                 </label>
               </div>
 
               <label className="block">
                 <span className="text-sm">Visibility</span>
-                <select
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.visibility}
-                  onChange={(e) => setForm({ ...form, visibility: e.target.value as Visibility })}
-                >
+                <select className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value as Visibility })}>
                   <option value="public">Public</option>
                   <option value="friends">Friends & acquaintances</option>
                   <option value="private">Private (invite only)</option>
@@ -579,46 +510,19 @@ export default function CalendarPage() {
 
               <label className="block">
                 <span className="text-sm">Community (optional)</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.community_id}
-                  onChange={(e) => setForm({ ...form, community_id: e.target.value })}
-                  placeholder="Community UUID (picker coming soon)"
-                />
+                <input className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.community_id} onChange={(e) => setForm({ ...form, community_id: e.target.value })}
+                  placeholder="Community UUID (picker later)" />
               </label>
 
-              <div className="grid grid-cols-1 gap-3">
-                <label className="block">
-                  <span className="text-sm">Latitude (optional)</span>
-                  <input
-                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.latitude}
-                    onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm">Longitude (optional)</span>
-                  <input
-                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.longitude}
-                    onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-                  />
-                </label>
-              </div>
-
               <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-                <button className="btn btn-neutral" onClick={() => setOpenCreate(false)}>
-                  Cancel
-                </button>
-                <button className="btn btn-brand" onClick={createEvent}>
-                  Save
-                </button>
+                <button className="btn btn-neutral" onClick={() => setOpenCreate(false)}>Cancel</button>
+                <button className="btn btn-brand" onClick={createEvent}>Save</button>
               </div>
             </div>
 
             <p className="mt-4 text-xs text-neutral-500">
-              Tip: “Friends going” shows events where at least one friend RSVP’d shareably.
-              “Only my events” shows anything you RSVP’d (including private) or pinned.
+              Drag to move; resize to change duration. You can only edit events you created.
             </p>
           </Dialog.Panel>
         </div>
