@@ -151,7 +151,6 @@ export default function CalendarPage() {
 
   // ui
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
