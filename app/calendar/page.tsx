@@ -10,9 +10,8 @@ import {
   Views,
   View,
 } from "react-big-calendar";
-import { format, parse, startOfWeek, getDay } from "date-fns";
+import { format, parse, startOfWeek, getDay, startOfYear, endOfYear, addDays } from "date-fns";
 import enUS from "date-fns/locale/en-US";
-import "react-big-calendar/lib/css/react-big-calendar.css";
 
 import { supabase } from "@/lib/supabaseClient";
 import Legend from "@/components/Legend";
@@ -47,6 +46,11 @@ type RSVP = {
   shareable: boolean | null;
 };
 
+type UiEvent = RBCEvent & {
+  resource: any;
+};
+
+// ---- date-fns localizer
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
   format,
@@ -55,6 +59,71 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
+
+// =========================================================
+// Moon phase overlay (approximate; ±1 day).
+// Based on synodic month ~29.530588 days from a known new moon epoch.
+// We derive New, First Quarter (+7.38d), Full (+14.77d), Last Quarter (+22.15d).
+// =========================================================
+function generateLunarEventsForYear(year: number): UiEvent[] {
+  const SYNODIC = 29.530588; // days
+  const FIRST_Q = 7.382647;
+  const FULL = 14.765294;
+  const LAST_Q = 22.147941;
+
+  // Known new moon epoch near J2000 (UTC): 2000-01-06 18:14
+  const epoch = new Date(Date.UTC(2000, 0, 6, 18, 14));
+  const yearStart = startOfYear(new Date(Date.UTC(year, 0, 1)));
+  const yearEnd = endOfYear(new Date(Date.UTC(year, 11, 31)));
+
+  // find k such that epoch + k*synodic enters this year
+  const daysBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 86400000;
+  let k = Math.floor(daysBetween(epoch, yearStart) / SYNODIC) - 1;
+
+  const events: UiEvent[] = [];
+  const pushPhase = (d: Date, title: string, key: string, color: string) => {
+    // Render as all-day marker (00:00 to 23:59 local)
+    const local = new Date(d); // approximate is fine
+    const start = new Date(local.getFullYear(), local.getMonth(), local.getDate());
+    const end = addDays(start, 1);
+    events.push({
+      id: `${key}-${start.toISOString()}`,
+      title,
+      start,
+      end,
+      allDay: true,
+      resource: { moonPhase: key, title },
+    });
+  };
+
+  // Generate until we pass the year end
+  // Safety cap on iterations
+  for (let i = 0; i < 20; i++) {
+    const newMoon = new Date(epoch.getTime() + (k + i) * SYNODIC * 86400000);
+
+    if (newMoon > addDays(yearEnd, 2)) break;
+
+    const firstQuarter = new Date(newMoon.getTime() + FIRST_Q * 86400000);
+    const fullMoon = new Date(newMoon.getTime() + FULL * 86400000);
+    const lastQuarter = new Date(newMoon.getTime() + LAST_Q * 86400000);
+
+    // Only include phases that land within the year window (with a small buffer)
+    const maybeAdd = (d: Date, title: string, key: string, color: string) => {
+      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2)) {
+        pushPhase(d, title, key, color);
+      }
+    };
+
+    maybeAdd(newMoon, "New Moon", "moon-new", "#E5E7EB");
+    maybeAdd(firstQuarter, "First Quarter", "moon-first", "#DBEAFE");
+    maybeAdd(fullMoon, "Full Moon", "moon-full", "#FEF3C7");
+    maybeAdd(lastQuarter, "Last Quarter", "moon-last", "#EDE9FE");
+  }
+
+  return events;
+}
+
+// =========================================================
 
 function VisibilityPill({ v }: { v: Visibility }) {
   const map = {
@@ -74,8 +143,9 @@ function VisibilityPill({ v }: { v: Visibility }) {
 export default function CalendarPage() {
   const [sessionUser, setSessionUser] = useState<string | null>(null);
 
-  // UI mode
+  // Modes & toggles
   const [mode, setMode] = useState<"whats" | "mine">("whats");
+  const [showMoon, setShowMoon] = useState(true);
 
   // Data
   const [events, setEvents] = useState<DBEvent[]>([]);
@@ -114,7 +184,7 @@ export default function CalendarPage() {
     if (!sessionUser) return;
     setLoading(true);
 
-    // 1) My RSVPs (for "Only my events" and interested coloring)
+    // 1) My RSVPs
     const myRsvpRes = await supabase
       .from("event_rsvps")
       .select("event_id,status")
@@ -146,7 +216,8 @@ export default function CalendarPage() {
       }
     }
 
-    // 3) RSVPs by friends (shareable only) → friendGoingIds
+    // 3) RSVPs by friends (shareable only)
+    let friendsGoing = new Set<string>();
     if (friendIds.size) {
       const friendList = Array.from(friendIds);
       const rsvpFriends = await supabase
@@ -156,16 +227,13 @@ export default function CalendarPage() {
         .in("status", ["yes", "maybe", "interested"])
         .eq("shareable", true);
 
-      const friendsGoing = new Set<string>();
       if (!rsvpFriends.error && rsvpFriends.data) {
         for (const r of rsvpFriends.data as RSVP[]) friendsGoing.add(r.event_id);
       }
-      setFriendGoingIds(friendsGoing);
-    } else {
-      setFriendGoingIds(new Set());
     }
+    setFriendGoingIds(friendsGoing);
 
-    // 4) Followed creators (businesses/users you follow)
+    // 4) Followed creators
     const followsRes = await supabase
       .from("follows")
       .select("followed_id")
@@ -203,27 +271,16 @@ export default function CalendarPage() {
       // "What's happening"
       const orClauses: string[] = [];
 
-      // a) Events from creators I follow
       if (followedIds.size) {
         orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
       }
-
-      // b) Events friends RSVP'd/shareable
-      if (friendIds.size) {
-        // get event ids first (already computed as friendGoingIds)
-        if (friendGoingIds.size) {
-          orClauses.push(`id.in.(${Array.from(friendGoingIds).join(",")})`);
-        }
+      if (friendsGoing.size) {
+        orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
       }
-
-      // c) Community-tagged events for my communities
       if (myCommunityIds.size) {
-        orClauses.push(
-          `community_id.in.(${Array.from(myCommunityIds).join(",")})`
-        );
+        orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
       }
 
-      // Fallback: if nothing to OR, still show public upcoming
       if (!orClauses.length) {
         const { data, error } = await supabase
           .from("events")
@@ -233,14 +290,12 @@ export default function CalendarPage() {
           .order("start_time", { ascending: true });
         if (!error && data) all = data as DBEvent[];
       } else {
-        // Supabase OR filtering (string)
         const { data, error } = await supabase
           .from("events")
           .select("*")
           .or(orClauses.join(","))
           .gte("end_time", new Date().toISOString())
           .order("start_time", { ascending: true });
-
         if (!error && data) all = data as DBEvent[];
       }
     }
@@ -254,8 +309,8 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode]);
 
-  // RBC mapping
-  const rbcEvents = useMemo<RBCEvent[]>(
+  // RBC mapping for DB events
+  const rbcDbEvents = useMemo<UiEvent[]>(
     () =>
       events.map((e) => ({
         id: e.id,
@@ -268,7 +323,21 @@ export default function CalendarPage() {
     [events]
   );
 
-  const onSelectEvent = (evt: any) => {
+  // Moon events for the current calendar year (toggle)
+  const lunarEvents = useMemo<UiEvent[]>(() => {
+    if (!showMoon) return [];
+    const y = date.getFullYear();
+    return generateLunarEventsForYear(y);
+  }, [date, showMoon]);
+
+  // Combined events for display
+  const allUiEvents = useMemo<UiEvent[]>(
+    () => [...rbcDbEvents, ...lunarEvents],
+    [rbcDbEvents, lunarEvents]
+  );
+
+  const onSelectEvent = (evt: UiEvent) => {
+    if (evt.resource?.moonPhase) return; // do nothing for moon markers
     const e: DBEvent = evt.resource;
     setSelected(e);
     setDetailsOpen(true);
@@ -283,14 +352,33 @@ export default function CalendarPage() {
     setOpenCreate(true);
   };
 
-  // Coloring rule (priority): friends-going > interested (me) > followed orgs > community > other
-  const eventPropGetter = (event: any) => {
-    const e: DBEvent = event.resource;
+  // Coloring rule (priority): moon phases (distinct) > friends-going > interested (me) > followed orgs > community > other
+  const eventPropGetter = (event: UiEvent) => {
+    const r = event.resource || {};
+    if (r.moonPhase) {
+      const colors: Record<string, string> = {
+        "moon-full": "#FEF3C7",   // amber-100
+        "moon-new": "#E5E7EB",    // gray-200
+        "moon-first": "#DBEAFE",  // blue-100
+        "moon-last": "#EDE9FE",   // violet-100
+      };
+      const bg = colors[r.moonPhase] || "#E5E7EB";
+      return {
+        style: {
+          backgroundColor: bg,
+          border: "1px dashed #CBD5E1",
+          borderRadius: "10px",
+          fontStyle: "italic",
+        },
+      };
+    }
+
+    const e: DBEvent = r;
     let backgroundColor = "#9ca3af"; // other
-    if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
-    else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";
-    else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa";
-    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa";
+    if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";          // green-500
+    else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";      // amber-200
+    else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa"; // blue-400
+    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa"; // violet-400
 
     return {
       style: {
@@ -301,7 +389,6 @@ export default function CalendarPage() {
     };
   };
 
-  // Minimal create (unchanged, plus optional community tag)
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
     if (!form.title || !form.start || !form.end) return alert("Missing fields.");
@@ -342,10 +429,8 @@ export default function CalendarPage() {
     <div className="min-h-screen">
       <div className="container-app py-6">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-2xl font-semibold logoText">
-            What’s happening
-          </h1>
-          <div className="flex gap-2">
+          <h1 className="text-2xl font-semibold logoText">What’s happening</h1>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               className={`btn ${mode === "whats" ? "btn-brand" : "btn-neutral"}`}
               onClick={() => setMode("whats")}
@@ -358,6 +443,12 @@ export default function CalendarPage() {
             >
               Only my events
             </button>
+
+            <label className="ml-2 inline-flex items-center gap-2 text-sm border rounded-xl px-3 py-2">
+              <input type="checkbox" checked={showMoon} onChange={(e) => setShowMoon(e.target.checked)} />
+              Show moon phases
+            </label>
+
             <Link href="/" className="btn btn-neutral">Home</Link>
             <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
               Create event
@@ -370,7 +461,7 @@ export default function CalendarPage() {
         <div className="card p-3 mt-3">
           <Calendar
             localizer={localizer}
-            events={rbcEvents}
+            events={allUiEvents}
             startAccessor="start"
             endAccessor="end"
             style={{ height: 680 }}
@@ -384,12 +475,21 @@ export default function CalendarPage() {
             onNavigate={setDate}
             eventPropGetter={eventPropGetter}
             components={{
-              event: ({ event }) => (
-                <div className="text-[11px] leading-tight">
-                  <div className="font-medium">{event.title}</div>
-                  <VisibilityPill v={event.resource.visibility} />
-                </div>
-              ),
+              event: ({ event }) => {
+                if ((event as UiEvent).resource?.moonPhase) {
+                  return (
+                    <div className="text-[11px] leading-tight italic">
+                      {(event as UiEvent).resource?.title ?? "Moon"}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="text-[11px] leading-tight">
+                    <div className="font-medium">{event.title}</div>
+                    <VisibilityPill v={(event as UiEvent).resource.visibility} />
+                  </div>
+                );
+              },
             }}
           />
         </div>
@@ -483,7 +583,7 @@ export default function CalendarPage() {
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.community_id}
                   onChange={(e) => setForm({ ...form, community_id: e.target.value })}
-                  placeholder="Community UUID (we can add a picker later)"
+                  placeholder="Community UUID (picker coming soon)"
                 />
               </label>
 
