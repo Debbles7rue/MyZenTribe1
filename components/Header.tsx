@@ -2,10 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Header() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const pathname = usePathname();
+
+  // Apply saved theme on every page load so routes match the chosen season
+  useEffect(() => {
+    const saved = localStorage.getItem("mzt_theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -13,8 +21,8 @@ export default function Header() {
       if (!mounted) return;
       setUserEmail(data.user?.email ?? null);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setUserEmail(s?.user?.email ?? null);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email ?? null);
     });
     return () => {
       mounted = false;
@@ -24,16 +32,21 @@ export default function Header() {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    // refresh page so UI updates quickly
-    window.location.href = "/";
+    window.location.href = "/"; // refresh UI quickly
   };
+
+  // Hide Sign up / Sign in on the calendar page if not logged in
+  const hideAuthOnCalendar = pathname === "/calendar" && !userEmail;
 
   return (
     <header className="site-header">
       <div className="container-app header-inner">
         <Link href="/" className="brand">
-          <img src="/logo.svg" alt="MyZenTribe" className="brand-logo" />
-          <span className="brand-name">MyZenTribe</span>
+          {/* Hide the tiny logo for now to reduce visual noise */}
+          {/* <img src="/logo.svg" alt="MyZenTribe" className="brand-logo" /> */}
+          <span className="brand-name">
+            My<em className="brand-zen">Zen</em>Tribe
+          </span>
         </Link>
 
         <nav className="main-nav">
@@ -43,23 +56,21 @@ export default function Header() {
           <Link href="/profile" className="nav-link">Profile</Link>
         </nav>
 
-        <div className="auth-area">
-          {userEmail ? (
-            <>
-              <span className="user-chip" title={userEmail}>
-                {userEmail}
-              </span>
-              <button className="btn btn-neutral" onClick={signOut}>
-                Sign out
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/signup" className="btn btn-brand">Sign up</Link>
-              <Link href="/login" className="btn btn-neutral">Sign in</Link>
-            </>
-          )}
-        </div>
+        {!hideAuthOnCalendar && (
+          <div className="auth-area">
+            {userEmail ? (
+              <>
+                <span className="user-chip" title={userEmail}>{userEmail}</span>
+                <button className="btn btn-neutral" onClick={signOut}>Sign out</button>
+              </>
+            ) : (
+              <>
+                <Link href="/signup" className="btn btn-brand">Sign up</Link>
+                <Link href="/login" className="btn btn-neutral">Sign in</Link>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
