@@ -1,5 +1,29 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Theme tokens */
+:root {
+  --brand-bg: #ffffff;
+  --brand-text: #111827;
+  --brand-accent: #7c3aed; /* purple */
+}
 
-body { background: #fff; color: #111; }
+[data-theme="spring"] {
+  --brand-bg: #f0fdf4;      /* light green */
+  --brand-accent: #22c55e;  /* green */
+}
+
+[data-theme="summer"] {
+  --brand-bg: #fff7ed;      /* warm peach */
+  --brand-accent: #f59e0b;  /* amber */
+}
+
+[data-theme="autumn"] {
+  --brand-bg: #fff1f2;      /* rose tint */
+  --brand-accent: #ef4444;  /* red */
+}
+
+[data-theme="winter"] {
+  --brand-bg: #f5f3ff;      /* lavender */
+  --brand-accent: #6366f1;  /* indigo */
+}
+
+.btn-brand { background-color: var(--brand-accent); color: #fff; }
+.card { background-color: var(--brand-bg); }
