@@ -1,5 +1,6 @@
 "use client";
-
+import "react-big-calendar/lib/css/react-big-calendar.css";
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Dialog } from "@headlessui/react";
