@@ -10,36 +10,43 @@ import {
   Views,
   View,
 } from "react-big-calendar";
-import "react-big-calendar/lib/css/react-big-calendar.css";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import enUS from "date-fns/locale/en-US";
+import "react-big-calendar/lib/css/react-big-calendar.css";
 
 import { supabase } from "@/lib/supabaseClient";
 import Legend from "@/components/Legend";
 import EventDetails from "@/components/EventDetails";
 
-// --- Local helper mini component (keeps this file self-contained)
-function VisibilityPill({ v }: { v: "public" | "friends" | "private" | "community" }) {
-  const map = {
-    public: "bg-green-100 text-green-700",
-    friends: "bg-blue-100 text-blue-700",
-    private: "bg-rose-100 text-rose-700",
-    community: "bg-violet-100 text-violet-700",
-  } as const;
-  const label = {
-    public: "Public",
-    friends: "Friends",
-    private: "Private",
-    community: "Community",
-  }[v];
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${map[v]}`}>
-      {label}
-    </span>
-  );
-}
+type Visibility = "public" | "friends" | "private" | "community";
 
-// --- date-fns localizer for react-big-calendar
+type DBEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  start_time: string;
+  end_time: string;
+  visibility: Visibility;
+  created_by: string;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  rrule: string | null;
+  event_type: string | null;
+  rsvp_public: boolean | null;
+  community_id: string | null;
+  created_at: string;
+};
+
+type RSVP = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  status: "yes" | "no" | "maybe" | "interested";
+  pinned: boolean | null;
+  shareable: boolean | null;
+};
+
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
   format,
@@ -49,55 +56,40 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// --- DB event type aligned to your Supabase SQL (start_time / end_time)
-type DBEvent = {
-  id: string;
-  title: string;
-  description: string | null;
-  start_time: string; // ISO
-  end_time: string;   // ISO
-  visibility: "public" | "friends" | "private" | "community";
-  created_by: string;
-  location: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  rrule: string | null;
-  event_type: string | null;
-  rsvp_public: boolean | null;
-  created_at: string;
-};
+function VisibilityPill({ v }: { v: Visibility }) {
+  const map = {
+    public: "bg-green-100 text-green-700",
+    friends: "bg-blue-100 text-blue-700",
+    private: "bg-rose-100 text-rose-700",
+    community: "bg-violet-100 text-violet-700",
+  } as const;
+  const label = { public: "Public", friends: "Friends", private: "Private", community: "Community" }[v];
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] ${map[v]}`}>
+      {label}
+    </span>
+  );
+}
 
 export default function CalendarPage() {
-  // --- UI State
   const [sessionUser, setSessionUser] = useState<string | null>(null);
+
+  // UI mode
+  const [mode, setMode] = useState<"whats" | "mine">("whats");
+
+  // Data
   const [events, setEvents] = useState<DBEvent[]>([]);
+  const [friendGoingIds, setFriendGoingIds] = useState<Set<string>>(new Set());
+  const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
+  const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(new Set());
+  const [myEventIds, setMyEventIds] = useState<Set<string>>(new Set());
+
+  // UI bits
   const [loading, setLoading] = useState(true);
-
-  // Filters & search
-  const [filters, setFilters] = useState<{
-    mine: boolean;
-    visibility: "all" | DBEvent["visibility"];
-    type: "all" | string;
-    q: string;
-  }>({
-    mine: false,
-    visibility: "all",
-    type: "all",
-    q: "",
-  });
-
-  const [types] = useState<string[]>([
-    "Coffee",
-    "Meditation",
-    "Sound Bath",
-    "Yoga",
-    "Drum Circle",
-    "Qi Gong",
-  ]);
-
-  // Calendar view/date
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selected, setSelected] = useState<DBEvent | null>(null);
 
   // Create dialog state
   const [openCreate, setOpenCreate] = useState(false);
@@ -107,65 +99,162 @@ export default function CalendarPage() {
     location: "",
     start: "",
     end: "",
-    allDay: false,
-    visibility: "public" as DBEvent["visibility"],
+    visibility: "public" as Visibility,
     latitude: "",
     longitude: "",
     event_type: "",
+    community_id: "",
   });
 
-  // Details dialog state
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selected, setSelected] = useState<DBEvent | null>(null);
-
-  // --- Load auth user once
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setSessionUser(data.user?.id ?? null);
-    });
+    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
 
-  // --- Load events with filters (RLS will enforce visibility per user)
-  const loadEvents = async () => {
+  const loadData = async () => {
+    if (!sessionUser) return;
     setLoading(true);
-    let q = supabase
-      .from("events")
-      .select(
-        "id,title,description,start_time,end_time,visibility,created_by,location,latitude,longitude,rrule,event_type,rsvp_public,created_at"
-      )
-      .order("start_time", { ascending: true });
 
-    if (filters.mine && sessionUser) q = q.eq("created_by", sessionUser);
-    if (filters.visibility !== "all") q = q.eq("visibility", filters.visibility);
-    if (filters.type !== "all") q = q.eq("event_type", filters.type);
+    // 1) My RSVPs (for "Only my events" and interested coloring)
+    const myRsvpRes = await supabase
+      .from("event_rsvps")
+      .select("event_id,status")
+      .eq("user_id", sessionUser);
+    const myEvents = new Set<string>();
+    const interested = new Set<string>();
+    if (!myRsvpRes.error && myRsvpRes.data) {
+      for (const r of myRsvpRes.data as RSVP[]) {
+        myEvents.add(r.event_id);
+        if (r.status === "interested") interested.add(r.event_id);
+      }
+    }
+    setMyEventIds(myEvents);
+    setInterestedIds(interested);
 
-    const { data, error } = await q;
-    if (error) {
-      console.error(error.message);
-      setEvents([]);
-      setLoading(false);
-      return;
+    // 2) Friends (accepted)
+    const friendsRes = await supabase
+      .from("friends")
+      .select("friend_user_id,user_id,status")
+      .or(`user_id.eq.${sessionUser},friend_user_id.eq.${sessionUser}`)
+      .eq("status", "accepted");
+
+    const friendIds = new Set<string>();
+    if (!friendsRes.error && friendsRes.data) {
+      for (const row of friendsRes.data) {
+        const other =
+          row.user_id === sessionUser ? row.friend_user_id : row.user_id;
+        friendIds.add(other);
+      }
     }
-    let rows = (data ?? []) as DBEvent[];
-    if (filters.q.trim()) {
-      const needle = filters.q.trim().toLowerCase();
-      rows = rows.filter(
-        (e) =>
-          e.title.toLowerCase().includes(needle) ||
-          (e.description ?? "").toLowerCase().includes(needle) ||
-          (e.location ?? "").toLowerCase().includes(needle)
-      );
+
+    // 3) RSVPs by friends (shareable only) → friendGoingIds
+    if (friendIds.size) {
+      const friendList = Array.from(friendIds);
+      const rsvpFriends = await supabase
+        .from("event_rsvps")
+        .select("event_id")
+        .in("user_id", friendList)
+        .in("status", ["yes", "maybe", "interested"])
+        .eq("shareable", true);
+
+      const friendsGoing = new Set<string>();
+      if (!rsvpFriends.error && rsvpFriends.data) {
+        for (const r of rsvpFriends.data as RSVP[]) friendsGoing.add(r.event_id);
+      }
+      setFriendGoingIds(friendsGoing);
+    } else {
+      setFriendGoingIds(new Set());
     }
-    setEvents(rows);
+
+    // 4) Followed creators (businesses/users you follow)
+    const followsRes = await supabase
+      .from("follows")
+      .select("followed_id")
+      .eq("follower_id", sessionUser);
+    const followedIds = new Set<string>();
+    if (!followsRes.error && followsRes.data) {
+      for (const f of followsRes.data) followedIds.add(f.followed_id);
+    }
+    setFollowedCreatorIds(followedIds);
+
+    // 5) My communities
+    const cmRes = await supabase
+      .from("community_members")
+      .select("community_id")
+      .eq("user_id", sessionUser);
+    const myCommunityIds = new Set<string>();
+    if (!cmRes.error && cmRes.data) {
+      for (const c of cmRes.data) myCommunityIds.add(c.community_id);
+    }
+
+    // 6) Load events depending on mode
+    let all: DBEvent[] = [];
+
+    if (mode === "mine") {
+      // Only events I responded to (any status, including private)
+      if (myEvents.size) {
+        const { data, error } = await supabase
+          .from("events")
+          .select("*")
+          .in("id", Array.from(myEvents))
+          .order("start_time", { ascending: true });
+        if (!error && data) all = data as DBEvent[];
+      }
+    } else {
+      // "What's happening"
+      const orClauses: string[] = [];
+
+      // a) Events from creators I follow
+      if (followedIds.size) {
+        orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
+      }
+
+      // b) Events friends RSVP'd/shareable
+      if (friendIds.size) {
+        // get event ids first (already computed as friendGoingIds)
+        if (friendGoingIds.size) {
+          orClauses.push(`id.in.(${Array.from(friendGoingIds).join(",")})`);
+        }
+      }
+
+      // c) Community-tagged events for my communities
+      if (myCommunityIds.size) {
+        orClauses.push(
+          `community_id.in.(${Array.from(myCommunityIds).join(",")})`
+        );
+      }
+
+      // Fallback: if nothing to OR, still show public upcoming
+      if (!orClauses.length) {
+        const { data, error } = await supabase
+          .from("events")
+          .select("*")
+          .eq("visibility", "public")
+          .gte("end_time", new Date().toISOString())
+          .order("start_time", { ascending: true });
+        if (!error && data) all = data as DBEvent[];
+      } else {
+        // Supabase OR filtering (string)
+        const { data, error } = await supabase
+          .from("events")
+          .select("*")
+          .or(orClauses.join(","))
+          .gte("end_time", new Date().toISOString())
+          .order("start_time", { ascending: true });
+
+        if (!error && data) all = data as DBEvent[];
+      }
+    }
+
+    setEvents(all);
     setLoading(false);
   };
 
   useEffect(() => {
-    loadEvents();
+    if (sessionUser) loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionUser, filters.mine, filters.visibility, filters.type, filters.q]);
+  }, [sessionUser, mode]);
 
-  // --- rbc events
+  // RBC mapping
   const rbcEvents = useMemo<RBCEvent[]>(
     () =>
       events.map((e) => ({
@@ -179,54 +268,44 @@ export default function CalendarPage() {
     [events]
   );
 
-  // --- calendar slot click -> prefill create form
-  const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    const toLocal = (d: Date) =>
-      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    setForm((f) => ({
-      ...f,
-      start: toLocal(start),
-      end: toLocal(end),
-    }));
-    setOpenCreate(true);
-  };
-
-  // --- calendar event click -> details
   const onSelectEvent = (evt: any) => {
     const e: DBEvent = evt.resource;
     setSelected(e);
     setDetailsOpen(true);
   };
 
-  // --- style by visibility
-  const eventStyleGetter = (event: any) => {
-    const v = (event.resource?.visibility ?? "public") as DBEvent["visibility"];
-    const colors: Record<DBEvent["visibility"], string> = {
-      public: "#DCFCE7",
-      friends: "#DBEAFE",
-      private: "#FFE4E6",
-      community: "#EDE9FE",
-    };
-    const style = {
-      backgroundColor: colors[v],
-      borderRadius: "10px",
-      border: "1px solid #ddd",
-    };
-    return { style };
+  const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+    const toLocal = (d: Date) =>
+      new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+    setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
+    setOpenCreate(true);
   };
-   const createEvent = async () => {
-    if (!sessionUser) {
-      alert("Please log in to create an event.");
-      return;
-    }
-    if (!form.title || !form.start || !form.end) {
-      alert("Please fill in title, start, and end.");
-      return;
-    }
-    const payload: Partial<DBEvent> & {
-      start_time: Date;
-      end_time: Date;
-    } = {
+
+  // Coloring rule (priority): friends-going > interested (me) > followed orgs > community > other
+  const eventPropGetter = (event: any) => {
+    const e: DBEvent = event.resource;
+    let backgroundColor = "#9ca3af"; // other
+    if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
+    else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";
+    else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa";
+    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa";
+
+    return {
+      style: {
+        backgroundColor,
+        border: "1px solid #e5e7eb",
+        borderRadius: "10px",
+      },
+    };
+  };
+
+  // Minimal create (unchanged, plus optional community tag)
+  const createEvent = async () => {
+    if (!sessionUser) return alert("Please log in.");
+    if (!form.title || !form.start || !form.end) return alert("Missing fields.");
+    const payload: Partial<DBEvent> & { start_time: Date; end_time: Date } = {
       title: form.title,
       description: form.description || null,
       location: form.location || null,
@@ -239,13 +318,10 @@ export default function CalendarPage() {
       rrule: null,
       event_type: form.event_type || null,
       rsvp_public: true,
+      community_id: form.community_id || null,
     };
-
     const { error } = await supabase.from("events").insert(payload);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) return alert(error.message);
     setOpenCreate(false);
     setForm({
       title: "",
@@ -253,82 +329,45 @@ export default function CalendarPage() {
       location: "",
       start: "",
       end: "",
-      allDay: false,
       visibility: "public",
       latitude: "",
       longitude: "",
       event_type: "",
+      community_id: "",
     });
-    await loadEvents();
+    loadData();
   };
 
   return (
     <div className="min-h-screen">
       <div className="container-app py-6">
-        {/* Header */}
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl font-semibold logoText">
-            My <span className="word-zen">Zen</span> Tribe Calendar
+            What’s happening
           </h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href="/" className="btn btn-neutral">
-              Home
-            </Link>
+          <div className="flex gap-2">
+            <button
+              className={`btn ${mode === "whats" ? "btn-brand" : "btn-neutral"}`}
+              onClick={() => setMode("whats")}
+            >
+              What’s happening
+            </button>
+            <button
+              className={`btn ${mode === "mine" ? "btn-brand" : "btn-neutral"}`}
+              onClick={() => setMode("mine")}
+            >
+              Only my events
+            </button>
+            <Link href="/" className="btn btn-neutral">Home</Link>
             <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
               Create event
             </button>
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <input
-            placeholder="Search title, description, or location…"
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm w-full md:w-80"
-            value={filters.q}
-            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-          />
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={filters.mine}
-              onChange={(e) => setFilters({ ...filters, mine: e.target.checked })}
-            />
-            My events only
-          </label>
-          <select
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            value={filters.visibility}
-            onChange={(e) =>
-              setFilters({
-                ...filters,
-                visibility: e.target.value as any,
-              })
-            }
-          >
-            <option value="all">All visibilities</option>
-            <option value="public">Public</option>
-            <option value="friends">Friends</option>
-            <option value="private">Private</option>
-            <option value="community">Community</option>
-          </select>
-          <select
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            value={filters.type}
-            onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-          >
-            <option value="all">All types</option>
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <Legend />
-        </div>
+        <Legend />
 
-        {/* Calendar */}
-        <div className="card p-3">
+        <div className="card p-3 mt-3">
           <Calendar
             localizer={localizer}
             events={rbcEvents}
@@ -343,7 +382,7 @@ export default function CalendarPage() {
             onView={setView}
             date={date}
             onNavigate={setDate}
-            eventPropGetter={eventStyleGetter}
+            eventPropGetter={eventPropGetter}
             components={{
               event: ({ event }) => (
                 <div className="text-[11px] leading-tight">
@@ -351,55 +390,11 @@ export default function CalendarPage() {
                   <VisibilityPill v={event.resource.visibility} />
                 </div>
               ),
-              toolbar: (props) => (
-                <div className="flex items-center justify-between p-2">
-                  <div className="flex items-center gap-2">
-                    <button className="btn btn-neutral" onClick={() => props.onNavigate("TODAY")}>
-                      Today
-                    </button>
-                    <button className="btn btn-neutral" onClick={() => props.onNavigate("PREV")}>
-                      Prev
-                    </button>
-                    <button className="btn btn-neutral" onClick={() => props.onNavigate("NEXT")}>
-                      Next
-                    </button>
-                  </div>
-                  <div className="text-sm">{format(props.date, "MMMM yyyy")}</div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className={`btn ${props.view === Views.MONTH ? "btn-brand" : "btn-neutral"}`}
-                      onClick={() => props.onView(Views.MONTH)}
-                    >
-                      Month
-                    </button>
-                    <button
-                      className={`btn ${props.view === Views.WEEK ? "btn-brand" : "btn-neutral"}`}
-                      onClick={() => props.onView(Views.WEEK)}
-                    >
-                      Week
-                    </button>
-                    <button
-                      className={`btn ${props.view === Views.DAY ? "btn-brand" : "btn-neutral"}`}
-                      onClick={() => props.onView(Views.DAY)}
-                    >
-                      Day
-                    </button>
-                    <button
-                      className={`btn ${props.view === Views.AGENDA ? "btn-brand" : "btn-neutral"}`}
-                      onClick={() => props.onView(Views.AGENDA)}
-                    >
-                      Agenda
-                    </button>
-                  </div>
-                </div>
-              ),
             }}
           />
         </div>
 
-        {loading && (
-          <p className="mt-3 text-sm text-neutral-500">Loading events…</p>
-        )}
+        {loading && <p className="mt-3 text-sm text-neutral-500">Loading…</p>}
       </div>
 
       {/* Create Event Dialog */}
@@ -439,18 +434,12 @@ export default function CalendarPage() {
 
               <label className="block">
                 <span className="text-sm">Type</span>
-                <select
+                <input
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.event_type}
                   onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-                >
-                  <option value="">{`(optional)`}</option>
-                  {types.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Coffee, Yoga, etc."
+                />
               </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:col-span-2">
@@ -479,15 +468,23 @@ export default function CalendarPage() {
                 <select
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.visibility}
-                  onChange={(e) =>
-                    setForm({ ...form, visibility: e.target.value as DBEvent["visibility"] })
-                  }
+                  onChange={(e) => setForm({ ...form, visibility: e.target.value as Visibility })}
                 >
                   <option value="public">Public</option>
                   <option value="friends">Friends & acquaintances</option>
                   <option value="private">Private (invite only)</option>
                   <option value="community">Community</option>
                 </select>
+              </label>
+
+              <label className="block">
+                <span className="text-sm">Community (optional)</span>
+                <input
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.community_id}
+                  onChange={(e) => setForm({ ...form, community_id: e.target.value })}
+                  placeholder="Community UUID (we can add a picker later)"
+                />
               </label>
 
               <div className="grid grid-cols-1 gap-3">
@@ -520,14 +517,13 @@ export default function CalendarPage() {
             </div>
 
             <p className="mt-4 text-xs text-neutral-500">
-              Tip: “Private” events are only visible to invitees and you. “Friends” are visible to your
-              accepted friends/acquaintances. “Community” is visible to members of that community.
+              Tip: “Friends going” shows events where at least one friend RSVP’d shareably.
+              “Only my events” shows anything you RSVP’d (including private) or pinned.
             </p>
           </Dialog.Panel>
         </div>
       </Dialog>
 
-      {/* Details modal */}
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
