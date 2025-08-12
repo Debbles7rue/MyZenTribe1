@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@headlessui/react";
-import { generateICS } from "@/lib/ics";
+import { generateICS } from "../lib/ics";
 
 export default function EventDetails({ event, onClose }: any) {
   if (!event) return null;
