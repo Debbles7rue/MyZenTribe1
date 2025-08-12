@@ -1,38 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-// ...
-await supabase.auth.signInWithPassword({ email, password });
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
     setBusy(true);
+    setMsg(null);
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     setBusy(false);
     if (error) {
-      setErrorMsg(error.message);
+      setMsg(error.message);
       return;
     }
-    router.push("/"); // go home after login
+    router.push("/"); // success → go home
   };
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold mb-4">Log in</h1>
+
         <form onSubmit={onSubmit} className="space-y-3">
           <label className="block">
             <span className="text-sm">Email</span>
@@ -41,14 +40,10 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-brand"
+              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
             />
           </label>
-<p className="text-sm text-gray-500 mt-2">
-  <a href="/forgot-password" className="text-indigo-600 hover:underline">
-    Forgot password?
-  </a>
-</p>
+
           <label className="block">
             <span className="text-sm">Password</span>
             <input
@@ -56,14 +51,20 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-brand"
+              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
             />
           </label>
 
-          {errorMsg && <p className="text-sm text-rose-600">{errorMsg}</p>}
+          <p className="text-sm text-gray-500 mt-2">
+            <Link href="/forgot-password" className="text-indigo-600 hover:underline">
+              Forgot password?
+            </Link>
+          </p>
+
+          {msg && <p className="text-sm text-rose-600">{msg}</p>}
 
           <button type="submit" disabled={busy} className="w-full btn btn-brand">
-            {busy ? "Signing in..." : "Sign in"}
+            {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
