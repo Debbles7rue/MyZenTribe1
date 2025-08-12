@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Dialog } from "@headlessui/react";
 import {
   Calendar,
@@ -24,7 +23,6 @@ import enUS from "date-fns/locale/en-US";
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
 
-// ---------------- Types ----------------
 type Visibility = "public" | "friends" | "private" | "community";
 
 type DBEvent = {
@@ -56,7 +54,6 @@ type RSVP = {
 
 type UiEvent = RBCEvent & { resource: any };
 
-// --------------- Calendar setup ---------------
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
   format,
@@ -65,9 +62,10 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
+
 const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 
-// --------------- Moon phases (approximate) ---------------
+// ---- Moon phases (approx) ----
 function generateLunarEventsForYear(year: number): UiEvent[] {
   const SYNODIC = 29.530588;
   const FIRST_Q = 7.382647;
@@ -121,7 +119,6 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   return events;
 }
 
-// ---------------- Component ----------------
 export default function CalendarPage() {
   // session
   const [sessionUser, setSessionUser] = useState<string | null>(null);
@@ -130,7 +127,7 @@ export default function CalendarPage() {
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [showMoon, setShowMoon] = useState(true);
 
-  // themes + quote
+  // theme + tiny quote
   const [theme, setTheme] =
     useState<"spring" | "summer" | "autumn" | "winter">("winter");
   const quotes = useMemo(
@@ -152,7 +149,7 @@ export default function CalendarPage() {
     new Set()
   );
 
-  // ui state
+  // ui
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
@@ -174,7 +171,9 @@ export default function CalendarPage() {
     community_id: "",
   });
 
-  // session + theme
+  // search
+  const [query, setQuery] = useState("");
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
@@ -183,12 +182,12 @@ export default function CalendarPage() {
     return () => document.documentElement.removeAttribute("data-theme");
   }, [theme]);
 
-  // -------------- Data loader (shows my created items even w/out RSVP) --------------
+  // ------------ loader (includes my created items even without RSVP) ------------
   const loadData = async () => {
     if (!sessionUser) return;
     setLoading(true);
 
-    // 1) my RSVPs
+    // my RSVPs
     const myRsvpRes = await supabase
       .from("event_rsvps")
       .select("event_id,status")
@@ -204,7 +203,7 @@ export default function CalendarPage() {
     }
     setInterestedIds(interested);
 
-    // 2) friends (accepted)
+    // friends
     const friendsRes = await supabase
       .from("friends")
       .select("friend_user_id,user_id,status")
@@ -220,7 +219,7 @@ export default function CalendarPage() {
       }
     }
 
-    // 3) friends’ shareable RSVPs
+    // friends’ shareable RSVPs
     let friendsGoing = new Set<string>();
     if (friendIds.size) {
       const rsvpFriends = await supabase
@@ -229,14 +228,13 @@ export default function CalendarPage() {
         .in("user_id", Array.from(friendIds))
         .in("status", ["yes", "maybe", "interested"])
         .eq("shareable", true);
-
       if (!rsvpFriends.error && rsvpFriends.data) {
         for (const r of rsvpFriends.data as RSVP[]) friendsGoing.add(r.event_id);
       }
     }
     setFriendGoingIds(friendsGoing);
 
-    // 4) followed creators
+    // followed creators
     const followsRes = await supabase
       .from("follows")
       .select("followed_id")
@@ -247,7 +245,7 @@ export default function CalendarPage() {
     }
     setFollowedCreatorIds(followedIds);
 
-    // 5) my communities
+    // my communities
     const cmRes = await supabase
       .from("community_members")
       .select("community_id")
@@ -257,10 +255,9 @@ export default function CalendarPage() {
       for (const c of cmRes.data) myCommunityIds.add(c.community_id);
     }
 
-    // 6) pull events
+    // pull events
     let all: DBEvent[] = [];
     if (mode === "mine") {
-      // include events I created OR RSVPed to
       const ors: string[] = [`created_by.eq.${sessionUser}`];
       if (rsvpEventIds.size) ors.push(`id.in.(${Array.from(rsvpEventIds).join(",")})`);
       const { data } = await supabase
@@ -270,7 +267,6 @@ export default function CalendarPage() {
         .order("start_time", { ascending: true });
       all = (data ?? []) as DBEvent[];
     } else {
-      // what's happening = followed creators, friends going, my communities + my own
       const orClauses: string[] = [`created_by.eq.${sessionUser}`];
       if (followedIds.size)
         orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
@@ -295,10 +291,22 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode]);
 
-  // map DB -> calendar events
+  // map + search filter
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return events;
+    return events.filter((e) => {
+      return (
+        e.title.toLowerCase().includes(q) ||
+        (e.description ?? "").toLowerCase().includes(q) ||
+        (e.location ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [events, query]);
+
   const rbcDbEvents = useMemo<UiEvent[]>(
     () =>
-      events.map((e) => ({
+      filtered.map((e) => ({
         id: e.id,
         title: e.title,
         start: new Date(e.start_time),
@@ -306,10 +314,9 @@ export default function CalendarPage() {
         allDay: false,
         resource: e,
       })),
-    [events]
+    [filtered]
   );
 
-  // moon overlay
   const lunarEvents = useMemo<UiEvent[]>(() => {
     if (!showMoon) return [];
     return generateLunarEventsForYear(date.getFullYear());
@@ -320,16 +327,15 @@ export default function CalendarPage() {
     [rbcDbEvents, lunarEvents]
   );
 
-  // event click
   const onSelectEvent = (evt: UiEvent) => {
     if (evt.resource?.moonPhase) return;
     setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
 
-  // day click: month -> day (no auto-create)
+  const [viewState, setView] = useState<View>(Views.MONTH);
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    if (view === Views.MONTH) {
+    if (viewState === Views.MONTH) {
       setDate(start);
       setView(Views.DAY);
       return;
@@ -342,7 +348,6 @@ export default function CalendarPage() {
     setOpenCreate(true);
   };
 
-  // colors
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
     if (r.moonPhase) {
@@ -373,10 +378,8 @@ export default function CalendarPage() {
     };
   };
 
-  // edit rights
   const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
 
-  // drag / resize
   const onEventDrop = async ({
     event,
     start,
@@ -415,11 +418,9 @@ export default function CalendarPage() {
     loadData();
   };
 
-  // create event
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
-    if (!form.title || !form.start || !form.end)
-      return alert("Missing fields.");
+    if (!form.title || !form.start || !form.end) return alert("Missing fields.");
 
     const payload: Partial<DBEvent> & { start_time: Date; end_time: Date } = {
       title: form.title,
@@ -428,7 +429,7 @@ export default function CalendarPage() {
       start_time: new Date(form.start),
       end_time: new Date(form.end),
       visibility: form.visibility,
-      created_by: sessionUser, // DB trigger also sets this if omitted
+      created_by: sessionUser,
       latitude: form.latitude ? Number(form.latitude) : null,
       longitude: form.longitude ? Number(form.longitude) : null,
       rrule: null,
@@ -460,33 +461,28 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="container-app py-6">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-2xl font-semibold logoText">Calendar</h1>
+    <div className="page">
+      <div className="container-app">
+        <div className="header-bar">
+          <h1 className="page-title">Calendar</h1>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Toggle buttons */}
-            <div className="inline-flex rounded-xl overflow-hidden border border-neutral-300">
+          <div className="controls">
+            <div className="segmented">
               <button
-                className={`px-4 py-2 text-sm ${
-                  mode === "whats" ? "bg-black text-white" : "bg-white"
-                }`}
+                className={`seg-btn ${mode === "whats" ? "active" : ""}`}
                 onClick={() => setMode("whats")}
               >
                 What’s happening
               </button>
               <button
-                className={`px-4 py-2 text-sm ${
-                  mode === "mine" ? "bg-black text-white" : "bg-white"
-                }`}
+                className={`seg-btn ${mode === "mine" ? "active" : ""}`}
                 onClick={() => setMode("mine")}
               >
                 Only my events
               </button>
             </div>
 
-            <label className="ml-2 inline-flex items-center gap-2 text-sm border rounded-xl px-3 py-2">
+            <label className="check">
               <input
                 type="checkbox"
                 checked={showMoon}
@@ -498,7 +494,7 @@ export default function CalendarPage() {
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as any)}
-              className="border rounded-xl px-3 py-2 text-sm"
+              className="select"
               title="Theme"
             >
               <option value="spring">Spring</option>
@@ -510,14 +506,20 @@ export default function CalendarPage() {
             <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
               Create event
             </button>
-
-            <Link href="/" className="btn btn-neutral">
-              Home
-            </Link>
           </div>
         </div>
 
-        <div className="card p-3 mt-3">
+        {/* Search bar */}
+        <div className="card p-3 mb-3">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search events by title, description or location…"
+            className="search-input"
+          />
+        </div>
+
+        <div className="card p-3">
           <DnDCalendar
             localizer={localizer}
             events={allUiEvents}
@@ -527,7 +529,7 @@ export default function CalendarPage() {
             selectable
             resizable
             popup
-            view={view}
+            view={viewState}
             onView={setView}
             date={date}
             onNavigate={setDate}
@@ -555,12 +557,11 @@ export default function CalendarPage() {
           />
         </div>
 
-        {loading && <p className="mt-3 text-sm text-neutral-500">Loading…</p>}
-
-        <p className="mt-4 text-sm italic text-neutral-600">“{quote}”</p>
+        {loading && <p className="muted mt-3">Loading…</p>}
+        <p className="muted mt-4 italic">“{quote}”</p>
       </div>
 
-      {/* Create Event Dialog */}
+      {/* Create dialog */}
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
