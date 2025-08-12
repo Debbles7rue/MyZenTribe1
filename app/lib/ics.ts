@@ -5,21 +5,19 @@ export function generateICS(event: {
   end: Date;
   location?: string;
 }) {
-  const formatDate = (date: Date) =>
-    date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-
-  const icsContent = `
-BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-SUMMARY:${event.title}
-DESCRIPTION:${event.description || ""}
-DTSTART:${formatDate(event.start)}
-DTEND:${formatDate(event.end)}
-LOCATION:${event.location || ""}
-END:VEVENT
-END:VCALENDAR
-`.trim();
-
-  return new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//MyZenTribe//Calendar//EN",
+    "BEGIN:VEVENT",
+    `DTSTART:${fmt(event.start)}`,
+    `DTEND:${fmt(event.end)}`,
+    `SUMMARY:${event.title}`,
+    event.description ? `DESCRIPTION:${event.description}` : null,
+    event.location ? `LOCATION:${event.location}` : null,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].filter(Boolean).join("\r\n");
+  return new Blob([ics], { type: "text/calendar;charset=utf-8" });
 }
