@@ -120,16 +120,25 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
 }
 
 export default function CalendarPage() {
-  // session
   const [sessionUser, setSessionUser] = useState<string | null>(null);
 
-  // modes & toggles
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [showMoon, setShowMoon] = useState(true);
 
-  // theme + tiny quote
+  // Theme with persistence
   const [theme, setTheme] =
     useState<"spring" | "summer" | "autumn" | "winter">("winter");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("mzt_theme") as
+      | "spring" | "summer" | "autumn" | "winter" | null;
+    if (saved) setTheme(saved);
+  }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("mzt_theme", theme);
+  }, [theme]);
+
   const quotes = useMemo(
     () => [
       "Small steps every day.",
@@ -141,7 +150,6 @@ export default function CalendarPage() {
   );
   const quote = quotes[new Date().getDate() % quotes.length];
 
-  // data
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [friendGoingIds, setFriendGoingIds] = useState<Set<string>>(new Set());
   const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
@@ -149,13 +157,12 @@ export default function CalendarPage() {
     new Set()
   );
 
-  // ui
   const [loading, setLoading] = useState(true);
+  const [calendarView, setCalendarView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
-  // create dialog state
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -170,23 +177,16 @@ export default function CalendarPage() {
     community_id: "",
   });
 
-  // search
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    return () => document.documentElement.removeAttribute("data-theme");
-  }, [theme]);
 
-  // ------------ loader (includes my created items even without RSVP) ------------
   const loadData = async () => {
     if (!sessionUser) return;
     setLoading(true);
 
-    // my RSVPs
     const myRsvpRes = await supabase
       .from("event_rsvps")
       .select("event_id,status")
@@ -202,7 +202,6 @@ export default function CalendarPage() {
     }
     setInterestedIds(interested);
 
-    // friends
     const friendsRes = await supabase
       .from("friends")
       .select("friend_user_id,user_id,status")
@@ -218,7 +217,6 @@ export default function CalendarPage() {
       }
     }
 
-    // friends’ shareable RSVPs
     let friendsGoing = new Set<string>();
     if (friendIds.size) {
       const rsvpFriends = await supabase
@@ -233,7 +231,6 @@ export default function CalendarPage() {
     }
     setFriendGoingIds(friendsGoing);
 
-    // followed creators
     const followsRes = await supabase
       .from("follows")
       .select("followed_id")
@@ -244,7 +241,6 @@ export default function CalendarPage() {
     }
     setFollowedCreatorIds(followedIds);
 
-    // my communities
     const cmRes = await supabase
       .from("community_members")
       .select("community_id")
@@ -254,7 +250,6 @@ export default function CalendarPage() {
       for (const c of cmRes.data) myCommunityIds.add(c.community_id);
     }
 
-    // pull events
     let all: DBEvent[] = [];
     if (mode === "mine") {
       const ors: string[] = [`created_by.eq.${sessionUser}`];
@@ -290,7 +285,6 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode]);
 
-  // map + search filter
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return events;
@@ -332,11 +326,10 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   };
 
-  const [viewState, setView] = useState<View>(Views.MONTH);
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    if (viewState === Views.MONTH) {
+    if (calendarView === Views.MONTH) {
       setDate(start);
-      setView(Views.DAY);
+      setCalendarView(Views.DAY);
       return;
     }
     const toLocal = (d: Date) =>
@@ -350,18 +343,18 @@ export default function CalendarPage() {
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
     if (r.moonPhase) {
-      const colors: Record<string, string> = {
-        "moon-full": "#FEF3C7",
+      const bg: Record<string, string> = {
+        "moon-full": "#FFF3BF",
         "moon-new": "#E5E7EB",
         "moon-first": "#DBEAFE",
         "moon-last": "#EDE9FE",
       };
       return {
         style: {
-          backgroundColor: colors[r.moonPhase] || "#E5E7EB",
-          border: "1px dashed #CBD5E1",
+          backgroundColor: bg[r.moonPhase] || "#E5E7EB",
+          border: "1px dashed #94a3b8",
           borderRadius: 10,
-          fontStyle: "italic",
+          fontWeight: 600,
         },
       };
     }
@@ -443,7 +436,7 @@ export default function CalendarPage() {
     setOpenCreate(false);
     setMode("mine");
     setDate(new Date(form.start));
-    setView(Views.DAY);
+    setCalendarView(Views.DAY);
     setForm({
       title: "",
       description: "",
@@ -508,7 +501,7 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Search bar */}
+        {/* Search */}
         <div className="card p-3 mb-3">
           <input
             value={query}
@@ -528,8 +521,8 @@ export default function CalendarPage() {
             selectable
             resizable
             popup
-            view={viewState}
-            onView={setView}
+            view={calendarView}
+            onView={setCalendarView}
             date={date}
             onNavigate={setDate}
             onSelectSlot={onSelectSlot}
@@ -539,10 +532,15 @@ export default function CalendarPage() {
             eventPropGetter={eventPropGetter}
             components={{
               event: ({ event }) => {
-                if ((event as UiEvent).resource?.moonPhase) {
+                const r = (event as UiEvent).resource;
+                if (r?.moonPhase) {
+                  const icon =
+                    r.moonPhase === "moon-full" ? "🌕" :
+                    r.moonPhase === "moon-new" ? "🌑" :
+                    r.moonPhase === "moon-first" ? "🌓" : "🌗";
                   return (
-                    <div className="text-[11px] leading-tight italic">
-                      {(event as UiEvent).resource?.title ?? "Moon"}
+                    <div className="text-[11px] leading-tight">
+                      {icon} {r.title}
                     </div>
                   );
                 }
@@ -557,7 +555,8 @@ export default function CalendarPage() {
         </div>
 
         {loading && <p className="muted mt-3">Loading…</p>}
-        <p className="muted mt-4 italic">“{quote}”</p>
+        <p className="muted mt-2 text-xs">🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter</p>
+        <p className="muted mt-2 italic">“{quote}”</p>
       </div>
 
       {/* Create dialog */}
