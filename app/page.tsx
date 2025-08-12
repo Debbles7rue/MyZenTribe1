@@ -1,38 +1,53 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function HomePage() {
-  const [hasSession, setHasSession] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setHasSession(!!data.session));
-  }, []);
-
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white p-8 shadow">
-        <h1 className="text-3xl font-semibold mb-3 logoText">Welcome to MyZenTribe</h1>
-        <p className="text-neutral-600 mb-6">
-          Feel the vibe, find your tribe.
-        </p>
+    <main className="home-page">
+      {/* Brand Name */}
+      <h1 className="text-center text-4xl font-bold mb-6">
+        <span style={{ fontFamily: "Georgia, serif", fontWeight: "bold" }}>
+          My<em style={{ fontStyle: "italic" }}>Zen</em>Tribe
+        </span>
+      </h1>
 
-        <div className="flex flex-wrap gap-3">
-          {hasSession ? (
-            <>
-              <Link href="/calendar" className="btn btn-brand">Go to calendar</Link>
-              <Link href="/profile" className="btn btn-neutral">My profile</Link>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="btn btn-brand">Log in</Link>
-              <Link href="/signup" className="btn btn-neutral">Create account</Link>
-            </>
-          )}
+      {/* Your existing content — unchanged */}
+      <section className="our-intention bg-white rounded-2xl shadow-md p-6 max-w-3xl mx-auto">
+        <h2 className="text-2xl font-semibold mb-4">Our Intention</h2>
+        <p className="text-gray-700 mb-4">
+          Welcome to MyZenTribe — a space where connection, community, and
+          healing come together. Our mission is to connect people to local and
+          global communities, support talented small businesses, and encourage
+          everyone to make the world a better place.
+        </p>
+        <div className="mt-4">
+          <Link
+            href="/commitment"
+            className="px-5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition"
+          >
+            Our Commitment
+          </Link>
         </div>
-      </div>
+      </section>
+
+      {/* Signup / Login section */}
+      <section className="mt-8 flex flex-col items-center">
+        <div className="flex gap-4">
+          <Link
+            href="/signup"
+            className="px-6 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition"
+          >
+            Sign Up
+          </Link>
+          <Link
+            href="/login"
+            className="px-6 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 transition"
+          >
+            Sign In
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }
