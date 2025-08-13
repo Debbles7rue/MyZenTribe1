@@ -31,26 +31,29 @@ export default function CommitmentPage() {
 
   return (
     <main className="page">
-      <div className="lavender-hero">
-        <div className="container-app hero-inner">
-          <h1 className="brand-display" style={{ fontSize: 36 }}>Our Commitment</h1>
-          <p className="hero-tagline">
-            The heart of MyZenTribe — simple promises we stand by.
-          </p>
-        </div>
-      </div>
+      {/* Lavender full-page backdrop */}
+      <div className="lavender-page">
+        <div className="container-app">
+          {/* Header */}
+          <div className="hero-inner" style={{ paddingBottom: 20 }}>
+            <h1 className="brand-display" style={{ fontSize: 36, marginBottom: 6 }}>
+              Our Commitment
+            </h1>
+            <p className="hero-tagline">
+              The heart of MyZenTribe — simple promises we stand by.
+            </p>
+          </div>
 
-      <div className="container-app">
-        <section className="commit-wrap">
-          <div className="commit-grid">
+          {/* Stacked long cards */}
+          <section className="commit-stack">
             {points.map((p, i) => (
-              <div key={i} className="commit-card card">
+              <article key={i} className="commit-long card">
                 <h3 className="commit-title">{p.title}</h3>
                 <p className="commit-text">{p.text}</p>
-              </div>
+              </article>
             ))}
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </main>
   );
