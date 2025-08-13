@@ -186,3 +186,71 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .lavender-page .hero-inner {
   text-align: center;
 }
+
+/* ===== Home / Welcome / Commitment ===== */
+
+.home-wrap { max-width: 920px; margin: 24px auto; padding: 0 16px; }
+
+/* Brand lockup like your screenshot */
+.brand-lockup {
+  margin: 6px 0 18px;
+  font-family: "Playfair Display", ui-serif, Georgia, serif;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+  color: #111827;
+}
+.brand-word .zen { font-style: italic; }
+
+/* Welcome / intention card */
+.hero-card {
+  background: var(--brand-bg, #fff);
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 6px 14px rgba(17,24,39,0.05);
+  margin-bottom: 22px;
+}
+.hero-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.hero-text {
+  color: #374151;
+  font-size: 16px;
+  margin: 0 0 14px;
+}
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn.subtle { background: #f8fafc; border-color: #e5e7eb; }
+
+/* Commitment */
+.commitment { margin: 26px 0 40px; }
+.commitment-title { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+.commitment-sub  { color:#6b7280; margin: 0 0 14px; }
+
+.commitment-grid {
+  display: grid;
+  grid-template-columns: repeat( auto-fit, minmax(240px, 1fr) );
+  gap: 14px;
+}
+.commitment-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.commitment-card h4 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+.commitment-card p {
+  margin: 0;
+  color: #374151;
+  font-size: 14px;
+}
+
+/* keep seasonal theme tokens already defined; they tint --brand-bg */
