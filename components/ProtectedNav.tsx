@@ -1,11 +1,12 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClientBrowser } from "@/lib/supabase-browser";
 
 const tabs = [
-  { href: "/(protected)/calendar", label: "Calendar" },
+  { href: "/(protected)/cal", label: "Calendar" },
   { href: "/(protected)/communities", label: "Communities" },
   { href: "/(protected)/meditation", label: "Meditation room" },
   { href: "/(protected)/profile", label: "Profile" },
