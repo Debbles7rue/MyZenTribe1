@@ -1,60 +1,55 @@
+// app/commitment/page.tsx
 "use client";
 
+const COMMITMENTS = [
+  {
+    title: "No Ads. Ever.",
+    body: "You will never see invasive banner ads, pop-ups, or unrelated product pitches here. Your experience on MyZenTribe will remain peaceful, focused, and free from the noise that clutters so many other online spaces."
+  },
+  {
+    title: "Transparent Funding",
+    body: "We are funded entirely through voluntary donations and, in the future, a simple and affordable membership model. Until January 1, 2026, MyZenTribe is completely free for everyone. After that, you’ll have the option to join with a membership plan — or continue supporting through donations if you wish."
+  },
+  {
+    title: "Community First",
+    body: "Our decisions, features, and updates are shaped with you in mind. We welcome feedback and actively listen to our members to make this a space that truly serves the needs of spiritual, wellness, and community-focused individuals."
+  },
+  {
+    title: "A Safe & Supportive Environment",
+    body: "We take safety seriously. From clear community guidelines to built-in reporting features, MyZenTribe is committed to creating a space where everyone feels welcome, respected, and protected."
+  },
+  {
+    title: "Giving Back",
+    body: "Through features like Karma Corner, community events, and opportunities for members to showcase their skills and services, we aim to create ripples of kindness and support that reach far beyond the screen."
+  }
+];
+
 export default function CommitmentPage() {
-  const points = [
-    {
-      title: "Kindness first",
-      text:
-        "We lead with compassion and respect in every interaction — online and in person.",
-    },
-    {
-      title: "Support small & local",
-      text:
-        "We lift up healers, studios, makers, and small businesses that serve their communities.",
-    },
-    {
-      title: "Inclusive & safe",
-      text:
-        "We welcome all backgrounds and identities, with clear tools to report harm and keep spaces safe.",
-    },
-    {
-      title: "Mindful tech",
-      text:
-        "We design features to encourage real connection, reflection, and wellbeing — not doom-scrolling.",
-    },
-    {
-      title: "Give back",
-      text:
-        "We make it easy to volunteer, donate, and participate in community good.",
-    },
-  ];
-
   return (
-    <main className="page">
-      {/* Lavender full-page backdrop */}
-      <div className="lavender-page">
-        <div className="container-app">
-          {/* Header */}
-          <div className="hero-inner" style={{ paddingBottom: 20 }}>
-            <h1 className="brand-display" style={{ fontSize: 36, marginBottom: 6 }}>
-              Our Commitment
-            </h1>
-            <p className="hero-tagline">
-              The heart of MyZenTribe — simple promises we stand by.
-            </p>
-          </div>
-
-          {/* Stacked long cards */}
-          <section className="commit-stack">
-            {points.map((p, i) => (
-              <article key={i} className="commit-long card">
-                <h3 className="commit-title">{p.title}</h3>
-                <p className="commit-text">{p.text}</p>
-              </article>
-            ))}
-          </section>
+    <div className="lavender-page">
+      <div className="home-wrap">
+        <div className="hero-inner" style={{ paddingTop: 24, paddingBottom: 8 }}>
+          <h1 className="brand-lockup">
+            Our <span className="zen">Commitment</span>
+          </h1>
+          <p className="hero-text">
+            At MyZenTribe, we believe connection, community, and kindness should never be overshadowed by distractions or profit-driven agendas. That’s why we’ve built this platform with a clear commitment to our members:
+          </p>
         </div>
+
+        <div className="commit-stack">
+          {COMMITMENTS.map(({ title, body }) => (
+            <article key={title} className="commit-long">
+              <h3 className="commit-title">{title}</h3>
+              <p className="commit-text">{body}</p>
+            </article>
+          ))}
+        </div>
+
+        <p className="hero-text" style={{ marginTop: "2rem", textAlign: "center", fontWeight: "500" }}>
+          💜 Together, we can make this a space where meaningful connections grow, ideas flourish, and kindness leads the way.
+        </p>
       </div>
-    </main>
+    </div>
   );
 }
