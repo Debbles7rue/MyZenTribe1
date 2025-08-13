@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClientBrowser } from "@/lib/supabase-browser";
+import { supabase } from "@/lib/supabaseClient";
 
 const tabs = [
   { href: "/(protected)/cal", label: "Calendar" },
@@ -16,12 +16,11 @@ const tabs = [
 export default function ProtectedNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClientBrowser();
   const [email, setEmail] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
-  }, [supabase]);
+  }, []);
 
   async function signOut() {
     await supabase.auth.signOut();
