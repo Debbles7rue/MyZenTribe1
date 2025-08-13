@@ -138,3 +138,51 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 [data-theme="autumn"] .lavender-hero { background: linear-gradient(180deg, #fff1f2 0%, #ffffff 45%); }
 [data-theme="summer"] .lavender-hero { background: linear-gradient(180deg, #fff7ed 0%, #ffffff 45%); }
 [data-theme="spring"] .lavender-hero { background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 45%); }
+
+/* ---------- Commitment page: lavender background, stacked long cards ---------- */
+
+/* Full-page lavender backdrop for the commitment route */
+.lavender-page {
+  background: #f5f3ff; /* soft lavender */
+  padding: 10px 0 28px;
+}
+
+/* One long card per row, centered with generous spacing */
+.commit-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;               /* space so the lavender shows between cards */
+  max-width: 980px;        /* comfortable reading width */
+  margin: 0 auto;          /* center within container */
+}
+
+/* Long, elegant card style */
+.commit-long {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  padding: 18px 20px;
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02), 0 8px 30px rgba(17, 24, 39, 0.04);
+}
+
+/* Typography */
+.commit-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #111827;
+  text-align: center;
+  letter-spacing: -0.2px;
+}
+.commit-text {
+  color: #374151;
+  line-height: 1.7;
+  font-size: 16px;
+  text-align: center;
+  margin: 0;
+}
+
+/* Make sure the intro header sits nicely on lavender */
+.lavender-page .hero-inner {
+  text-align: center;
+}
