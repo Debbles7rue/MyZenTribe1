@@ -1,16 +1,33 @@
-import './globals.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Optional: brand font for the big title */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap');
+
 :root {
-  --brand: theme(colors.brand.500);
-  --gold: theme(colors.gold);
-  --jade: theme(colors.jade);
+  --brand: theme(colors.violet.600);
+  --gold: #eab308; /* tailwind amber-500 */
+  --jade: #10b981; /* tailwind emerald-500 */
 }
 
+/* Base body styles */
 body {
-  @apply bg-white text-gray-900 dark:bg-zinc-950 dark:text-zinc-100;
-  background-image: theme(backgroundImage.protection-watermark);
-  background-attachment: fixed;
+  @apply bg-gray-50 text-gray-900 dark:bg-zinc-950 dark:text-zinc-100;
 }
+
+/* Small helpers for the welcome/commitment pages */
+.brand-lockup {
+  font-family: "Playfair Display", ui-serif, Georgia, serif;
+  letter-spacing: 0.2px;
+}
+
+.card {
+  @apply bg-white border border-gray-200 rounded-2xl shadow-sm;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+}
+.btn-primary { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
+.btn-neutral { @apply bg-white text-gray-900 border border-gray-200 hover:bg-gray-50; }
