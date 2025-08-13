@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
-  // 👉 change this ONE line if your calendar URL changes (e.g. "/cal")
+  // change this to "/cal" only if your calendar really lives at /cal right now
   const AFTER_LOGIN = "/calendar";
 
   const router = useRouter();
@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // If already logged in, send to calendar
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) router.replace(AFTER_LOGIN);
@@ -28,7 +27,7 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      password, // do not trim passwords
+      password,
     });
 
     if (error) {
@@ -44,9 +43,7 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow">
         <h1 className="text-2xl font-semibold mb-2">Log in</h1>
-        <p className="text-sm text-neutral-600 mb-4">
-          Use your email and password.
-        </p>
+        <p className="text-sm text-neutral-600 mb-4">Use your email and password.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">
@@ -77,18 +74,12 @@ export default function LoginPage() {
             <p className="text-sm text-rose-600">{errorMsg || "Login failed"}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={status === "loading"}
-            className="btn btn-brand w-full"
-          >
+          <button type="submit" disabled={status === "loading"} className="btn btn-brand w-full">
             {status === "loading" ? "Signing in…" : "Sign in"}
           </button>
 
           <p className="text-sm text-gray-500 mt-2">
-            <a href="/forgot-password" className="text-indigo-600 hover:underline">
-              Forgot password?
-            </a>
+            <a href="/forgot-password" className="text-indigo-600 hover:underline">Forgot password?</a>
           </p>
         </form>
       </div>
