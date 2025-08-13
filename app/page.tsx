@@ -82,46 +82,5 @@ export default function HomePage() {
     </div>
   </section>
 </div>
-        <div className="hero-actions">
-          <Link href="/calendar" className="btn btn-brand">Open calendar</Link>
-          <a href="#commitment" className="btn btn-neutral subtle">Our commitment</a>
-        </div>
-      </section>
-
-      {/* Our Commitment */}
-      <section id="commitment" className="commitment">
-        <h3 className="commitment-title">Our commitment</h3>
-        <p className="commitment-sub">
-          We promise to keep MyZenTribe kind, safe, and genuinely helpful.
-        </p>
-
-        <div className="commitment-grid">
-          <div className="commitment-card">
-            <h4>Kindness & inclusion</h4>
-            <p>We foster kindness, inclusion, and respect for all members.</p>
-          </div>
-
-          <div className="commitment-card">
-            <h4>Privacy & boundaries</h4>
-            <p>We protect your privacy and honor personal boundaries.</p>
-          </div>
-
-          <div className="commitment-card">
-            <h4>Support small business</h4>
-            <p>We uplift makers, wellness pros, and local businesses.</p>
-          </div>
-
-          <div className="commitment-card">
-            <h4>Growth & connection</h4>
-            <p>We encourage personal growth, real connection, and community.</p>
-          </div>
-
-          <div className="commitment-card">
-            <h4>Spam-free space</h4>
-            <p>No spam, scams, or exploitation — ever.</p>
-          </div>
-        </div>
-      </section>
-    </div>
   );
 }
