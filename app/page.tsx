@@ -1,85 +1,32 @@
-// app/page.tsx
-"use client";
-
-import Image from "next/image";
-import Link from "next/link";
-
 export default function HomePage() {
   return (
-    <>
-      {/* Page-only overrides: hide the app nav on the landing page */}
-      <style jsx global>{`
-        .site-header .main-nav,
-        .site-header .auth-area {
-          display: none !important;
-        }
-        .site-header {
-          border-bottom: none !important;
-          background: transparent !important;
-          box-shadow: none !important;
-        }
-        body {
-          background: #f5f3ff; /* lavender like the original */
-        }
-      `}</style>
-
-      <main className="min-h-screen flex flex-col items-center justify-start p-6">
-        {/* Large centered logo (use your uploaded logo) */}
-        <div className="mt-8 mb-6">
-          <Image
-            src="/logo-myzentribe.png"
-            alt="MyZenTribe Logo"
-            width={250}
-            height={250}
-            priority
-          />
+    <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4 py-8">
+      <div className="max-w-4xl w-full text-center">
+        <img
+          src="/logo.png"
+          alt="MyZenTribe Logo"
+          className="mx-auto mb-6 w-48 h-auto"
+        />
+        <h1 className="text-4xl font-bold mb-4">Welcome to MyZenTribe</h1>
+        <p className="text-lg text-gray-700 mb-6">
+          A space to connect, recharge, and share what matters.
+        </p>
+        <p className="text-lg text-gray-700 mb-6">
+          From daily mindfulness and gratitude practices to meaningful events, MyZenTribe makes it easy to find your people and build something good together.
+        </p>
+        <div className="flex justify-center gap-4 mb-8">
+          <a href="/signup" className="bg-green-500 text-white px-6 py-3 rounded-lg shadow hover:bg-green-600">Sign Up</a>
+          <a href="/signin" className="bg-purple-500 text-white px-6 py-3 rounded-lg shadow hover:bg-purple-600">Sign In</a>
         </div>
 
-        {/* Welcome / intention content */}
-        <section className="max-w-4xl text-center space-y-6">
-          <h1 className="text-4xl font-bold tracking-tight">
-            Welcome to <span className="italic">My</span>Zen
-            <span className="italic">Tribe</span>
-          </h1>
-
-          <p className="text-lg">
-            A space to connect, recharge, and share what matters.
-          </p>
-
-          <p className="text-lg">
-            From daily mindfulness and gratitude practices to meaningful events,
-            MyZenTribe makes it easy to find your people and build something good
-            together.
-          </p>
-
-          {/* The single primary CTA, like before */}
-          <div className="flex justify-center">
-            <Link href="/auth" className="rounded-2xl bg-black px-5 py-2.5 text-white">
-              Sign up / Sign in
-            </Link>
-          </div>
-        </section>
-
-        {/* Intention card with “Our Commitment” button under it */}
-        <section
-          id="intention"
-          className="mt-10 max-w-3xl rounded-3xl border bg-white/80 p-6 shadow-md text-center"
-        >
-          <h2 className="mb-2 text-xl font-semibold">Our Intention</h2>
-          <p className="mb-5">
-            To bring people together across local and global communities, support
-            talented small businesses, and encourage every member to play a part
-            in making the world a better place.
-          </p>
-
-          <Link
-            href="/commitment"
-            className="inline-block rounded-2xl border px-4 py-2 hover:bg-white"
-          >
-            Our Commitment
-          </Link>
-        </section>
-      </main>
-    </>
+        <h2 className="text-3xl font-semibold mb-4">Our Intention</h2>
+        <p className="text-gray-700 mb-6">
+          To bring people together across local and global communities, support talented small businesses, and encourage every member to play a part in making the world a better place.
+        </p>
+        <a href="/commitment" className="text-blue-600 hover:underline font-medium">
+          Our Commitment
+        </a>
+      </div>
+    </main>
   );
 }
