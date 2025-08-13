@@ -1,9 +1,14 @@
 export type LatLon = { lat: number; lon: number };
 
 export async function geocode(q: string): Promise<LatLon | null> {
+  // Accept "lat,lon"
   const m = q.trim().match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);
   if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[3]) };
-  const url = `https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=${encodeURIComponent(q)}`;
+
+  // Open-Meteo geocoding (no API key)
+  const url = `https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=${encodeURIComponent(
+    q
+  )}`;
   const r = await fetch(url);
   if (!r.ok) return null;
   const j = await r.json();
