@@ -16,17 +16,12 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
     async function check() {
       const { data } = await supabase.auth.getUser();
       if (!mounted) return;
-      if (!data.user) {
-        router.replace("/"); // kick to landing if not logged in
-      } else {
-        setAuthed(true);
-      }
+      if (!data.user) router.replace("/");
+      else setAuthed(true);
       setReady(true);
     }
-
     check();
 
-    // keep auth reactive (optional)
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (!mounted) return;
       if (!session?.user) router.replace("/");
@@ -39,8 +34,7 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
-  if (!ready) return null; // avoid flash
-  if (!authed) return null;
+  if (!ready || !authed) return null;
 
   return (
     <div className="min-h-screen">
