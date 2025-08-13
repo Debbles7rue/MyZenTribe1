@@ -1,14 +1,13 @@
 {
-  "extends": "next/tsconfig",
   "compilerOptions": {
+    "target": "es2022",
+    "lib": ["dom", "es2022"],
+    "jsx": "preserve",
+    "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     },
-    "jsx": "preserve",
-    "target": "es2022",
-    "lib": ["dom", "es2022"],
-    "moduleResolution": "bundler",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
