@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
-const AFTER_LOGIN = "/calendar";  
-const router = useRouter();
+  // 👉 change this ONE line if your calendar URL changes (e.g. "/cal")
+  const AFTER_LOGIN = "/calendar";
+
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -15,9 +17,9 @@ const router = useRouter();
   // If already logged in, send to calendar
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/(protected)/cal"); // <— updated path
+      if (data.session) router.replace(AFTER_LOGIN);
     });
-  }, [router]);
+  }, [router, AFTER_LOGIN]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +28,7 @@ const router = useRouter();
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      password, // don't trim passwords
+      password, // do not trim passwords
     });
 
     if (error) {
@@ -35,7 +37,7 @@ const router = useRouter();
       return;
     }
 
-    router.replace("/(protected)/cal"); // <— updated path
+    router.replace(AFTER_LOGIN);
   };
 
   return (
