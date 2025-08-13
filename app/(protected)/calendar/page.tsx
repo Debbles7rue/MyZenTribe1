@@ -38,6 +38,14 @@ type MZTEvent = {
 
 const DnDCalendar = withDragAndDrop<RBCalendar<MZTEvent>>(RBCalendar as any) as any;
 
+// Map moon phase labels to emojis
+const moonIcons: Record<string, string> = {
+  "New Moon": "🌑",
+  "First Quarter": "🌓",
+  "Full Moon": "🌕",
+  "Last Quarter": "🌗",
+};
+
 export default function CalendarPage() {
   // ------------ UI state ------------
   const [date, setDate] = useState<Date>(new Date());
@@ -51,7 +59,6 @@ export default function CalendarPage() {
 
   // ------------ events ------------
   const [events, setEvents] = useState<MZTEvent[]>(() => {
-    // load from localStorage once
     try {
       const raw = localStorage.getItem("mzt.events");
       if (!raw) return [];
@@ -66,7 +73,6 @@ export default function CalendarPage() {
     }
   });
 
-  // persist user events
   useEffect(() => {
     const toSave = events.filter((e) => e.kind !== "moon");
     localStorage.setItem("mzt.events", JSON.stringify(toSave));
@@ -79,7 +85,7 @@ export default function CalendarPage() {
     const month0 = date.getMonth();
     return monthMoonEvents(year, month0).map((m) => ({
       id: `moon-${m.date}`,
-      title: m.label,
+      title: `${moonIcons[m.label] ?? ""} ${m.label}`,
       start: new Date(`${m.date}T00:00:00`),
       end: new Date(`${m.date}T23:59:59`),
       allDay: true,
@@ -114,7 +120,6 @@ export default function CalendarPage() {
         const saved = localStorage.getItem("mzt.location") || "";
         let latlon = saved ? await geocode(saved) : null;
 
-        // fallback to browser geolocation
         if (!latlon && navigator.geolocation) {
           await new Promise<void>((resolve) => {
             navigator.geolocation.getCurrentPosition(
@@ -323,7 +328,10 @@ export default function CalendarPage() {
 
         {/* Legend */}
         <div className="text-xs text-gray-600 flex items-center gap-3">
-          <span>●</span> New • First Quarter • Full • Last Quarter
+          <span>🌑 New</span>
+          <span>🌓 First Quarter</span>
+          <span>🌕 Full</span>
+          <span>🌗 Last Quarter</span>
         </div>
 
         <p className="text-xs text-gray-500">“Small steps every day.”</p>
