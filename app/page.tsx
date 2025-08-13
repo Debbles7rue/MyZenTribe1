@@ -1,66 +1,85 @@
 // app/page.tsx
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
- return (
-  <div className="home-wrap">
-    {/* Brand / Welcome */}
-    <div className="hero-card">
-      <h1 className="brand-lockup">
-        My<span className="zen">Zen</span>Tribe
-      </h1>
-      <h2 className="hero-title">Welcome to Your Community</h2>
-      <p className="hero-text">
-        Our intention is to connect people to local and global communities,
-        support talented small businesses, and encourage everyone to make the
-        world a better place.
-      </p>
-      <div className="hero-actions">
-        <a href="/signup" className="btn btn-brand">Join Now</a>
-        <a href="/about" className="btn subtle">Learn More</a>
-      </div>
-    </div>
+  return (
+    <>
+      {/* Page-only overrides: hide the app nav on the landing page */}
+      <style jsx global>{`
+        .site-header .main-nav,
+        .site-header .auth-area {
+          display: none !important;
+        }
+        .site-header {
+          border-bottom: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        body {
+          background: #f5f3ff; /* lavender like the original */
+        }
+      `}</style>
 
-    {/* Commitment */}
-    <section className="commitment">
-      <h3 className="commitment-title">Our Commitment</h3>
-      <p className="commitment-sub">What makes MyZenTribe special</p>
-      <div className="commitment-grid">
-        <div className="commitment-card">
-          <h4>No Ads, Ever</h4>
-          <p>We believe in real connection without distraction or data mining.</p>
+      <main className="min-h-screen flex flex-col items-center justify-start p-6">
+        {/* Large centered logo (use your uploaded logo) */}
+        <div className="mt-8 mb-6">
+          <Image
+            src="/logo-myzentribe.png"
+            alt="MyZenTribe Logo"
+            width={250}
+            height={250}
+            priority
+          />
         </div>
-        <div className="commitment-card">
-          <h4>No Doom-Scrolling</h4>
-          <p>Our platform encourages mindful, uplifting interactions only.</p>
-        </div>
-        <div className="commitment-card">
-          <h4>Kindness & Respect</h4>
-          <p>We uphold clear community agreements so all feel safe and valued.</p>
-        </div>
-      </div>
-    </section>
 
-    {/* Why We’re Different */}
-    <section className="why-wrap">
-      <h3 className="why-title">Why We’re Different</h3>
-      <div className="why-grid">
-        <div className="why-card">
-          <h4>Mindful by Design</h4>
-          <p>Features are built to foster positivity, not endless scrolling.</p>
-        </div>
-        <div className="why-card">
-          <h4>Community First</h4>
-          <p>We spotlight members’ talents, events, and kindness challenges.</p>
-        </div>
-        <div className="why-card">
-          <h4>Aligned with Your Values</h4>
-          <p>Our mission is about wellness, connection, and collective good.</p>
-        </div>
-      </div>
-    </section>
-  </div>
-);
+        {/* Welcome / intention content */}
+        <section className="max-w-4xl text-center space-y-6">
+          <h1 className="text-4xl font-bold tracking-tight">
+            Welcome to <span className="italic">My</span>Zen
+            <span className="italic">Tribe</span>
+          </h1>
+
+          <p className="text-lg">
+            A space to connect, recharge, and share what matters.
+          </p>
+
+          <p className="text-lg">
+            From daily mindfulness and gratitude practices to meaningful events,
+            MyZenTribe makes it easy to find your people and build something good
+            together.
+          </p>
+
+          {/* The single primary CTA, like before */}
+          <div className="flex justify-center">
+            <Link href="/auth" className="rounded-2xl bg-black px-5 py-2.5 text-white">
+              Sign up / Sign in
+            </Link>
+          </div>
+        </section>
+
+        {/* Intention card with “Our Commitment” button under it */}
+        <section
+          id="intention"
+          className="mt-10 max-w-3xl rounded-3xl border bg-white/80 p-6 shadow-md text-center"
+        >
+          <h2 className="mb-2 text-xl font-semibold">Our Intention</h2>
+          <p className="mb-5">
+            To bring people together across local and global communities, support
+            talented small businesses, and encourage every member to play a part
+            in making the world a better place.
+          </p>
+
+          <Link
+            href="/commitment"
+            className="inline-block rounded-2xl border px-4 py-2 hover:bg-white"
+          >
+            Our Commitment
+          </Link>
+        </section>
+      </main>
+    </>
+  );
 }
