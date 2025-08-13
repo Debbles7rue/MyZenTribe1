@@ -14,7 +14,7 @@ export default function LoginPage() {
   // If already logged in, send to calendar
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/calendar");
+      if (data.session) router.replace("/(protected)/cal"); // <— updated path
     });
   }, [router]);
 
@@ -25,24 +25,25 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      password, // do not trim passwords
+      password, // don't trim passwords
     });
 
     if (error) {
       setStatus("error");
-      setErrorMsg(error.message);
+      setErrorMsg(error.message || "Login failed");
       return;
     }
 
-    // Success → go to calendar
-    router.replace("/calendar");
+    router.replace("/(protected)/cal"); // <— updated path
   };
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow">
         <h1 className="text-2xl font-semibold mb-2">Log in</h1>
-        <p className="text-sm text-neutral-600 mb-4">Use your email and password.</p>
+        <p className="text-sm text-neutral-600 mb-4">
+          Use your email and password.
+        </p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">
@@ -52,7 +53,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:ring-2"
+              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="you@example.com"
             />
           </label>
@@ -64,7 +65,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:ring-2"
+              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="Your password"
             />
           </label>
