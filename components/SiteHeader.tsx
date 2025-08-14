@@ -3,20 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import ThemeSwitch from "@/components/ThemeSwitch";
+import ThemeDropdown from "@/components/ThemeDropdown";
 
 export default function SiteHeader() {
-  const [email, setEmail] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!mounted) return;
-      setEmail(data.user?.email ?? null);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setEmail(session?.user?.email ?? null);
-    });
+    supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
+      setSignedIn(!!session?.user)
+    );
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -24,20 +20,18 @@ export default function SiteHeader() {
     <header className="site-header">
       <div className="header-inner container-app">
         <Link className="brand" href="/">
-          {/* If you have a logo: <img src="/logo.png" className="brand-logo" alt="logo" /> */}
           <span className="brand-name">My<span className="brand-zen">Zen</span>Tribe</span>
         </Link>
 
-        {/* Tabs: only when signed in */}
         <nav className="main-nav">
-          {email ? (
+          {signedIn ? (
             <>
               <Link className="nav-link" href="/profile">Profile</Link>
               <Link className="nav-link" href="/calendar">Calendar</Link>
               <Link className="nav-link" href="/meditation">Meditation</Link>
               <Link className="nav-link" href="/communities">Communities</Link>
-              <Link className="nav-link" href="/gratitude">Gratitude</Link>
-              <Link className="nav-link" href="/photos">Photos</Link>
+              <Link className="nav-link" href="/karma">Karma Corner</Link>
+              <Link className="nav-link" href="/good-news">Good News</Link>
             </>
           ) : (
             <>
@@ -48,8 +42,7 @@ export default function SiteHeader() {
         </nav>
 
         <div className="auth-area">
-          <ThemeSwitch />
-          {email && <span className="user-chip">{email}</span>}
+          <ThemeDropdown /> {/* compact “Color theme” dropdown */}
         </div>
       </div>
     </header>
