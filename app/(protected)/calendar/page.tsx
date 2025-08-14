@@ -24,6 +24,7 @@ import enUS from "date-fns/locale/en-US";
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
 import { geocode, dailyForecast } from "@/lib/weather";
+import AvatarUpload from "@/components/AvatarUpload";
 
 type Visibility = "public" | "friends" | "private" | "community";
 
@@ -43,6 +44,10 @@ type DBEvent = {
   rsvp_public: boolean | null;
   community_id: string | null;
   created_at: string;
+
+  // NEW:
+  image_path: string | null;
+  source: "personal" | "business";
 };
 
 type RSVP = {
@@ -67,7 +72,7 @@ const localizer = dateFnsLocalizer({
 
 const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 
-// ---- Moon phases (approx) ----
+/* ---------------- Moon phases (approx) ---------------- */
 function generateLunarEventsForYear(year: number): UiEvent[] {
   const SYNODIC = 29.530588;
   const FIRST_Q = 7.382647;
@@ -84,11 +89,7 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   const events: UiEvent[] = [];
   const pushPhase = (d: Date, title: string, key: string) => {
     const local = new Date(d);
-    const start = new Date(
-      local.getFullYear(),
-      local.getMonth(),
-      local.getDate()
-    );
+    const start = new Date(local.getFullYear(), local.getMonth(), local.getDate());
     const end = addDays(start, 1);
     events.push({
       id: `${key}-${start.toISOString()}`,
@@ -109,8 +110,7 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
     const lastQuarter = new Date(newMoon.getTime() + LAST_Q * 86400000);
 
     const maybeAdd = (d: Date, title: string, key: string) => {
-      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2))
-        pushPhase(d, title, key);
+      if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2)) pushPhase(d, title, key);
     };
 
     maybeAdd(newMoon, "New Moon", "moon-new");
@@ -121,6 +121,30 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   return events;
 }
 
+/* ------------- Weather -> calendar items (5 days) ------------- */
+function generateWeatherEventsFromForecast(forecast: any): UiEvent[] {
+  if (!forecast?.daily?.time?.length) return [];
+  const days = forecast.daily.time.slice(0, 5);
+  const highs = forecast.daily.temperature_2m_max || [];
+  const lows = forecast.daily.temperature_2m_min || [];
+  const rain = forecast.daily.precipitation_probability_max || [];
+
+  return days.map((iso: string, i: number) => {
+    const d = new Date(iso);
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const end = addDays(start, 1);
+    const title = `${Math.round(highs[i] ?? 0)}°/${Math.round(lows[i] ?? 0)}° · ${rain[i] ?? 0}%`;
+    return {
+      id: `weather-${iso}`,
+      title,
+      start,
+      end,
+      allDay: true,
+      resource: { weather: true, high: highs[i], low: lows[i], rain: rain[i] },
+    } as UiEvent;
+  });
+}
+
 export default function CalendarPage() {
   const [sessionUser, setSessionUser] = useState<string | null>(null);
 
@@ -128,22 +152,18 @@ export default function CalendarPage() {
   const [showMoon, setShowMoon] = useState(true);
   const [showWeather, setShowWeather] = useState(true);
 
-  // Theme with persistence
-  const [theme, setTheme] =
-    useState<"spring" | "summer" | "autumn" | "winter">("winter");
+  // NEW: personal/business filter
+  const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
 
+  // Theme with persistence (align to global key "mzt-theme")
+  const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">("winter");
   useEffect(() => {
-    const saved = localStorage.getItem("mzt_theme") as
-      | "spring"
-      | "summer"
-      | "autumn"
-      | "winter"
-      | null;
+    const saved = (localStorage.getItem("mzt-theme") as any) || null;
     if (saved) setTheme(saved);
   }, []);
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("mzt_theme", theme);
+    localStorage.setItem("mzt-theme", theme);
   }, [theme]);
 
   const quotes = useMemo(
@@ -160,9 +180,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [friendGoingIds, setFriendGoingIds] = useState<Set<string>>(new Set());
   const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
-  const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(
-    new Set()
-  );
+  const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [calendarView, setCalendarView] = useState<View>(Views.MONTH);
@@ -182,6 +200,9 @@ export default function CalendarPage() {
     longitude: "",
     event_type: "",
     community_id: "",
+    // NEW:
+    source: "personal" as "personal" | "business",
+    image_path: "",
   });
 
   const [query, setQuery] = useState("");
@@ -283,6 +304,11 @@ export default function CalendarPage() {
       all = (data ?? []) as DBEvent[];
     }
 
+    // Apply type filter client-side (simpler than altering the query)
+    if (typeFilter !== "all") {
+      all = all.filter((e) => (e.source || "personal") === typeFilter);
+    }
+
     setEvents(all);
     setLoading(false);
   };
@@ -290,7 +316,7 @@ export default function CalendarPage() {
   useEffect(() => {
     if (sessionUser) loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionUser, mode]);
+  }, [sessionUser, mode, typeFilter]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -322,13 +348,64 @@ export default function CalendarPage() {
     return generateLunarEventsForYear(date.getFullYear());
   }, [date, showMoon]);
 
+  /* ---------- Weather overlay (3–5 days) ---------- */
+  const [forecast, setForecast] = useState<any>(null);
+  const [wError, setWError] = useState<string>("");
+
+  useEffect(() => {
+    if (!showWeather) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setWError("");
+        // 1) Try saved default location from Profile
+        const saved = localStorage.getItem("mzt.location") || "";
+        let latlon = saved ? await geocode(saved) : null;
+
+        // 2) Fallback to browser geolocation
+        if (!latlon && navigator.geolocation) {
+          await new Promise<void>((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                latlon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                resolve();
+              },
+              () => resolve()
+            );
+          });
+        }
+
+        if (!latlon) {
+          setWError("Set a default location in Profile to see weather.");
+          return;
+        }
+
+        const data = await dailyForecast(latlon);
+        if (!cancelled) setForecast(data);
+      } catch (e: any) {
+        if (!cancelled) setWError(e.message || "Weather unavailable.");
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [showWeather]);
+
+  const weatherEvents = useMemo<UiEvent[]>(() => {
+    if (!showWeather || !forecast) return [];
+    return generateWeatherEventsFromForecast(forecast);
+  }, [forecast, showWeather]);
+
   const allUiEvents = useMemo<UiEvent[]>(
-    () => [...rbcDbEvents, ...lunarEvents],
-    [rbcDbEvents, lunarEvents]
+    () => [...rbcDbEvents, ...lunarEvents, ...weatherEvents],
+    [rbcDbEvents, lunarEvents, weatherEvents]
   );
 
   const onSelectEvent = (evt: UiEvent) => {
-    if (evt.resource?.moonPhase) return;
+    if (evt.resource?.moonPhase || evt.resource?.weather) return; // not clickable
     setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
@@ -349,6 +426,8 @@ export default function CalendarPage() {
 
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
+
+    // Moon styling
     if (r.moonPhase) {
       const bg: Record<string, string> = {
         "moon-full": "#FFF3BF",
@@ -366,6 +445,21 @@ export default function CalendarPage() {
         className: "text-[11px] leading-tight",
       };
     }
+
+    // Weather styling
+    if (r.weather) {
+      return {
+        style: {
+          backgroundColor: "#E0F2FE", // light blue
+          border: "1px dashed #93C5FD",
+          borderRadius: 10,
+          fontWeight: 600,
+        },
+        className: "text-[11px] leading-tight",
+      };
+    }
+
+    // Regular events styling (yours)
     const e: DBEvent = r;
     let backgroundColor = "#9ca3af";
     if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
@@ -373,6 +467,8 @@ export default function CalendarPage() {
     else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa";
     else if (e.visibility === "community" || e.community_id)
       backgroundColor = "#a78bfa";
+    // personal/business tint
+    if (e.source === "business") backgroundColor = "#c4b5fd"; // soft purple
     return {
       style: { backgroundColor, border: "1px solid #e5e7eb", borderRadius: 10 },
       className: "text-[11px] leading-tight",
@@ -437,6 +533,10 @@ export default function CalendarPage() {
       event_type: form.event_type || null,
       rsvp_public: true,
       community_id: form.community_id || null,
+
+      // NEW:
+      image_path: form.image_path || null,       // storing public URL
+      source: form.source,                        // personal/business
     };
 
     const { error } = await supabase.from("events").insert(payload);
@@ -457,55 +557,11 @@ export default function CalendarPage() {
       longitude: "",
       event_type: "",
       community_id: "",
+      source: "personal",
+      image_path: "",
     });
     loadData();
   };
-
-  // ---------- Weather overlay (3–5 days) ----------
-  const [forecast, setForecast] = useState<any>(null);
-  const [wError, setWError] = useState<string>("");
-
-  useEffect(() => {
-    if (!showWeather) return;
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setWError("");
-        // 1) Try saved default location from Profile
-        const saved = localStorage.getItem("mzt.location") || "";
-        let latlon = saved ? await geocode(saved) : null;
-
-        // 2) Fallback to browser geolocation
-        if (!latlon && navigator.geolocation) {
-          await new Promise<void>((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                latlon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-                resolve();
-              },
-              () => resolve()
-            );
-          });
-        }
-
-        if (!latlon) {
-          setWError("Set a default location in Profile to see weather.");
-          return;
-        }
-
-        const data = await dailyForecast(latlon);
-        if (!cancelled) setForecast(data);
-      } catch (e: any) {
-        if (!cancelled) setWError(e.message || "Weather unavailable.");
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [showWeather]);
 
   return (
     <div className="page">
@@ -529,6 +585,22 @@ export default function CalendarPage() {
               </button>
             </div>
 
+            {/* NEW: type filter */}
+            <label className="check">
+              <span>Type</span>
+              <select
+                className="select"
+                value={typeFilter}
+                onChange={(e) =>
+                  setTypeFilter(e.target.value as "all" | "personal" | "business")
+                }
+              >
+                <option value="all">All</option>
+                <option value="personal">Personal</option>
+                <option value="business">Business</option>
+              </select>
+            </label>
+
             <label className="check">
               <input
                 type="checkbox"
@@ -547,11 +619,12 @@ export default function CalendarPage() {
               Weather (3–5 days)
             </label>
 
+            {/* Theme dropdown (aligned with global key) */}
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as any)}
               className="select"
-              title="Theme"
+              title="Color theme"
             >
               <option value="spring">Spring</option>
               <option value="summer">Summer</option>
@@ -575,7 +648,7 @@ export default function CalendarPage() {
           />
         </div>
 
-        {/* Weather overlay */}
+        {/* Optional weather summary card (kept) */}
         {showWeather && (
           <div className="card p-3 text-sm mb-3">
             {wError ? (
@@ -638,6 +711,13 @@ export default function CalendarPage() {
                     </div>
                   );
                 }
+                if (r?.weather) {
+                  return (
+                    <div className="text-[11px] leading-tight">
+                      🌤 {event.title}
+                    </div>
+                  );
+                }
                 return (
                   <div className="text-[11px] leading-tight">
                     <div className="font-medium">{event.title}</div>
@@ -674,13 +754,33 @@ export default function CalendarPage() {
                 />
               </label>
 
-              <label className="block md:col-span-2">
-                <span className="text-sm">Description</span>
-                <textarea
+              {/* NEW: event photo */}
+              <div className="md:col-span-2">
+                <span className="text-sm">Event photo</span>
+                <div className="mt-2">
+                  <AvatarUpload
+                    userId={sessionUser}
+                    value={form.image_path}
+                    onChange={(url) => setForm({ ...form, image_path: url })}
+                    bucket="event-photos"
+                    label="Upload event photo"
+                  />
+                </div>
+              </div>
+
+              {/* NEW: Type selector */}
+              <label className="block">
+                <span className="text-sm">Type</span>
+                <select
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
+                  value={form.source}
+                  onChange={(e) =>
+                    setForm({ ...form, source: e.target.value as "personal" | "business" })
+                  }
+                >
+                  <option value="personal">Personal</option>
+                  <option value="business">Business</option>
+                </select>
               </label>
 
               <label className="block">
@@ -693,7 +793,7 @@ export default function CalendarPage() {
               </label>
 
               <label className="block">
-                <span className="text-sm">Type</span>
+                <span className="text-sm">Type (tag)</span>
                 <input
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.event_type}
@@ -722,6 +822,16 @@ export default function CalendarPage() {
                   />
                 </label>
               </div>
+
+              <label className="block md:col-span-2">
+                <span className="text-sm">Description</span>
+                <textarea
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </label>
 
               <label className="block">
                 <span className="text-sm">Visibility</span>
