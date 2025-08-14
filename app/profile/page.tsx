@@ -8,6 +8,8 @@ import AvatarUpload from "@/components/AvatarUpload";
 import BusinessServicesEditor, { type Service } from "@/components/BusinessServicesEditor";
 import PhotosFeed from "@/components/PhotosFeed";
 import GratitudePanel from "@/components/GratitudePanel";
+import ShopEditor from "@/components/ShopEditor";
+import EventCreator from "@/components/EventCreator";
 
 type Profile = {
   id: string;
@@ -16,11 +18,18 @@ type Profile = {
   bio: string | null;
   location: string | null;
   show_mutuals: boolean | null;
+
   is_business: boolean | null;
+  business_name: string | null;
+  business_logo_url: string | null;
+  business_contact_email: string | null;
+  business_phone: string | null;
+  website: string | null;
   offering_title: string | null;
   offering_description: string | null;
   booking_url: string | null;
-  website: string | null; // business website stored here
+
+  shop_enabled: boolean | null;
 };
 
 type Tab = "personal" | "business";
@@ -29,7 +38,6 @@ export default function ProfilePage() {
   const router = useRouter();
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,64 +50,53 @@ export default function ProfilePage() {
     bio: "",
     location: "",
     show_mutuals: true,
+
     is_business: false,
+    business_name: "",
+    business_logo_url: "",
+    business_contact_email: "",
+    business_phone: "",
+    website: "",
     offering_title: "",
     offering_description: "",
     booking_url: "",
-    website: "",
+
+    shop_enabled: false,
   });
 
   const [services, setServices] = useState<Service[]>([]);
 
-  // Load auth user
+  // auth user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
-      setUserId(u?.id ?? null);
-      setEmail(u?.email ?? null);
+      setUserId(data.user?.id ?? null);
     });
   }, []);
 
-  // Load profile + services
+  // load profile + services
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
       setLoading(true);
-      setTableMissing(false);
-
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("id, full_name, avatar_url, bio, location, show_mutuals, is_business, offering_title, offering_description, booking_url, website")
+          .select(`
+            id, full_name, avatar_url, bio, location, show_mutuals,
+            is_business, business_name, business_logo_url, business_contact_email, business_phone,
+            website, offering_title, offering_description, booking_url, shop_enabled
+          `)
           .eq("id", userId)
           .maybeSingle();
+        if (error) throw error;
 
-        if (error) setTableMissing(true);
+        if (data) setP(data as Profile); else setP(prev => ({ ...prev, id: userId }));
 
-        if (data) {
-          setP({
-            id: data.id,
-            full_name: data.full_name,
-            avatar_url: data.avatar_url,
-            bio: data.bio,
-            location: data.location,
-            show_mutuals: data.show_mutuals,
-            is_business: data.is_business,
-            offering_title: data.offering_title,
-            offering_description: data.offering_description,
-            booking_url: data.booking_url,
-            website: data.website,
-          });
-        } else {
-          setP((prev) => ({
-            ...prev,
-            id: userId,
-            full_name: prev.full_name || (email ? email.split("@")[0] : "New member"),
-          }));
-        }
-
-        const svc = await supabase.from("business_services").select("id, title, description").eq("user_id", userId);
-        setServices((svc.data ?? []).map(r => ({ id: r.id, title: r.title, description: r.description ?? "" })));
+        const svc = await supabase.from("business_services")
+          .select("id, title, description, image_url").eq("user_id", userId);
+        setServices((svc.data ?? []).map(r => ({
+          id: r.id, title: r.title, description: r.description ?? "", image_url: r.image_url ?? ""
+        })));
       } catch {
         setTableMissing(true);
       } finally {
@@ -107,69 +104,68 @@ export default function ProfilePage() {
       }
     };
     load();
-  }, [userId, email]);
+  }, [userId]);
 
   const displayName = useMemo(
-    () => p.full_name || (email ? email.split("@")[0] : "Member"),
-    [p.full_name, email]
+    () => p.full_name || "Member",
+    [p.full_name]
   );
 
   const save = async () => {
-    if (!userId) return alert("Please sign in.");
+    if (!userId) return;
     setSaving(true);
     try {
-      const payload = {
+      const payload: Profile = {
+        ...p,
         id: userId,
         full_name: p.full_name?.trim() || null,
         avatar_url: p.avatar_url?.trim() || null,
         bio: p.bio?.trim() || null,
         location: p.location?.trim() || null,
-        show_mutuals: p.show_mutuals ?? true,
+        show_mutuals: !!p.show_mutuals,
+
         is_business: !!p.is_business,
+        business_name: p.business_name?.trim() || null,
+        business_logo_url: p.business_logo_url?.trim() || null,
+        business_contact_email: p.business_contact_email?.trim() || null,
+        business_phone: p.business_phone?.trim() || null,
+        website: p.website?.trim() || null,
         offering_title: p.offering_title?.trim() || null,
         offering_description: p.offering_description?.trim() || null,
         booking_url: p.booking_url?.trim() || null,
-        website: p.website?.trim() || null, // business website
+
+        shop_enabled: !!p.shop_enabled,
       };
 
       const up = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
       if (up.error) throw up.error;
 
-      // Replace services set for simplicity
+      // replace services set
       await supabase.from("business_services").delete().eq("user_id", userId);
-      const clean = services.filter(s => s.title.trim().length);
-      if (clean.length) {
-        const rows = clean.map(s => ({ user_id: userId, title: s.title.trim(), description: (s.description || "").trim() || null }));
-        const ins = await supabase.from("business_services").insert(rows);
-        if (ins.error) throw ins.error;
-      }
+      const clean = services.filter(s => s.title.trim().length).map(s => ({
+        user_id: userId,
+        title: s.title.trim(),
+        description: (s.description || "").trim() || null,
+        image_url: (s.image_url || "").trim() || null,
+      }));
+      if (clean.length) await supabase.from("business_services").insert(clean);
 
-      alert("Profile saved!");
-    } catch (err: any) {
-      if (err?.code === "42P01") {
-        setTableMissing(true);
-        alert("Tables missing. Run the SQL in Supabase → SQL Editor.");
-      } else {
-        alert(err.message || "Save failed");
-      }
+      alert("Saved!");
+    } catch (e: any) {
+      alert(e.message || "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.replace("/");
-  }
-
-  const showActionsForOthers = false; // your own profile
+  async function signOut() { await supabase.auth.signOut(); router.replace("/"); }
 
   return (
     <div className="page-wrap">
       <SiteHeader />
-
       <div className="page">
         <div className="container-app">
+
           <div className="header-bar">
             <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
             <div className="controls">
@@ -182,123 +178,159 @@ export default function ProfilePage() {
           </div>
 
           {tableMissing && (
-            <div className="note">
-              <div className="note-title">Tables missing.</div>
-              <div className="note-body">Please run the SQL for profiles, business_services, photo_posts, photo_tags, gratitude_entries, events.</div>
-            </div>
+            <div className="note"><div className="note-title">Tables missing.</div><div className="note-body">Run the SQL migration, then reload.</div></div>
           )}
 
-          {/* Header card */}
+          {/* HEADER CARD (email hidden) */}
           <div className="card p-3 mb-3 profile-card">
             <div className="profile-header">
-              <AvatarUpload userId={userId} value={p.avatar_url} onChange={(url) => setP(prev => ({ ...prev, avatar_url: url }))} />
+              <AvatarUpload userId={userId} value={p.avatar_url} onChange={(url)=>setP(prev=>({...prev, avatar_url: url}))} />
               <div className="profile-heading">
                 <div className="profile-name">{displayName}</div>
-                <div className="profile-sub">{email}</div>
                 <div className="kpis">
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
               </div>
-              {showActionsForOthers && (
-                <div className="profile-actions">
-                  <button className="btn btn-brand" onClick={() => alert("Follow coming soon")}>Follow</button>
-                  <button className="btn btn-neutral" onClick={() => alert("Friends coming soon")}>Add Friend</button>
-                  <button className="btn" onClick={() => alert("Report sent")}>Report</button>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Main + Sidebar layout */}
+          {/* MAIN LAYOUT: left column changes by tab; right column (journal) only on Personal */}
           <div className="columns">
-            {/* MAIN COLUMN */}
+            {/* LEFT COLUMN */}
             <div className="stack">
               {tab === "personal" ? (
-                <section className="card p-3">
-                  <h2 className="section-title">About you</h2>
-                  <div className="stack">
-                    <label className="field">
-                      <span className="label">Name</span>
-                      <input className="input" value={p.full_name ?? ""} onChange={(e) => setP({ ...p, full_name: e.target.value })} />
-                    </label>
-
-                    <label className="field">
-                      <span className="label">Location</span>
-                      <input className="input" value={p.location ?? ""} onChange={(e) => setP({ ...p, location: e.target.value })} placeholder="City, State" />
-                    </label>
-
-                    <label className="field">
-                      <span className="label">Bio</span>
-                      <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e) => setP({ ...p, bio: e.target.value })} placeholder="Tell people who you are, what you love, and how you show up for your community." />
-                    </label>
-
-                    <label className="checkbox">
-                      <input type="checkbox" checked={!!p.show_mutuals} onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} />
-                      <span>Show mutual friends</span>
-                    </label>
-
-                    <div className="right">
-                      <button className="btn btn-brand" onClick={save} disabled={saving || tableMissing}>{saving ? "Saving…" : "Save"}</button>
-                    </div>
-                  </div>
-                </section>
-              ) : (
-                <div className="stack">
+                <>
                   <section className="card p-3">
-                    <div className="section-row">
-                      <h2 className="section-title">Business profile</h2>
-                      <label className="checkbox">
-                        <input type="checkbox" checked={!!p.is_business} onChange={(e) => setP({ ...p, is_business: e.target.checked })} />
-                        <span>I offer services</span>
-                      </label>
-                    </div>
-
+                    <h2 className="section-title">About you</h2>
                     <div className="stack">
                       <label className="field">
+                        <span className="label">Name</span>
+                        <input className="input" value={p.full_name ?? ""} onChange={(e)=>setP({...p, full_name: e.target.value})}/>
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Location</span>
+                        <input className="input" value={p.location ?? ""} onChange={(e)=>setP({...p, location: e.target.value})} placeholder="City, State"/>
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Bio</span>
+                        <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e)=>setP({...p, bio: e.target.value})}/>
+                      </label>
+
+                      <label className="checkbox">
+                        <input type="checkbox" checked={!!p.show_mutuals} onChange={(e)=>setP({...p, show_mutuals: e.target.checked})}/>
+                        <span>Show mutual friends</span>
+                      </label>
+
+                      <div className="right">
+                        <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Personal photos feed */}
+                  <PhotosFeed userId={userId} />
+                </>
+              ) : (
+                <>
+                  {/* BUSINESS IDENTITY */}
+                  <section className="card p-3">
+                    <h2 className="section-title">Business identity</h2>
+                    <div className="stack">
+                      <div>
+                        <AvatarUpload userId={userId} value={p.business_logo_url} onChange={(url)=>setP({...p, business_logo_url: url})} bucket="avatars" label="Upload business logo"/>
+                      </div>
+
+                      <label className="field">
+                        <span className="label">Business name</span>
+                        <input className="input" value={p.business_name ?? ""} onChange={(e)=>setP({...p, business_name: e.target.value})} placeholder="Your public name"/>
+                      </label>
+
+                      <label className="field">
                         <span className="label">Business website</span>
-                        <input className="input" value={p.website ?? ""} onChange={(e) => setP({ ...p, website: e.target.value })} placeholder="https://example.com" disabled={!p.is_business} />
+                        <input className="input" value={p.website ?? ""} onChange={(e)=>setP({...p, website: e.target.value})} placeholder="https://example.com"/>
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Contact email (public)</span>
+                        <input className="input" value={p.business_contact_email ?? ""} onChange={(e)=>setP({...p, business_contact_email: e.target.value})} placeholder="hello@yourbusiness.com"/>
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Contact phone (optional)</span>
+                        <input className="input" value={p.business_phone ?? ""} onChange={(e)=>setP({...p, business_phone: e.target.value})} placeholder="(555) 555-5555"/>
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Booking link (shows “Book now”)</span>
+                        <input className="input" value={p.booking_url ?? ""} onChange={(e)=>setP({...p, booking_url: e.target.value})} placeholder="https://calendly.com/you"/>
                       </label>
 
                       <label className="field">
                         <span className="label">Headline</span>
-                        <input className="input" value={p.offering_title ?? ""} onChange={(e) => setP({ ...p, offering_title: e.target.value })} placeholder="Qi Gong, Sound Baths, Drum Circles…" disabled={!p.is_business} />
+                        <input className="input" value={p.offering_title ?? ""} onChange={(e)=>setP({...p, offering_title: e.target.value})} placeholder="Qi Gong, Sound Baths, Drum Circles…"/>
                       </label>
 
                       <label className="field">
                         <span className="label">Description</span>
-                        <textarea className="input" rows={4} value={p.offering_description ?? ""} onChange={(e) => setP({ ...p, offering_description: e.target.value })} placeholder="Describe what you offer and who it's for." disabled={!p.is_business} />
+                        <textarea className="input" rows={4} value={p.offering_description ?? ""} onChange={(e)=>setP({...p, offering_description: e.target.value})}/>
                       </label>
 
-                      <label className="field">
-                        <span className="label">Booking link (optional)</span>
-                        <input className="input" value={p.booking_url ?? ""} onChange={(e) => setP({ ...p, booking_url: e.target.value })} placeholder="https://mybookinglink.com" disabled={!p.is_business} />
+                      <label className="checkbox">
+                        <input type="checkbox" checked={!!p.is_business} onChange={(e)=>setP({...p, is_business: e.target.checked})}/>
+                        <span>I offer services</span>
                       </label>
+
+                      <div className="right">
+                        <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save business"}</button>
+                      </div>
                     </div>
                   </section>
 
+                  {/* SERVICES */}
                   <section className="card p-3">
-                    <h2 className="section-title">Services</h2>
-                    <BusinessServicesEditor value={services} onChange={setServices} disabled={!p.is_business} />
+                    <div className="section-row">
+                      <h2 className="section-title">Services</h2>
+                      {p.booking_url && (
+                        <a className="btn btn-brand" href={p.booking_url} target="_blank" rel="noreferrer">Book now</a>
+                      )}
+                    </div>
+                    <BusinessServicesEditor value={services} onChange={setServices} disabled={!p.is_business} userId={userId}/>
                     <div className="right" style={{ marginTop: 10 }}>
-                      <button className="btn btn-brand" onClick={save} disabled={saving || tableMissing}>{saving ? "Saving…" : "Save business"}</button>
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save services"}</button>
                     </div>
                   </section>
-                </div>
-              )}
 
-              {/* Photos feed always visible on profile */}
-              <PhotosFeed userId={userId} />
+                  {/* SHOP (optional) */}
+                  <section className="card p-3">
+                    <div className="section-row">
+                      <h2 className="section-title">Shop now</h2>
+                      <label className="checkbox">
+                        <input type="checkbox" checked={!!p.shop_enabled} onChange={(e)=>setP({...p, shop_enabled: e.target.checked})}/>
+                        <span>Enable shop section</span>
+                      </label>
+                    </div>
+                    {p.shop_enabled ? <ShopEditor userId={userId}/> : <p className="muted">Turn on to add up to 5 items (each with image + link).</p>}
+                  </section>
+
+                  {/* CREATE EVENT */}
+                  <EventCreator userId={userId} />
+                </>
+              )}
             </div>
 
-            {/* SIDEBAR */}
+            {/* RIGHT COLUMN (private panels) */}
             <div className="stack">
-              <GratitudePanel userId={userId} />
-              <section className="card p-3">
-                <h2 className="section-title">Privacy (preview)</h2>
-                <p className="muted">Right now, your profile content is private in the app UI. We’ll add public business pages and enforce friends/acquaintance visibility in the next step.</p>
-              </section>
+              {tab === "personal" && <GratitudePanel userId={userId} />}
+              {tab === "business" && (
+                <section className="card p-3">
+                  <h2 className="section-title">Privacy</h2>
+                  <p className="muted">Your personal profile stays private. Business page will be public; we’ll add friend/acquaintance visibility rules next.</p>
+                </section>
+              )}
             </div>
           </div>
 
