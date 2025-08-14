@@ -4,20 +4,26 @@ import SiteHeader from "@/components/SiteHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import AvatarUpload from "@/components/AvatarUpload";
+import BusinessServicesEditor, { type Service } from "@/components/BusinessServicesEditor";
+import PhotosFeed from "@/components/PhotosFeed";
+import GratitudePanel from "@/components/GratitudePanel";
 
 type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  website: string | null;
   location: string | null;
+  show_mutuals: boolean | null;
   is_business: boolean | null;
   offering_title: string | null;
   offering_description: string | null;
   booking_url: string | null;
-  show_mutuals: boolean | null;
+  website: string | null; // business website stored here
 };
+
+type Tab = "personal" | "business";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -27,20 +33,23 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<Tab>("personal");
 
   const [p, setP] = useState<Profile>({
     id: "",
     full_name: "",
     avatar_url: "",
     bio: "",
-    website: "",
     location: "",
+    show_mutuals: true,
     is_business: false,
     offering_title: "",
     offering_description: "",
     booking_url: "",
-    show_mutuals: true,
+    website: "",
   });
+
+  const [services, setServices] = useState<Service[]>([]);
 
   // Load auth user
   useEffect(() => {
@@ -51,7 +60,7 @@ export default function ProfilePage() {
     });
   }, []);
 
-  // Load profile (if table exists)
+  // Load profile + services
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
@@ -61,9 +70,7 @@ export default function ProfilePage() {
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select(
-            "id, full_name, avatar_url, bio, website, location, is_business, offering_title, offering_description, booking_url, show_mutuals"
-          )
+          .select("id, full_name, avatar_url, bio, location, show_mutuals, is_business, offering_title, offering_description, booking_url, website")
           .eq("id", userId)
           .maybeSingle();
 
@@ -75,13 +82,13 @@ export default function ProfilePage() {
             full_name: data.full_name,
             avatar_url: data.avatar_url,
             bio: data.bio,
-            website: data.website,
             location: data.location,
+            show_mutuals: data.show_mutuals,
             is_business: data.is_business,
             offering_title: data.offering_title,
             offering_description: data.offering_description,
             booking_url: data.booking_url,
-            show_mutuals: data.show_mutuals,
+            website: data.website,
           });
         } else {
           setP((prev) => ({
@@ -90,6 +97,9 @@ export default function ProfilePage() {
             full_name: prev.full_name || (email ? email.split("@")[0] : "New member"),
           }));
         }
+
+        const svc = await supabase.from("business_services").select("id, title, description").eq("user_id", userId);
+        setServices((svc.data ?? []).map(r => ({ id: r.id, title: r.title, description: r.description ?? "" })));
       } catch {
         setTableMissing(true);
       } finally {
@@ -113,42 +123,46 @@ export default function ProfilePage() {
         full_name: p.full_name?.trim() || null,
         avatar_url: p.avatar_url?.trim() || null,
         bio: p.bio?.trim() || null,
-        website: p.website?.trim() || null,
         location: p.location?.trim() || null,
+        show_mutuals: p.show_mutuals ?? true,
         is_business: !!p.is_business,
         offering_title: p.offering_title?.trim() || null,
         offering_description: p.offering_description?.trim() || null,
         booking_url: p.booking_url?.trim() || null,
-        show_mutuals: p.show_mutuals ?? true,
+        website: p.website?.trim() || null, // business website
       };
 
-      const { error } = await supabase
-        .from("profiles")
-        .upsert(payload, { onConflict: "id" });
+      const up = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+      if (up.error) throw up.error;
 
-      if (error) {
-        if ((error as any).code === "42P01") {
-          setTableMissing(true);
-          alert("Profiles table not found yet. See the note at the top.");
-        } else {
-          alert(error.message);
-        }
-        return;
+      // Replace services set for simplicity
+      await supabase.from("business_services").delete().eq("user_id", userId);
+      const clean = services.filter(s => s.title.trim().length);
+      if (clean.length) {
+        const rows = clean.map(s => ({ user_id: userId, title: s.title.trim(), description: (s.description || "").trim() || null }));
+        const ins = await supabase.from("business_services").insert(rows);
+        if (ins.error) throw ins.error;
       }
+
       alert("Profile saved!");
+    } catch (err: any) {
+      if (err?.code === "42P01") {
+        setTableMissing(true);
+        alert("Tables missing. Run the SQL in Supabase → SQL Editor.");
+      } else {
+        alert(err.message || "Save failed");
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  // Quick sign-out for testing
   async function signOut() {
     await supabase.auth.signOut();
     router.replace("/");
   }
 
-  // (Future) Only show follow/report on OTHER profiles
-  const showActionsForOthers = false; // your page = own profile, so keep false
+  const showActionsForOthers = false; // your own profile
 
   return (
     <div className="page-wrap">
@@ -159,50 +173,25 @@ export default function ProfilePage() {
           <div className="header-bar">
             <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
             <div className="controls">
+              <div className="segmented" role="tablist" aria-label="Profile mode">
+                <button className={`seg-btn ${tab === "personal" ? "active" : ""}`} onClick={() => setTab("personal")} role="tab" aria-selected={tab === "personal"}>Personal</button>
+                <button className={`seg-btn ${tab === "business" ? "active" : ""}`} onClick={() => setTab("business")} role="tab" aria-selected={tab === "business"}>Business</button>
+              </div>
               <button className="btn" onClick={signOut}>Sign out</button>
             </div>
           </div>
 
           {tableMissing && (
             <div className="note">
-              <div className="note-title">The <code>profiles</code> table isn’t found yet.</div>
-              <div className="note-body">
-                The page still works, but saving to the database is disabled until the table exists.
-                <details className="mt-1">
-                  <summary className="linkish">Show SQL to create the table</summary>
-                  <pre className="codeblock">
-{`create table if not exists profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  avatar_url text,
-  bio text,
-  website text,
-  location text,
-  is_business boolean default false,
-  offering_title text,
-  offering_description text,
-  booking_url text,
-  show_mutuals boolean default true,
-  updated_at timestamptz default now()
-);
-alter table profiles enable row level security;
-create policy "Profiles are readable by everyone" on profiles for select using (true);
-create policy "Users can insert their own profile" on profiles for insert with check (auth.uid() = id);
-create policy "Users can update their own profile" on profiles for update using (auth.uid() = id) with check (auth.uid() = id);`}
-                  </pre>
-                </details>
-              </div>
+              <div className="note-title">Tables missing.</div>
+              <div className="note-body">Please run the SQL for profiles, business_services, photo_posts, photo_tags, gratitude_entries, events.</div>
             </div>
           )}
 
-          {/* Top card: identity */}
+          {/* Header card */}
           <div className="card p-3 mb-3 profile-card">
             <div className="profile-header">
-              <img
-                src={p.avatar_url || "/avatar-placeholder.png"}
-                alt="Avatar"
-                className="avatar"
-              />
+              <AvatarUpload userId={userId} value={p.avatar_url} onChange={(url) => setP(prev => ({ ...prev, avatar_url: url }))} />
               <div className="profile-heading">
                 <div className="profile-name">{displayName}</div>
                 <div className="profile-sub">{email}</div>
@@ -212,8 +201,6 @@ create policy "Users can update their own profile" on profiles for update using 
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
               </div>
-
-              {/* Hide actions on your own profile */}
               {showActionsForOthers && (
                 <div className="profile-actions">
                   <button className="btn btn-brand" onClick={() => alert("Follow coming soon")}>Follow</button>
@@ -224,144 +211,94 @@ create policy "Users can update their own profile" on profiles for update using 
             </div>
           </div>
 
-          {/* Two columns below on desktop */}
+          {/* Main + Sidebar layout */}
           <div className="columns">
-            {/* About */}
-            <section className="card p-3">
-              <h2 className="section-title">About</h2>
-              <div className="stack">
-                <label className="field">
-                  <span className="label">Name</span>
-                  <input
-                    className="input"
-                    value={p.full_name ?? ""}
-                    onChange={(e) => setP({ ...p, full_name: e.target.value })}
-                  />
-                </label>
+            {/* MAIN COLUMN */}
+            <div className="stack">
+              {tab === "personal" ? (
+                <section className="card p-3">
+                  <h2 className="section-title">About you</h2>
+                  <div className="stack">
+                    <label className="field">
+                      <span className="label">Name</span>
+                      <input className="input" value={p.full_name ?? ""} onChange={(e) => setP({ ...p, full_name: e.target.value })} />
+                    </label>
 
-                <label className="field">
-                  <span className="label">Location</span>
-                  <input
-                    className="input"
-                    value={p.location ?? ""}
-                    onChange={(e) => setP({ ...p, location: e.target.value })}
-                    placeholder="City, State"
-                  />
-                </label>
+                    <label className="field">
+                      <span className="label">Location</span>
+                      <input className="input" value={p.location ?? ""} onChange={(e) => setP({ ...p, location: e.target.value })} placeholder="City, State" />
+                    </label>
 
-                <label className="field">
-                  <span className="label">Bio</span>
-                  <textarea
-                    className="input"
-                    rows={4}
-                    value={p.bio ?? ""}
-                    onChange={(e) => setP({ ...p, bio: e.target.value })}
-                    placeholder="Tell people who you are, what you love, and how you show up for your community."
-                  />
-                </label>
+                    <label className="field">
+                      <span className="label">Bio</span>
+                      <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e) => setP({ ...p, bio: e.target.value })} placeholder="Tell people who you are, what you love, and how you show up for your community." />
+                    </label>
 
-                <label className="field">
-                  <span className="label">Website</span>
-                  <input
-                    className="input"
-                    value={p.website ?? ""}
-                    onChange={(e) => setP({ ...p, website: e.target.value })}
-                    placeholder="https://example.com"
-                  />
-                  {p.website && (
-                    <div className="hint">
-                      <img
-                        alt="favicon"
-                        src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(
-                          p.website
-                        )}&sz=64`}
-                        width={16}
-                        height={16}
-                        style={{ borderRadius: 4, marginRight: 6, verticalAlign: "text-bottom" }}
-                      />
-                      <a href={p.website} target="_blank" rel="noreferrer">{p.website}</a>
+                    <label className="checkbox">
+                      <input type="checkbox" checked={!!p.show_mutuals} onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} />
+                      <span>Show mutual friends</span>
+                    </label>
+
+                    <div className="right">
+                      <button className="btn btn-brand" onClick={save} disabled={saving || tableMissing}>{saving ? "Saving…" : "Save"}</button>
                     </div>
-                  )}
-                </label>
+                  </div>
+                </section>
+              ) : (
+                <div className="stack">
+                  <section className="card p-3">
+                    <div className="section-row">
+                      <h2 className="section-title">Business profile</h2>
+                      <label className="checkbox">
+                        <input type="checkbox" checked={!!p.is_business} onChange={(e) => setP({ ...p, is_business: e.target.checked })} />
+                        <span>I offer services</span>
+                      </label>
+                    </div>
 
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={!!p.show_mutuals}
-                    onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
-                  />
-                  <span>Show mutual friends</span>
-                </label>
+                    <div className="stack">
+                      <label className="field">
+                        <span className="label">Business website</span>
+                        <input className="input" value={p.website ?? ""} onChange={(e) => setP({ ...p, website: e.target.value })} placeholder="https://example.com" disabled={!p.is_business} />
+                      </label>
 
-                <div className="right">
-                  <button
-                    className="btn btn-brand"
-                    onClick={save}
-                    disabled={saving || tableMissing}
-                    title={tableMissing ? "Create profiles table first" : "Save profile"}
-                  >
-                    {saving ? "Saving…" : "Save"}
-                  </button>
+                      <label className="field">
+                        <span className="label">Headline</span>
+                        <input className="input" value={p.offering_title ?? ""} onChange={(e) => setP({ ...p, offering_title: e.target.value })} placeholder="Qi Gong, Sound Baths, Drum Circles…" disabled={!p.is_business} />
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Description</span>
+                        <textarea className="input" rows={4} value={p.offering_description ?? ""} onChange={(e) => setP({ ...p, offering_description: e.target.value })} placeholder="Describe what you offer and who it's for." disabled={!p.is_business} />
+                      </label>
+
+                      <label className="field">
+                        <span className="label">Booking link (optional)</span>
+                        <input className="input" value={p.booking_url ?? ""} onChange={(e) => setP({ ...p, booking_url: e.target.value })} placeholder="https://mybookinglink.com" disabled={!p.is_business} />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="card p-3">
+                    <h2 className="section-title">Services</h2>
+                    <BusinessServicesEditor value={services} onChange={setServices} disabled={!p.is_business} />
+                    <div className="right" style={{ marginTop: 10 }}>
+                      <button className="btn btn-brand" onClick={save} disabled={saving || tableMissing}>{saving ? "Saving…" : "Save business"}</button>
+                    </div>
+                  </section>
                 </div>
-              </div>
-            </section>
+              )}
 
-            {/* Business offering */}
-            <section className="card p-3">
-              <div className="section-row">
-                <h2 className="section-title">Business offering</h2>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={!!p.is_business}
-                    onChange={(e) => setP({ ...p, is_business: e.target.checked })}
-                  />
-                  <span>I offer services</span>
-                </label>
-              </div>
+              {/* Photos feed always visible on profile */}
+              <PhotosFeed userId={userId} />
+            </div>
 
-              <div className="stack">
-                <label className="field">
-                  <span className="label">Offering title</span>
-                  <input
-                    className="input"
-                    value={p.offering_title ?? ""}
-                    onChange={(e) => setP({ ...p, offering_title: e.target.value })}
-                    placeholder="Reiki, Sound Bath, Qi Gong, etc."
-                    disabled={!p.is_business}
-                  />
-                </label>
-
-                <label className="field">
-                  <span className="label">Offering description</span>
-                  <textarea
-                    className="input"
-                    rows={4}
-                    value={p.offering_description ?? ""}
-                    onChange={(e) => setP({ ...p, offering_description: e.target.value })}
-                    placeholder="Describe what you offer and who it's for."
-                    disabled={!p.is_business}
-                  />
-                </label>
-
-                <label className="field">
-                  <span className="label">Booking link (optional)</span>
-                  <input
-                    className="input"
-                    value={p.booking_url ?? ""}
-                    onChange={(e) => setP({ ...p, booking_url: e.target.value })}
-                    placeholder="https://mybookinglink.com"
-                    disabled={!p.is_business}
-                  />
-                </label>
-              </div>
-            </section>
-          </div>
-
-          {/* Roadmap footer */}
-          <div className="card p-3 mt-3">
-            <div className="muted text-sm">
-              Coming soon: Posts & Reflections • Photos • Friends & Mutuals • Business reviews
+            {/* SIDEBAR */}
+            <div className="stack">
+              <GratitudePanel userId={userId} />
+              <section className="card p-3">
+                <h2 className="section-title">Privacy (preview)</h2>
+                <p className="muted">Right now, your profile content is private in the app UI. We’ll add public business pages and enforce friends/acquaintance visibility in the next step.</p>
+              </section>
             </div>
           </div>
 
