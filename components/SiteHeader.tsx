@@ -30,8 +30,7 @@ export default function SiteHeader() {
               <Link className="nav-link" href="/calendar">Calendar</Link>
               <Link className="nav-link" href="/meditation">Meditation</Link>
               <Link className="nav-link" href="/communities">Communities</Link>
-              <Link className="nav-link" href="/karma">Karma Corner</Link>
-              <Link className="nav-link" href="/good-news">Good News</Link>
+              <Link className="nav-link" href="/good-vibes">Good Vibes</Link>{/* (Karma + Good News) */}
             </>
           ) : (
             <>
@@ -42,7 +41,7 @@ export default function SiteHeader() {
         </nav>
 
         <div className="auth-area">
-          <ThemeDropdown /> {/* compact “Color theme” dropdown */}
+          <ThemeDropdown />
         </div>
       </div>
     </header>
