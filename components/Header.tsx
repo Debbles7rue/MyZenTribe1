@@ -1,76 +1,60 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Header() {
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const router = useRouter();
   const pathname = usePathname();
+  const [email, setEmail] = useState<string | null>(null);
 
-  // Apply saved theme on every page load so routes match the chosen season
+  // check auth on mount and on route change
   useEffect(() => {
-    const saved = localStorage.getItem("mzt_theme");
-    if (saved) document.documentElement.setAttribute("data-theme", saved);
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!mounted) return;
-      setUserEmail(data.user?.email ?? null);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user?.email ?? null);
-    });
-    return () => {
-      mounted = false;
-      sub?.subscription.unsubscribe();
-    };
-  }, []);
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+  }, [pathname]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/"; // refresh UI quickly
+    setEmail(null);
+    router.push("/login");
   };
 
-  // Hide Sign up / Sign in on the calendar page if not logged in
-  const hideAuthOnCalendar = pathname === "/calendar" && !userEmail;
+  // simple helper for active tab styling
+  const tabClass = (href: string) =>
+    `px-3 py-1.5 rounded-full border text-sm ${
+      pathname?.startsWith(href) ? "bg-brand-600 text-white" : "bg-white hover:bg-gray-50"
+    }`;
 
   return (
-    <header className="site-header">
-      <div className="container-app header-inner">
-        <Link href="/" className="brand">
-          {/* Hide the tiny logo for now to reduce visual noise */}
-          {/* <img src="/logo.svg" alt="MyZenTribe" className="brand-logo" /> */}
-          <span className="brand-name">
-            My<em className="brand-zen">Zen</em>Tribe
-          </span>
+    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b">
+      <div className="max-w-6xl mx-auto px-4 h-12 flex items-center gap-4">
+        <Link href="/" className="font-semibold">
+          My<span className="italic">Zen</span>Tribe
         </Link>
 
-        <nav className="main-nav">
-          <Link href="/login">Sign in</Link>
-          <Link href="/calendar" className="nav-link">Calendar</Link>
-          <Link href="/communities" className="nav-link">Communities</Link>
-          <Link href="/meditation" className="nav-link">Meditation room</Link>
-          <Link href="/profile" className="nav-link">Profile</Link>
-        </nav>
+        {/* When logged in, show the app tabs */}
+        {email ? (
+          <nav className="flex gap-2 flex-1">
+            <Link href="/calendar" className={tabClass("/calendar")}>Calendar</Link>
+            <Link href="/communities" className={tabClass("/communities")}>Communities</Link>
+            <Link href="/meditation" className={tabClass("/meditation")}>Meditation</Link>
+            <Link href="/profile" className={tabClass("/profile")}>Profile</Link>
+            <Link href="/karma" className={tabClass("/karma")}>Karma Corner</Link>
+          </nav>
+        ) : (
+          <div className="flex-1" />
+        )}
 
-        {!hideAuthOnCalendar && (
-          <div className="auth-area">
-            {userEmail ? (
-              <>
-                <span className="user-chip" title={userEmail}>{userEmail}</span>
-                <button className="btn btn-neutral" onClick={signOut}>Sign out</button>
-              </>
-            ) : (
-              <>
-                <Link href="/signup" className="btn btn-brand">Sign up</Link>
-                <Link href="/login" className="btn btn-neutral">Sign in</Link>
-              </>
-            )}
+        {/* Right side: auth controls */}
+        {email ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-2 py-1 rounded-full border bg-white">{email}</span>
+            <button onClick={signOut} className="btn">Sign out</button>
           </div>
+        ) : (
+          <Link href="/login" className="btn btn-brand">Sign in</Link>
         )}
       </div>
     </header>
