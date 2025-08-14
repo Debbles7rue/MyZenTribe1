@@ -50,6 +50,7 @@ export default function Header() {
         </Link>
 
         <nav className="main-nav">
+          <Link href="/login">Sign in</Link>
           <Link href="/calendar" className="nav-link">Calendar</Link>
           <Link href="/communities" className="nav-link">Communities</Link>
           <Link href="/meditation" className="nav-link">Meditation room</Link>
