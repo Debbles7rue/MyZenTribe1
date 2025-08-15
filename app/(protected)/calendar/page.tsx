@@ -1,5 +1,7 @@
 "use client";
 
+// app/calendar/page.tsx (top of file)
+import SiteHeader from "@/components/SiteHeader";
 import SiteHeader from "@/components/SiteHeader";            // or remove if you don’t have it
 import CalendarHeader from "@/components/CalendarHeader";
 import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
