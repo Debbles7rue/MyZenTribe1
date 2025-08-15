@@ -121,13 +121,20 @@ export default function EventDetails({
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
-          {/* scrollable content */}
-          <div className="max-h-[80vh] overflow-y-auto">
-            {/* Banner image */}
+          {/* scrollable content (inline styles to avoid relying on utilities) */}
+          <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
+            {/* Small, tidy banner image */}
             <img
               src={event.image_path || "/event-placeholder.jpg"}
-              alt=""
-              className="w-full max-h-56 object-cover"
+              alt={event.title || ""}
+              style={{
+                width: "100%",
+                height: "170px",      // <= adjust if you want smaller/larger
+                objectFit: "cover",
+                display: "block",
+                borderBottom: "1px solid #eee",
+              }}
+              loading="lazy"
             />
 
             <div className="p-6 space-y-5">
