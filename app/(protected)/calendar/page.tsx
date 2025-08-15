@@ -1,5 +1,6 @@
 "use client";
 
+import SiteHeader from "@/components/SiteHeader";
 import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import SiteHeader from "@/components/SiteHeader";
