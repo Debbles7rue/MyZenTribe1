@@ -44,10 +44,10 @@ type DBEvent = {
   rsvp_public: boolean | null;
   community_id: string | null;
   created_at: string;
-
   // NEW:
   image_path: string | null;
-  source: "personal" | "business";
+  source: "personal" | "business" | null;
+  location_requires_rsvp?: boolean | null;
 };
 
 type RSVP = {
@@ -166,6 +166,15 @@ export default function CalendarPage() {
     localStorage.setItem("mzt-theme", theme);
   }, [theme]);
 
+  // Zoom + grid snap
+  const [step, setStep] = useState(30); // minutes
+  const [slots, setSlots] = useState(2); // 2 slots per hour
+  const scrollTime = useMemo(() => new Date(1970, 1, 1, 8, 0, 0), []);
+  const [calendarView, setCalendarView] = useState<View>(Views.MONTH);
+  const [date, setDate] = useState<Date>(new Date());
+  const zoomIn = () => setCalendarView((v) => (v === Views.MONTH ? Views.WEEK : Views.DAY));
+  const zoomOut = () => setCalendarView((v) => (v === Views.DAY ? Views.WEEK : Views.MONTH));
+
   const quotes = useMemo(
     () => [
       "Small steps every day.",
@@ -183,8 +192,6 @@ export default function CalendarPage() {
   const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(true);
-  const [calendarView, setCalendarView] = useState<View>(Views.MONTH);
-  const [date, setDate] = useState<Date>(new Date());
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
@@ -203,6 +210,7 @@ export default function CalendarPage() {
     // NEW:
     source: "personal" as "personal" | "business",
     image_path: "",
+    location_requires_rsvp: false,
   });
 
   const [query, setQuery] = useState("");
@@ -304,7 +312,7 @@ export default function CalendarPage() {
       all = (data ?? []) as DBEvent[];
     }
 
-    // Apply type filter client-side (simpler than altering the query)
+    // Type filter
     if (typeFilter !== "all") {
       all = all.filter((e) => (e.source || "personal") === typeFilter);
     }
@@ -313,10 +321,39 @@ export default function CalendarPage() {
     setLoading(false);
   };
 
+  // Load + reload when mode/filter changes
   useEffect(() => {
     if (sessionUser) loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode, typeFilter]);
+
+  // Realtime: reflect inserts/updates/deletes
+  useEffect(() => {
+    const ch = supabase
+      .channel("events-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "events" },
+        (payload) => {
+          setEvents((prev) =>
+            prev.map((e) => (e.id === payload.new.id ? { ...e, ...(payload.new as any) } : e))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "events" },
+        (payload) => setEvents((prev) => [{ ...(payload.new as any) }, ...prev])
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "events" },
+        (payload) => setEvents((prev) => prev.filter((e) => e.id !== payload.old.id))
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -359,29 +396,32 @@ export default function CalendarPage() {
     async function load() {
       try {
         setWError("");
-        // 1) Try saved default location from Profile
+        // 1) Try saved default location from Profile via your lib
         const saved = localStorage.getItem("mzt.location") || "";
-        let latlon = saved ? await geocode(saved) : null;
+        let data: any = null;
 
-        // 2) Fallback to browser geolocation
-        if (!latlon && navigator.geolocation) {
+        try {
+          if (saved) {
+            const latlon = await geocode(saved);
+            data = await dailyForecast(latlon);
+          }
+        } catch {}
+
+        // 2) Fallback to Open-Meteo using geolocation (no key)
+        if (!data) {
+          let lat = 32.7767, lon = -96.7970; // Dallas fallback
           await new Promise<void>((resolve) => {
+            if (!navigator.geolocation) return resolve();
             navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                latlon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-                resolve();
-              },
+              (pos) => { lat = pos.coords.latitude; lon = pos.coords.longitude; resolve(); },
               () => resolve()
             );
           });
+          const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`;
+          const res = await fetch(url);
+          data = await res.json();
         }
 
-        if (!latlon) {
-          setWError("Set a default location in Profile to see weather.");
-          return;
-        }
-
-        const data = await dailyForecast(latlon);
         if (!cancelled) setForecast(data);
       } catch (e: any) {
         if (!cancelled) setWError(e.message || "Weather unavailable.");
@@ -389,9 +429,7 @@ export default function CalendarPage() {
     }
 
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [showWeather]);
 
   const weatherEvents = useMemo<UiEvent[]>(() => {
@@ -450,7 +488,7 @@ export default function CalendarPage() {
     if (r.weather) {
       return {
         style: {
-          backgroundColor: "#E0F2FE", // light blue
+          backgroundColor: "#E0F2FE",
           border: "1px dashed #93C5FD",
           borderRadius: 10,
           fontWeight: 600,
@@ -459,7 +497,7 @@ export default function CalendarPage() {
       };
     }
 
-    // Regular events styling (yours)
+    // Regular events styling
     const e: DBEvent = r;
     let backgroundColor = "#9ca3af";
     if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
@@ -533,10 +571,10 @@ export default function CalendarPage() {
       event_type: form.event_type || null,
       rsvp_public: true,
       community_id: form.community_id || null,
-
       // NEW:
-      image_path: form.image_path || null,       // storing public URL
-      source: form.source,                        // personal/business
+      image_path: form.image_path || null,
+      source: form.source,
+      location_requires_rsvp: form.location_requires_rsvp,
     };
 
     const { error } = await supabase.from("events").insert(payload);
@@ -559,6 +597,7 @@ export default function CalendarPage() {
       community_id: "",
       source: "personal",
       image_path: "",
+      location_requires_rsvp: false,
     });
     loadData();
   };
@@ -583,6 +622,15 @@ export default function CalendarPage() {
               >
                 Only my events
               </button>
+            </div>
+
+            {/* Zoom controls */}
+            <div className="segmented" title="Zoom">
+              <button className="seg-btn" onClick={zoomOut}>−</button>
+              <button className={`seg-btn ${calendarView===Views.MONTH ? "active":""}`} onClick={() => setCalendarView(Views.MONTH)}>Month</button>
+              <button className={`seg-btn ${calendarView===Views.WEEK ? "active":""}`} onClick={() => setCalendarView(Views.WEEK)}>Week</button>
+              <button className={`seg-btn ${calendarView===Views.DAY ? "active":""}`} onClick={() => setCalendarView(Views.DAY)}>Day</button>
+              <button className="seg-btn" onClick={zoomIn}>+</button>
             </div>
 
             {/* NEW: type filter */}
@@ -619,7 +667,7 @@ export default function CalendarPage() {
               Weather (3–5 days)
             </label>
 
-            {/* Theme dropdown (aligned with global key) */}
+            {/* Theme dropdown */}
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as any)}
@@ -648,7 +696,7 @@ export default function CalendarPage() {
           />
         </div>
 
-        {/* Optional weather summary card (kept) */}
+        {/* Optional weather summary card */}
         {showWeather && (
           <div className="card p-3 text-sm mb-3">
             {wError ? (
@@ -697,6 +745,9 @@ export default function CalendarPage() {
             onEventDrop={onEventDrop}
             onEventResize={onEventResize}
             eventPropGetter={eventPropGetter}
+            step={step}
+            timeslots={slots}
+            scrollToTime={scrollTime}
             components={{
               event: ({ event }) => {
                 const r = (event as UiEvent).resource;
@@ -751,10 +802,11 @@ export default function CalendarPage() {
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="Sound Bath at the Park"
                 />
               </label>
 
-              {/* NEW: event photo */}
+              {/* Event photo */}
               <div className="md:col-span-2">
                 <span className="text-sm">Event photo</span>
                 <div className="mt-2">
@@ -768,7 +820,7 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              {/* NEW: Type selector */}
+              {/* Type + Location */}
               <label className="block">
                 <span className="text-sm">Type</span>
                 <select
@@ -789,50 +841,70 @@ export default function CalendarPage() {
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  placeholder="Greenville, TX"
                 />
               </label>
 
+              {/* Tag */}
               <label className="block">
                 <span className="text-sm">Type (tag)</span>
                 <input
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
                   value={form.event_type}
                   onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-                  placeholder="Coffee, Yoga, etc."
+                  placeholder="Coffee, Yoga, Drum circle…"
                 />
               </label>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:col-span-2">
-                <label className="block">
-                  <span className="text-sm">Start</span>
-                  <input
-                    type="datetime-local"
-                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.start}
-                    onChange={(e) => setForm({ ...form, start: e.target.value })}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm">End</span>
-                  <input
-                    type="datetime-local"
-                    className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                    value={form.end}
-                    onChange={(e) => setForm({ ...form, end: e.target.value })}
-                  />
-                </label>
-              </div>
+              {/* Start / End */}
+              <label className="block">
+                <span className="text-sm">Start</span>
+                <input
+                  type="datetime-local"
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.start}
+                  onChange={(e) => setForm({ ...form, start: e.target.value })}
+                />
+              </label>
 
+              <label className="block">
+                <span className="text-sm">End</span>
+                <input
+                  type="datetime-local"
+                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  value={form.end}
+                  onChange={(e) => setForm({ ...form, end: e.target.value })}
+                />
+              </label>
+
+              {/* Description */}
               <label className="block md:col-span-2">
                 <span className="text-sm">Description</span>
                 <textarea
                   className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-                  rows={3}
+                  rows={4}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Share details attendees should know…"
                 />
               </label>
 
+              {/* Address privacy */}
+              <label className="block md:col-span-2">
+                <span className="text-sm">Address privacy</span>
+                <div className="check mt-1">
+                  <input
+                    type="checkbox"
+                    checked={form.location_requires_rsvp}
+                    onChange={(e) =>
+                      setForm({ ...form, location_requires_rsvp: e.target.checked })
+                    }
+                  />
+                  <span>Only show the address after someone RSVPs (public events)</span>
+                </div>
+              </label>
+
+              {/* Visibility + Community */}
               <label className="block">
                 <span className="text-sm">Visibility</span>
                 <select
