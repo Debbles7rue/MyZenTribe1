@@ -1,6 +1,5 @@
 "use client";
 
-import SiteHeader from "@/components/SiteHeader";
 import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import SiteHeader from "@/components/SiteHeader";
@@ -8,44 +7,37 @@ import { supabase } from "@/lib/supabaseClient";
 import type { DBEvent, Visibility } from "@/lib/types";
 import CalendarHeader from "@/components/CalendarHeader";
 import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
-import CreateEventModal from "@/components/CreateEventModal";
 import { useMoon } from "@/hooks/useMoon";
-// (Weather hook ready when we want it) import { useWeather } from "@/hooks/useWeather";
 import EventDetails from "@/components/EventDetails";
 
 export default function CalendarPage() {
-  // --- theme (persists)
+  // theme (persist)
   const [theme, setTheme] = useState<"spring"|"summer"|"autumn"|"winter">("winter");
   useEffect(() => { const saved = localStorage.getItem("mzt-theme") as any; if (saved) setTheme(saved); }, []);
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); localStorage.setItem("mzt-theme", theme); }, [theme]);
 
-  // --- session
+  // session
   const [sessionUser, setSessionUser] = useState<string|null>(null);
   useEffect(()=>{ supabase.auth.getUser().then(({data})=>setSessionUser(data.user?.id ?? null)); },[]);
 
-  // --- filters
+  // filters
   const [mode, setMode] = useState<"whats"|"mine">("whats");
   const [typeFilter, setTypeFilter] = useState<"all"|"personal"|"business">("all");
   const [showMoon, setShowMoon] = useState(true);
   const [query, setQuery] = useState("");
 
-  // --- calendar state
+  // calendar state
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
 
-  // --- data
+  // data
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function load() {
     if (!sessionUser) return;
     setLoading(true);
-
-    // Keep it simple: fetch visible + mine, filter client-side
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .order("start_time", { ascending: true });
+    const { data, error } = await supabase.from("events").select("*").order("start_time", { ascending: true });
     if (!error && data) {
       let list = data as DBEvent[];
       if (mode === "mine") list = list.filter(e => e.created_by === sessionUser);
@@ -64,7 +56,6 @@ export default function CalendarPage() {
   }
   useEffect(()=>{ if (sessionUser) load(); }, [sessionUser, mode, typeFilter, query]);
 
-  // realtime updates (lightweight)
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -73,7 +64,7 @@ export default function CalendarPage() {
     return () => { supabase.removeChannel(ch); };
   }, [sessionUser, mode, typeFilter, query]);
 
-  // --- create modal
+  // create modal
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", location: "",
@@ -86,7 +77,6 @@ export default function CalendarPage() {
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
     if (!form.title || !form.start || !form.end) return alert("Missing fields.");
-
     const payload: Partial<DBEvent> & { start_time: Date; end_time: Date } = {
       title: form.title,
       description: form.description || null,
@@ -95,14 +85,12 @@ export default function CalendarPage() {
       end_time: new Date(form.end),
       visibility: form.visibility,
       created_by: sessionUser,
-      latitude: null, longitude: null, rrule: null,
       event_type: form.event_type || null,
       rsvp_public: true,
       community_id: form.community_id || null,
       image_path: form.image_path || null,
       source: form.source,
     };
-
     const { error } = await supabase.from("events").insert(payload);
     if (error) return alert(error.message);
     setOpenCreate(false);
@@ -110,24 +98,14 @@ export default function CalendarPage() {
     load();
   };
 
-  // --- moon + (future) weather overlays
+  // moon
   const moonUi = useMoon(date.getFullYear(), showMoon);
-  // const weatherUi = useWeather(showWeather);
+  const moonUiEvents: UiEvent[] = useMemo(
+    () => moonUi.map(m => ({ id: m.id, title: m.title, start: m.start, end: m.end, allDay: true, resource: { moonPhase: (m as any).resource.moonPhase } })),
+    [moonUi]
+  );
 
-  // --- merge into ui events
-  const uiEvents = useMemo<UiEvent[]>(() => {
-    const base = events.map((e) => ({
-      id: e.id,
-      title: e.title,
-      start: new Date(e.start_time),
-      end: new Date(e.end_time),
-      allDay: false,
-      resource: e,
-    }));
-    return [...base, ...moonUi /*, ...weatherUi*/];
-  }, [events, moonUi]);
-
-  // --- click handlers
+  // click handlers
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent|null>(null);
 
@@ -138,7 +116,7 @@ export default function CalendarPage() {
     setOpenCreate(true);
   };
   const onSelectEvent = (evt: UiEvent) => {
-    if (evt.resource?.moonPhase) return; // ignore moon markers
+    if ((evt as any)?.resource?.moonPhase) return;
     setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
@@ -154,7 +132,6 @@ export default function CalendarPage() {
   return (
     <div className="page">
       <SiteHeader />
-
       <div className="container-app">
         <CalendarHeader
           mode={mode} setMode={setMode}
@@ -166,7 +143,9 @@ export default function CalendarPage() {
         />
 
         <CalendarGrid
-          events={uiEvents}
+          dbEvents={events}
+          moonEvents={moonUiEvents}
+          showMoon={showMoon}
           date={date} setDate={setDate}
           view={view} setView={setView}
           onSelectSlot={onSelectSlot}
