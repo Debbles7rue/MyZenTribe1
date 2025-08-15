@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import { Calendar, Views, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { localizer } from "@/lib/localizer";
@@ -9,7 +9,10 @@ const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 export type UiEvent = RBCEvent & { resource: any };
 
 type Props = {
-  events: UiEvent[];
+  dbEvents: DBEvent[];
+  moonEvents: UiEvent[];
+  showMoon: boolean;
+
   date: Date;
   setDate: (d: Date) => void;
   view: View;
@@ -21,8 +24,27 @@ type Props = {
 };
 
 export default function CalendarGrid({
-  events, date, setDate, view, setView, onSelectSlot, onSelectEvent, onDrop, onResize
+  dbEvents, moonEvents, showMoon,
+  date, setDate, view, setView,
+  onSelectSlot, onSelectEvent, onDrop, onResize
 }: Props) {
+  const dbUiEvents = useMemo<UiEvent[]>(
+    () => dbEvents.map((e) => ({
+      id: e.id,
+      title: e.title,
+      start: new Date(e.start_time),
+      end: new Date(e.end_time),
+      allDay: false,
+      resource: e,
+    })),
+    [dbEvents]
+  );
+
+  const mergedEvents = useMemo(
+    () => [...dbUiEvents, ...(showMoon ? moonEvents : [])],
+    [dbUiEvents, moonEvents, showMoon]
+  );
+
   const eventPropGetter = (event: UiEvent) => {
     const r: DBEvent | any = event.resource;
     if (r?.moonPhase) {
@@ -36,7 +58,7 @@ export default function CalendarGrid({
     <div className="card p-3">
       <DnDCalendar
         localizer={localizer}
-        events={events}
+        events={mergedEvents}
         startAccessor="start"
         endAccessor="end"
         selectable
@@ -53,17 +75,21 @@ export default function CalendarGrid({
         onEventResize={onResize}
         step={30}
         timeslots={2}
-        scrollToTime={new Date(1970, 1, 1, 8, 0, 0)} // scroll to 8am
+        scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
         components={{
           event: ({ event }) => {
-            const r = (event as UiEvent).resource;
+            const r = (event as UiEvent).resource || {};
             if (r?.moonPhase) {
-              const icon = r.moonPhase === "moon-full" ? "🌕" : r.moonPhase === "moon-new" ? "🌑" : r.moonPhase === "moon-first" ? "🌓" : "🌗";
-              return <div className="text-[11px] leading-tight">{icon} {event.title}</div>;
+              const icon =
+                r.moonPhase === "moon-full" ? "🌕" :
+                r.moonPhase === "moon-new" ? "🌑" :
+                r.moonPhase === "moon-first" ? "🌓" : "🌗";
+              return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
             }
-            return <div className="text-[11px] leading-tight"><div className="font-medium">{event.title}</div></div>;
+            return <div className="text-[11px] leading-tight"><div className="font-medium">{(event as any).title}</div></div>;
           },
         }}
+        eventPropGetter={eventPropGetter}
       />
     </div>
   );
