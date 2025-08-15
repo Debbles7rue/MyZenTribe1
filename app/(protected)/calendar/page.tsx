@@ -20,12 +20,12 @@ import {
   addDays,
 } from "date-fns";
 import enUS from "date-fns/locale/en-US";
-import SiteHeader from "@/components/SiteHeader";
 
+import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
-import AvatarUpload from "@/components/AvatarUpload";
 import { geocode, dailyForecast } from "@/lib/weather";
+import AvatarUpload from "@/components/AvatarUpload";
 
 type Visibility = "public" | "friends" | "private" | "community";
 
@@ -46,9 +46,11 @@ type DBEvent = {
   community_id: string | null;
   created_at: string;
 
-  // Extra fields we added
   image_path: string | null;
-  source: "personal" | "business";
+  source: "personal" | "business" | null;
+
+  status?: "scheduled" | "cancelled" | null;
+  cancellation_reason?: string | null;
   location_requires_rsvp?: boolean | null;
 };
 
@@ -71,7 +73,6 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
-
 const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 
 /* ---------------- Moon phases (approx) ---------------- */
@@ -83,9 +84,7 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   const epoch = new Date(Date.UTC(2000, 0, 6, 18, 14));
   const yearStart = startOfYear(new Date(Date.UTC(year, 0, 1)));
   const yearEnd = endOfYear(new Date(Date.UTC(year, 11, 31)));
-
-  const daysBetween = (a: Date, b: Date) =>
-    (b.getTime() - a.getTime()) / 86400000;
+  const daysBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 86400000;
   let k = Math.floor(daysBetween(epoch, yearStart) / SYNODIC) - 1;
 
   const events: UiEvent[] = [];
@@ -106,7 +105,6 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   for (let i = 0; i < 20; i++) {
     const newMoon = new Date(epoch.getTime() + (k + i) * SYNODIC * 86400000);
     if (newMoon > addDays(yearEnd, 2)) break;
-
     const firstQuarter = new Date(newMoon.getTime() + FIRST_Q * 86400000);
     const fullMoon = new Date(newMoon.getTime() + FULL * 86400000);
     const lastQuarter = new Date(newMoon.getTime() + LAST_Q * 86400000);
@@ -114,7 +112,6 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
     const maybeAdd = (d: Date, title: string, key: string) => {
       if (d >= addDays(yearStart, -2) && d <= addDays(yearEnd, 2)) pushPhase(d, title, key);
     };
-
     maybeAdd(newMoon, "New Moon", "moon-new");
     maybeAdd(firstQuarter, "First Quarter", "moon-first");
     maybeAdd(fullMoon, "Full Moon", "moon-full");
@@ -123,26 +120,33 @@ function generateLunarEventsForYear(year: number): UiEvent[] {
   return events;
 }
 
-/* ------------- Weather -> calendar items (5 days) ------------- */
-function generateWeatherEventsFromForecast(forecast: any): UiEvent[] {
+/* ---- Weather icons (no text) for next 5 days on calendar ---- */
+function weatherIconFromDaily(highC: number, rainPct: number): string {
+  // very simple signal: rainy dominates; otherwise hot/sunny/partly
+  if ((rainPct ?? 0) >= 60) return "🌧️";
+  if ((rainPct ?? 0) >= 30) return "🌦️";
+  const highF = highC * 1.8 + 32;
+  if (highF >= 100) return "🔆";
+  if (highF >= 80) return "☀️";
+  return "⛅";
+}
+function generateWeatherIconEvents(forecast: any): UiEvent[] {
   if (!forecast?.daily?.time?.length) return [];
   const days = forecast.daily.time.slice(0, 5);
   const highs = forecast.daily.temperature_2m_max || [];
-  const lows = forecast.daily.temperature_2m_min || [];
   const rain = forecast.daily.precipitation_probability_max || [];
-
   return days.map((iso: string, i: number) => {
     const d = new Date(iso);
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const end = addDays(start, 1);
-    const title = `${Math.round(highs[i] ?? 0)}°/${Math.round(lows[i] ?? 0)}° · ${rain[i] ?? 0}%`;
+    const icon = weatherIconFromDaily(highs[i], rain[i]);
     return {
-      id: `weather-${iso}`,
-      title,
+      id: `wicon-${iso}`,
+      title: icon,
       start,
       end,
       allDay: true,
-      resource: { weather: true, high: highs[i], low: lows[i], rain: rain[i] },
+      resource: { weatherIcon: icon },
     } as UiEvent;
   });
 }
@@ -152,8 +156,31 @@ export default function CalendarPage() {
 
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [showMoon, setShowMoon] = useState(true);
-  const [showWeather, setShowWeather] = useState(true);
+  const [showWeatherIcons, setShowWeatherIcons] = useState(true);
+
   const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
+
+  const [theme, setTheme] =
+    useState<"spring" | "summer" | "autumn" | "winter">("winter");
+  useEffect(() => {
+    const saved = (localStorage.getItem("mzt-theme") as any) || null;
+    if (saved) setTheme(saved);
+  }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("mzt-theme", theme);
+  }, [theme]);
+
+  const quotes = useMemo(
+    () => [
+      "Small steps every day.",
+      "Be where your feet are.",
+      "Energy flows where attention goes.",
+      "Breathe in peace, breathe out stress.",
+    ],
+    []
+  );
+  const quote = quotes[new Date().getDate() % quotes.length];
 
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [friendGoingIds, setFriendGoingIds] = useState<Set<string>>(new Set());
@@ -163,9 +190,18 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [calendarView, setCalendarView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
+  // Moon mini dialog
+  const [moonOpen, setMoonOpen] = useState(false);
+  const [moonMeta, setMoonMeta] = useState<{ title: string; date: Date }>({
+    title: "",
+    date: new Date(),
+  });
+
+  // Create dialog
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -185,12 +221,37 @@ export default function CalendarPage() {
 
   const [query, setQuery] = useState("");
 
-  // Forecast card units
-  const [units, setUnits] = useState<"F" | "C">("F");
-  const toUnit = (c: number) => (units === "F" ? Math.round(c * 9/5 + 32) : Math.round(c));
-
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
+  }, []);
+
+  // Live updates (optional)
+  useEffect(() => {
+    const ch = supabase
+      .channel("events-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "events" },
+        (payload) => {
+          setEvents((prev) =>
+            prev.map((e) => (e.id === (payload.new as any).id ? { ...e, ...(payload.new as any) } : e))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "events" },
+        (payload) => setEvents((prev) => [{ ...(payload.new as any) }, ...prev])
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "events" },
+        (payload) => setEvents((prev) => prev.filter((e) => e.id !== (payload.old as any).id))
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   const loadData = async () => {
@@ -221,8 +282,7 @@ export default function CalendarPage() {
     const friendIds = new Set<string>();
     if (!friendsRes.error && friendsRes.data) {
       for (const row of friendsRes.data) {
-        const other =
-          row.user_id === sessionUser ? row.friend_user_id : row.user_id;
+        const other = row.user_id === sessionUser ? row.friend_user_id : row.user_id;
         friendIds.add(other);
       }
     }
@@ -264,25 +324,14 @@ export default function CalendarPage() {
     if (mode === "mine") {
       const ors: string[] = [`created_by.eq.${sessionUser}`];
       if (rsvpEventIds.size) ors.push(`id.in.(${Array.from(rsvpEventIds).join(",")})`);
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .or(ors.join(","))
-        .order("start_time", { ascending: true });
+      const { data } = await supabase.from("events").select("*").or(ors.join(",")).order("start_time", { ascending: true });
       all = (data ?? []) as DBEvent[];
     } else {
       const orClauses: string[] = [`created_by.eq.${sessionUser}`];
-      if (followedIds.size)
-        orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
-      if (friendsGoing.size)
-        orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
-      if (myCommunityIds.size)
-        orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .or(orClauses.join(","))
-        .order("start_time", { ascending: true });
+      if (followedIds.size) orClauses.push(`created_by.in.(${Array.from(followedIds).join(",")})`);
+      if (friendsGoing.size) orClauses.push(`id.in.(${Array.from(friendsGoing).join(",")})`);
+      if (myCommunityIds.size) orClauses.push(`community_id.in.(${Array.from(myCommunityIds).join(",")})`);
+      const { data } = await supabase.from("events").select("*").or(orClauses.join(",")).order("start_time", { ascending: true });
       all = (data ?? []) as DBEvent[];
     }
 
@@ -329,72 +378,58 @@ export default function CalendarPage() {
     return generateLunarEventsForYear(date.getFullYear());
   }, [date, showMoon]);
 
-  /* ---------- Weather card data ---------- */
+  // Weather icons overlay
   const [forecast, setForecast] = useState<any>(null);
-  const [wError, setWError] = useState<string>("");
-
   useEffect(() => {
-    if (!showWeather) return;
+    if (!showWeatherIcons) return;
     let cancelled = false;
-
     async function load() {
       try {
-        setWError("");
-        // 1) Try saved default location from Profile
         const saved = localStorage.getItem("mzt.location") || "";
-        let data: any = null;
-
-        try {
-          if (saved) {
-            const latlon = await geocode(saved);
-            data = await dailyForecast(latlon);
-          }
-        } catch {}
-
-        // 2) Fallback: Open-Meteo via browser location (no key)
-        if (!data) {
-          let lat = 32.7767, lon = -96.7970; // Dallas fallback
+        let latlon = saved ? await geocode(saved) : null;
+        if (!latlon && navigator.geolocation) {
           await new Promise<void>((resolve) => {
-            if (!navigator.geolocation) return resolve();
             navigator.geolocation.getCurrentPosition(
-              (pos) => { lat = pos.coords.latitude; lon = pos.coords.longitude; resolve(); },
+              (pos) => {
+                latlon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                resolve();
+              },
               () => resolve()
             );
           });
-          const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`;
-          const res = await fetch(url);
-          data = await res.json();
         }
-
+        if (!latlon) return;
+        const data = await dailyForecast(latlon);
         if (!cancelled) setForecast(data);
-      } catch (e: any) {
-        if (!cancelled) setWError(e.message || "Weather unavailable.");
+      } catch {
+        /* ignore */
       }
     }
-
     load();
-    return () => { cancelled = true; };
-  }, [showWeather]);
+    return () => {
+      cancelled = true;
+    };
+  }, [showWeatherIcons]);
 
-  // Weather overlays on the grid? Keep off by default (quieter)
-  const SHOW_WEATHER_ON_GRID = false;
-  const weatherEvents = useMemo<UiEvent[]>(() => {
-    if (!showWeather || !forecast) return [];
-    return generateWeatherEventsFromForecast(forecast);
-  }, [forecast, showWeather]);
+  const weatherIconEvents = useMemo<UiEvent[]>(() => {
+    if (!showWeatherIcons || !forecast) return [];
+    return generateWeatherIconEvents(forecast);
+  }, [forecast, showWeatherIcons]);
 
   const allUiEvents = useMemo<UiEvent[]>(
-    () => SHOW_WEATHER_ON_GRID
-          ? [...rbcDbEvents, ...lunarEvents, ...weatherEvents]
-          : [...rbcDbEvents, ...lunarEvents],
-    [rbcDbEvents, lunarEvents, weatherEvents]
+    () => [...rbcDbEvents, ...lunarEvents, ...weatherIconEvents],
+    [rbcDbEvents, lunarEvents, weatherIconEvents]
   );
 
   const onSelectEvent = (evt: UiEvent) => {
     if (evt.resource?.moonPhase) {
-      alert(`${evt.title} — ${evt.start.toLocaleString()}`);
+      setMoonMeta({ title: evt.resource.title, date: evt.start as Date });
+      setMoonOpen(true);
       return;
     }
+    // weather icons are not clickable
+    if (evt.resource?.weatherIcon) return;
+
     setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
@@ -416,8 +451,8 @@ export default function CalendarPage() {
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
 
-    // Moon icons: subtle, no strip
-    if (r.moonPhase) {
+    // Moon / Weather icons -> transparent chip
+    if (r.moonPhase || r.weatherIcon) {
       return {
         style: {
           backgroundColor: "transparent",
@@ -429,14 +464,26 @@ export default function CalendarPage() {
       };
     }
 
-    // Regular events
     const e: DBEvent = r;
+    if (e.status === "cancelled") {
+      return {
+        style: {
+          backgroundColor: "#e5e7eb",
+          border: "1px solid #d1d5db",
+          borderRadius: 10,
+          textDecoration: "line-through",
+          color: "#374151",
+          opacity: 0.75,
+        },
+        className: "text-[11px] leading-tight",
+      };
+    }
+
     let backgroundColor = "#9ca3af";
     if (friendGoingIds.has(e.id)) backgroundColor = "#22c55e";
     else if (interestedIds.has(e.id)) backgroundColor = "#fde68a";
     else if (followedCreatorIds.has(e.created_by)) backgroundColor = "#60a5fa";
-    else if (e.visibility === "community" || e.community_id)
-      backgroundColor = "#a78bfa";
+    else if (e.visibility === "community" || e.community_id) backgroundColor = "#a78bfa";
     if (e.source === "business") backgroundColor = "#c4b5fd";
     return {
       style: { backgroundColor, border: "1px solid #e5e7eb", borderRadius: 10 },
@@ -504,7 +551,7 @@ export default function CalendarPage() {
       community_id: form.community_id || null,
       image_path: form.image_path || null,
       source: form.source,
-      location_requires_rsvp: form.location_requires_rsvp,
+      location_requires_rsvp: !!form.location_requires_rsvp,
     };
 
     const { error } = await supabase.from("events").insert(payload);
@@ -534,6 +581,8 @@ export default function CalendarPage() {
 
   return (
     <div className="page">
+      <SiteHeader />
+
       <div className="container-app">
         <div className="header-bar">
           <h1 className="page-title">Calendar</h1>
@@ -575,17 +624,29 @@ export default function CalendarPage() {
                 checked={showMoon}
                 onChange={(e) => setShowMoon(e.target.checked)}
               />
-              Show moon phases
+              Show moon
             </label>
 
             <label className="check">
               <input
                 type="checkbox"
-                checked={showWeather}
-                onChange={(e) => setShowWeather(e.target.checked)}
+                checked={showWeatherIcons}
+                onChange={(e) => setShowWeatherIcons(e.target.checked)}
               />
-              Weather card
+              Weather icons
             </label>
+
+            <select
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as any)}
+              className="select"
+              title="Color theme"
+            >
+              <option value="spring">Spring</option>
+              <option value="summer">Summer</option>
+              <option value="autumn">Autumn</option>
+              <option value="winter">Winter</option>
+            </select>
 
             <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
               Create event
@@ -613,9 +674,6 @@ export default function CalendarPage() {
             selectable
             resizable
             popup
-            step={30}
-            timeslots={2}
-            scrollToTime={new Date(1970, 1, 1, 8, 0, 0)} // 8am
             view={calendarView}
             onView={setCalendarView}
             date={date}
@@ -625,15 +683,26 @@ export default function CalendarPage() {
             onEventDrop={onEventDrop}
             onEventResize={onEventResize}
             eventPropGetter={eventPropGetter}
+            step={30}
+            timeslots={2}
+            scrollToTime={new Date(1970, 0, 1, 8, 0, 0)}
             components={{
               event: ({ event }) => {
                 const r = (event as UiEvent).resource;
                 if (r?.moonPhase) {
+                  // icon only
                   const icon =
-                    r.moonPhase === "moon-full" ? "🌕" :
-                    r.moonPhase === "moon-new" ? "🌑" :
-                    r.moonPhase === "moon-first" ? "🌓" : "🌗";
-                  return <div className="text-[11px] leading-tight">{icon} {r.title}</div>;
+                    r.moonPhase === "moon-full"
+                      ? "🌕"
+                      : r.moonPhase === "moon-new"
+                      ? "🌑"
+                      : r.moonPhase === "moon-first"
+                      ? "🌓"
+                      : "🌗";
+                  return <span className="text-[12px]">{icon}</span>;
+                }
+                if (r?.weatherIcon) {
+                  return <span className="text-[12px]">{r.weatherIcon}</span>;
                 }
                 return (
                   <div className="text-[11px] leading-tight">
@@ -645,77 +714,55 @@ export default function CalendarPage() {
           />
         </div>
 
-        {/* Forecast card BELOW the calendar */}
-        {showWeather && (
-          <div className="card p-3 text-sm mt-3">
-            <div className="flex items-center gap-2 mb-2">
-              <strong>Forecast</strong>
-              <select
-                className="select"
-                value={units}
-                onChange={(e) => setUnits(e.target.value as "F" | "C")}
-                title="Units"
-              >
-                <option value="F">°F</option>
-                <option value="C">°C</option>
-              </select>
-              {wError && <span className="text-amber-700">{wError}</span>}
-            </div>
-            {forecast ? (
-              <div className="flex flex-wrap gap-2">
-                {forecast.daily.time.slice(0, 5).map((d: string, i: number) => (
-                  <div key={d} className="px-3 py-2 rounded-lg border bg-white">
-                    <div className="font-medium">
-                      {new Date(d).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </div>
-                    <div className="text-xs">
-                      High {toUnit(forecast.daily.temperature_2m_max[i])}° /
-                      Low {toUnit(forecast.daily.temperature_2m_min[i])}° ·
-                      Rain {forecast.daily.precipitation_probability_max[i] ?? 0}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <span className="opacity-70">Loading weather…</span>
-            )}
-          </div>
-        )}
-
         {loading && <p className="muted mt-3">Loading…</p>}
-        <p className="muted mt-2 text-xs">
-          🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter
-        </p>
+        {/* (Removed the moon legend / bulky forecast card) */}
+        <p className="muted mt-2 italic">“{quote}”</p>
       </div>
 
-      {/* Create dialog (pretty, spacious) */}
+      {/* Moon info dialog */}
+      <Dialog open={moonOpen} onClose={() => setMoonOpen(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 shadow-lg">
+            <Dialog.Title className="text-lg font-semibold mb-2">{moonMeta.title}</Dialog.Title>
+            <p className="text-sm text-neutral-700">
+              {moonMeta.date.toLocaleString(undefined, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+            <div className="mt-4 flex justify-end">
+              <button className="btn" onClick={() => setMoonOpen(false)}>Close</button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      {/* Create event dialog (pretty layout, unchanged) */}
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <Dialog.Title className="text-lg font-semibold">Create event</Dialog.Title>
+            <div className="section-row">
+              <Dialog.Title className="section-title">Create event</Dialog.Title>
               <button className="btn" onClick={() => setOpenCreate(false)}>Close</button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block md:col-span-2">
-                <span className="text-sm">Title</span>
+            <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <label className="field" style={{ gridColumn: "1 / -1" }}>
+                <span className="label">Title</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="Sound Bath at the Park"
                 />
               </label>
 
-              <div className="md:col-span-2">
-                <span className="text-sm">Event photo</span>
-                <div className="mt-2">
+              <div style={{ gridColumn: "1 / -1" }}>
+                <span className="label">Event photo</span>
+                <div style={{ marginTop: 6 }}>
                   <AvatarUpload
                     userId={sessionUser}
                     value={form.image_path}
@@ -726,10 +773,10 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              <label className="block">
-                <span className="text-sm">Type</span>
+              <label className="field">
+                <span className="label">Type</span>
                 <select
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="select"
                   value={form.source}
                   onChange={(e) =>
                     setForm({ ...form, source: e.target.value as "personal" | "business" })
@@ -740,50 +787,62 @@ export default function CalendarPage() {
                 </select>
               </label>
 
-              <label className="block">
-                <span className="text-sm">Location</span>
+              <label className="field">
+                <span className="label">Location</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
                   placeholder="Greenville, TX"
                 />
               </label>
 
-              <label className="block">
-                <span className="text-sm">Type (tag)</span>
+              <label className="field">
+                <span className="label">Type (tag)</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   value={form.event_type}
                   onChange={(e) => setForm({ ...form, event_type: e.target.value })}
                   placeholder="Coffee, Yoga, Drum circle…"
                 />
               </label>
 
-              <label className="block">
-                <span className="text-sm">Start</span>
+              <label className="field">
+                <span className="label">Address privacy</span>
+                <div className="check">
+                  <input
+                    type="checkbox"
+                    checked={form.location_requires_rsvp}
+                    onChange={(e) => setForm({ ...form, location_requires_rsvp: e.target.checked })}
+                  />
+                  <span>Only show the address after someone RSVPs (public events)</span>
+                </div>
+              </label>
+
+              <label className="field">
+                <span className="label">Start</span>
                 <input
                   type="datetime-local"
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   value={form.start}
                   onChange={(e) => setForm({ ...form, start: e.target.value })}
                 />
               </label>
 
-              <label className="block">
-                <span className="text-sm">End</span>
+              <label className="field">
+                <span className="label">End</span>
                 <input
                   type="datetime-local"
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   value={form.end}
                   onChange={(e) => setForm({ ...form, end: e.target.value })}
                 />
               </label>
 
-              <label className="block md:col-span-2">
-                <span className="text-sm">Description</span>
+              <label className="field" style={{ gridColumn: "1 / -1" }}>
+                <span className="label">Description</span>
                 <textarea
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   rows={4}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -791,10 +850,10 @@ export default function CalendarPage() {
                 />
               </label>
 
-              <label className="block">
-                <span className="text-sm">Visibility</span>
+              <label className="field">
+                <span className="label">Visibility</span>
                 <select
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="select"
                   value={form.visibility}
                   onChange={(e) =>
                     setForm({ ...form, visibility: e.target.value as Visibility })
@@ -807,10 +866,10 @@ export default function CalendarPage() {
                 </select>
               </label>
 
-              <label className="block">
-                <span className="text-sm">Community (optional)</span>
+              <label className="field">
+                <span className="label">Community (optional)</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
+                  className="input"
                   value={form.community_id}
                   onChange={(e) =>
                     setForm({ ...form, community_id: e.target.value })
@@ -818,30 +877,18 @@ export default function CalendarPage() {
                   placeholder="Community UUID (picker later)"
                 />
               </label>
-
-              <label className="block md:col-span-2">
-                <span className="text-sm">Address privacy</span>
-                <div className="check mt-1">
-                  <input
-                    type="checkbox"
-                    checked={form.location_requires_rsvp}
-                    onChange={(e) => setForm({ ...form, location_requires_rsvp: e.target.checked })}
-                  />
-                  <span>Only show the address after someone RSVPs (public events)</span>
-                </div>
-              </label>
-
-              <div className="md:col-span-2 flex justify-end gap-3 mt-2">
-                <button className="btn btn-neutral" onClick={() => setOpenCreate(false)}>
-                  Cancel
-                </button>
-                <button className="btn btn-brand" onClick={createEvent}>
-                  Save
-                </button>
-              </div>
             </div>
 
-            <p className="mt-4 text-xs text-neutral-500">
+            <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button className="btn btn-neutral" onClick={() => setOpenCreate(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-brand" onClick={createEvent}>
+                Save
+              </button>
+            </div>
+
+            <p className="muted mt-2" style={{ fontSize: 12 }}>
               Tip: In Month view, click a day to zoom into it. Drag events to reschedule. Resize edges to change duration.
             </p>
           </Dialog.Panel>
