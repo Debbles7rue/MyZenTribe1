@@ -1,5 +1,10 @@
 "use client";
 
+import SiteHeader from "@/components/SiteHeader";            // or remove if you don’t have it
+import CalendarHeader from "@/components/CalendarHeader";
+import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
+import CreateEventModal from "@/components/CreateEventModal"; // <-- this one is usually the culprit
+import EventDetails from "@/components/EventDetails";
 import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import SiteHeader from "@/components/SiteHeader";
