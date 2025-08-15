@@ -1,4 +1,8 @@
 "use client";
+import CalendarHeader from "@/components/CalendarHeader";
+import CalendarGrid from "@/components/CalendarGrid";
+import CreateEventModal from "@/components/CreateEventModal"; // easy to miss
+import EventDetails from "@/components/EventDetails";
 import React from "react";
 import { Dialog } from "@headlessui/react";
 import AvatarUpload from "@/components/AvatarUpload";
