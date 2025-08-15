@@ -20,6 +20,7 @@ import {
   addDays,
 } from "date-fns";
 import enUS from "date-fns/locale/en-US";
+import SiteHeader from "@/components/SiteHeader";
 
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
