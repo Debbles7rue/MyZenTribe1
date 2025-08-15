@@ -31,3 +31,12 @@ body {
 }
 .btn-primary { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
 .btn-neutral { @apply bg-white text-gray-900 border border-gray-200 hover:bg-gray-50; }
+
+return (
+  <div className="page">
+    <div className="container-app">
+      {/* header-bar with controls, search, etc. */}
+      {/* the Calendar card */}
+    </div>
+  </div>
+);
