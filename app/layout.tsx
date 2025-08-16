@@ -1,6 +1,5 @@
-import "react-big-calendar/lib/css/react-big-calendar.css"; // ← needed for proper calendar layout
+import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./globals.css";
-import SiteHeader from "@/components/SiteHeader";
 
 export default function RootLayout({
   children,
@@ -10,10 +9,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="page-wrap">
-          <SiteHeader />
-          {children}
-        </div>
+        <div className="page-wrap">{children}</div>
       </body>
     </html>
   );
