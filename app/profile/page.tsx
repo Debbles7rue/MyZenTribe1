@@ -9,7 +9,7 @@ import BusinessServicesEditor, { type Service } from "@/components/BusinessServi
 import PhotosFeed from "@/components/PhotosFeed";
 import GratitudePanel from "@/components/GratitudePanel";
 import ShopEditor from "@/components/ShopEditor";
-import TermsGate from "@/components/TermsGate"; // <-- added
+import InvitePanel from "@/components/InvitePanel"; // <-- NEW
 
 type Profile = {
   id: string;
@@ -18,6 +18,7 @@ type Profile = {
   bio: string | null;
   location: string | null;
   show_mutuals: boolean | null;
+
   is_business: boolean | null;
   business_name: string | null;
   business_logo_url: string | null;
@@ -27,6 +28,7 @@ type Profile = {
   offering_title: string | null;
   offering_description: string | null;
   booking_url: string | null;
+
   shop_enabled: boolean | null;
 };
 
@@ -50,6 +52,7 @@ export default function ProfilePage() {
     bio: "",
     location: "",
     show_mutuals: true,
+
     is_business: false,
     business_name: "",
     business_logo_url: "",
@@ -59,6 +62,7 @@ export default function ProfilePage() {
     offering_title: "",
     offering_description: "",
     booking_url: "",
+
     shop_enabled: false,
   });
 
@@ -127,6 +131,7 @@ export default function ProfilePage() {
         bio: p.bio?.trim() || null,
         location: p.location?.trim() || null,
         show_mutuals: !!p.show_mutuals,
+
         is_business: !!p.is_business,
         business_name: p.business_name?.trim() || null,
         business_logo_url: p.business_logo_url?.trim() || null,
@@ -136,12 +141,14 @@ export default function ProfilePage() {
         offering_title: p.offering_title?.trim() || null,
         offering_description: p.offering_description?.trim() || null,
         booking_url: p.booking_url?.trim() || null,
+
         shop_enabled: !!p.shop_enabled,
       };
 
       const up = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
       if (up.error) throw up.error;
 
+      // replace services set
       await supabase.from("business_services").delete().eq("user_id", userId);
       const clean = services
         .filter(s => s.title.trim().length)
@@ -163,9 +170,6 @@ export default function ProfilePage() {
   return (
     <div className="page-wrap">
       <SiteHeader />
-
-      {/* show once per user until accepted */}
-      <TermsGate userId={userId} version={1} /> {/* <-- added */}
 
       <div className="page">
         <div className="container-app">
@@ -196,6 +200,7 @@ export default function ProfilePage() {
             </div>
           )}
 
+          {/* Identity header (email hidden) */}
           <div className="card p-3 mb-3 profile-card">
             <div className="profile-header">
               {tab === "personal" ? (
@@ -219,7 +224,9 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* MAIN two-column layout */}
           <div className="columns">
+            {/* LEFT column */}
             <div className="stack">
               {tab === "personal" ? (
                 editPersonal ? (
@@ -324,6 +331,7 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
+                  {/* Pretty business view */}
                   <section className="card p-3">
                     <h2 className="section-title">About this business</h2>
                     <div className="stack">
@@ -383,7 +391,9 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {/* RIGHT column */}
             <div className="stack">
+              {tab === "personal" && <InvitePanel userId={userId} />}   {/* <-- NEW */}
               {tab === "personal" && <GratitudePanel userId={userId} />}
               {tab === "personal" && <PhotosFeed userId={userId} />}
               {tab === "business" && (
