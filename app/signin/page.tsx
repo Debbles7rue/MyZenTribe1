@@ -1,9 +1,10 @@
 "use client";
 
-import { TERMS_VERSION } from "@/lib/terms";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { TERMS_VERSION } from "@/lib/terms";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,16 +13,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If already signed in, skip to Profile (kept from your original)
+  // If already signed in, bounce to Profile (Terms gate runs there too)
   useEffect(() => {
     let mounted = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!mounted) return;
       if (data.user) router.replace("/profile");
     });
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -29,124 +28,84 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    setLoading(false);
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setError(error.message || "Sign in failed");
+      setLoading(false);
+      setError(error.message);
       return;
     }
 
-    // same as your original
+    // Ensure a profiles row exists for new users
+    const uid = data.user?.id;
+    if (uid) {
+      await supabase.from("profiles").upsert({ id: uid }, { onConflict: "id" });
+      // Check terms state
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("terms_version, terms_accepted_at")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (!prof?.terms_accepted_at || (prof?.terms_version ?? 0) < TERMS_VERSION) {
+        setLoading(false);
+        router.replace("/legal/terms");
+        return;
+      }
+    }
+
+    setLoading(false);
     router.replace("/profile");
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#F4ECFF", // lavender
-        padding: "48px 16px",
-        display: "grid",
-        placeItems: "center",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          padding: 24,
-          boxShadow: "0 10px 20px rgba(0,0,0,0.05)",
-        }}
-      >
-        <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, textAlign: "center" }}>
-          Sign in
-        </h1>
-        <p style={{ marginTop: 8, fontSize: 14, color: "#4b5563", textAlign: "center" }}>
-          Use your email and password.
-        </p>
+    <main className="min-h-screen flex items-center justify-center p-6" style={{ background: "#F4ECFF" }}>
+      <div className="w-full max-w-md rounded-2xl border border-purple-100 bg-white p-6 shadow">
+        <h1 className="text-2xl font-semibold mb-2 text-center">Sign in</h1>
+        <p className="text-sm text-neutral-600 mb-4 text-center">Use your email and password.</p>
 
-        <form onSubmit={onSubmit} style={{ marginTop: 16, display: "grid", gap: 12 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 14 }}>Email</span>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <label className="block">
+            <span className="text-sm">Email</span>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="you@example.com"
-              style={{
-                width: "100%",
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
-                padding: "10px 12px",
-                outline: "none",
-              }}
             />
           </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 14 }}>Password</span>
+          <label className="block">
+            <span className="text-sm">Password</span>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="••••••••"
-              style={{
-                width: "100%",
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
-                padding: "10px 12px",
-                outline: "none",
-              }}
             />
           </label>
 
           {error && (
-            <div
-              style={{
-                border: "1px solid #fecaca",
-                background: "#fef2f2",
-                color: "#991b1b",
-                borderRadius: 12,
-                padding: "8px 12px",
-                fontSize: 14,
-              }}
-            >
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn btn-brand"
-            style={{ width: "100%", marginTop: 4 }}
-          >
+          <button type="submit" disabled={loading} className="btn btn-brand w-full">
             {loading ? "Signing in…" : "Sign in"}
           </button>
-        </form>
 
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: 14,
-          }}
-        >
-          <a href="/" className="underline">Back to welcome</a>
-          <a href="/forgot-password" className="underline">Forgot password?</a>
-        </div>
+          <div className="flex items-center justify-between text-sm mt-1">
+            <Link href="/" className="underline">Back to welcome</Link>
+            <div className="space-x-4">
+              <Link href="/signup" className="underline">Create profile</Link>
+              <Link href="/forgot-password" className="underline">Forgot password?</Link>
+            </div>
+          </div>
+        </form>
       </div>
     </main>
   );
