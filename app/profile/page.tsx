@@ -2,12 +2,10 @@
 
 import SiteHeader from "@/components/SiteHeader";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import AvatarUpload from "@/components/AvatarUpload";
+import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
-import GratitudePanel from "@/components/GratitudePanel";
-import InvitePanel from "@/components/InvitePanel";
+import InvitePanelCompact from "@/components/InvitePanelCompact";
 
 type Profile = {
   id: string;
@@ -19,12 +17,10 @@ type Profile = {
 };
 
 export default function ProfilePage() {
-  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [editPersonal, setEditPersonal] = useState(false);
 
   const [p, setP] = useState<Profile>({
@@ -53,7 +49,6 @@ export default function ProfilePage() {
           .eq("id", userId)
           .maybeSingle();
         if (error) throw error;
-
         if (data) setP(data as Profile);
         else setP(prev => ({ ...prev, id: userId }));
       } catch {
@@ -80,10 +75,8 @@ export default function ProfilePage() {
         location: p.location?.trim() || null,
         show_mutuals: !!p.show_mutuals,
       };
-
       const up = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
       if (up.error) throw up.error;
-
       alert("Saved!");
       setEditPersonal(false);
     } catch (e: any) {
@@ -98,21 +91,17 @@ export default function ProfilePage() {
       <SiteHeader />
 
       <div className="page">
-        {/* soft lavender spacing wrapper (non-breaking) */}
-        <div className="container-app mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>
-              Profile
-            </h1>
+            <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
             <div className="controls">
               <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
                 {editPersonal ? "Done" : "Edit"}
               </button>
-              {/* Removed duplicate Sign out here; keep the one in SiteHeader */}
+              {/* Keep Sign out only in SiteHeader to avoid duplicates */}
             </div>
           </div>
 
-          {/* subtle divider */}
           <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
 
           {tableMissing && (
@@ -126,36 +115,40 @@ export default function ProfilePage() {
           <div
             className="card p-3 mb-3 profile-card"
             style={{
-              borderColor: "rgba(196, 181, 253, 0.7)", // violet-300
-              background: "rgba(245, 243, 255, 0.4)",   // violet-50
+              borderColor: "rgba(196, 181, 253, 0.7)",
+              background: "rgba(245, 243, 255, 0.4)",
             }}
           >
             <div className="profile-header">
-              <AvatarUpload
+              <AvatarUploader
                 userId={userId}
                 value={p.avatar_url}
                 onChange={(url) => setP((prev) => ({ ...prev, avatar_url: url }))}
+                label="Profile photo"
+                size={180}
               />
               <div className="profile-heading">
                 <div className="profile-name">{displayName}</div>
                 <div className="kpis">
-                  <span className="kpi">
-                    <strong>0</strong> Followers
-                  </span>
-                  <span className="kpi">
-                    <strong>0</strong> Following
-                  </span>
-                  <span className="kpi">
-                    <strong>0</strong> Friends
-                  </span>
+                  <span className="kpi"><strong>0</strong> Followers</span>
+                  <span className="kpi"><strong>0</strong> Following</span>
+                  <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* MAIN two-column layout */}
-          <div className="columns">
-            {/* LEFT column — main feed first */}
+          {/* Two-column layout with narrow right rail */}
+          <div
+            className="columns"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0,1fr) 280px", // smaller right column
+              gap: 16,
+              alignItems: "start",
+            }}
+          >
+            {/* LEFT: about + feed */}
             <div className="stack">
               {editPersonal ? (
                 <section className="card p-3">
@@ -206,27 +199,30 @@ export default function ProfilePage() {
                 <section className="card p-3">
                   <h2 className="section-title">About</h2>
                   <div className="stack">
-                    {p.location && (
-                      <div>
-                        <strong>Location:</strong> {p.location}
-                      </div>
-                    )}
-                    {p.bio && <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>}
-                    {!p.location && !p.bio && (
-                      <div className="muted">Add a bio and location using Edit.</div>
-                    )}
+                    {p.location && (<div><strong>Location:</strong> {p.location}</div>)}
+                    {p.bio && (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>)}
+                    {!p.location && !p.bio && (<div className="muted">Add a bio and location using Edit.</div>)}
                   </div>
                 </section>
               )}
 
-              {/* Main feed: newest first */}
+              {/* Main feed */}
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT column — utilities/side cards */}
+            {/* RIGHT: compact cards */}
             <div className="stack">
-              <InvitePanel userId={userId} />
-              <GratitudePanel userId={userId} />
+              <InvitePanelCompact userId={userId} />
+
+              <section className="card p-3" style={{ padding: 12 }}>
+                <div className="section-row">
+                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
+                  <a className="btn btn-brand" href="/gratitude">Open</a>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Capture daily gratitude. Prompts & a 30-day healing journal live on the full page.
+                </p>
+              </section>
             </div>
           </div>
 
