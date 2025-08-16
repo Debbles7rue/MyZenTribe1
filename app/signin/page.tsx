@@ -1,27 +1,36 @@
+// app/signin/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function SignInPage() {
+export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // sanitize ?next so we only allow same-site, absolute-path redirects
+  const rawNext = searchParams.get("next") || "";
+  const fallback = "/profile"; // change to "/calendar" if you prefer
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : fallback;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If already signed in, go to profile (where terms gate can show)
+  // If already signed in, bounce straight to next/fallback
   useEffect(() => {
     let mounted = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!mounted) return;
-      if (data.user) router.replace("/profile");
+      if (data.user) router.replace(next);
     });
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, [router, next]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,118 +48,98 @@ export default function SignInPage() {
       setError(error.message || "Invalid login credentials");
       return;
     }
-    router.replace("/profile");
+
+    router.replace(next);
   }
 
-  // quick inline styles (so page looks good even if a stylesheet fails to load)
-  const bg: React.CSSProperties = {
+  // --- simple inline styles to match your current look ---
+  const shell: React.CSSProperties = {
     minHeight: "100vh",
-    background: "#F4ECFF",
+    backgroundColor: "#F4ECFF",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "24px",
+    padding: "40px 16px",
   };
   const card: React.CSSProperties = {
     width: "100%",
     maxWidth: 520,
     background: "#fff",
-    border: "1px solid #E9D8FD",
+    border: "1px solid #e5e7eb",
     borderRadius: 16,
     padding: 24,
-    boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.06)",
   };
-  const h1: React.CSSProperties = {
-    fontSize: 32,
-    fontWeight: 700,
-    margin: 0,
-    textAlign: "center",
-  };
+  const h1: React.CSSProperties = { fontSize: 28, fontWeight: 700, textAlign: "center", margin: 0 };
   const sub: React.CSSProperties = {
-    fontSize: 14,
-    color: "#6B7280",
     textAlign: "center",
+    color: "#6b7280",
     marginTop: 6,
-    marginBottom: 12,
-  };
-  const label: React.CSSProperties = { fontSize: 14, display: "block", marginBottom: 6 };
-  const input: React.CSSProperties = {
-    width: "100%",
-    borderRadius: 12,
-    border: "1px solid #D1D5DB",
-    padding: "10px 12px",
-    outline: "none",
-  };
-  const btnPrimary: React.CSSProperties = {
-    width: "100%",
-    border: "none",
-    borderRadius: 14,
-    padding: "12px 16px",
-    background: "#6D28D9",
-    color: "#fff",
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: "0 6px 14px rgba(109,40,217,0.25)",
-  };
-  const row: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 10,
-    fontSize: 14,
-  };
-  const link: React.CSSProperties = { color: "#6D28D9", textDecoration: "underline" };
-  const alertErr: React.CSSProperties = {
-    marginTop: 8,
-    borderRadius: 12,
-    border: "1px solid #FCA5A5",
-    background: "#FEF2F2",
-    color: "#B91C1C",
-    padding: "8px 12px",
-    fontSize: 14,
+    marginBottom: 16,
   };
 
   return (
-    <main style={bg}>
+    <main style={shell}>
       <div style={card}>
         <h1 style={h1}>Sign in</h1>
         <p style={sub}>Use your email and password.</p>
 
-        <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 8 }}>
-          <label style={label}>Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={input}
-            placeholder="you@example.com"
-          />
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <label className="grid gap-1">
+            <span className="text-sm">Email</span>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="rounded-xl border px-3 py-2"
+              placeholder="you@example.com"
+            />
+          </label>
 
-          <label style={{ ...label, marginTop: 6 }}>Password</label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={input}
-            placeholder="••••••••"
-          />
+          <label className="grid gap-1">
+            <span className="text-sm">Password</span>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-xl border px-3 py-2"
+              placeholder="••••••••"
+            />
+          </label>
 
-          {error && <div style={alertErr}>{error}</div>}
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-          <button type="submit" disabled={loading} style={btnPrimary}>
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-brand w-full"
+            style={{ marginTop: 4 }}
+          >
             {loading ? "Signing in…" : "Sign in"}
           </button>
-
-          <div style={row}>
-            <a href="/" style={link}>Back to welcome</a>
-            <a href="/forgot-password" style={link}>Forgot password?</a>
-          </div>
-          <div style={{ textAlign: "center", marginTop: 6 }}>
-            <a href="/signup" style={link}>Create profile</a>
-          </div>
         </form>
+
+        <div className="flex items-center justify-between text-sm mt-3">
+          <Link href="/" className="underline">
+            Back to welcome
+          </Link>
+          <Link href="/forgot-password" className="underline">
+            Forgot password?
+          </Link>
+        </div>
+
+        <div className="text-center text-sm mt-4">
+          New here?{" "}
+          <Link href="/signup" className="underline">
+            Create profile
+          </Link>
+        </div>
       </div>
     </main>
   );
