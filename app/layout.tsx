@@ -1,3 +1,4 @@
+import "react-big-calendar/lib/css/react-big-calendar.css"; // ← needed for proper calendar layout
 import "./globals.css";
 import SiteHeader from "@/components/SiteHeader";
 
