@@ -3,7 +3,7 @@
 import SiteHeader from "@/components/SiteHeader";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /** ───────────────────────────────────────────────────────────────────────────
  * Types
@@ -36,47 +36,37 @@ type MediaItem = {
 /** Theme palette (paper backgrounds + accents) */
 const THEMES: Record<
   ThemeKey,
-  { leftBg: string; rightBg: string; border: string; accent: string; chipA: string; chipB: string }
+  { leftBg: string; rightBg: string; border: string; accent: string }
 > = {
   lavender: {
     leftBg: "linear-gradient(180deg,#faf5ff 0%, #ffffff 60%)",
     rightBg: "linear-gradient(180deg,#ffffff 0%, #fafafa 60%)",
     border: "#ede9fe",
     accent: "#7c3aed",
-    chipA: "#c4b5fd",
-    chipB: "#f5f3ff",
   },
   sunset: {
     leftBg: "linear-gradient(180deg,#ffe4d6 0%, #fff7ed 60%)",
     rightBg: "linear-gradient(180deg,#fff7ed 0%, #fff 60%)",
     border: "#fed7aa",
     accent: "#ea580c",
-    chipA: "#fdba74",
-    chipB: "#fff7ed",
   },
   forest: {
     leftBg: "linear-gradient(180deg,#ecfdf5 0%, #ffffff 60%)",
     rightBg: "linear-gradient(180deg,#ffffff 0%, #f0fdf4 60%)",
     border: "#bbf7d0",
     accent: "#047857",
-    chipA: "#86efac",
-    chipB: "#ecfdf5",
   },
   ocean: {
     leftBg: "linear-gradient(180deg,#eff6ff 0%, #ffffff 60%)",
     rightBg: "linear-gradient(180deg,#ffffff 0%, #eef2ff 60%)",
     border: "#bfdbfe",
     accent: "#2563eb",
-    chipA: "#93c5fd",
-    chipB: "#eff6ff",
   },
   rose: {
     leftBg: "linear-gradient(180deg,#fff1f2 0%, #ffffff 60%)",
     rightBg: "linear-gradient(180deg,#ffffff 0%, #fff1f2 60%)",
     border: "#fecdd3",
     accent: "#e11d48",
-    chipA: "#fda4af",
-    chipB: "#fff1f2",
   },
 };
 
@@ -96,7 +86,7 @@ export default function GratitudePage() {
 
   /** Data & flags */
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [hasCandle, setHasCandle] = useState(false); // meditation candle placeholder
+  const [hasCandle, setHasCandle] = useState(false);       // meditation candle placeholder
   const [photosEnabled, setPhotosEnabled] = useState(false); // add-on flag
 
   /** Entries */
@@ -104,7 +94,7 @@ export default function GratitudePage() {
   const [todayList, setTodayList] = useState<Entry[]>([]);
   const [recent, setRecent] = useState<Entry[]>([]);
 
-  /** Photos (inline module so you don't need another file) */
+  /** Photos */
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -290,7 +280,7 @@ export default function GratitudePage() {
     }
   }
 
-  /** Recap generation */
+  /** Recap generation (simple local summary) */
   function summarizeText(t: string): string {
     const clean = t.replace(/\s+/g, " ").trim();
     if (clean.length <= 40) return clean;
@@ -316,9 +306,9 @@ export default function GratitudePage() {
   /** Theme */
   const theme = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
 
-  /** Photos add-on: list current year */
+  /** Photos add-on (current year) */
   const thisYear = new Date().getFullYear();
-  const slideUrl = `/gratitude/slideshow?year=${thisYear}`; // optional route we can add next
+  const slideUrl = `/gratitude/slideshow?year=${thisYear}`; // optional route you can add later
 
   async function loadMedia() {
     if (!userId || !photosEnabled) return;
@@ -334,6 +324,7 @@ export default function GratitudePage() {
         .lt("taken_at", end)
         .order("taken_at", { ascending: false });
       if (error) throw error;
+
       const paths = (data ?? []).map((d) => d.file_path);
       if (paths.length) {
         const { data: signed } = await supabase.storage.from("gratitude-media").createSignedUrls(paths, 3600);
@@ -352,7 +343,6 @@ export default function GratitudePage() {
         setMedia([]);
       }
     } catch {
-      // Silent fail if bucket/table not ready
       setMedia([]);
     } finally {
       setMediaLoading(false);
@@ -483,10 +473,6 @@ export default function GratitudePage() {
               <div className="rounded-xl overflow-hidden border" style={{ borderColor: "#e5e7eb" }}>
                 <div style={{ height: 46, background: th.leftBg }} />
                 <div style={{ height: 46, background: th.rightBg }} />
-              </div>
-              <div className="flex gap-2 mt-2">
-                <span className="inline-block w-4 h-4 rounded-full" style={{ background: th.chipA }} />
-                <span className="inline-block w-4 h-4 rounded-full" style={{ background: th.chipB }} />
               </div>
               <div className="mt-1 font-medium capitalize">{t}</div>
             </button>
