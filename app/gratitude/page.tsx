@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 /** ─── Types ───────────────────────────────────────────── */
 type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose";
-type Plan = "free" | "photos" | "healing";
+type Plan = "free" | "photos";
 
 type Settings = {
   user_id: string;
@@ -202,7 +202,6 @@ export default function GratitudePage() {
         setPhotosEnabled(true);
       }
 
-      // healing journal is a separate flow/page (not enabled here)
       setSettings({ user_id: userId, activated: true, recap_frequency: "weekly", theme });
       setStage("journal");
     } catch (e: any) {
@@ -383,14 +382,12 @@ export default function GratitudePage() {
 
   /** ─── UI blocks ─────────────────────────────────────── */
 
-  // 0) COVER — full-size book cover on sandy background
+  // 0) COVER — full-size cover on sandy background (no weird fallback overlay)
+  const [coverError, setCoverError] = useState(false);
   const cover = (
     <div
       className="rounded-2xl p-6"
-      style={{
-        background: "#f6efe6",
-        border: "1px solid #eadfd1",
-      }}
+      style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}
     >
       <div className="max-w-4xl mx-auto">
         <div
@@ -401,26 +398,33 @@ export default function GratitudePage() {
             border: "1px solid #e5e7eb",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/gratitude-cover.png"
-            alt="Gratitude Journal cover"
-            className="w-full h-auto block"
-            onError={(e) => {
-              // quick visual fallback
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-          {/* Fallback if image missing */}
-          <div
-            className="absolute inset-0 hidden items-center justify-center text-white"
-            style={{ background: "linear-gradient(120deg,#5B2A86,#FF6A3D)" }}
-          >
-            <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: 1 }}>Gratitude Journal</div>
-          </div>
+          {!coverError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src="/images/gratitude-cover.png"
+              alt="Gratitude Journal cover"
+              className="w-full h-auto block"
+              onError={() => setCoverError(true)}
+            />
+          ) : (
+            <div
+              className="w-full"
+              style={{
+                aspectRatio: "16/6",
+                background: "linear-gradient(120deg,#5B2A86,#FF6A3D)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div style={{ color: "#fff", fontSize: 36, fontWeight: 700, letterSpacing: 1 }}>
+                Gratitude Journal
+              </div>
+            </div>
+          )}
           <button
             onClick={() => setStage("book_intro")}
-            className="absolute bottom-4 right-4 btn btn-brand"
+            className="absolute bottom-4 left-4 btn btn-brand"
             aria-label="Open the journal"
           >
             Open
@@ -430,14 +434,11 @@ export default function GratitudePage() {
     </div>
   );
 
-  // 1) BOOK INTRO — left page: your explanation, right page: activation options
+  // 1) BOOK INTRO — left page explanation, right page activation (no Healing Journal)
   const bookIntro = (
     <div
       className="rounded-2xl p-4 md:p-6"
-      style={{
-        background: "#f6efe6",
-        border: "1px solid #eadfd1",
-      }}
+      style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}
     >
       <div className="max-w-5xl mx-auto relative">
         {/* book shell */}
@@ -458,22 +459,16 @@ export default function GratitudePage() {
             }}
           />
           {/* left page */}
-          <div
-            className="p-5 sm:p-7"
-            style={{ background: "#fffdf8", borderRight: "1px solid #eadfd1" }}
-          >
+          <div className="p-5 sm:p-7" style={{ background: "#fffdf8", borderRight: "1px solid #eadfd1" }}>
             <h2 className="section-title" style={{ marginTop: 0 }}>Gratitude Journal</h2>
             <p style={{ whiteSpace: "pre-wrap" }}>
 {`Your brain is naturally wired to notice the negative—it’s part of how it keeps you safe. But with just a little practice, you can retrain your mind to see the positives all around you. This gratitude journal is designed to help you do exactly that.
 
 Each day, you’ll be guided to write down three things you’re thankful for. They can be as simple as a smile from a stranger, a moment of peace, or as detailed as a story that brought you joy. Over time, these small daily shifts rewire your brain, helping you create a more positive outlook and a deeper sense of well-being.
 
-To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.`}
-            </p>
-            <p>
-              Want to make your journey even more special? For just <strong>$2.99</strong>,
-              you can add photos to your entries and get a personalized end-of-year slideshow—a visual celebration
-              of your most beautiful moments.
+To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.
+
+Want to make your journey even more special? For just $2.99, you can add photos to your entries and get a personalized end-of-year slideshow—a visual celebration of your most beautiful moments.`}
             </p>
           </div>
 
@@ -519,30 +514,9 @@ To keep you on track, you’ll receive daily reminders, plus weekly, monthly, an
                   </div>
                 </div>
               </label>
-
-              {/* Healing Journal */}
-              <label className="rounded-2xl border p-3 cursor-pointer">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="plan"
-                    checked={selectedPlan === "healing"}
-                    onChange={() => setSelectedPlan("healing")}
-                    style={{ marginTop: 4 }}
-                  />
-                  <div>
-                    <div className="font-medium">
-                      30-Day Healing Journal <span className="opacity-70">($9.99)</span>
-                    </div>
-                    <div className="muted text-sm">
-                      Step-by-step prompts, reflections, and gentle education to move through stuck places.
-                    </div>
-                  </div>
-                </div>
-              </label>
             </div>
 
-            {/* Theme pick (small preview) */}
+            {/* Theme pick */}
             <div className="mt-4">
               <div className="muted text-sm mb-1">Pick a page theme</div>
               <div className="flex flex-wrap gap-2">
@@ -566,22 +540,8 @@ To keep you on track, you’ll receive daily reminders, plus weekly, monthly, an
             </div>
 
             <div className="controls mt-4">
-              <button
-                className="btn btn-brand"
-                onClick={() => {
-                  if (selectedPlan === "healing") {
-                    // route placeholder for now
-                    window.location.href = "/gratitude/healing";
-                    return;
-                  }
-                  setStage("theme");
-                }}
-              >
-                Continue
-              </button>
-              <button className="btn btn-neutral" onClick={() => setStage("cover")}>
-                Back
-              </button>
+              <button className="btn btn-brand" onClick={() => setStage("theme")}>Continue</button>
+              <button className="btn btn-neutral" onClick={() => setStage("cover")}>Back</button>
             </div>
           </div>
         </div>
@@ -625,7 +585,9 @@ To keep you on track, you’ll receive daily reminders, plus weekly, monthly, an
     </section>
   );
 
-  // 3) JOURNAL BOOK (same as before, with recap & photos section)
+  // 3) JOURNAL BOOK
+  const theme = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
+
   const book = (
     <section
       className="card p-3"
@@ -691,7 +653,7 @@ To keep you on track, you’ll receive daily reminders, plus weekly, monthly, an
         <div className="rounded-xl border p-4" style={{ background: theme.rightBg, borderColor: "#e5e7eb" }}>
           <div className="section-row" style={{ marginBottom: 8 }}>
             <h2 className="section-title" style={{ margin: 0 }}>Today</h2>
-            <div className="muted">Glimmers: {todayCount}/3</div>
+            <div className="muted">Glimmers: {todayList.length}/3</div>
           </div>
 
           <textarea
