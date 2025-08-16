@@ -1,61 +1,43 @@
 "use client";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+
+import Link from "next/link";
+import { useState } from "react";
 
 export default function GratitudePanel({ userId }: { userId: string | null }) {
-  const [text, setText] = useState("");
-  const [items, setItems] = useState<{id:string; body:string; created_at:string}[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  async function list() {
-    if (!userId) return setItems([]);
-    const { data } = await supabase
-      .from("gratitude_entries")
-      .select("id, body, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(10);
-    setItems(data ?? []);
-  }
-
-  async function add() {
-    if (!userId || !text.trim()) return;
-    setSaving(true);
-    await supabase.from("gratitude_entries").insert({ user_id: userId, body: text.trim() });
-    setText("");
-    setSaving(false);
-    await list();
-  }
-
-  useEffect(() => { list(); }, [userId]);
+  const [hideImg, setHideImg] = useState(false);
 
   return (
-    <aside className="card p-3">
-      <h2 className="section-title">Gratitude Journal</h2>
-      <textarea
-        className="input"
-        rows={4}
-        placeholder="Today I'm grateful for…"
-        value={text}
-        onChange={(e)=>setText(e.target.value)}
-      />
-      <div className="right" style={{ marginTop: 8 }}>
-        <button className="btn btn-brand" onClick={add} disabled={saving || !text.trim()}>
-          {saving ? "Saving…" : "Add entry"}
-        </button>
+    <section className="card p-3">
+      <div className="section-row">
+        <h2 className="section-title" style={{ margin: 0 }}>Gratitude</h2>
+        <Link className="btn btn-brand" href="/gratitude">Open</Link>
       </div>
 
-      <div className="stack" style={{ marginTop: 12 }}>
-        {items.map(i => (
-          <div key={i.id} className="card p-3">
-            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-              {new Date(i.created_at).toLocaleString()}
-            </div>
-            <div>{i.body}</div>
-          </div>
-        ))}
-        {!items.length && <p className="muted">No entries yet.</p>}
+      <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+        <div
+          className="rounded-xl overflow-hidden border"
+          style={{ borderColor: "#e5e7eb", boxShadow: "0 8px 18px rgba(0,0,0,.08)" }}
+          aria-hidden
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {!hideImg ? (
+            <img
+              src="/images/gratitude-cover.png"
+              alt=""
+              className="w-full h-full object-cover"
+              onError={() => setHideImg(true)}
+            />
+          ) : (
+            <div
+              className="w-full h-[80px]"
+              style={{ background: "linear-gradient(120deg,#5B2A86,#FF6A3D)" }}
+            />
+          )}
+        </div>
+        <p className="muted">
+          Capture daily gratitude. Prompts & a 30-day healing journal live on the full page.
+        </p>
       </div>
-    </aside>
+    </section>
   );
 }
