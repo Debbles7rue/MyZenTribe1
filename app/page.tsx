@@ -24,7 +24,7 @@ export default function HomePage() {
     <main
       style={{
         minHeight: "100vh",
-        backgroundColor: "#F4ECFF", // lavender
+        backgroundColor: "#F4ECFF",
         padding: "48px 16px",
       }}
     >
@@ -35,7 +35,6 @@ export default function HomePage() {
           textAlign: "center",
         }}
       >
-        {/* Logo */}
         <img
           src={LOGO_SRC}
           alt="MyZenTribe Logo"
@@ -43,7 +42,6 @@ export default function HomePage() {
           style={{ width: 260, height: "auto", display: "block", margin: "0 auto 24px" }}
         />
 
-        {/* Card 1 */}
         <div
           style={{
             background: "#fff",
@@ -83,7 +81,7 @@ export default function HomePage() {
             {!signedIn ? (
               <>
                 <Link href="/signin" className="btn btn-brand">Sign in</Link>
-                <Link href="/signin" className="btn btn-neutral">Create profile</Link>
+                <Link href="/signup" className="btn btn-neutral">Create profile</Link>
               </>
             ) : (
               <>
@@ -94,7 +92,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Card 2 */}
         <div
           style={{
             background: "#fff",
@@ -112,12 +109,6 @@ export default function HomePage() {
             businesses, and encourage every member to play a part in making the world a better
             place.
           </p>
-          {/* Centered button inside the card */}
           <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
             <Link href="/commitment" className="btn btn-brand">Our Commitment</Link>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
+          </div
