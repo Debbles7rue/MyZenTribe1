@@ -1,37 +1,23 @@
 "use client";
-import { useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
+
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "ok" | "error">("idle");
   const [msg, setMsg] = useState("");
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.updateUser({ password });
-    setMsg(error ? error.message : "Password updated. You can now log in.");
-  };
-
-  return (
-    <div className="max-w-md mx-auto p-6">
-      <h1 className="text-2xl font-semibold mb-4">Set a new password</h1>
-      <form onSubmit={handleUpdate} className="space-y-3">
-        <input
-          type="password"
-          placeholder="New password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
-          required
-        />
-        <button className="btn btn-brand w-full">Update password</button>
-      </form>
-      {msg && (
-        <p className="mt-3 text-sm">
-          {msg} {msg.includes("updated") && <Link href="/login" className="text-indigo-600 underline">Log in</Link>}
-        </p>
-      )}
-    </div>
-  );
-}
+  // Supabase recovery links create a temporary session; check for it
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setHasSession(!!data.sessi
