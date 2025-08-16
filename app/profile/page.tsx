@@ -9,7 +9,7 @@ import BusinessServicesEditor, { type Service } from "@/components/BusinessServi
 import PhotosFeed from "@/components/PhotosFeed";
 import GratitudePanel from "@/components/GratitudePanel";
 import ShopEditor from "@/components/ShopEditor";
-import InvitePanel from "@/components/InvitePanel"; // <-- NEW
+import InvitePanel from "@/components/InvitePanel";
 
 type Profile = {
   id: string;
@@ -67,7 +67,9 @@ export default function ProfilePage() {
   });
 
   const [services, setServices] = useState<Service[]>([]);
-  const [shopItems, setShopItems] = useState<{ id: string; title: string; image_url: string | null; external_link: string }[]>([]);
+  const [shopItems, setShopItems] = useState<
+    { id: string; title: string; image_url: string | null; external_link: string }[]
+  >([]);
 
   // auth
   useEffect(() => {
@@ -91,16 +93,22 @@ export default function ProfilePage() {
           .maybeSingle();
         if (error) throw error;
 
-        if (data) setP(data as Profile); else setP(prev => ({ ...prev, id: userId }));
+        if (data) setP(data as Profile);
+        else setP(prev => ({ ...prev, id: userId }));
 
         const svc = await supabase
           .from("business_services")
           .select("id, title, description, image_url")
           .eq("user_id", userId)
           .order("created_at", { ascending: true });
-        setServices((svc.data ?? []).map(r => ({
-          id: r.id, title: r.title, description: r.description ?? "", image_url: r.image_url ?? ""
-        })));
+        setServices(
+          (svc.data ?? []).map(r => ({
+            id: r.id,
+            title: r.title,
+            description: r.description ?? "",
+            image_url: r.image_url ?? "",
+          }))
+        );
 
         const shop = await supabase
           .from("business_shop_items")
@@ -152,7 +160,12 @@ export default function ProfilePage() {
       await supabase.from("business_services").delete().eq("user_id", userId);
       const clean = services
         .filter(s => s.title.trim().length)
-        .map(s => ({ user_id: userId, title: s.title.trim(), description: (s.description || "").trim() || null, image_url: (s.image_url || "").trim() || null }));
+        .map(s => ({
+          user_id: userId,
+          title: s.title.trim(),
+          description: (s.description || "").trim() || null,
+          image_url: (s.image_url || "").trim() || null,
+        }));
       if (clean.length) await supabase.from("business_services").insert(clean);
 
       alert("Saved!");
@@ -165,7 +178,10 @@ export default function ProfilePage() {
     }
   };
 
-  async function signOut() { await supabase.auth.signOut(); router.replace("/"); }
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.replace("/");
+  }
 
   return (
     <div className="page-wrap">
@@ -174,11 +190,27 @@ export default function ProfilePage() {
       <div className="page">
         <div className="container-app">
           <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
+            <h1 className="page-title" style={{ marginBottom: 0 }}>
+              Profile
+            </h1>
             <div className="controls">
               <div className="segmented" role="tablist" aria-label="Profile mode">
-                <button className={`seg-btn ${tab === "personal" ? "active" : ""}`} onClick={() => setTab("personal")} role="tab" aria-selected={tab === "personal"}>Personal</button>
-                <button className={`seg-btn ${tab === "business" ? "active" : ""}`} onClick={() => setTab("business")} role="tab" aria-selected={tab === "business"}>Business</button>
+                <button
+                  className={`seg-btn ${tab === "personal" ? "active" : ""}`}
+                  onClick={() => setTab("personal")}
+                  role="tab"
+                  aria-selected={tab === "personal"}
+                >
+                  Personal
+                </button>
+                <button
+                  className={`seg-btn ${tab === "business" ? "active" : ""}`}
+                  onClick={() => setTab("business")}
+                  role="tab"
+                  aria-selected={tab === "business"}
+                >
+                  Business
+                </button>
               </div>
               {tab === "personal" ? (
                 <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
@@ -189,7 +221,9 @@ export default function ProfilePage() {
                   {editBusiness ? "Done" : "Edit"}
                 </button>
               )}
-              <button className="btn" onClick={signOut}>Sign out</button>
+              <button className="btn" onClick={signOut}>
+                Sign out
+              </button>
             </div>
           </div>
 
@@ -204,21 +238,36 @@ export default function ProfilePage() {
           <div className="card p-3 mb-3 profile-card">
             <div className="profile-header">
               {tab === "personal" ? (
-                <AvatarUpload userId={userId} value={p.avatar_url} onChange={(url)=>setP(prev=>({...prev, avatar_url: url}))} />
+                <AvatarUpload
+                  userId={userId}
+                  value={p.avatar_url}
+                  onChange={(url) => setP((prev) => ({ ...prev, avatar_url: url }))}
+                />
               ) : (
-                <AvatarUpload userId={userId} value={p.business_logo_url} onChange={(url)=>setP(prev=>({...prev, business_logo_url: url}))} label="Upload logo" />
+                <AvatarUpload
+                  userId={userId}
+                  value={p.business_logo_url}
+                  onChange={(url) => setP((prev) => ({ ...prev, business_logo_url: url }))}
+                  label="Upload logo"
+                />
               )}
               <div className="profile-heading">
                 <div className="profile-name">
-                  {tab === "personal" ? displayName : (p.business_name || "Your business name")}
+                  {tab === "personal" ? displayName : p.business_name || "Your business name"}
                 </div>
                 {tab === "business" && p.offering_title && (
                   <div className="muted">{p.offering_title}</div>
                 )}
                 <div className="kpis">
-                  <span className="kpi"><strong>0</strong> Followers</span>
-                  <span className="kpi"><strong>0</strong> Following</span>
-                  <span className="kpi"><strong>0</strong> Friends</span>
+                  <span className="kpi">
+                    <strong>0</strong> Followers
+                  </span>
+                  <span className="kpi">
+                    <strong>0</strong> Following
+                  </span>
+                  <span className="kpi">
+                    <strong>0</strong> Friends
+                  </span>
                 </div>
               </div>
             </div>
@@ -235,22 +284,42 @@ export default function ProfilePage() {
                     <div className="stack">
                       <label className="field">
                         <span className="label">Name</span>
-                        <input className="input" value={p.full_name ?? ""} onChange={(e)=>setP({...p, full_name: e.target.value})}/>
+                        <input
+                          className="input"
+                          value={p.full_name ?? ""}
+                          onChange={(e) => setP({ ...p, full_name: e.target.value })}
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Location</span>
-                        <input className="input" value={p.location ?? ""} onChange={(e)=>setP({...p, location: e.target.value})} placeholder="City, State"/>
+                        <input
+                          className="input"
+                          value={p.location ?? ""}
+                          onChange={(e) => setP({ ...p, location: e.target.value })}
+                          placeholder="City, State"
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Bio</span>
-                        <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e)=>setP({...p, bio: e.target.value})}/>
+                        <textarea
+                          className="input"
+                          rows={4}
+                          value={p.bio ?? ""}
+                          onChange={(e) => setP({ ...p, bio: e.target.value })}
+                        />
                       </label>
                       <label className="checkbox">
-                        <input type="checkbox" checked={!!p.show_mutuals} onChange={(e)=>setP({...p, show_mutuals: e.target.checked})}/>
+                        <input
+                          type="checkbox"
+                          checked={!!p.show_mutuals}
+                          onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
+                        />
                         <span>Show mutual friends</span>
                       </label>
                       <div className="right">
-                        <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+                        <button className="btn btn-brand" onClick={save} disabled={saving}>
+                          {saving ? "Saving…" : "Save"}
+                        </button>
                       </div>
                     </div>
                   </section>
@@ -258,9 +327,15 @@ export default function ProfilePage() {
                   <section className="card p-3">
                     <h2 className="section-title">About</h2>
                     <div className="stack">
-                      {p.location && <div><strong>Location:</strong> {p.location}</div>}
-                      {p.bio && <div style={{ whiteSpace:"pre-wrap" }}>{p.bio}</div>}
-                      {!p.location && !p.bio && <div className="muted">Add a bio and location using Edit.</div>}
+                      {p.location && (
+                        <div>
+                          <strong>Location:</strong> {p.location}
+                        </div>
+                      )}
+                      {p.bio && <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>}
+                      {!p.location && !p.bio && (
+                        <div className="muted">Add a bio and location using Edit.</div>
+                      )}
                     </div>
                   </section>
                 )
@@ -271,38 +346,80 @@ export default function ProfilePage() {
                     <div className="stack">
                       <label className="field">
                         <span className="label">Business name</span>
-                        <input className="input" value={p.business_name ?? ""} onChange={(e)=>setP({...p, business_name: e.target.value})}/>
+                        <input
+                          className="input"
+                          value={p.business_name ?? ""}
+                          onChange={(e) => setP({ ...p, business_name: e.target.value })}
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Headline</span>
-                        <input className="input" value={p.offering_title ?? ""} onChange={(e)=>setP({...p, offering_title: e.target.value})} placeholder="Qi Gong, Sound Baths, Drum Circles…"/>
+                        <input
+                          className="input"
+                          value={p.offering_title ?? ""}
+                          onChange={(e) => setP({ ...p, offering_title: e.target.value })}
+                          placeholder="Qi Gong, Sound Baths, Drum Circles…"
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Description</span>
-                        <textarea className="input" rows={4} value={p.offering_description ?? ""} onChange={(e)=>setP({...p, offering_description: e.target.value})}/>
+                        <textarea
+                          className="input"
+                          rows={4}
+                          value={p.offering_description ?? ""}
+                          onChange={(e) =>
+                            setP({ ...p, offering_description: e.target.value })
+                          }
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Business website</span>
-                        <input className="input" value={p.website ?? ""} onChange={(e)=>setP({...p, website: e.target.value})} placeholder="https://example.com"/>
+                        <input
+                          className="input"
+                          value={p.website ?? ""}
+                          onChange={(e) => setP({ ...p, website: e.target.value })}
+                          placeholder="https://example.com"
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Contact email (public)</span>
-                        <input className="input" value={p.business_contact_email ?? ""} onChange={(e)=>setP({...p, business_contact_email: e.target.value})}/>
+                        <input
+                          className="input"
+                          value={p.business_contact_email ?? ""}
+                          onChange={(e) =>
+                            setP({ ...p, business_contact_email: e.target.value })
+                          }
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Phone (optional)</span>
-                        <input className="input" value={p.business_phone ?? ""} onChange={(e)=>setP({...p, business_phone: e.target.value})}/>
+                        <input
+                          className="input"
+                          value={p.business_phone ?? ""}
+                          onChange={(e) => setP({ ...p, business_phone: e.target.value })}
+                        />
                       </label>
                       <label className="field">
                         <span className="label">Booking link (“Book now”)</span>
-                        <input className="input" value={p.booking_url ?? ""} onChange={(e)=>setP({...p, booking_url: e.target.value})} placeholder="https://calendly.com/you"/>
+                        <input
+                          className="input"
+                          value={p.booking_url ?? ""}
+                          onChange={(e) => setP({ ...p, booking_url: e.target.value })}
+                          placeholder="https://calendly.com/you"
+                        />
                       </label>
                       <label className="checkbox">
-                        <input type="checkbox" checked={!!p.is_business} onChange={(e)=>setP({...p, is_business: e.target.checked})}/>
+                        <input
+                          type="checkbox"
+                          checked={!!p.is_business}
+                          onChange={(e) => setP({ ...p, is_business: e.target.checked })}
+                        />
                         <span>I offer services</span>
                       </label>
                       <div className="right">
-                        <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save business"}</button>
+                        <button className="btn btn-brand" onClick={save} disabled={saving}>
+                          {saving ? "Saving…" : "Save business"}
+                        </button>
                       </div>
                     </div>
                   </section>
@@ -310,11 +427,27 @@ export default function ProfilePage() {
                   <section className="card p-3">
                     <div className="section-row">
                       <h2 className="section-title">Services</h2>
-                      {p.booking_url && <a className="btn btn-brand" href={p.booking_url} target="_blank" rel="noreferrer">Book now</a>}
+                      {p.booking_url && (
+                        <a
+                          className="btn btn-brand"
+                          href={p.booking_url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Book now
+                        </a>
+                      )}
                     </div>
-                    <BusinessServicesEditor value={services} onChange={setServices} disabled={!p.is_business} userId={userId}/>
+                    <BusinessServicesEditor
+                      value={services}
+                      onChange={setServices}
+                      disabled={!p.is_business}
+                      userId={userId}
+                    />
                     <div className="right" style={{ marginTop: 10 }}>
-                      <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save services"}</button>
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>
+                        {saving ? "Saving…" : "Save services"}
+                      </button>
                     </div>
                   </section>
 
@@ -322,11 +455,21 @@ export default function ProfilePage() {
                     <div className="section-row">
                       <h2 className="section-title">Shop now (optional)</h2>
                       <label className="checkbox">
-                        <input type="checkbox" checked={!!p.shop_enabled} onChange={(e)=>setP({...p, shop_enabled: e.target.checked})}/>
+                        <input
+                          type="checkbox"
+                          checked={!!p.shop_enabled}
+                          onChange={(e) => setP({ ...p, shop_enabled: e.target.checked })}
+                        />
                         <span>Enable shop section</span>
                       </label>
                     </div>
-                    {p.shop_enabled ? <ShopEditor userId={userId}/> : <p className="muted">Turn on to add up to 5 items (each with image + link).</p>}
+                    {p.shop_enabled ? (
+                      <ShopEditor userId={userId} />
+                    ) : (
+                      <p className="muted">
+                        Turn on to add up to 5 items (each with image + link).
+                      </p>
+                    )}
                   </section>
                 </>
               ) : (
@@ -336,18 +479,35 @@ export default function ProfilePage() {
                     <h2 className="section-title">About this business</h2>
                     <div className="stack">
                       {p.offering_title && <div><strong>{p.offering_title}</strong></div>}
-                      {p.offering_description && <div style={{ whiteSpace:"pre-wrap" }}>{p.offering_description}</div>}
+                      {p.offering_description && (
+                        <div style={{ whiteSpace: "pre-wrap" }}>{p.offering_description}</div>
+                      )}
                       <div className="controls">
-                        {p.booking_url && <a className="btn btn-brand" href={p.booking_url} target="_blank" rel="noreferrer">Book now</a>}
-                        {p.website && <a className="btn btn-neutral" href={p.website} target="_blank" rel="noreferrer">Visit website</a>}
+                        {p.booking_url && (
+                          <a
+                            className="btn btn-brand"
+                            href={p.booking_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Book now
+                          </a>
+                        )}
+                        {p.website && (
+                          <a className="btn btn-neutral" href={p.website} target="_blank" rel="noreferrer">
+                            Visit website
+                          </a>
+                        )}
                       </div>
-                      <div className="muted" style={{ fontSize:12 }}>
+                      <div className="muted" style={{ fontSize: 12 }}>
                         {p.business_contact_email || p.business_phone ? (
                           <>
                             {p.business_contact_email && <>Email: {p.business_contact_email} • </>}
                             {p.business_phone && <>Phone: {p.business_phone}</>}
                           </>
-                        ) : "Add contact info via Edit."}
+                        ) : (
+                          "Add contact info via Edit."
+                        )}
                       </div>
                     </div>
                   </section>
@@ -362,7 +522,7 @@ export default function ProfilePage() {
                               <img
                                 src={s.image_url}
                                 alt={s.title}
-                                style={{ width:"100%", borderRadius:12, marginBottom:8 }}
+                                style={{ width: "100%", borderRadius: 12, marginBottom: 8 }}
                               />
                             )}
                             <h4>{s.title}</h4>
@@ -378,8 +538,20 @@ export default function ProfilePage() {
                       <h2 className="section-title">Shop now</h2>
                       <div className="commitment-grid">
                         {shopItems.map((it) => (
-                          <a key={it.id} className="commitment-card" href={it.external_link} target="_blank" rel="noreferrer">
-                            {it.image_url && <img src={it.image_url} alt={it.title} style={{ width:"100%", borderRadius:12, marginBottom:8 }} />}
+                          <a
+                            key={it.id}
+                            className="commitment-card"
+                            href={it.external_link}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {it.image_url && (
+                              <img
+                                src={it.image_url}
+                                alt={it.title}
+                                style={{ width: "100%", borderRadius: 12, marginBottom: 8 }}
+                              />
+                            )}
                             <h4>{it.title}</h4>
                             <p>Open link</p>
                           </a>
@@ -393,13 +565,16 @@ export default function ProfilePage() {
 
             {/* RIGHT column */}
             <div className="stack">
-              {tab === "personal" && <InvitePanel userId={userId} />}   {/* <-- NEW */}
+              {tab === "personal" && <InvitePanel userId={userId} />}
               {tab === "personal" && <GratitudePanel userId={userId} />}
               {tab === "personal" && <PhotosFeed userId={userId} />}
               {tab === "business" && (
                 <section className="card p-3">
                   <h2 className="section-title">Privacy</h2>
-                  <p className="muted">Your personal profile stays private. Business page is public-facing. We’ll wire friend/acquaintance visibility next.</p>
+                  <p className="muted">
+                    Your personal profile stays private. Business page is public-facing. We’ll wire
+                    friend/acquaintance visibility next.
+                  </p>
                 </section>
               )}
             </div>
