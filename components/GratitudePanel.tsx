@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export default function GratitudePanel({ userId }: { userId: string | null }) {
-  const [hideImg, setHideImg] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   return (
     <section className="card p-3">
@@ -20,22 +20,19 @@ export default function GratitudePanel({ userId }: { userId: string | null }) {
           aria-hidden
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {!hideImg ? (
+          {!imgError ? (
             <img
               src="/images/gratitude-cover.png"
               alt=""
-              className="w-full h-full object-cover"
-              onError={() => setHideImg(true)}
+              className="w-full h-[80px] object-cover"
+              onError={() => setImgError(true)}
             />
           ) : (
-            <div
-              className="w-full h-[80px]"
-              style={{ background: "linear-gradient(120deg,#5B2A86,#FF6A3D)" }}
-            />
+            <div className="w-full h-[80px]" style={{ background: "linear-gradient(120deg,#5B2A86,#FF6A3D)" }} />
           )}
         </div>
         <p className="muted">
-          Capture daily gratitude. Prompts & a 30-day healing journal live on the full page.
+          Capture daily gratitude. Prompts & a gentle recap live on the full page.
         </p>
       </div>
     </section>
