@@ -24,11 +24,10 @@ export default function AvatarUploader({
   userId,
   value,
   onChange,
-  label = "Upload photo",
+  label = "Profile photo",
   size = 180,
 }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(value ?? null);
-  const [fileUrl, setFileUrl] = useState<string | null>(null); // object URL of chosen file
   const [zoom, setZoom] = useState(1.2); // 1.0–2.5
   const [posX, setPosX] = useState(50);  // 0–100
   const [posY, setPosY] = useState(50);  // 0–100
@@ -38,14 +37,13 @@ export default function AvatarUploader({
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    if (value) setPreviewUrl(value);
+    setPreviewUrl(value ?? null);
   }, [value]);
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     const url = URL.createObjectURL(f);
-    setFileUrl(url);
     setPreviewUrl(url);
     setError(null);
   };
@@ -54,6 +52,7 @@ export default function AvatarUploader({
     setZoom(1.2);
     setPosX(50);
     setPosY(50);
+    setPreviewUrl(value ?? null);
   };
 
   const exportPng = useCallback(async (): Promise<Blob> => {
@@ -71,7 +70,7 @@ export default function AvatarUploader({
     const cover = Math.max(N / iw, N / ih);
     const scale = cover * zoom;
 
-    const cx = posX / 100;
+    const cx = posX / 100; // 0..1
     const cy = posY / 100;
 
     const dx = N / 2 - cx * iw * scale;
@@ -107,15 +106,12 @@ export default function AvatarUploader({
       const publicUrl = pub?.publicUrl;
       if (!publicUrl) throw new Error("Could not get public URL");
 
-      // persist to profiles.avatar_url
       const { error: dbErr } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
         .eq("id", userId);
       if (dbErr) throw dbErr;
 
-      setFileUrl(null);
-      setPreviewUrl(publicUrl);
       onChange?.(publicUrl);
     } catch (e: any) {
       setError(e?.message || "Save failed");
@@ -149,7 +145,7 @@ export default function AvatarUploader({
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
-                objectPosition: `${posX}% ${posY}%`, // visual only (final crop uses canvas)
+                objectPosition: `${posX}% ${posY}%`, // visual only; final crop uses canvas
                 transform: `scale(${zoom})`,
                 transformOrigin: "center",
               }}
@@ -191,7 +187,7 @@ export default function AvatarUploader({
         )}
 
         <div className="controls" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-neutral" onClick={() => { setPreviewUrl(value ?? null); setFileUrl(null); reset(); }}>
+          <button type="button" className="btn btn-neutral" onClick={reset}>
             Reset
           </button>
           <button type="button" className="btn btn-brand" onClick={onSave} disabled={!previewUrl || saving}>
