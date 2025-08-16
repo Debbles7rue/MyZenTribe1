@@ -1,22 +1,20 @@
-// app/invite/[token]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AcceptInvitePage({ params }: { params: { token: string } }) {
   const { token } = params;
-
   const [userId, setUserId] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "working" | "ok" | "invalid" | "self" | "error">("idle");
+  const [status, setStatus] = useState<"idle"|"working"|"ok"|"invalid"|"self"|"error">("idle");
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  async function accept() {
+  const accept = async () => {
     setStatus("working");
     const { data, error } = await supabase.rpc("accept_friend_invite", { p_token: token });
     if (error) {
@@ -27,10 +25,10 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
     if (data === "ok") setStatus("ok");
     else if (data === "self") setStatus("self");
     else setStatus("invalid");
-  }
+  };
 
-  // Not signed in → send to /signin and tell it to come back here after
   if (!userId) {
+    // IMPORTANT: pass ?next back to THIS invite page
     const next = `/invite/${token}`;
     return (
       <main className="container-app" style={{ paddingTop: 24 }}>
@@ -49,7 +47,6 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
     <main className="container-app" style={{ paddingTop: 24 }}>
       <div className="card p-3">
         <h1 className="section-title">Add friend</h1>
-
         {status === "idle" && (
           <>
             <p className="muted">Accept this invite to send a friend request.</p>
@@ -59,7 +56,6 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
             </div>
           </>
         )}
-
         {status === "working" && <p className="muted">Sending…</p>}
         {status === "ok" && <p>Request sent! 🎉</p>}
         {status === "self" && <p className="muted">That invite points to your own profile.</p>}
