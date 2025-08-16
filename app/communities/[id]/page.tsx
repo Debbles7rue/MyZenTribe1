@@ -1,326 +1,373 @@
+// app/communities/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import SiteHeader from "@/components/SiteHeader";
+import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 
 type Community = {
   id: string;
-  name: string;
-  description: string | null;
-  category: string;
-  subcategory: string | null;
-  location_scope: string | null;
-  created_by: string;
+  title: string;
+  category: string | null;
+  zip: string | null;
+  photo_url: string | null;
+  about: string | null;
+  created_by: string | null;
   created_at: string;
 };
 
-type Member = { community_id: string; user_id: string; status: "member" | "pending" | "banned" };
-
 type Post = {
   id: string;
-  community_id: string;
   user_id: string;
-  title: string | null;
   content: string;
   created_at: string;
 };
 
 type Event = {
   id: string;
-  community_id: string;
   user_id: string;
   title: string;
-  description: string | null;
+  details: string | null;
   start_at: string;
-  end_at: string | null;
-  venue: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  lat: number | null;
-  lng: number | null;
-  is_verified: boolean;
+  location: string | null;
   created_at: string;
 };
-
-const POLITICS_WORDS = [
-  "politic","election","president","vote","ballot","campaign","congress","senate","house",
-  "democrat","republican","gop","left","right","liberal","conservative",
-  "biden","trump","kamala","harris","pence","obama","clinton",
-  "israel","palestine","gaza","ukraine","russia","war"
-];
-function looksPolitical(text: string) {
-  const hay = text.toLowerCase();
-  return POLITICS_WORDS.some(w => hay.includes(w));
-}
 
 type Tab = "discussion" | "events" | "about";
 
 export default function CommunityPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const communityId = params?.id;
-  const [tab, setTab] = useState<Tab>("discussion");
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [community, setCommunity] = useState<Community | null>(null);
+  const [tab, setTab] = useState<Tab>("discussion");
+
+  const [c, setC] = useState<Community | null>(null);
   const [isMember, setIsMember] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
-  // discussion
+  // posts
   const [posts, setPosts] = useState<Post[]>([]);
-  const [postTitle, setPostTitle] = useState("");
-  const [postBody, setPostBody] = useState("");
+  const [newPost, setNewPost] = useState("");
   const [posting, setPosting] = useState(false);
 
   // events
   const [events, setEvents] = useState<Event[]>([]);
   const [evTitle, setEvTitle] = useState("");
-  const [evDesc, setEvDesc] = useState("");
-  const [evStart, setEvStart] = useState("");
-  const [evEnd, setEvEnd] = useState("");
-  const [evVenue, setEvVenue] = useState("");
-  const [evCity, setEvCity] = useState("");
-  const [evState, setEvState] = useState("");
-  const [evZip, setEvZip] = useState("");
-  const [creatingEvent, setCreatingEvent] = useState(false);
+  const [evWhen, setEvWhen] = useState(""); // datetime-local
+  const [evWhere, setEvWhere] = useState("");
+  const [evDetails, setEvDetails] = useState("");
+  const [savingEvent, setSavingEvent] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  async function loadAll() {
+  async function load() {
     if (!communityId) return;
+
     setLoading(true);
 
-    const { data: c } = await supabase.from("communities").select("*").eq("id", communityId).maybeSingle();
-    setCommunity((c ?? null) as Community | null);
+    const { data, error } = await supabase
+      .from("communities")
+      .select("id,title,category,zip,photo_url,about,created_by,created_at")
+      .eq("id", communityId)
+      .maybeSingle();
 
-    const { data: m } = await supabase
-      .from("community_members")
-      .select("*")
-      .eq("community_id", communityId)
-      .eq("user_id", userId ?? "");
-    setIsMember((m ?? []).length > 0);
+    if (error) {
+      console.error(error);
+      setC(null);
+      setLoading(false);
+      return;
+    }
+    setC(data);
 
-    const { data: p } = await supabase
-      .from("community_posts")
-      .select("*")
-      .eq("community_id", communityId)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    setPosts((p ?? []) as Post[]);
+    // membership & role
+    if (userId) {
+      const { data: m } = await supabase
+        .from("community_members")
+        .select("role")
+        .eq("community_id", communityId)
+        .eq("user_id", userId)
+        .maybeSingle();
 
-    const { data: e } = await supabase
-      .from("community_events")
-      .select("*")
-      .eq("community_id", communityId)
-      .order("start_at", { ascending: false })
-      .limit(100);
-    setEvents((e ?? []) as Event[]);
+      setIsMember(!!m);
+      setIsAdmin(m?.role === "admin");
+    } else {
+      setIsMember(false);
+      setIsAdmin(false);
+    }
 
+    // posts and events
+    const [{ data: pr }, { data: er }] = await Promise.all([
+      supabase
+        .from("community_posts")
+        .select("id,user_id,content,created_at")
+        .eq("community_id", communityId)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("community_events")
+        .select("id,user_id,title,details,start_at,location,created_at")
+        .eq("community_id", communityId)
+        .order("start_at", { ascending: true })
+        .limit(100),
+    ]);
+
+    setPosts(pr ?? []);
+    setEvents(er ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { loadAll(); }, [communityId, userId]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, communityId]);
 
   async function join() {
-    if (!userId || !communityId) { alert("Please sign in."); return; }
-    const { error } = await supabase.from("community_members").insert([{ community_id: communityId, user_id: userId, status: "member" }]);
-    if (error) { alert(error.message); return; }
-    setIsMember(true);
+    if (!userId || !communityId) return;
+    await supabase.from("community_members").insert({
+      community_id: communityId,
+      user_id: userId,
+      role: "member",
+      status: "member",
+    });
+    await load();
   }
 
   async function leave() {
     if (!userId || !communityId) return;
-    const { error } = await supabase.from("community_members").delete().eq("community_id", communityId).eq("user_id", userId);
-    if (error) { alert(error.message); return; }
-    setIsMember(false);
+    await supabase.from("community_members").delete().eq("community_id", communityId).eq("user_id", userId);
+    await load();
   }
 
   async function submitPost() {
-    if (!userId || !communityId) return;
-    const text = `${postTitle} ${postBody}`.trim();
-    if (looksPolitical(text)) { alert("Thanks for sharing! Communities are politics-free."); return; }
-
+    if (!userId || !communityId || !newPost.trim()) return;
     setPosting(true);
-    const { data, error } = await supabase
-      .from("community_posts")
-      .insert([{ community_id: communityId, user_id: userId, title: postTitle.trim() || null, content: postBody.trim() }])
-      .select("*")
-      .single();
+    const { error } = await supabase.from("community_posts").insert({
+      community_id: communityId,
+      user_id: userId,
+      content: newPost.trim(),
+    });
     setPosting(false);
-    if (error) { alert(error.message); return; }
-    setPosts(prev => [data as Post, ...prev]);
-    setPostTitle(""); setPostBody("");
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setNewPost("");
+    await load();
   }
 
-  async function createEvent() {
-    if (!userId || !communityId) return;
-    if (!evTitle || !evStart) { alert("Please add a title and start time."); return; }
-    const text = `${evTitle} ${evDesc} ${evVenue} ${evCity} ${evState}`;
-    if (looksPolitical(text)) { alert("Events must be non-political."); return; }
+  async function deletePost(id: string) {
+    if (!confirm("Delete this post?")) return;
+    await supabase.from("community_posts").delete().eq("id", id);
+    await load();
+  }
 
-    setCreatingEvent(true);
-    const payload = {
+  async function addEvent() {
+    if (!userId || !communityId || !evTitle.trim() || !evWhen) return;
+    setSavingEvent(true);
+    const { error } = await supabase.from("community_events").insert({
       community_id: communityId,
       user_id: userId,
       title: evTitle.trim(),
-      description: evDesc.trim() || null,
-      start_at: new Date(evStart).toISOString(),
-      end_at: evEnd ? new Date(evEnd).toISOString() : null,
-      venue: evVenue.trim() || null,
-      city: evCity.trim() || null,
-      state: evState.trim() || null,
-      zip: evZip.trim() || null,
-      lat: null, lng: null
-    };
-    const { data, error } = await supabase.from("community_events").insert([payload]).select("*").single();
-    setCreatingEvent(false);
-    if (error) { alert(error.message); return; }
-    setEvents(prev => [data as Event, ...prev]);
-    setEvTitle(""); setEvDesc(""); setEvStart(""); setEvEnd(""); setEvVenue(""); setEvCity(""); setEvState(""); setEvZip("");
+      details: evDetails.trim() || null,
+      start_at: new Date(evWhen).toISOString(),
+      location: evWhere.trim() || null,
+    });
+    setSavingEvent(false);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setEvTitle("");
+    setEvWhen("");
+    setEvWhere("");
+    setEvDetails("");
+    await load();
   }
 
-  const verifiedEvents = useMemo(() => events.filter(e => e.is_verified), [events]);
+  const bg: React.CSSProperties = {
+    background: "linear-gradient(#FFF7DB, #ffffff)",
+    minHeight: "100vh",
+  };
 
   return (
-    <div className="page-wrap">
-      <SiteHeader />
+    <div className="page-wrap" style={bg}>
       <div className="page">
         <div className="container-app">
           <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>{community?.name ?? "Community"}</h1>
+            <h1 className="page-title" style={{ marginBottom: 0 }}>
+              Community
+            </h1>
             <div className="controls">
-              <Link className="btn btn-neutral" href="/communities">Back</Link>
-              {isMember ? (
-                <button className="btn" onClick={leave}>Leave</button>
+              <Link href="/communities" className="btn">
+                Back
+              </Link>
+              {!isMember ? (
+                <button className="btn btn-brand" onClick={join}>
+                  Join
+                </button>
               ) : (
-                <button className="btn btn-brand" onClick={join}>Join</button>
+                <button className="btn" onClick={leave}>
+                  Leave
+                </button>
               )}
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="segmented" role="tablist" aria-label="Community sections">
-            <button className={`seg-btn ${tab === "discussion" ? "active" : ""}`} onClick={() => setTab("discussion")} role="tab" aria-selected={tab==="discussion"}>Discussion</button>
-            <button className={`seg-btn ${tab === "events" ? "active" : ""}`} onClick={() => setTab("events")} role="tab" aria-selected={tab==="events"}>What’s happening</button>
-            <button className={`seg-btn ${tab === "about" ? "active" : ""}`} onClick={() => setTab("about")} role="tab" aria-selected={tab==="about"}>About</button>
+          {/* identity card */}
+          <div className="card p-3">
+            <div style={{ display: "grid", gridTemplateColumns: "96px 1fr", gap: 12 }}>
+              <div
+                style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: 16,
+                  background:
+                    c?.photo_url ? `center / cover no-repeat url(${c.photo_url})` : "linear-gradient(135deg,#c4a6ff,#ff8a65)",
+                }}
+              />
+              <div>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: 20 }}>{c?.title || "Untitled"}</strong>
+                  {c?.category && <span className="tag">{c.category}</span>}
+                  {c?.zip && <span className="muted">· {c.zip}</span>}
+                  {isAdmin && <span className="tag">Admin</span>}
+                </div>
+                {c?.about && <p className="muted" style={{ marginTop: 6 }}>{c.about}</p>}
+              </div>
+            </div>
           </div>
 
-          {loading && <p className="muted mt-3">Loading…</p>}
+          {/* tabs */}
+          <div className="card p-3 mt-2">
+            <div className="segmented" role="tablist" aria-label="Community tabs">
+              <button className={`seg-btn ${tab === "discussion" ? "active" : ""}`} onClick={() => setTab("discussion")}>
+                Discussion
+              </button>
+              <button className={`seg-btn ${tab === "events" ? "active" : ""}`} onClick={() => setTab("events")}>
+                What’s happening
+              </button>
+              <button className={`seg-btn ${tab === "about" ? "active" : ""}`} onClick={() => setTab("about")}>
+                About
+              </button>
+            </div>
 
-          {/* Discussion */}
-          {!loading && tab === "discussion" && (
-            <div className="stack">
-              {isMember && (
-                <section className="card p-3">
-                  <h2 className="section-title">Start a discussion</h2>
-                  <div className="grid gap-3">
-                    <input className="input" placeholder="Optional title" value={postTitle} onChange={e => setPostTitle(e.target.value)} />
-                    <textarea className="input" rows={4} placeholder="Share something with the community…" value={postBody} onChange={e => setPostBody(e.target.value)} />
+            {/* DISCUSSION */}
+            {tab === "discussion" && (
+              <div className="stack" style={{ marginTop: 12 }}>
+                {isMember ? (
+                  <div className="stack">
+                    <textarea
+                      className="input"
+                      rows={3}
+                      placeholder="Start a discussion…"
+                      value={newPost}
+                      onChange={(e) => setNewPost(e.target.value)}
+                    />
                     <div className="right">
-                      <button className="btn btn-brand" onClick={submitPost} disabled={posting || !postBody.trim()}>
+                      <button className="btn btn-brand" onClick={submitPost} disabled={posting}>
                         {posting ? "Posting…" : "Post"}
                       </button>
                     </div>
                   </div>
-                </section>
-              )}
+                ) : (
+                  <p className="muted">Join to post.</p>
+                )}
 
-              {posts.length === 0 ? (
-                <p className="muted">No posts yet.</p>
-              ) : (
-                posts.map(p => (
-                  <article key={p.id} className="card p-3">
-                    <div className="muted text-xs mb-1">
-                      {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric" })} • Member
-                    </div>
-                    {p.title && <h3 style={{ marginTop: 0 }}>{p.title}</h3>}
-                    <div style={{ whiteSpace: "pre-wrap" }}>{p.content}</div>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* Events */}
-          {!loading && tab === "events" && (
-            <div className="stack">
-              {isMember && (
-                <section className="card p-3">
-                  <h2 className="section-title">Add an event</h2>
-                  <div className="grid gap-3">
-                    <input className="input" placeholder="Event title" value={evTitle} onChange={e => setEvTitle(e.target.value)} />
-                    <textarea className="input" rows={3} placeholder="Description (optional)" value={evDesc} onChange={e => setEvDesc(e.target.value)} />
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <label className="grid gap-1">
-                        <span className="text-sm">Starts</span>
-                        <input className="input" type="datetime-local" value={evStart} onChange={e => setEvStart(e.target.value)} />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-sm">Ends (optional)</span>
-                        <input className="input" type="datetime-local" value={evEnd} onChange={e => setEvEnd(e.target.value)} />
-                      </label>
-                    </div>
-                    <input className="input" placeholder="Venue (optional)" value={evVenue} onChange={e => setEvVenue(e.target.value)} />
-                    <div className="grid sm:grid-cols-3 gap-3">
-                      <input className="input" placeholder="City" value={evCity} onChange={e => setEvCity(e.target.value)} />
-                      <input className="input" placeholder="State" value={evState} onChange={e => setEvState(e.target.value)} />
-                      <input className="input" placeholder="ZIP" value={evZip} onChange={e => setEvZip(e.target.value)} />
-                    </div>
-                    <div className="right">
-                      <button className="btn btn-brand" onClick={createEvent} disabled={creatingEvent || !evTitle || !evStart}>
-                        {creatingEvent ? "Saving…" : "Save event"}
-                      </button>
-                    </div>
-                    <p className="muted text-sm">Verified events are highlighted once a community admin confirms them.</p>
-                  </div>
-                </section>
-              )}
-
-              {events.length === 0 ? (
-                <p className="muted">No events yet.</p>
-              ) : (
-                events.map(e => (
-                  <article key={e.id} className="card p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="muted text-xs mb-1">
-                          {new Date(e.start_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} {e.end_at ? "– " + new Date(e.end_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                        </div>
-                        <h3 style={{ marginTop: 0 }}>{e.title}</h3>
-                        {e.description && <div style={{ whiteSpace: "pre-wrap" }}>{e.description}</div>}
-                        <div className="muted text-sm mt-1">
-                          {[e.venue, e.city, e.state, e.zip].filter(Boolean).join(" • ")}
-                        </div>
+                <div className="stack">
+                  {posts.length === 0 && <p className="muted">No posts yet.</p>}
+                  {posts.map((p) => (
+                    <div key={p.id} className="card p-3">
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {format(new Date(p.created_at), "MMM d")} · {p.user_id === userId ? "You" : "Member"}
                       </div>
-                      {e.is_verified && (
-                        <span className="rounded-full px-2 py-1 text-xs" style={{ background: "#E9FFF2", border: "1px solid #c6f6d5", color: "#256F4D" }}>
-                          Verified
-                        </span>
+                      <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{p.content}</div>
+                      {p.user_id === userId && (
+                        <div className="right" style={{ marginTop: 8 }}>
+                          <button className="btn btn-neutral" onClick={() => deletePost(p.id)}>
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </div>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* About */}
-          {!loading && tab === "about" && (
-            <section className="card p-3">
-              <h2 className="section-title">About this community</h2>
-              <div className="grid gap-2">
-                <div><strong>Category:</strong> {community?.category}{community?.subcategory ? ` • ${community.subcategory}` : ""}</div>
-                {community?.location_scope && <div><strong>Area:</strong> {community.location_scope}</div>}
-                {community?.description && <div style={{ whiteSpace: "pre-wrap" }}>{community.description}</div>}
-                <div className="muted text-sm">Keep it kind. No politics. Respect differences. Safety first when sharing info.</div>
+                  ))}
+                </div>
               </div>
-            </section>
-          )}
+            )}
+
+            {/* EVENTS */}
+            {tab === "events" && (
+              <div className="stack" style={{ marginTop: 12 }}>
+                {isMember ? (
+                  <div className="card p-3">
+                    <h3 style={{ marginTop: 0 }}>Add an event</h3>
+                    <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr", gap: 8 }}>
+                      <input className="input" placeholder="Title" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} />
+                      <input
+                        className="input"
+                        type="datetime-local"
+                        value={evWhen}
+                        onChange={(e) => setEvWhen(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                      <input
+                        className="input"
+                        placeholder="Location (address, city, etc.)"
+                        value={evWhere}
+                        onChange={(e) => setEvWhere(e.target.value)}
+                      />
+                      <input
+                        className="input"
+                        placeholder="Details (optional)"
+                        value={evDetails}
+                        onChange={(e) => setEvDetails(e.target.value)}
+                      />
+                    </div>
+                    <div className="right" style={{ marginTop: 8 }}>
+                      <button className="btn btn-brand" onClick={addEvent} disabled={savingEvent}>
+                        {savingEvent ? "Saving…" : "Save event"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted">Join to add events.</p>
+                )}
+
+                <div className="stack">
+                  {events.length === 0 && <p className="muted">No upcoming events yet.</p>}
+                  {events.map((ev) => (
+                    <div key={ev.id} className="card p-3">
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <strong>{ev.title}</strong>
+                        <span className="muted">{format(new Date(ev.start_at), "EEE, MMM d • h:mma")}</span>
+                      </div>
+                      {ev.location && <div className="muted" style={{ marginTop: 4 }}>{ev.location}</div>}
+                      {ev.details && <div style={{ marginTop: 6 }}>{ev.details}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ABOUT */}
+            {tab === "about" && (
+              <div className="stack" style={{ marginTop: 12 }}>
+                <div className="muted">Category: {c?.category || "—"}</div>
+                <div className="muted">ZIP: {c?.zip || "—"}</div>
+                <div style={{ whiteSpace: "pre-wrap" }}>{c?.about || "No description yet."}</div>
+              </div>
+            )}
+          </div>
+
+          {loading && <p className="muted mt-2">Loading…</p>}
         </div>
       </div>
     </div>
