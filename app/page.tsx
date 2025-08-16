@@ -1,32 +1,89 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
 export default function HomePage() {
+  // If you keep your logo somewhere else, change this path
+  const LOGO_SRC = "/logo.png"; // e.g. /images/myzent_tribe_logo.svg
+
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSignedIn(!!data.session?.user?.id);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setSignedIn(!!session?.user?.id);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4 py-8">
-      <div className="max-w-4xl w-full text-center">
+    <main className="min-h-screen bg-[#F4ECFF]"> {/* soft lavender */}
+      <section className="mx-auto max-w-5xl px-6 py-12 text-center">
+        {/* Logo */}
         <img
-          src="/logo.png"
+          src={LOGO_SRC}
           alt="MyZenTribe Logo"
-          className="mx-auto mb-6 w-48 h-auto"
+          className="mx-auto mb-6 h-16 w-auto"
+          loading="lazy"
         />
-        <h1 className="text-4xl font-bold mb-4">Welcome to MyZenTribe</h1>
-        <p className="text-lg text-gray-700 mb-6">
-          A space to connect, recharge, and share what matters.
+
+        {/* Headline */}
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Welcome to <span className="text-brand-600">MyZenTribe</span>
+        </h1>
+
+        <p className="mx-auto mt-3 max-w-3xl text-base text-neutral-700">
+          A space to connect, recharge, and share what matters. From daily mindfulness and gratitude
+          practices to meaningful events, MyZenTribe makes it easy to find your people and build
+          something good together.
         </p>
-        <p className="text-lg text-gray-700 mb-6">
-          From daily mindfulness and gratitude practices to meaningful events, MyZenTribe makes it easy to find your people and build something good together.
-        </p>
-        <div className="flex justify-center gap-4 mb-8">
-          <a href="/signup" className="bg-green-500 text-white px-6 py-3 rounded-lg shadow hover:bg-green-600">Sign Up</a>
-          <a href="/signin" className="bg-purple-500 text-white px-6 py-3 rounded-lg shadow hover:bg-purple-600">Sign In</a>
+
+        {/* Primary CTAs */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          {!signedIn ? (
+            <>
+              <Link href="/signin" className="btn btn-brand">
+                Sign in
+              </Link>
+              <Link href="/signin" className="btn btn-neutral">
+                Create profile
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/calendar" className="btn btn-brand">
+                Go to Calendar
+              </Link>
+              <Link href="/profile" className="btn btn-neutral">
+                Open Profile
+              </Link>
+            </>
+          )}
         </div>
 
-        <h2 className="text-3xl font-semibold mb-4">Our Intention</h2>
-        <p className="text-gray-700 mb-6">
-          To bring people together across local and global communities, support talented small businesses, and encourage every member to play a part in making the world a better place.
-        </p>
-        <a href="/commitment" className="text-blue-600 hover:underline font-medium">
-          Our Commitment
-        </a>
-      </div>
+        {/* Our Intention card */}
+        <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-neutral-200 bg-white p-6 text-left shadow">
+          <h2 className="text-2xl font-semibold">Our Intention</h2>
+          <p className="mt-3 text-neutral-700">
+            To bring people together across local and global communities, support talented small
+            businesses, and encourage every member to play a part in making the world a better
+            place.
+          </p>
+
+          <div className="mt-5">
+            {/* Link this to wherever your “commitment” content lives (adjust as needed) */}
+            <Link href="/good-vibes" className="btn btn-brand">
+              Our Commitment
+            </Link>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
