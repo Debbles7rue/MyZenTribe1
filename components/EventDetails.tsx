@@ -2,10 +2,12 @@
 
 import { Dialog } from "@headlessui/react";
 import { format } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Visibility = "public" | "friends" | "private" | "community";
+type Status = "scheduled" | "cancelled";
+
 type DBEvent = {
   id: string;
   title: string;
@@ -17,6 +19,10 @@ type DBEvent = {
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
+
+  // NEW (optional at runtime until SQL added)
+  status?: Status | null;
+  cancellation_reason?: string | null;
 };
 
 type Comment = {
@@ -34,7 +40,18 @@ export default function EventDetails({
   onClose: () => void;
 }) {
   const open = !!event;
+
+  // current user id
   const [me, setMe] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
+
+  // local copy of the event so UI updates immediately on save/cancel
+  const [evt, setEvt] = useState<DBEvent | null>(null);
+  useEffect(() => {
+    setEvt(event);
+  }, [event?.id]);
 
   // comments
   const [comments, setComments] = useState<Comment[]>([]);
@@ -42,16 +59,9 @@ export default function EventDetails({
 
   // edit
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    location: "",
-  });
+  const [form, setForm] = useState({ title: "", description: "", location: "" });
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
-  }, []);
-
+  // bootstrap form + comments when event changes
   useEffect(() => {
     if (!event) return;
     setForm({
@@ -59,7 +69,6 @@ export default function EventDetails({
       description: event.description ?? "",
       location: event.location ?? "",
     });
-    // load comments
     (async () => {
       const { data } = await supabase
         .from("event_comments")
@@ -70,26 +79,30 @@ export default function EventDetails({
     })();
   }, [event?.id]);
 
-  if (!event) return null;
+  if (!open || !evt) return null;
 
-  const start = new Date(event.start_time);
-  const end = new Date(event.end_time);
-  const when =
-    `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`.replace(
-      "AM",
-      "AM"
-    );
+  const isOwner = me && evt.created_by === me;
+  const isCancelled = (evt.status ?? "scheduled") === "cancelled";
 
-  const mapUrl = event.location
-    ? `https://www.google.com/maps/search/${encodeURIComponent(
-        event.location
-      )}`
+  const start = new Date(evt.start_time);
+  const end = new Date(evt.end_time);
+  const when = useMemo(
+    () =>
+      `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`.replace(
+        "AM",
+        "AM"
+      ),
+    [evt.start_time, evt.end_time]
+  );
+
+  const mapUrl = evt.location
+    ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
     : null;
 
   async function postComment() {
     if (!me || !newBody.trim()) return;
     const { error } = await supabase.from("event_comments").insert({
-      event_id: event.id,
+      event_id: evt.id,
       user_id: me,
       body: newBody.trim(),
     });
@@ -98,114 +111,148 @@ export default function EventDetails({
     const { data } = await supabase
       .from("event_comments")
       .select("id, body, created_at, user_id")
-      .eq("event_id", event.id)
+      .eq("event_id", evt.id)
       .order("created_at", { ascending: true });
     setComments(data || []);
   }
 
   async function saveEdits() {
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      location: form.location.trim() || null,
+    };
+    const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
+    if (error) return alert(error.message);
+    // reflect changes locally right away
+    setEvt((prev) => (prev ? { ...prev, ...payload } as DBEvent : prev));
+    setEditing(false);
+  }
+
+  async function cancelEvent() {
+    if (!isOwner) return;
+    const reason = window.prompt("Cancel this event? Optional: add a reason") || null;
     const { error } = await supabase
       .from("events")
-      .update({
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        location: form.location.trim() || null,
-      })
-      .eq("id", event.id);
+      .update({ status: "cancelled", cancellation_reason: reason })
+      .eq("id", evt.id);
     if (error) return alert(error.message);
-    setEditing(false);
+    setEvt((prev) =>
+      prev ? ({ ...prev, status: "cancelled", cancellation_reason: reason } as DBEvent) : prev
+    );
+  }
+
+  async function reinstateEvent() {
+    if (!isOwner) return;
+    const { error } = await supabase
+      .from("events")
+      .update({ status: "scheduled", cancellation_reason: null })
+      .eq("id", evt.id);
+    if (error) return alert(error.message);
+    setEvt((prev) =>
+      prev ? ({ ...prev, status: "scheduled", cancellation_reason: null } as DBEvent) : prev
+    );
   }
 
   return (
     <Dialog open={open} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="w-full max-w-2xl rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
-          {/* scrollable content (inline styles to avoid relying on utilities) */}
+        <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
+          {/* scrollable content */}
           <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
-            {/* Small, tidy banner image */}
+            {/* Banner image (capped height) */}
             <img
-              src={event.image_path || "/event-placeholder.jpg"}
-              alt={event.title || ""}
+              src={evt.image_path || "/event-placeholder.jpg"}
+              alt={evt.title || ""}
               style={{
                 width: "100%",
-                height: "170px",      // <= adjust if you want smaller/larger
+                height: "170px",
                 objectFit: "cover",
                 display: "block",
                 borderBottom: "1px solid #eee",
+                filter: isCancelled ? "grayscale(0.6)" : undefined,
+                opacity: isCancelled ? 0.8 : 1,
               }}
               loading="lazy"
             />
 
-            <div className="p-6 space-y-5">
+            <div className="space-y-5 p-6">
               <div className="flex items-start justify-between gap-3">
-                <Dialog.Title className="text-xl font-semibold">
+                <Dialog.Title
+                  className={`text-xl font-semibold ${isCancelled ? "line-through text-neutral-500" : ""}`}
+                >
                   {editing ? (
                     <input
                       className="input"
                       value={form.title}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, title: e.target.value }))
-                      }
+                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                     />
                   ) : (
-                    event.title || "Untitled event"
+                    evt.title || "Untitled event"
                   )}
                 </Dialog.Title>
 
                 <div className="flex gap-2">
-                  <button
-                    className="btn btn-neutral"
-                    onClick={() =>
-                      setEditing((v) => {
-                        if (!v) {
-                          setForm({
-                            title: event.title ?? "",
-                            description: event.description ?? "",
-                            location: event.location ?? "",
-                          });
-                        }
-                        return !v;
-                      })
-                    }
-                  >
-                    {editing ? "Done" : "Edit"}
-                  </button>
+                  {isOwner && (
+                    <button
+                      className="btn btn-neutral"
+                      onClick={() =>
+                        setEditing((v) => {
+                          if (!v) {
+                            setForm({
+                              title: evt.title ?? "",
+                              description: evt.description ?? "",
+                              location: evt.location ?? "",
+                            });
+                          }
+                          return !v;
+                        })
+                      }
+                    >
+                      {editing ? "Done" : "Edit"}
+                    </button>
+                  )}
                   <button className="btn" onClick={onClose}>
                     Close
                   </button>
                 </div>
               </div>
 
+              {/* Cancelled notice */}
+              {isCancelled && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="font-medium">This event is cancelled.</div>
+                  {evt.cancellation_reason ? (
+                    <div className="mt-1">{evt.cancellation_reason}</div>
+                  ) : null}
+                </div>
+              )}
+
               {/* When & where */}
               <div className="card p-3">
-                <div className="text-sm text-neutral-700">{when}</div>
+                <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
+                  {when}
+                </div>
                 {editing ? (
                   <div className="mt-2">
-                    <label className="block text-sm mb-1">Location</label>
+                    <label className="mb-1 block text-sm">Location</label>
                     <input
                       className="input"
                       value={form.location}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, location: e.target.value }))
-                      }
+                      onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
                       placeholder="Address or place"
                     />
                   </div>
-                ) : event.location ? (
+                ) : evt.location ? (
                   <div className="mt-2 text-sm">
                     <span className="font-medium">Location: </span>
                     {mapUrl ? (
-                      <a
-                        className="underline"
-                        href={mapUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {event.location}
+                      <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
+                        {evt.location}
                       </a>
                     ) : (
-                      event.location
+                      evt.location
                     )}
                   </div>
                 ) : null}
@@ -213,24 +260,22 @@ export default function EventDetails({
 
               {/* Description */}
               <div className="card p-3">
-                <div className="text-sm mb-1 font-medium">Details</div>
+                <div className="mb-1 text-sm font-medium">Details</div>
                 {editing ? (
                   <textarea
                     className="input"
                     rows={4}
                     value={form.description}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, description: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                     placeholder="Share details attendees should know…"
                   />
                 ) : (
-                  <div className="text-sm text-neutral-800 whitespace-pre-wrap">
-                    {event.description || "No description yet."}
+                  <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>
+                    {evt.description || "No description yet."}
                   </div>
                 )}
                 {editing && (
-                  <div className="flex justify-end mt-3">
+                  <div className="mt-3 flex justify-end">
                     <button className="btn btn-brand" onClick={saveEdits}>
                       Save changes
                     </button>
@@ -238,20 +283,31 @@ export default function EventDetails({
                 )}
               </div>
 
+              {/* Owner-only actions: Cancel / Reinstate */}
+              {isOwner && (
+                <div className="flex items-center justify-end gap-2">
+                  {!isCancelled ? (
+                    <button className="btn btn-danger" onClick={cancelEvent}>
+                      Cancel event
+                    </button>
+                  ) : (
+                    <button className="btn btn-brand" onClick={reinstateEvent}>
+                      Reinstate event
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Comments */}
               <div className="card p-3">
-                <div className="text-sm mb-2 font-medium">Comments</div>
+                <div className="mb-2 text-sm font-medium">Comments</div>
                 {comments.length === 0 ? (
-                  <div className="text-sm text-neutral-500">
-                    No comments yet.
-                  </div>
+                  <div className="text-sm text-neutral-500">No comments yet.</div>
                 ) : (
                   <ul className="space-y-2">
                     {comments.map((c) => (
                       <li key={c.id} className="text-sm">
-                        <div className="text-neutral-800 whitespace-pre-wrap">
-                          {c.body}
-                        </div>
+                        <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
                         <div className="text-xs text-neutral-500">
                           {new Date(c.created_at).toLocaleString()}
                         </div>
