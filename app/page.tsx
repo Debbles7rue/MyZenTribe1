@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -35,6 +36,7 @@ export default function HomePage() {
           textAlign: "center",
         }}
       >
+        {/* Logo */}
         <img
           src={LOGO_SRC}
           alt="MyZenTribe Logo"
@@ -42,6 +44,7 @@ export default function HomePage() {
           style={{ width: 260, height: "auto", display: "block", margin: "0 auto 24px" }}
         />
 
+        {/* Card 1 — welcome + CTA */}
         <div
           style={{
             background: "#fff",
@@ -92,6 +95,7 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Card 2 — intention */}
         <div
           style={{
             background: "#fff",
@@ -111,4 +115,9 @@ export default function HomePage() {
           </p>
           <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
             <Link href="/commitment" className="btn btn-brand">Our Commitment</Link>
-          </div
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
