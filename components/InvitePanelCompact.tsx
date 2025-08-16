@@ -76,7 +76,6 @@ export default function InvitePanelCompact({ userId }: Props) {
     <section className="card p-3" style={{ padding: 12 }}>
       <div className="section-row">
         <h3 className="section-title" style={{ marginBottom: 4 }}>Invite friends</h3>
-        {/* small toggle, keep card compact */}
         <button className="btn btn-neutral" onClick={() => setShowQR((s) => !s)} disabled={!link || !!error || loading}>
           {showQR ? "Hide QR" : "Show QR"}
         </button>
