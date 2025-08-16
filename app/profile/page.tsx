@@ -1,5 +1,6 @@
 "use client";
 
+import InviteFriendsPanel from "@/components/InviteFriendsPanel";
 import SiteHeader from "@/components/SiteHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
