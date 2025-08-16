@@ -43,7 +43,7 @@ export default function HomePage() {
           style={{ width: 260, height: "auto", display: "block", margin: "0 auto 24px" }}
         />
 
-        {/* Card 1: Welcome + blurb (white box) */}
+        {/* Card 1 */}
         <div
           style={{
             background: "#fff",
@@ -71,7 +71,6 @@ export default function HomePage() {
             and build something good together.
           </p>
 
-          {/* Centered buttons */}
           <div
             style={{
               marginTop: 18,
@@ -83,27 +82,19 @@ export default function HomePage() {
           >
             {!signedIn ? (
               <>
-                <Link href="/signin" className="btn btn-brand">
-                  Sign in
-                </Link>
-                <Link href="/signin" className="btn btn-neutral">
-                  Create profile
-                </Link>
+                <Link href="/signin" className="btn btn-brand">Sign in</Link>
+                <Link href="/signin" className="btn btn-neutral">Create profile</Link>
               </>
             ) : (
               <>
-                <Link href="/calendar" className="btn btn-brand">
-                  Go to Calendar
-                </Link>
-                <Link href="/profile" className="btn btn-neutral">
-                  Open Profile
-                </Link>
+                <Link href="/calendar" className="btn btn-brand">Go to Calendar</Link>
+                <Link href="/profile" className="btn btn-neutral">Open Profile</Link>
               </>
             )}
           </div>
         </div>
 
-        {/* Card 2: Our Intention (white box with button inside) */}
+        {/* Card 2 */}
         <div
           style={{
             background: "#fff",
@@ -121,10 +112,9 @@ export default function HomePage() {
             businesses, and encourage every member to play a part in making the world a better
             place.
           </p>
-          <div style={{ marginTop: 16 }}>
-            <Link href="/good-vibes" className="btn btn-brand">
-              Our Commitment
-            </Link>
+          {/* Centered button inside the card */}
+          <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
+            <Link href="/commitment" className="btn btn-brand">Our Commitment</Link>
           </div>
         </div>
       </section>
