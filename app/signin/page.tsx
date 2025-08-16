@@ -1,26 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { TERMS_VERSION } from "@/lib/terms";
 
-export default function LoginPage() {
+export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If already signed in, bounce to Profile (Terms gate runs there too)
+  // If already signed in, go to profile (where terms gate can show)
   useEffect(() => {
     let mounted = true;
     supabase.auth.getUser().then(({ data }) => {
       if (!mounted) return;
       if (data.user) router.replace("/profile");
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -28,82 +28,127 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setLoading(false);
-      setError(error.message);
-      return;
-    }
-
-    // Ensure a profiles row exists for new users
-    const uid = data.user?.id;
-    if (uid) {
-      await supabase.from("profiles").upsert({ id: uid }, { onConflict: "id" });
-      // Check terms state
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("terms_version, terms_accepted_at")
-        .eq("id", uid)
-        .maybeSingle();
-
-      if (!prof?.terms_accepted_at || (prof?.terms_version ?? 0) < TERMS_VERSION) {
-        setLoading(false);
-        router.replace("/legal/terms");
-        return;
-      }
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
     setLoading(false);
+
+    if (error) {
+      setError(error.message || "Invalid login credentials");
+      return;
+    }
     router.replace("/profile");
   }
 
+  // quick inline styles (so page looks good even if a stylesheet fails to load)
+  const bg: React.CSSProperties = {
+    minHeight: "100vh",
+    background: "#F4ECFF",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+  };
+  const card: React.CSSProperties = {
+    width: "100%",
+    maxWidth: 520,
+    background: "#fff",
+    border: "1px solid #E9D8FD",
+    borderRadius: 16,
+    padding: 24,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+  };
+  const h1: React.CSSProperties = {
+    fontSize: 32,
+    fontWeight: 700,
+    margin: 0,
+    textAlign: "center",
+  };
+  const sub: React.CSSProperties = {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 12,
+  };
+  const label: React.CSSProperties = { fontSize: 14, display: "block", marginBottom: 6 };
+  const input: React.CSSProperties = {
+    width: "100%",
+    borderRadius: 12,
+    border: "1px solid #D1D5DB",
+    padding: "10px 12px",
+    outline: "none",
+  };
+  const btnPrimary: React.CSSProperties = {
+    width: "100%",
+    border: "none",
+    borderRadius: 14,
+    padding: "12px 16px",
+    background: "#6D28D9",
+    color: "#fff",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 6px 14px rgba(109,40,217,0.25)",
+  };
+  const row: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    fontSize: 14,
+  };
+  const link: React.CSSProperties = { color: "#6D28D9", textDecoration: "underline" };
+  const alertErr: React.CSSProperties = {
+    marginTop: 8,
+    borderRadius: 12,
+    border: "1px solid #FCA5A5",
+    background: "#FEF2F2",
+    color: "#B91C1C",
+    padding: "8px 12px",
+    fontSize: 14,
+  };
+
   return (
-    <main className="min-h-screen flex items-center justify-center p-6" style={{ background: "#F4ECFF" }}>
-      <div className="w-full max-w-md rounded-2xl border border-purple-100 bg-white p-6 shadow">
-        <h1 className="text-2xl font-semibold mb-2 text-center">Sign in</h1>
-        <p className="text-sm text-neutral-600 mb-4 text-center">Use your email and password.</p>
+    <main style={bg}>
+      <div style={card}>
+        <h1 style={h1}>Sign in</h1>
+        <p style={sub}>Use your email and password.</p>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block">
-            <span className="text-sm">Email</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-              placeholder="you@example.com"
-            />
-          </label>
+        <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 8 }}>
+          <label style={label}>Email</label>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={input}
+            placeholder="you@example.com"
+          />
 
-          <label className="block">
-            <span className="text-sm">Password</span>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-              placeholder="••••••••"
-            />
-          </label>
+          <label style={{ ...label, marginTop: 6 }}>Password</label>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={input}
+            placeholder="••••••••"
+          />
 
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+          {error && <div style={alertErr}>{error}</div>}
 
-          <button type="submit" disabled={loading} className="btn btn-brand w-full">
+          <button type="submit" disabled={loading} style={btnPrimary}>
             {loading ? "Signing in…" : "Sign in"}
           </button>
 
-          <div className="flex items-center justify-between text-sm mt-1">
-            <Link href="/" className="underline">Back to welcome</Link>
-            <div className="space-x-4">
-              <Link href="/signup" className="underline">Create profile</Link>
-              <Link href="/forgot-password" className="underline">Forgot password?</Link>
-            </div>
+          <div style={row}>
+            <a href="/" style={link}>Back to welcome</a>
+            <a href="/forgot-password" style={link}>Forgot password?</a>
+          </div>
+          <div style={{ textAlign: "center", marginTop: 6 }}>
+            <a href="/signup" style={link}>Create profile</a>
           </div>
         </form>
       </div>
