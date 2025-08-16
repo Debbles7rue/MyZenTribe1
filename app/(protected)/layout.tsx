@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import SiteHeader from "@/components/SiteHeader";
 
 export default function ProtectedLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -14,14 +15,14 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
     async function check() {
       const { data } = await supabase.auth.getUser();
       if (!mounted) return;
-      if (!data.user) router.replace("/");
+      if (!data.user) router.replace("/signin");
       setReady(true);
     }
     check();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (!mounted) return;
-      if (!session?.user) router.replace("/");
+      if (!session?.user) router.replace("/signin");
     });
 
     return () => {
@@ -32,6 +33,10 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
 
   if (!ready) return null;
 
-  // Note: SiteHeader is already rendered globally in app/layout.tsx
-  return <div className="min-h-screen">{children}</div>;
+  return (
+    <div className="min-h-screen">
+      <SiteHeader />
+      {children}
+    </div>
+  );
 }
