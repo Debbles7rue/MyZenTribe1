@@ -87,11 +87,7 @@ export default function CalendarPage() {
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "events" },
-        load
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -151,18 +147,23 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------------- Moon overlay ---------------- */
+  /* ---------------- Moon overlay (fixed end date) ---------------- */
   const moonUi = useMoon(date.getFullYear(), showMoon);
   const moonUiEvents: UiEvent[] = useMemo(
     () =>
-      moonUi.map((m) => ({
-        id: m.id,
-        title: m.title,
-        start: m.start,
-        end: m.end,
-        allDay: true,
-        resource: { moonPhase: (m as any).resource.moonPhase },
-      })),
+      moonUi.map((m) => {
+        const start = m.start as Date;
+        // IMPORTANT: all-day events must end the NEXT day to render inside the cell
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+        return {
+          id: m.id,
+          title: m.title,
+          start,
+          end,
+          allDay: true,
+          resource: { moonPhase: (m as any).resource.moonPhase },
+        };
+      }),
     [moonUi]
   );
 
@@ -177,9 +178,7 @@ export default function CalendarPage() {
       return;
     }
     const toLocal = (d: Date) =>
-      new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16);
+      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
     setOpenCreate(true);
   };
@@ -197,10 +196,7 @@ export default function CalendarPage() {
     if (!canEdit(db)) return alert("You can only move events you created.");
     const { error } = await supabase
       .from("events")
-      .update({
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-      })
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
       .eq("id", db.id);
     if (error) alert(error.message);
     else load();
@@ -256,10 +252,7 @@ export default function CalendarPage() {
         onSave={createEvent}
       />
 
-      <EventDetails
-        event={detailsOpen ? selected : null}
-        onClose={() => setDetailsOpen(false)}
-      />
+      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
 }
