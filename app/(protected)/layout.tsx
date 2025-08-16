@@ -2,8 +2,8 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import ProtectedNav from "@/components/ProtectedNav";
 import { supabase } from "@/lib/supabaseClient";
+import SiteHeader from "@/components/SiteHeader";
 
 export default function ProtectedLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -38,7 +38,8 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <ProtectedNav />
+      {/* Single, styled header for all protected pages */}
+      <SiteHeader />
       {children}
     </div>
   );
