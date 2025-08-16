@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
   userId: string | null;
-  version: number; // bump to re-prompt in the future
+  version: number; // bump to re-prompt
 };
 
 export default function TermsGate({ userId, version }: Props) {
@@ -26,21 +26,16 @@ export default function TermsGate({ userId, version }: Props) {
       if (!mounted) return;
 
       if (error) {
-        // fail open (don’t block the app)
-        setLoading(false);
+        setLoading(false); // fail-open
         return;
       }
-
-      const alreadyAccepted =
+      const accepted =
         data?.terms_accepted_at && (data?.terms_version ?? 0) >= version;
 
-      setOpen(!alreadyAccepted);
+      setOpen(!accepted);
       setLoading(false);
     })();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [userId, version]);
 
   async function accept() {
@@ -52,8 +47,8 @@ export default function TermsGate({ userId, version }: Props) {
         terms_accepted_at: new Date().toISOString(),
       })
       .eq("id", userId);
-    if (!error) setOpen(false);
-    else alert(error.message);
+    if (error) alert(error.message);
+    else setOpen(false);
   }
 
   if (!userId || loading || !open) return null;
@@ -69,21 +64,18 @@ export default function TermsGate({ userId, version }: Props) {
             </Dialog.Title>
 
             <p className="text-sm text-neutral-700">
-              Please review our <a className="underline" href="/legal/terms" target="_blank" rel="noreferrer">full Terms</a>.
-              By continuing, you agree to them.
+              Please review our <a className="underline" href="/legal/terms" target="_blank" rel="noreferrer">full Terms</a>. By continuing, you agree to them.
             </p>
 
             <ul className="text-sm list-disc pl-5 space-y-2">
-              <li>Be kind. No harassment or hate speech.</li>
-              <li>Respect privacy. Don’t share private info.</li>
-              <li>Events and content are community-contributed; use your own judgment.</li>
-              <li>MyZenTribe is not liable for user-generated content or off-platform interactions.</li>
+              <li>Be kind; no harassment or hate speech.</li>
+              <li>Respect privacy; don’t share private info.</li>
+              <li>Use your own judgment with community content & events.</li>
+              <li>MyZenTribe isn’t liable for user-generated content or off-platform interactions.</li>
             </ul>
 
             <div className="flex justify-end gap-2 pt-2">
-              <a href="/legal/terms" className="btn btn-neutral" target="_blank" rel="noreferrer">
-                Read full Terms
-              </a>
+              <a href="/legal/terms" className="btn btn-neutral" target="_blank" rel="noreferrer">Read full Terms</a>
               <button className="btn btn-brand" onClick={accept}>I Agree</button>
             </div>
           </div>
