@@ -3,18 +3,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function SiteHeader() {
   const pathname = usePathname();
-  const [email, setEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-    });
-  }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -46,9 +38,10 @@ export default function SiteHeader() {
         </nav>
 
         <div className="auth-area">
-          {/* We hide the actual email for privacy */}
-          {email && <span className="user-chip">Signed in</span>}
-          <button className="btn" onClick={signOut}>Sign out</button>
+          {/* No email or "signed in" chip to keep UI clean */}
+          <button className="btn" onClick={signOut} aria-label="Sign out">
+            Sign out
+          </button>
         </div>
       </div>
     </header>
