@@ -5,10 +5,9 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useMemo, useState } from "react";
 
-/** ───────────────────────────────────────────────────────────────────────────
- * Types
- * ─────────────────────────────────────────────────────────────────────────── */
+/** ─── Types ───────────────────────────────────────────── */
 type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose";
+type Plan = "free" | "photos" | "healing";
 
 type Settings = {
   user_id: string;
@@ -27,13 +26,13 @@ type Entry = {
 type MediaItem = {
   id: string;
   file_path: string;
-  url: string;            // signed
+  url: string;
   favorite: boolean;
   caption: string | null;
   taken_at: string;
 };
 
-/** Theme palette (paper backgrounds + accents) */
+/** Themes */
 const THEMES: Record<
   ThemeKey,
   { leftBg: string; rightBg: string; border: string; accent: string }
@@ -70,40 +69,34 @@ const THEMES: Record<
   },
 };
 
-/** ───────────────────────────────────────────────────────────────────────────
- * Page
- * ─────────────────────────────────────────────────────────────────────────── */
+/** ─── Page ────────────────────────────────────────────── */
 export default function GratitudePage() {
-  /** Auth */
   const [userId, setUserId] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  /** UI stage */
-  const [stage, setStage] =
-    useState<"loading" | "cover" | "about" | "theme" | "instructions" | "journal">("loading");
+  type Stage = "loading" | "cover" | "book_intro" | "theme" | "journal";
+  const [stage, setStage] = useState<Stage>("loading");
 
-  /** Data & flags */
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [hasCandle, setHasCandle] = useState(false);       // meditation candle placeholder
-  const [photosEnabled, setPhotosEnabled] = useState(false); // add-on flag
+  const [pickedTheme, setPickedTheme] = useState<ThemeKey>("lavender");
+  const [selectedPlan, setSelectedPlan] = useState<Plan>("free");
 
-  /** Entries */
+  const [hasCandle, setHasCandle] = useState(false);
+  const [photosEnabled, setPhotosEnabled] = useState(false);
+
   const [draft, setDraft] = useState("");
   const [todayList, setTodayList] = useState<Entry[]>([]);
   const [recent, setRecent] = useState<Entry[]>([]);
 
-  /** Photos */
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  /** UI helpers */
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pickedTheme, setPickedTheme] = useState<ThemeKey>("lavender");
 
   /** Today string */
   const today = useMemo(() => {
@@ -114,7 +107,7 @@ export default function GratitudePage() {
     return `${yyyy}-${mm}-${dd}`;
   }, []);
 
-  /** Load settings, entries, add-on flag, candle */
+  /** Load settings + entries + add-on flag */
   useEffect(() => {
     if (!userId) return;
     (async () => {
@@ -157,7 +150,7 @@ export default function GratitudePage() {
         setTodayList(all.filter((x) => x.entry_date === today));
         setRecent(all.filter((x) => x.entry_date !== today));
 
-        // add-on flag (photos)
+        // add-on flag
         const { data: addons } = await supabase
           .from("user_addons")
           .select("photos_enabled")
@@ -165,7 +158,7 @@ export default function GratitudePage() {
           .maybeSingle();
         setPhotosEnabled(!!addons?.photos_enabled);
 
-        // candle placeholder (ignore errors if table doesn't exist)
+        // candle placeholder
         try {
           const { data: candles } = await supabase
             .from("meditation_candles")
@@ -185,19 +178,33 @@ export default function GratitudePage() {
     })();
   }, [userId, today]);
 
-  /** Activation */
+  /** Activate with theme and plan */
   async function activateWithTheme(theme: ThemeKey) {
     if (!userId) return;
     setSaving(true);
     setError(null);
     try {
+      // settings
       const payload = { user_id: userId, activated: true, recap_frequency: "weekly", theme };
       const { error: upErr } = await supabase
         .from("gratitude_settings")
         .upsert(payload, { onConflict: "user_id" });
       if (upErr) throw upErr;
+
+      // optional add-on
+      if (selectedPlan === "photos") {
+        await supabase
+          .from("user_addons")
+          .upsert(
+            { user_id: userId, photos_enabled: true, purchased_at: new Date().toISOString() },
+            { onConflict: "user_id" }
+          );
+        setPhotosEnabled(true);
+      }
+
+      // healing journal is a separate flow/page (not enabled here)
       setSettings({ user_id: userId, activated: true, recap_frequency: "weekly", theme });
-      setStage("instructions");
+      setStage("journal");
     } catch (e: any) {
       setError(e?.message || "Activation failed.");
     } finally {
@@ -205,33 +212,25 @@ export default function GratitudePage() {
     }
   }
 
-  /** Recap frequency */
+  /** Recap prefs */
   async function saveRecapFrequency(freq: Settings["recap_frequency"]) {
     if (!userId || !settings) return;
     setSaving(true);
-    setError(null);
     try {
       const { error: upErr } = await supabase
         .from("gratitude_settings")
         .upsert(
-          {
-            user_id: userId,
-            activated: true,
-            recap_frequency: freq,
-            theme: settings.theme,
-          },
+          { user_id: userId, activated: true, recap_frequency: freq, theme: settings.theme },
           { onConflict: "user_id" }
         );
       if (upErr) throw upErr;
       setSettings({ ...settings, recap_frequency: freq });
-    } catch (e: any) {
-      setError(e?.message || "Could not update recap preference.");
     } finally {
       setSaving(false);
     }
   }
 
-  /** Entries (3 per day) */
+  /** Entries (3/day) */
   const todayCount = todayList.length;
   const canAdd = todayCount < 3 && !!userId && !saving;
 
@@ -263,24 +262,16 @@ export default function GratitudePage() {
   async function removeEntry(id: string) {
     if (!userId) return;
     setSaving(true);
-    setError(null);
     try {
-      const { error } = await supabase
-        .from("gratitude_entries")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", userId);
-      if (error) throw error;
+      await supabase.from("gratitude_entries").delete().eq("id", id).eq("user_id", userId);
       setTodayList(todayList.filter((e) => e.id !== id));
       setRecent(recent.filter((e) => e.id !== id));
-    } catch (e: any) {
-      setError(e?.message || "Delete failed.");
     } finally {
       setSaving(false);
     }
   }
 
-  /** Recap generation (simple local summary) */
+  /** Local recap summary */
   function summarizeText(t: string): string {
     const clean = t.replace(/\s+/g, " ").trim();
     if (clean.length <= 40) return clean;
@@ -303,47 +294,40 @@ export default function GratitudePage() {
     return filtered.map((e) => ({ id: e.id, summary: summarizeText(e.content), when: new Date(e.created_at) }));
   }, [settings?.activated, settings?.recap_frequency, todayList, recent]);
 
-  /** Theme */
-  const theme = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
-
-  /** Photos add-on (current year) */
+  /** Photos add-on (load current year thumbnails) */
   const thisYear = new Date().getFullYear();
-  const slideUrl = `/gratitude/slideshow?year=${thisYear}`; // optional route you can add later
-
   async function loadMedia() {
     if (!userId || !photosEnabled) return;
     setMediaLoading(true);
     try {
       const start = new Date(`${thisYear}-01-01T00:00:00Z`).toISOString();
       const end = new Date(`${thisYear + 1}-01-01T00:00:00Z`).toISOString();
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("gratitude_media")
         .select("id,file_path,favorite,caption,taken_at")
         .eq("user_id", userId)
         .gte("taken_at", start)
         .lt("taken_at", end)
+        .order("favorite", { ascending: false })
         .order("taken_at", { ascending: false });
-      if (error) throw error;
 
       const paths = (data ?? []).map((d) => d.file_path);
-      if (paths.length) {
+      if (!paths.length) {
+        setMedia([]);
+      } else {
         const { data: signed } = await supabase.storage.from("gratitude-media").createSignedUrls(paths, 3600);
         const map = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
         setMedia(
           (data ?? []).map((d) => ({
             id: d.id,
-            file_path: d.file_path,
             url: map.get(d.file_path) || "",
             favorite: !!d.favorite,
             caption: d.caption,
             taken_at: d.taken_at,
+            file_path: d.file_path,
           }))
         );
-      } else {
-        setMedia([]);
       }
-    } catch {
-      setMedia([]);
     } finally {
       setMediaLoading(false);
     }
@@ -353,6 +337,7 @@ export default function GratitudePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, photosEnabled]);
 
+  /** Uploads */
   async function onMediaFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!userId || !files.length) return;
@@ -361,15 +346,19 @@ export default function GratitudePage() {
       for (const f of files) {
         const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
         const path = `${userId}/${thisYear}/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase
-          .storage
-          .from("gratitude-media")
-          .upload(path, f, { cacheControl: "3600", upsert: false, contentType: f.type });
-        if (upErr) throw upErr;
-        const { error: insErr } = await supabase
-          .from("gratitude_media")
-          .insert({ user_id: userId, file_path: path, caption: null, favorite: false });
-        if (insErr) throw insErr;
+        const up = await supabase.storage.from("gratitude-media").upload(path, f, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: f.type,
+        });
+        if (up.error) throw up.error;
+        const ins = await supabase.from("gratitude_media").insert({
+          user_id: userId,
+          file_path: path,
+          caption: null,
+          favorite: false,
+        });
+        if (ins.error) throw ins.error;
       }
       (e.target as HTMLInputElement).value = "";
       await loadMedia();
@@ -379,86 +368,235 @@ export default function GratitudePage() {
       setUploading(false);
     }
   }
-  async function toggleFavorite(it: MediaItem) {
-    const { error } = await supabase
-      .from("gratitude_media")
-      .update({ favorite: !it.favorite })
-      .eq("id", it.id);
-    if (!error) setMedia(media.map((m) => (m.id === it.id ? { ...m, favorite: !m.favorite } : m)));
+  async function toggleFavorite(id: string, value: boolean) {
+    await supabase.from("gratitude_media").update({ favorite: !value }).eq("id", id);
+    setMedia((m) => m.map((x) => (x.id === id ? { ...x, favorite: !value } : x)));
   }
-  async function deleteMedia(it: MediaItem) {
-    const { error: sErr } = await supabase.storage.from("gratitude-media").remove([it.file_path]);
-    if (sErr) return alert(sErr.message || "Delete failed");
-    const { error: dErr } = await supabase.from("gratitude_media").delete().eq("id", it.id);
-    if (dErr) return alert(dErr.message || "Delete failed");
-    setMedia(media.filter((m) => m.id !== it.id));
+  async function deleteMedia(id: string, file_path: string) {
+    await supabase.storage.from("gratitude-media").remove([file_path]);
+    await supabase.from("gratitude_media").delete().eq("id", id);
+    setMedia((m) => m.filter((x) => x.id !== id));
   }
 
-  /** UI sections */
+  /** Theme computed */
+  const theme = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
 
-  // Cover: click the book → About
+  /** ─── UI blocks ─────────────────────────────────────── */
+
+  // 0) COVER — full-size book cover on sandy background
   const cover = (
-    <section className="card p-3" style={{ border: "1px solid rgba(196,181,253,.5)", borderRadius: 20 }}>
-      <div className="grid md:grid-cols-2 gap-5 items-center">
-        <button
-          onClick={() => setStage("about")}
-          className="w-full overflow-hidden rounded-2xl border"
-          style={{ borderColor: "#e5e7eb", boxShadow: "0 12px 28px rgba(0,0,0,.08)" }}
-          aria-label="Open Gratitude Journal"
+    <div
+      className="rounded-2xl p-6"
+      style={{
+        background: "#f6efe6",
+        border: "1px solid #eadfd1",
+      }}
+    >
+      <div className="max-w-4xl mx-auto">
+        <div
+          className="relative mx-auto overflow-hidden"
+          style={{
+            borderRadius: 18,
+            boxShadow: "0 18px 40px rgba(0,0,0,.18)",
+            border: "1px solid #e5e7eb",
+          }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/gratitude-cover.png" alt="Gratitude Journal cover" className="w-full h-auto" />
-        </button>
-        <div className="stack">
-          <h2 className="section-title" style={{ marginTop: 0 }}>Gratitude Journal</h2>
-          <p className="muted">
-            A calming place to notice your <em>glimmers</em>—the tiny, feel-good moments. Click the
-            book to learn more and activate your journal.
-          </p>
-          <div className="controls">
-            <button className="btn btn-brand" onClick={() => setStage("about")}>Open</button>
+          <img
+            src="/images/gratitude-cover.png"
+            alt="Gratitude Journal cover"
+            className="w-full h-auto block"
+            onError={(e) => {
+              // quick visual fallback
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+          {/* Fallback if image missing */}
+          <div
+            className="absolute inset-0 hidden items-center justify-center text-white"
+            style={{ background: "linear-gradient(120deg,#5B2A86,#FF6A3D)" }}
+          >
+            <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: 1 }}>Gratitude Journal</div>
+          </div>
+          <button
+            onClick={() => setStage("book_intro")}
+            className="absolute bottom-4 right-4 btn btn-brand"
+            aria-label="Open the journal"
+          >
+            Open
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 1) BOOK INTRO — left page: your explanation, right page: activation options
+  const bookIntro = (
+    <div
+      className="rounded-2xl p-4 md:p-6"
+      style={{
+        background: "#f6efe6",
+        border: "1px solid #eadfd1",
+      }}
+    >
+      <div className="max-w-5xl mx-auto relative">
+        {/* book shell */}
+        <div
+          className="relative grid md:grid-cols-2 gap-0 rounded-[20px] overflow-hidden"
+          style={{
+            boxShadow: "0 18px 40px rgba(0,0,0,.18)",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          {/* spine */}
+          <div
+            className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[6px]"
+            style={{
+              background: "linear-gradient(180deg,#d3c4af,#e8dccb)",
+              boxShadow: "inset 0 0 6px rgba(0,0,0,.12)",
+              zIndex: 2,
+            }}
+          />
+          {/* left page */}
+          <div
+            className="p-5 sm:p-7"
+            style={{ background: "#fffdf8", borderRight: "1px solid #eadfd1" }}
+          >
+            <h2 className="section-title" style={{ marginTop: 0 }}>Gratitude Journal</h2>
+            <p style={{ whiteSpace: "pre-wrap" }}>
+{`Your brain is naturally wired to notice the negative—it’s part of how it keeps you safe. But with just a little practice, you can retrain your mind to see the positives all around you. This gratitude journal is designed to help you do exactly that.
+
+Each day, you’ll be guided to write down three things you’re thankful for. They can be as simple as a smile from a stranger, a moment of peace, or as detailed as a story that brought you joy. Over time, these small daily shifts rewire your brain, helping you create a more positive outlook and a deeper sense of well-being.
+
+To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.`}
+            </p>
+            <p>
+              Want to make your journey even more special? For just <strong>$2.99</strong>,
+              you can add photos to your entries and get a personalized end-of-year slideshow—a visual celebration
+              of your most beautiful moments.
+            </p>
+          </div>
+
+          {/* right page */}
+          <div className="p-5 sm:p-7" style={{ background: "#fffdf8" }}>
+            <h3 className="section-title" style={{ marginTop: 0 }}>Choose how you’d like to start</h3>
+
+            <div className="grid gap-3">
+              {/* Free */}
+              <label className="rounded-2xl border p-3 cursor-pointer">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="plan"
+                    checked={selectedPlan === "free"}
+                    onChange={() => setSelectedPlan("free")}
+                    style={{ marginTop: 4 }}
+                  />
+                  <div>
+                    <div className="font-medium">Free journal</div>
+                    <div className="muted text-sm">
+                      Daily entries, reminders, and weekly/monthly/yearly recaps.
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+              {/* Photos add-on */}
+              <label className="rounded-2xl border p-3 cursor-pointer">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="plan"
+                    checked={selectedPlan === "photos"}
+                    onChange={() => setSelectedPlan("photos")}
+                    style={{ marginTop: 4 }}
+                  />
+                  <div>
+                    <div className="font-medium">Photos + Slideshow <span className="opacity-70">($2.99 one-time)</span></div>
+                    <div className="muted text-sm">
+                      Attach photos to entries, star favorites, and enjoy a year-end slideshow.
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+              {/* Healing Journal */}
+              <label className="rounded-2xl border p-3 cursor-pointer">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="plan"
+                    checked={selectedPlan === "healing"}
+                    onChange={() => setSelectedPlan("healing")}
+                    style={{ marginTop: 4 }}
+                  />
+                  <div>
+                    <div className="font-medium">
+                      30-Day Healing Journal <span className="opacity-70">($9.99)</span>
+                    </div>
+                    <div className="muted text-sm">
+                      Step-by-step prompts, reflections, and gentle education to move through stuck places.
+                    </div>
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {/* Theme pick (small preview) */}
+            <div className="mt-4">
+              <div className="muted text-sm mb-1">Pick a page theme</div>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(THEMES) as ThemeKey[]).map((t) => {
+                  const th = THEMES[t]; const active = pickedTheme === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setPickedTheme(t)}
+                      className="rounded-xl border px-3 py-2 capitalize"
+                      style={{
+                        borderColor: active ? th.accent : "#e5e7eb",
+                        boxShadow: active ? `0 0 0 3px ${th.accent}33` : "none",
+                      }}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="controls mt-4">
+              <button
+                className="btn btn-brand"
+                onClick={() => {
+                  if (selectedPlan === "healing") {
+                    // route placeholder for now
+                    window.location.href = "/gratitude/healing";
+                    return;
+                  }
+                  setStage("theme");
+                }}
+              >
+                Continue
+              </button>
+              <button className="btn btn-neutral" onClick={() => setStage("cover")}>
+                Back
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 
-  // About: explanation → Activate
-  const about = (
+  // 2) THEME CONFIRM → activates
+  const themeConfirm = (
     <section className="card p-3" style={{ borderRadius: 20 }}>
-      <div className="stack">
-        <h2 className="section-title" style={{ marginTop: 0 }}>What this journal is about</h2>
-        <p>
-          Gratitude reshapes attention. When you <strong>feel</strong> gratitude—not just write the words—your
-          nervous system learns to scan for the good. We use <strong>glimmers</strong>: the opposite of triggers.
-          A glimmer is a small embodied lift—a warm mug, a kind glance, a pet’s stretch, a deep breath that lands.
-        </p>
-        <p>
-          Each day you’ll add <strong>three glimmers</strong>. Write a word, a sentence, or let it spill for pages.
-          Weekly (or monthly/yearly) you’ll see a gentle recap so you can look back and notice how much light arrived.
-        </p>
-        <div className="rounded-xl border px-3 py-2" style={{ borderColor: "#e5e7eb", background: "#fafafa" }}>
-          <div className="muted" style={{ fontSize: 12 }}>
-            Tip: Close your eyes and ask, “Where did I feel a tiny lift today?” Feel it in the body, then write.
-          </div>
-        </div>
-        <div className="controls" style={{ marginTop: 6 }}>
-          <button className="btn btn-brand" onClick={() => setStage("theme")}>Activate journal</button>
-          <button className="btn btn-neutral" onClick={() => setStage("cover")}>Back</button>
-        </div>
-      </div>
-    </section>
-  );
-
-  // Theme picker
-  const themePick = (
-    <section className="card p-3" style={{ borderRadius: 20 }}>
-      <h2 className="section-title" style={{ marginTop: 0 }}>Choose your theme</h2>
-      <p className="muted">Pick a vibe for your pages. You can change this later.</p>
+      <h2 className="section-title" style={{ marginTop: 0 }}>Confirm your theme</h2>
+      <p className="muted">You can change this later in the journal.</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {(Object.keys(THEMES) as ThemeKey[]).map((t) => {
-          const th = THEMES[t];
-          const active = pickedTheme === t;
+          const th = THEMES[t]; const active = pickedTheme === t;
           return (
             <button
               key={t}
@@ -468,7 +606,6 @@ export default function GratitudePage() {
                 borderColor: active ? th.accent : "#e5e7eb",
                 boxShadow: active ? `0 0 0 3px ${th.accent}33` : "none",
               }}
-              aria-pressed={active}
             >
               <div className="rounded-xl overflow-hidden border" style={{ borderColor: "#e5e7eb" }}>
                 <div style={{ height: 46, background: th.leftBg }} />
@@ -481,39 +618,14 @@ export default function GratitudePage() {
       </div>
       <div className="controls" style={{ marginTop: 10 }}>
         <button className="btn btn-brand" onClick={() => activateWithTheme(pickedTheme)} disabled={saving}>
-          {saving ? "Activating…" : "Save & continue"}
+          {saving ? "Activating…" : "Activate journal"}
         </button>
-        <button className="btn btn-neutral" onClick={() => setStage("about")}>Back</button>
+        <button className="btn btn-neutral" onClick={() => setStage("book_intro")}>Back</button>
       </div>
     </section>
   );
 
-  // Instructions
-  const instructions = (
-    <section
-      className="card p-3"
-      style={{
-        border: `1px solid ${THEMES[settings?.theme ?? pickedTheme].border}`,
-        borderRadius: 20,
-        background: "#fff",
-      }}
-    >
-      <div className="stack">
-        <h2 className="section-title" style={{ marginTop: 0 }}>How it works</h2>
-        <ol className="stack" style={{ gap: 8 }}>
-          <li><strong>Every day</strong>, jot down <strong>three glimmers</strong>.</li>
-          <li>Let yourself <strong>feel</strong> the gratitude for a few seconds before/after writing.</li>
-          <li>Write a word, a sentence, or as many pages as you want—whatever feels right.</li>
-          <li>Use the recap (weekly/monthly/yearly) to reinforce how much goodness showed up.</li>
-        </ol>
-        <div className="controls">
-          <button className="btn btn-brand" onClick={() => setStage("journal")}>Start journaling</button>
-        </div>
-      </div>
-    </section>
-  );
-
-  // Book (journal)
+  // 3) JOURNAL BOOK (same as before, with recap & photos section)
   const book = (
     <section
       className="card p-3"
@@ -524,22 +636,17 @@ export default function GratitudePage() {
         position: "relative",
       }}
     >
-      {/* Candle placeholder (only if user actually has one) */}
       {hasCandle && (
         <div title="Meditation candle" style={{ position: "absolute", top: 8, right: 10, fontSize: 22, opacity: 0.9 }}>
           🕯️
         </div>
       )}
 
-      {/* Two-page spread */}
       <div className="grid md:grid-cols-2 gap-6 items-start">
-        {/* Left page: philosophy + recap */}
+        {/* Left: recap + prefs */}
         <div className="rounded-xl border p-4" style={{ background: theme.leftBg, borderColor: theme.border }}>
           <h2 className="section-title" style={{ marginTop: 0 }}>Feel your glimmers</h2>
-          <p>
-            Gratitude works best when you <strong>feel</strong> it—notice the body’s tiny shift: a breath loosening,
-            shoulders dropping, a quiet smile. That’s the glimmer.
-          </p>
+          <p>Close your eyes for a moment and notice where a tiny lift shows up in your body—then write from there.</p>
 
           <div className="stack" style={{ marginTop: 10 }}>
             <h3 className="section-title" style={{ fontSize: 16 }}>Recap preference</h3>
@@ -555,30 +662,20 @@ export default function GratitudePage() {
                 </button>
               ))}
             </div>
-            <p className="muted" style={{ fontSize: 12 }}>
-              Weekly is recommended; monthly/yearly are available too.
-            </p>
+            <p className="muted" style={{ fontSize: 12 }}>Weekly is recommended; monthly/yearly are available too.</p>
           </div>
 
           <div className="stack" style={{ marginTop: 14 }}>
             <h3 className="section-title" style={{ fontSize: 16, margin: 0 }}>
-              {settings?.recap_frequency === "weekly"
-                ? "This week’s"
-                : settings?.recap_frequency === "monthly"
-                ? "This month’s"
-                : "This year’s"}{" "}
-              recap
+              {settings?.recap_frequency === "weekly" ? "This week’s"
+                : settings?.recap_frequency === "monthly" ? "This month’s" : "This year’s"} recap
             </h3>
             {recapItems.length === 0 ? (
               <p className="muted">Your recap will appear as you add entries.</p>
             ) : (
               <ul className="stack" style={{ gap: 6 }}>
                 {recapItems.map((r) => (
-                  <li
-                    key={r.id}
-                    className="rounded-xl border px-3 py-2"
-                    style={{ borderColor: "#e5e7eb", background: "#fff" }}
-                  >
+                  <li key={r.id} className="rounded-xl border px-3 py-2" style={{ borderColor: "#e5e7eb", background: "#fff" }}>
                     <div className="muted" style={{ fontSize: 12 }}>
                       {r.when.toLocaleDateString([], { month: "short", day: "numeric" })}
                     </div>
@@ -590,7 +687,7 @@ export default function GratitudePage() {
           </div>
         </div>
 
-        {/* Right page: today's entries */}
+        {/* Right: today */}
         <div className="rounded-xl border p-4" style={{ background: theme.rightBg, borderColor: "#e5e7eb" }}>
           <div className="section-row" style={{ marginBottom: 8 }}>
             <h2 className="section-title" style={{ margin: 0 }}>Today</h2>
@@ -611,24 +708,18 @@ export default function GratitudePage() {
           </div>
 
           {error && (
-            <div
-              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-              style={{ marginTop: 10 }}
-            >
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" style={{ marginTop: 10 }}>
               {error}
             </div>
           )}
 
-          {/* Today list */}
           {todayList.length > 0 && (
             <div className="stack" style={{ marginTop: 12 }}>
               {todayList.map((e) => (
                 <div key={e.id} className="rounded-xl border px-3 py-2" style={{ borderColor: "#e5e7eb", background: "#fff" }}>
                   <div className="flex items-start justify-between gap-3">
                     <div style={{ whiteSpace: "pre-wrap" }}>{e.content}</div>
-                    <button className="btn btn-neutral" onClick={() => removeEntry(e.id)} disabled={saving}>
-                      Delete
-                    </button>
+                    <button className="btn btn-neutral" onClick={() => removeEntry(e.id)} disabled={saving}>Delete</button>
                   </div>
                   <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                     {new Date(e.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -640,7 +731,7 @@ export default function GratitudePage() {
         </div>
       </div>
 
-      {/* Photos add-on card (below the spread) */}
+      {/* Photos area */}
       <div className="stack" style={{ marginTop: 16 }}>
         {!photosEnabled ? (
           <section className="card p-3">
@@ -650,7 +741,6 @@ export default function GratitudePage() {
                 className="btn btn-brand"
                 onClick={async () => {
                   if (!userId) return;
-                  // DEV shortcut: enable immediately (replace with Stripe checkout later)
                   await supabase
                     .from("user_addons")
                     .upsert(
@@ -663,23 +753,13 @@ export default function GratitudePage() {
                 Enable for $2.99
               </button>
             </div>
-            <p className="muted">
-              Add photos to your journal and star favorites. At year’s end, enjoy a fullscreen slideshow of your
-              favorite memories.
-            </p>
+            <p className="muted">Attach photos, star favorites, and watch your year-end slideshow.</p>
           </section>
         ) : (
           <section className="card p-3">
-            <div className="section-row">
-              <h2 className="section-title">Photos</h2>
-              <a className="btn btn-neutral" href={slideUrl} target="_blank" rel="noreferrer">
-                Open {thisYear} slideshow
-              </a>
-            </div>
-
+            <h2 className="section-title">Photos</h2>
             <input type="file" accept="image/*" multiple onChange={onMediaFiles} disabled={uploading} />
             {uploading && <p className="muted">Uploading…</p>}
-
             {mediaLoading ? (
               <p className="muted">Loading photos…</p>
             ) : media.length === 0 ? (
@@ -693,13 +773,12 @@ export default function GratitudePage() {
                     <div className="flex items-center justify-between px-2 py-1 text-sm">
                       <button
                         className="underline"
-                        onClick={() => toggleFavorite(it)}
-                        title={it.favorite ? "Unfavorite" : "Favorite"}
+                        onClick={() => toggleFavorite(it.id, it.favorite)}
                         style={{ color: it.favorite ? theme.accent : undefined }}
                       >
                         {it.favorite ? "★ Favorite" : "☆ Favorite"}
                       </button>
-                      <button className="underline" onClick={() => deleteMedia(it)} style={{ color: "#ef4444" }}>
+                      <button className="underline" onClick={() => deleteMedia(it.id, it.file_path)} style={{ color: "#ef4444" }}>
                         Delete
                       </button>
                     </div>
@@ -718,7 +797,6 @@ export default function GratitudePage() {
       <SiteHeader />
       <div className="page">
         <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {/* top header row */}
           <div className="header-bar">
             <h1 className="page-title" style={{ marginBottom: 0 }}>Gratitude Journal</h1>
             <div className="controls">
@@ -728,11 +806,9 @@ export default function GratitudePage() {
           <div className="h-px" style={{ background: "rgba(196,181,253,.6)", margin: "12px 0 16px" }} />
 
           {loading && <p className="muted">Loading…</p>}
-
           {!loading && stage === "cover" && cover}
-          {!loading && stage === "about" && about}
-          {!loading && stage === "theme" && themePick}
-          {!loading && stage === "instructions" && instructions}
+          {!loading && stage === "book_intro" && bookIntro}
+          {!loading && stage === "theme" && themeConfirm}
           {!loading && stage === "journal" && book}
         </div>
       </div>
