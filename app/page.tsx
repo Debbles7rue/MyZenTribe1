@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function HomePage() {
   const LOGO_SRC = "/logo-myzentribe.png";
-
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
@@ -28,47 +27,58 @@ export default function HomePage() {
         <img
           src={LOGO_SRC}
           alt="MyZenTribe Logo"
-          className="mx-auto mb-6 h-16 w-auto"
+          className="mx-auto mb-8 h-24 w-auto"
           loading="lazy"
         />
 
-        {/* Headline */}
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Welcome to <span className="text-brand-600">MyZenTribe</span>
-        </h1>
+        {/* Card 1: Welcome + short blurb (white box) */}
+        <div className="mx-auto max-w-3xl rounded-2xl border border-neutral-200 bg-white p-8 shadow">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            Welcome to <span className="text-brand-600">MyZenTribe</span>
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-base text-neutral-700">
+            A space to connect, recharge, and share what matters. From daily mindfulness and
+            gratitude practices to meaningful events, MyZenTribe makes it easy to find your people
+            and build something good together.
+          </p>
 
-        <p className="mx-auto mt-3 max-w-3xl text-base text-neutral-700">
-          A space to connect, recharge, and share what matters. From daily mindfulness and
-          gratitude practices to meaningful events, MyZenTribe makes it easy to find your people
-          and build something good together.
-        </p>
-
-        {/* Primary CTAs */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          {!signedIn ? (
-            <>
-              <Link href="/signin" className="btn btn-brand">Sign in</Link>
-              <Link href="/signin" className="btn btn-neutral">Create profile</Link>
-            </>
-          ) : (
-            <>
-              <Link href="/calendar" className="btn btn-brand">Go to Calendar</Link>
-              <Link href="/profile" className="btn btn-neutral">Open Profile</Link>
-            </>
-          )}
+          {/* Primary CTAs (centered buttons) */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            {!signedIn ? (
+              <>
+                <Link href="/signin" className="btn btn-brand">
+                  Sign in
+                </Link>
+                <Link href="/signin" className="btn btn-neutral">
+                  Create profile
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/calendar" className="btn btn-brand">
+                  Go to Calendar
+                </Link>
+                <Link href="/profile" className="btn btn-neutral">
+                  Open Profile
+                </Link>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Our Intention card */}
-        <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-neutral-200 bg-white p-6 text-left shadow">
+        {/* Card 2: Our Intention (white box with button inside) */}
+        <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-neutral-200 bg-white p-8 text-left shadow">
           <h2 className="text-2xl font-semibold">Our Intention</h2>
           <p className="mt-3 text-neutral-700">
-            To bring people together across local and global communities, support talented
-            small businesses, and encourage every member to play a part in making the world a
-            better place.
+            To bring people together across local and global communities, support talented small
+            businesses, and encourage every member to play a part in making the world a better
+            place.
           </p>
 
           <div className="mt-5">
-            <Link href="/good-vibes" className="btn btn-brand">Our Commitment</Link>
+            <Link href="/good-vibes" className="btn btn-brand">
+              Our Commitment
+            </Link>
           </div>
         </div>
       </section>
