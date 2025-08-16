@@ -3,7 +3,9 @@
 
 import Link from "next/link";
 
-const COMMITMENTS = [
+type Commitment = { title: string; body: string };
+
+const COMMITMENTS: Commitment[] = [
   {
     title: "No Ads. Ever.",
     body:
@@ -35,9 +37,18 @@ export default function CommitmentPage() {
   return (
     <div className="lavender-page">
       <div className="home-wrap">
-        {/* Simple Home tab/button */}
-        <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 4 }}>
-          <Link href="/" className="btn btn-neutral">Home</Link>
+        {/* Centered Home button */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            paddingTop: 12,
+            paddingBottom: 4,
+          }}
+        >
+          <Link href="/" className="btn btn-neutral">
+            Home
+          </Link>
         </div>
 
         <div className="hero-inner" style={{ paddingTop: 24, paddingBottom: 8 }}>
@@ -45,4 +56,29 @@ export default function CommitmentPage() {
             Our <span className="zen">Commitment</span>
           </h1>
           <p className="hero-text">
-            At MyZenTribe, we believe connection, community, and kindness should never be overshadowed by distractions or profit-driven agendas. That’s
+            At MyZenTribe, we believe connection, community, and kindness should never be
+            overshadowed by distractions or profit-driven agendas. That’s why we’ve built this
+            platform with a clear commitment to our members:
+          </p>
+        </div>
+
+        <div className="commit-stack">
+          {COMMITMENTS.map((item) => (
+            <article key={item.title} className="commit-long">
+              <h3 className="commit-title">{item.title}</h3>
+              <p className="commit-text">{item.body}</p>
+            </article>
+          ))}
+        </div>
+
+        <p
+          className="hero-text"
+          style={{ marginTop: "2rem", textAlign: "center", fontWeight: 500 }}
+        >
+          💜 Together, we can make this a space where meaningful connections grow, ideas flourish,
+          and kindness leads the way.
+        </p>
+      </div>
+    </div>
+  );
+}
