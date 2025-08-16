@@ -1,5 +1,6 @@
 "use client";
 
+import { TERMS_VERSION } from "@/lib/terms";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
