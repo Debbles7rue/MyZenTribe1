@@ -1,3 +1,4 @@
+/* app/gratitude/page.tsx */
 "use client";
 
 import SiteHeader from "@/components/SiteHeader";
@@ -122,10 +123,10 @@ export default function GratitudePage() {
           .maybeSingle();
 
         if (s) {
-          const theme = (s.theme || "lavender") as ThemeKey;
+          const themeName = (s.theme || "lavender") as ThemeKey;
           const rec = (s.recap_frequency || "weekly") as Settings["recap_frequency"];
-          setSettings({ user_id: s.user_id, activated: !!s.activated, recap_frequency: rec, theme });
-          setPickedTheme(theme);
+          setSettings({ user_id: s.user_id, activated: !!s.activated, recap_frequency: rec, theme: themeName });
+          setPickedTheme(themeName);
           setStage(s.activated ? "journal" : "cover");
         } else {
           setSettings({
@@ -158,7 +159,7 @@ export default function GratitudePage() {
           .maybeSingle();
         setPhotosEnabled(!!addons?.photos_enabled);
 
-        // candle placeholder
+        // candle placeholder (ignore if table doesn’t exist yet)
         try {
           const { data: candles } = await supabase
             .from("meditation_candles")
@@ -179,13 +180,13 @@ export default function GratitudePage() {
   }, [userId, today]);
 
   /** Activate with theme and plan */
-  async function activateWithTheme(theme: ThemeKey) {
+  async function activateWithTheme(themeKey: ThemeKey) {
     if (!userId) return;
     setSaving(true);
     setError(null);
     try {
       // settings
-      const payload = { user_id: userId, activated: true, recap_frequency: "weekly", theme };
+      const payload = { user_id: userId, activated: true, recap_frequency: "weekly", theme: themeKey };
       const { error: upErr } = await supabase
         .from("gratitude_settings")
         .upsert(payload, { onConflict: "user_id" });
@@ -202,7 +203,7 @@ export default function GratitudePage() {
         setPhotosEnabled(true);
       }
 
-      setSettings({ user_id: userId, activated: true, recap_frequency: "weekly", theme });
+      setSettings({ user_id: userId, activated: true, recap_frequency: "weekly", theme: themeKey });
       setStage("journal");
     } catch (e: any) {
       setError(e?.message || "Activation failed.");
@@ -374,15 +375,14 @@ export default function GratitudePage() {
   async function deleteMedia(id: string, file_path: string) {
     await supabase.storage.from("gratitude-media").remove([file_path]);
     await supabase.from("gratitude_media").delete().eq("id", id);
-    setMedia((m) => m.filter((x) => x.id !== id));
+    setMedia((m) => m.filter((x) => x.id != id));
   }
 
-  /** Theme computed */
-  const theme = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
+  /** Theme palette (rename avoids duplicate-name error) */
+  const palette = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
 
   /** ─── UI blocks ─────────────────────────────────────── */
 
-  // 0) COVER — full-size cover on sandy background (no weird fallback overlay)
   const [coverError, setCoverError] = useState(false);
   const cover = (
     <div
@@ -398,8 +398,8 @@ export default function GratitudePage() {
             border: "1px solid #e5e7eb",
           }}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           {!coverError ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src="/images/gratitude-cover.png"
               alt="Gratitude Journal cover"
@@ -434,7 +434,6 @@ export default function GratitudePage() {
     </div>
   );
 
-  // 1) BOOK INTRO — left page explanation, right page activation (no Healing Journal)
   const bookIntro = (
     <div
       className="rounded-2xl p-4 md:p-6"
@@ -477,7 +476,6 @@ Want to make your journey even more special? For just $2.99, you can add photos 
             <h3 className="section-title" style={{ marginTop: 0 }}>Choose how you’d like to start</h3>
 
             <div className="grid gap-3">
-              {/* Free */}
               <label className="rounded-2xl border p-3 cursor-pointer">
                 <div className="flex items-start gap-3">
                   <input
@@ -496,7 +494,6 @@ Want to make your journey even more special? For just $2.99, you can add photos 
                 </div>
               </label>
 
-              {/* Photos add-on */}
               <label className="rounded-2xl border p-3 cursor-pointer">
                 <div className="flex items-start gap-3">
                   <input
@@ -516,7 +513,6 @@ Want to make your journey even more special? For just $2.99, you can add photos 
               </label>
             </div>
 
-            {/* Theme pick */}
             <div className="mt-4">
               <div className="muted text-sm mb-1">Pick a page theme</div>
               <div className="flex flex-wrap gap-2">
@@ -549,7 +545,6 @@ Want to make your journey even more special? For just $2.99, you can add photos 
     </div>
   );
 
-  // 2) THEME CONFIRM → activates
   const themeConfirm = (
     <section className="card p-3" style={{ borderRadius: 20 }}>
       <h2 className="section-title" style={{ marginTop: 0 }}>Confirm your theme</h2>
@@ -585,14 +580,11 @@ Want to make your journey even more special? For just $2.99, you can add photos 
     </section>
   );
 
-  // 3) JOURNAL BOOK
-  const theme = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
-
   const book = (
     <section
       className="card p-3"
       style={{
-        border: `1px solid ${theme.border}`,
+        border: `1px solid ${palette.border}`,
         background: "#fff",
         borderRadius: 20,
         position: "relative",
@@ -606,7 +598,7 @@ Want to make your journey even more special? For just $2.99, you can add photos 
 
       <div className="grid md:grid-cols-2 gap-6 items-start">
         {/* Left: recap + prefs */}
-        <div className="rounded-xl border p-4" style={{ background: theme.leftBg, borderColor: theme.border }}>
+        <div className="rounded-xl border p-4" style={{ background: palette.leftBg, borderColor: palette.border }}>
           <h2 className="section-title" style={{ marginTop: 0 }}>Feel your glimmers</h2>
           <p>Close your eyes for a moment and notice where a tiny lift shows up in your body—then write from there.</p>
 
@@ -650,7 +642,7 @@ Want to make your journey even more special? For just $2.99, you can add photos 
         </div>
 
         {/* Right: today */}
-        <div className="rounded-xl border p-4" style={{ background: theme.rightBg, borderColor: "#e5e7eb" }}>
+        <div className="rounded-xl border p-4" style={{ background: palette.rightBg, borderColor: "#e5e7eb" }}>
           <div className="section-row" style={{ marginBottom: 8 }}>
             <h2 className="section-title" style={{ margin: 0 }}>Today</h2>
             <div className="muted">Glimmers: {todayList.length}/3</div>
@@ -736,7 +728,7 @@ Want to make your journey even more special? For just $2.99, you can add photos 
                       <button
                         className="underline"
                         onClick={() => toggleFavorite(it.id, it.favorite)}
-                        style={{ color: it.favorite ? theme.accent : undefined }}
+                        style={{ color: it.favorite ? palette.accent : undefined }}
                       >
                         {it.favorite ? "★ Favorite" : "☆ Favorite"}
                       </button>
