@@ -1,5 +1,6 @@
 "use client";
 
+import { TERMS_VERSION } from "@/lib/terms";
 import SiteHeader from "@/components/SiteHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
