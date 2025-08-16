@@ -1,531 +1,299 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
-import SiteHeader from "@/components/SiteHeader";
+import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 
-/** Types */
-type Kind = "karma" | "news";
-type GoodNewsType = "personal" | "kindness" | "link" | "shoutout";
+type Tab = "karma" | "good";
 
-type IPost = {
+type PostRow = {
   id: string;
   user_id: string;
-  type: GoodNewsType;
+  kind: Tab;
   title: string | null;
   content: string;
-  link_url: string | null;
-  image_url: string | null;
-  anonymous: boolean;
-  created_at: string;
+  is_anonymous: boolean;
+  created_at: string; // ISO
 };
 
-type IReaction = {
-  id: string;
-  post_id: string;
-  user_id: string;
-  emoji: string;
+type ReactionCount = Record<string, number>;
+
+const pageBg: React.CSSProperties = {
+  background: "linear-gradient(180deg, #EAFBF3 0%, #F4FFF9 100%)",
+  minHeight: "100vh",
 };
 
-type IComment = {
-  id: string;
-  post_id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-};
+const cardTitle: React.CSSProperties = { fontWeight: 700, marginBottom: 6 };
 
-/** simple politics guard */
-const POLITICS_WORDS = [
-  "politic","election","president","vote","ballot","campaign","congress","senate","house",
-  "democrat","republican","gop","left","right","liberal","conservative",
-  "biden","trump","kamala","harris","pence","obama","clinton",
-  "israel","palestine","gaza","ukraine","russia","war"
-];
-function looksPolitical(text: string, url: string) {
-  const hay = (text + " " + (url || "")).toLowerCase();
-  return POLITICS_WORDS.some((w) => hay.includes(w));
-}
-
-/** Inline anonymous comments */
-function SupportComments({ postId, userId }: { postId: string; userId: string | null }) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<IComment[]>([]);
-  const [text, setText] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function fetchComments() {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error } = await supabase
-        .from("good_news_comments")
-        .select("*")
-        .eq("post_id", postId)
-        .order("created_at", { ascending: true })
-        .limit(100);
-      if (error) throw error;
-      setItems((data ?? []) as IComment[]);
-    } catch (e: any) {
-      setError(e?.message || "Could not load comments.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function addComment() {
-    if (!userId) {
-      alert("Please sign in to comment.");
-      return;
-    }
-    const content = text.trim();
-    if (!content) return;
-    if (content.length > 500) {
-      alert("Please keep comments under 500 characters.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const { data, error } = await supabase
-        .from("good_news_comments")
-        .insert([{ post_id: postId, user_id: userId, content }])
-        .select("*")
-        .single();
-      if (error) throw error;
-      setItems((prev) => [...prev, data as IComment]);
-      setText("");
-    } catch (e: any) {
-      setError(e?.message || "Could not add comment.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeComment(id: string) {
-    if (!userId) return;
-    try {
-      const { error } = await supabase
-        .from("good_news_comments")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", userId);
-      if (error) throw error;
-      setItems((prev) => prev.filter((c) => c.id !== id));
-    } catch (e: any) {
-      alert(e?.message || "Could not delete comment.");
-    }
-  }
-
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && items.length === 0) fetchComments();
-  }
-
-  return (
-    <div className="mt-2">
-      <button className="btn btn-neutral" onClick={toggle} type="button">
-        {open ? "Hide support" : "Support"}
-      </button>
-
-      {open && (
-        <div
-          className="rounded-xl p-3 mt-2"
-          style={{ background: "#E9FFF2", border: "1px solid #c6f6d5" }}
-        >
-          {loading && <p className="muted">Loading support…</p>}
-          {!loading && items.length === 0 && (
-            <p className="muted">Be the first to leave a kind word 💚</p>
-          )}
-
-          {!loading &&
-            items.map((c) => (
-              <div key={c.id} className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <div className="muted text-xs">
-                    Anonymous • {new Date(c.created_at).toLocaleString([], { month: "short", day: "numeric" })}
-                  </div>
-                  <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
-                </div>
-                {userId === c.user_id && (
-                  <button className="btn btn-neutral" onClick={() => removeComment(c.id)}>
-                    Delete
-                  </button>
-                )}
-              </div>
-            ))}
-
-          <div className="mt-2 grid gap-2">
-            <textarea
-              className="input"
-              rows={2}
-              placeholder="Leave a kind, supportive note…"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            <div className="right">
-              <button className="btn btn-brand" onClick={addComment} disabled={saving || !text.trim()}>
-                {saving ? "Sending…" : "Send support"}
-              </button>
-            </div>
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Main page */
 export default function KarmaPage() {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  // composer state
-  const [kind, setKind] = useState<Kind>("karma");
-  const [anonymous, setAnonymous] = useState(true); // forced true for karma
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
-
-  // data
-  const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState<IPost[]>([]);
-  const [reactions, setReactions] = useState<IReaction[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("karma");
 
   // auth
+  const [userId, setUserId] = useState<string | null>(null);
+  const [myName, setMyName] = useState<string>("You");
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    supabase.auth.getUser().then(async ({ data }) => {
+      const uid = data.user?.id ?? null;
+      setUserId(uid);
+      if (uid) {
+        const prof = await supabase.from("profiles").select("full_name").eq("id", uid).maybeSingle();
+        if (!prof.error && prof.data?.full_name) setMyName(prof.data.full_name);
+      }
+    });
   }, []);
 
-  // keep anonymity with kind
-  useEffect(() => {
-    setAnonymous(kind === "karma" ? true : false);
-  }, [kind]);
+  // composer
+  const [content, setContent] = useState("");
+  const [goodNewsAnon, setGoodNewsAnon] = useState<boolean>(true); // good-news only toggle
+  const [posting, setPosting] = useState(false);
+  const canPost = content.trim().length > 0 && !!userId;
 
-  // load posts + reactions
-  async function load() {
+  // feed
+  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<PostRow[]>([]);
+  const [supports, setSupports] = useState<ReactionCount>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data: p, error: pe } = await supabase
+      // Posts
+      const { data: rows, error: err } = await supabase
         .from("good_news_posts")
-        .select("*")
+        .select("id,user_id,kind,title,content,is_anonymous,created_at")
         .order("created_at", { ascending: false })
-        .limit(100);
-      if (pe) throw pe;
+        .limit(200);
+      if (err) throw err;
+      setPosts((rows ?? []) as PostRow[]);
 
-      setPosts((p ?? []) as IPost[]);
-
-      const ids = (p ?? []).map((x: any) => x.id);
-      if (ids.length) {
-        const { data: r, error: re } = await supabase
-          .from("good_news_reactions")
-          .select("id, post_id, user_id, emoji")
-          .in("post_id", ids);
-        if (re) throw re;
-        setReactions((r ?? []) as IReaction[]);
+      // Reaction counts (supports)
+      const { data: reacts, error: rErr } = await supabase
+        .from("good_news_reactions")
+        .select("post_id, count: post_id", { count: "exact", head: false });
+      // If your reactions table doesn't support this form, we'll fall back to grouping manually:
+      if (!rErr && Array.isArray(reacts)) {
+        const map: ReactionCount = {};
+        for (const r of reacts as any[]) {
+          const id = r.post_id as string;
+          map[id] = (map[id] ?? 0) + 1;
+        }
+        setSupports(map);
       } else {
-        setReactions([]);
+        // try manual grouping if needed
+        const { data: allRe, error: rAllErr } = await supabase
+          .from("good_news_reactions")
+          .select("post_id");
+        if (!rAllErr) {
+          const map: ReactionCount = {};
+          for (const r of (allRe ?? []) as any[]) {
+            const id = r.post_id as string;
+            map[id] = (map[id] ?? 0) + 1;
+          }
+          setSupports(map);
+        }
       }
     } catch (e: any) {
-      setError(e?.message || "Could not load the feed.");
+      setError(e?.message || "Could not load posts.");
     } finally {
       setLoading(false);
     }
-  }
-  useEffect(() => { load(); }, []);
+  }, []);
 
-  // reactions summary
-  const reactionsByPost = useMemo(() => {
-    const map = new Map<string, { count: number; mine: boolean }>();
-    for (const p of posts) map.set(p.id, { count: 0, mine: false });
-    for (const r of reactions) {
-      const it = map.get(r.post_id);
-      if (it) {
-        it.count += 1;
-        if (r.user_id === userId) it.mine = true;
-      }
-    }
-    return map;
-  }, [reactions, posts, userId]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  async function toggleStar(postId: string) {
-    if (!userId) {
-      alert("Please sign in to react.");
-      return;
-    }
-    const mine = reactions.find((r) => r.post_id === postId && r.user_id === userId && r.emoji === "🌟");
-    try {
-      if (mine) {
-        const { error } = await supabase
-          .from("good_news_reactions")
-          .delete()
-          .eq("id", mine.id)
-          .eq("user_id", userId);
-        if (error) throw error;
-        setReactions((prev) => prev.filter((r) => r.id !== mine.id));
-      } else {
-        const { data, error } = await supabase
-          .from("good_news_reactions")
-          .insert([{ post_id: postId, user_id: userId, emoji: "🌟" }])
-          .select()
-          .single();
-        if (error) throw error;
-        setReactions((prev) => [...prev, data as IReaction]);
-      }
-    } catch (e: any) {
-      alert(e?.message || "Could not update reaction.");
-    }
-  }
-
-  async function submitPost() {
-    if (!userId) {
-      alert("Please sign in to post.");
-      return;
-    }
-    const text = content.trim();
-    const ttl = title.trim() || null;
-    const link = linkUrl.trim() || null;
-    if (!text) return;
-
-    if (looksPolitical(`${ttl ?? ""} ${text}`, link ?? "")) {
-      setError("Thanks for sharing! Karma Corner is politics-free. Please rephrase or choose a different story.");
-      return;
-    }
-
-    setSaving(true);
+  // Post create
+  const onPost = async () => {
+    if (!canPost) return;
+    setPosting(true);
     setError(null);
     try {
-      const type: GoodNewsType =
-        kind === "news" ? (link ? "link" : "personal") : "kindness";
-
-      const payload = {
+      const isAnon = tab === "karma" ? true : !!goodNewsAnon;
+      const insert = {
         user_id: userId,
-        type,
-        title: ttl,
-        content: text,
-        link_url: link,
-        anonymous: kind === "karma" ? true : anonymous,
+        kind: tab,
+        title: null,
+        content: content.trim(),
+        is_anonymous: isAnon,
       };
-
-      const { data, error } = await supabase
+      const { data, error: err } = await supabase
         .from("good_news_posts")
-        .insert([payload])
-        .select("*")
+        .insert(insert)
+        .select("id,user_id,kind,title,content,is_anonymous,created_at")
         .single();
-      if (error) throw error;
-
-      setPosts((prev) => [data as IPost, ...prev]);
-      setTitle("");
+      if (err) throw err;
+      if (data) setPosts((prev) => [data as PostRow, ...prev]);
       setContent("");
-      setLinkUrl("");
-      setAnonymous(kind === "karma" ? true : false);
     } catch (e: any) {
-      setError(e?.message || "Could not post.");
+      setError(e?.message || "Posting failed.");
     } finally {
-      setSaving(false);
+      setPosting(false);
     }
-  }
+  };
 
-  async function deletePost(id: string, authorId: string) {
-    if (!userId || userId !== authorId) return;
+  // Delete own post
+  const onDelete = async (id: string, ownerId: string) => {
+    if (!userId || userId !== ownerId) return alert("You can only delete your own post.");
     if (!confirm("Delete this post?")) return;
-    try {
-      const { error } = await supabase
-        .from("good_news_posts")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", userId);
-      if (error) throw error;
-      setPosts((prev) => prev.filter((p) => p.id !== id));
-      setReactions((prev) => prev.filter((r) => r.post_id !== id));
-    } catch (e: any) {
-      alert(e?.message || "Delete failed.");
+    const { error: err } = await supabase.from("good_news_posts").delete().eq("id", id);
+    if (err) return alert(err.message || "Delete failed");
+    setPosts((prev) => prev.filter((p) => p.id !== id));
+    // remove any support counts we were showing
+    setSupports((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  // Support / reaction
+  const onSupport = async (id: string) => {
+    if (!userId) return;
+    // naive: allow multiple supports; if you add a unique constraint later, handle upsert
+    const { error: err } = await supabase
+      .from("good_news_reactions")
+      .insert({ post_id: id, user_id: userId });
+    if (err) {
+      // If uniqueness exists, we can just ignore duplicate
+      if (!`${err.message}`.toLowerCase().includes("duplicate")) {
+        return alert(err.message || "Could not support");
+      }
     }
-  }
+    setSupports((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+  };
+
+  // Filter by tab
+  const filtered = useMemo(() => posts.filter((p) => p.kind === tab), [posts, tab]);
 
   return (
-    <div className="page-wrap">
-      <SiteHeader />
-
-      {/* Mint gradient background */}
-      <div
-        className="page"
-        style={{ background: "linear-gradient(180deg, #F1FFF7 0%, #FFFFFF 70%)", minHeight: "100vh" }}
-      >
-        <div className="container-app mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Karma Corner</h1>
+    <div className="page-wrap" style={pageBg}>
+      <div className="page">
+        <div className="container-app">
+          <div className="header-bar" style={{ marginBottom: 12 }}>
+            <h1 className="page-title" style={{ marginBottom: 0 }}>
+              Karma Corner
+            </h1>
             <div className="controls">
-              <Link className="btn btn-neutral" href="/profile">Back to profile</Link>
+              <Link href="/profile" className="btn">
+                Back to profile
+              </Link>
             </div>
           </div>
 
-          <div
-            className="rounded-xl p-3 mb-3"
-            style={{ background: "#E9FFF2", border: "1px solid #c6f6d5" }}
-          >
-            <strong>Welcome!</strong> Share an act of kindness or a good-news story.
-            <div className="mt-1 text-sm" style={{ color: "#3f624f" }}>
-              <ul className="list-disc ml-5">
-                <li><b>Karma</b> posts are <i>always anonymous</i> (keeps the ego out).</li>
-                <li><b>Good News</b> can be anonymous or credited—your choice.</li>
-                <li><b>No politics.</b> This is a calm, uplifting space.</li>
-              </ul>
-            </div>
-          </div>
+          {/* Welcome blurb */}
+          <section className="card p-3" style={{ marginBottom: 12 }}>
+            <div style={cardTitle}>Welcome! Share an act of kindness or a good-news story.</div>
+            <ul className="muted" style={{ marginLeft: 18, listStyle: "disc" }}>
+              <li>
+                <strong>Karma</strong> posts are always anonymous (keep the ego out!).
+              </li>
+              <li>
+                <strong>Good News</strong> can be anonymous or credited to you.
+              </li>
+              <li>Kindness only. No politics.</li>
+            </ul>
+          </section>
 
-          {/* Composer */}
-          <section className="card p-3">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
+          {/* Tabs */}
+          <div className="card p-3" style={{ marginBottom: 12 }}>
+            <div className="controls" style={{ gap: 8, marginBottom: 10 }}>
               <button
-                className={`btn ${kind === "karma" ? "btn-brand" : "btn-neutral"}`}
-                onClick={() => setKind("karma")}
-                type="button"
+                className={`btn ${tab === "karma" ? "btn-brand" : "btn-neutral"}`}
+                onClick={() => setTab("karma")}
               >
                 Karma
               </button>
               <button
-                className={`btn ${kind === "news" ? "btn-brand" : "btn-neutral"}`}
-                onClick={() => setKind("news")}
-                type="button"
+                className={`btn ${tab === "good" ? "btn-brand" : "btn-neutral"}`}
+                onClick={() => setTab("good")}
               >
                 Good News
               </button>
             </div>
 
-            <div className="grid gap-3">
-              {kind === "news" && (
-                <input
-                  className="input"
-                  placeholder="Optional headline (e.g., 'Neighborhood builds free pantry')"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              )}
-
+            {/* Composer */}
+            <div className="stack">
               <textarea
                 className="input"
-                rows={kind === "news" ? 4 : 3}
+                rows={4}
                 placeholder={
-                  kind === "news"
-                    ? "Tell us the good news…"
-                    : "What kindness or challenge did you do? (kept anonymous)"
+                  tab === "karma"
+                    ? "What kindness or challenge did you do? (kept anonymous)"
+                    : "Share a good-news story or something uplifting…"
                 }
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
               />
-
-              {kind === "news" && (
-                <input
-                  className="input"
-                  placeholder="Optional link to article/story (https://…)"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                />
+              {tab === "good" ? (
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={goodNewsAnon}
+                    onChange={(e) => setGoodNewsAnon(e.target.checked)}
+                  />
+                  <span>Post anonymously</span>
+                </label>
+              ) : (
+                <div className="muted">
+                  Posting as: <strong>Anonymous</strong> (required for Karma)
+                </div>
               )}
-
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="text-sm" style={{ color: "#3f624f" }}>
-                  {kind === "karma" ? (
-                    <span><b>Posting as:</b> Anonymous (required for Karma)</span>
-                  ) : (
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={anonymous}
-                        onChange={(e) => setAnonymous(e.target.checked)}
-                      />
-                      <span>Post as <b>Anonymous</b></span>
-                    </label>
-                  )}
-                </div>
-                <div className="right">
-                  <button className="btn btn-brand" onClick={submitPost} disabled={saving || !content.trim()}>
-                    {saving ? "Posting…" : "Post"}
-                  </button>
-                </div>
-              </div>
 
               {error && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {error}
                 </div>
               )}
+
+              <div className="controls">
+                <button
+                  className="btn btn-brand"
+                  onClick={onPost}
+                  disabled={!canPost || posting}
+                  aria-disabled={!canPost || posting}
+                >
+                  {posting ? "Posting…" : "Post"}
+                </button>
+              </div>
             </div>
-          </section>
+          </div>
 
           {/* Feed */}
-          <div className="stack" style={{ marginTop: 12 }}>
+          <section className="stack">
             {loading && <p className="muted">Loading…</p>}
-            {!loading && posts.length === 0 && (
-              <p className="muted">Be the first to share something beautiful ✨</p>
+            {!loading && filtered.length === 0 && (
+              <div className="card p-3 muted">No posts yet. Be the first to share!</div>
             )}
 
-            {!loading &&
-              posts.map((p) => {
-                const rx = reactionsByPost.get(p.id) || { count: 0, mine: false };
-                const when = new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric" });
+            {filtered.map((p) => {
+              const when = format(new Date(p.created_at), "MMM d");
+              const who = p.is_anonymous ? "Anonymous" : myName;
+              const count = supports[p.id] ?? 0;
+              return (
+                <article key={p.id} className="card p-3">
+                  <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 6 }}>
+                    {p.kind === "karma" ? "Karma" : "Good News"} • {when} • {who}
+                  </div>
+                  {p.title && <h3 style={{ margin: "0 0 6px 0" }}>{p.title}</h3>}
+                  <div style={{ whiteSpace: "pre-wrap" }}>{p.content}</div>
 
-                const kindLabel =
-                  p.type === "link" ? "Good News"
-                  : p.type === "personal" ? "Good News"
-                  : "Karma";
-
-                const author = p.anonymous ? "Anonymous" : "Member";
-
-                return (
-                  <article key={p.id} className="card p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="w-full">
-                        <div className="muted text-xs uppercase tracking-wide mb-1">
-                          {kindLabel} • {when} • {author}
-                        </div>
-                        {p.title && <h3 style={{ margin: 0 }}>{p.title}</h3>}
-                        <div style={{ whiteSpace: "pre-wrap" }}>{p.content}</div>
-                        {p.link_url && (
-                          <div style={{ marginTop: 6 }}>
-                            <a className="underline text-sm" href={p.link_url} target="_blank" rel="noreferrer">
-                              Open link
-                            </a>
-                          </div>
-                        )}
-                      </div>
-
-                      {userId === p.user_id && (
-                        <button className="btn btn-neutral" onClick={() => deletePost(p.id, p.user_id)}>
-                          Delete
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 mt-2">
-                      <button
-                        className={`btn ${rx.mine ? "btn-brand" : "btn-neutral"}`}
-                        onClick={() => toggleStar(p.id)}
-                        type="button"
-                        aria-pressed={rx.mine}
-                      >
-                        🌟 {rx.count || ""}
+                  <div className="controls" style={{ marginTop: 10, gap: 8 }}>
+                    {userId === p.user_id && (
+                      <button className="btn btn-neutral" onClick={() => onDelete(p.id, p.user_id)}>
+                        Delete
                       </button>
-
-                      {/* Anonymous supportive comments */}
-                      <SupportComments postId={p.id} userId={userId} />
-                    </div>
-                  </article>
-                );
-              })}
-          </div>
+                    )}
+                    <button className="btn btn-neutral" onClick={() => onSupport(p.id)}>
+                      Support {count > 0 ? `(${count})` : ""}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
         </div>
       </div>
     </div>
