@@ -469,6 +469,23 @@ Each day, you’ll be guided to write down three things you’re thankful for. T
 
 To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.`}
             </p>
+
+            {/* NEW: clear, feel-first instructions */}
+            <div
+              className="rounded-xl border p-3 mt-3"
+              style={{ background: "#ffffff", borderColor: "#eadfd1" }}
+            >
+              <h4 style={{ margin: 0, fontWeight: 700 }}>How to practice (2 min)</h4>
+              <ol className="mt-2" style={{ paddingLeft: 18, lineHeight: 1.6 }}>
+                <li>Close your eyes. Take a slow breath in for 4, out for 6.</li>
+                <li><strong>Feel</strong> for a tiny lift in your body—a softening, warmth, ease. That’s a <em>glimmer</em>.</li>
+                <li>Open your eyes and write from that sensation. A word, a sentence, or a page—anything is enough.</li>
+                <li>Repeat up to <strong>{MAX_PER_DAY}</strong> times today. Small is powerful.</li>
+              </ol>
+              <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+                Tip: If you only have a word—write the word and breathe with it for one more slow breath.
+              </p>
+            </div>
           </div>
 
           {/* right page */}
