@@ -4,18 +4,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 /**
- * Drag to position. Scroll/pinch to zoom. Save to Supabase Storage "avatars".
- * - Preview area is a square (size px)
- * - We render the image as an absolutely-positioned <img> with translate + scale
- * - We clamp panning so you never see blank edges
- * - Export uses the same math to render a 512x512 PNG to the bucket
+ * Drag to position + wheel/pinch to zoom.
+ * Preview is a square "book frame". We pre-load the image (FileReader or URL)
+ * so it always renders, then export an exact 512x512 PNG to Supabase Storage.
  */
 type Props = {
   userId: string | null;
-  value?: string | null;           // current avatar_url
-  onChange?: (url: string) => void;
+  value?: string | null;            // profiles.avatar_url
+  onChange?: (url: string) => void; // called with public URL after save
   label?: string;
-  size?: number;                   // preview square size (px)
+  size?: number;                    // preview square size (px)
 };
 
 export default function AvatarUploader({
@@ -23,25 +21,29 @@ export default function AvatarUploader({
   value,
   onChange,
   label = "Profile photo",
-  size = 180,
+  size = 200,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const objUrlRef = useRef<string | null>(null);
-
+  // Preview image as a CSS background (reliable and fast for pan/zoom visuals)
   const [src, setSrc] = useState<string | null>(value ?? null);
-  const [imgW, setImgW] = useState<number>(0);
-  const [imgH, setImgH] = useState<number>(0);
+
+  // Natural dimensions of the actual image
+  const [imgW, setImgW] = useState(0);
+  const [imgH, setImgH] = useState(0);
+  const imgElRef = useRef<HTMLImageElement | null>(null); // used for export
+
+  // Ready flag -> only allow save once image has loaded
   const [ready, setReady] = useState(false);
 
   // Pan & zoom state
-  const [zoom, setZoom] = useState(1);            // 1..4 (multiplier on base "cover" scale)
-  const [dx, setDx] = useState(0);                // translation X in preview px
-  const [dy, setDy] = useState(0);                // translation Y in preview px
+  const [zoom, setZoom] = useState(1); // 1..4 (multiplies base "cover" scale)
+  const [dx, setDx] = useState(0);     // translation X within the square (px)
+  const [dy, setDy] = useState(0);     // translation Y within the square (px)
   const minZoom = 1;
   const maxZoom = 4;
 
-  // Derived: cover scale to ensure image fills the square at zoom=1
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Base scale to cover the square at zoom=1
   const baseScale = useMemo(() => {
     if (!imgW || !imgH) return 1;
     return Math.max(size / imgW, size / imgH);
@@ -50,68 +52,92 @@ export default function AvatarUploader({
   const scaledW = useMemo(() => imgW * baseScale * zoom, [imgW, baseScale, zoom]);
   const scaledH = useMemo(() => imgH * baseScale * zoom, [imgH, baseScale, zoom]);
 
-  // Clamp pan so no blank edges
+  // Clamp pan so you never see blank edges
   function clampPan(nx: number, ny: number) {
     const minX = Math.min(0, size - scaledW);
     const minY = Math.min(0, size - scaledH);
     const maxX = 0;
     const maxY = 0;
-    nx = Math.min(maxX, Math.max(minX, nx));
-    ny = Math.min(maxY, Math.max(minY, ny));
-    return { nx, ny };
+    return {
+      nx: Math.min(maxX, Math.max(minX, nx)),
+      ny: Math.min(maxY, Math.max(minY, ny)),
+    };
   }
 
-  // Initialize pan to center image
-  useEffect(() => {
-    if (!imgW || !imgH) return;
-    const w = imgW * baseScale * zoom;
-    const h = imgH * baseScale * zoom;
+  // Load image (from file or URL) into an <img> for natural sizes and export
+  async function loadImage(url: string) {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = (e) => reject(e);
+      img.src = url;
+    });
+  }
+
+  // Initialize/calc centered pan
+  function recenter(zw = zoom) {
+    const w = imgW * baseScale * zw;
+    const h = imgH * baseScale * zw;
     const startX = (size - w) / 2;
     const startY = (size - h) / 2;
     const { nx, ny } = clampPan(startX, startY);
     setDx(nx);
     setDy(ny);
-    setReady(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imgW, imgH, baseScale]);
-
-  // Handle file choose
-  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    // revoke previous object URL if any
-    if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
-    const url = URL.createObjectURL(f);
-    objUrlRef.current = url;
-    setSrc(url);
-    setReady(false);
-    setZoom(1);
   }
 
-  // Cleanup object URL on unmount
+  // When initial avatar URL from DB changes, preload it
   useEffect(() => {
-    return () => {
-      if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
-    };
-  }, []);
-
-  // When remote/public URL changes from DB
-  useEffect(() => {
-    if (value && value !== src) setSrc(value);
+    (async () => {
+      if (!value) {
+        setSrc(null);
+        setReady(false);
+        return;
+      }
+      try {
+        setReady(false);
+        const img = await loadImage(value);
+        imgElRef.current = img;
+        setImgW(img.naturalWidth);
+        setImgH(img.naturalHeight);
+        setSrc(value);
+        setZoom(1);
+        // center after sizes set
+        setTimeout(() => { recenter(1); setReady(true); }, 0);
+      } catch {
+        // ignore — user can upload a new photo
+        setReady(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  // Image onload → set natural size
-  function onImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
-    const el = e.currentTarget;
-    setImgW(el.naturalWidth || 0);
-    setImgH(el.naturalHeight || 0);
+  // File picker → read as data URL, then preload
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const img = await loadImage(dataUrl);
+        imgElRef.current = img;
+        setImgW(img.naturalWidth);
+        setImgH(img.naturalHeight);
+        setSrc(dataUrl);
+        setZoom(1);
+        setReady(true);
+        recenter(1);
+      } catch {
+        setReady(false);
+      }
+    };
+    reader.readAsDataURL(f);
   }
 
   // Drag to pan (pointer events)
   const dragging = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
-
   function onPointerDown(e: React.PointerEvent) {
     if (!ready) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -119,65 +145,65 @@ export default function AvatarUploader({
     last.current = { x: e.clientX, y: e.clientY };
   }
   function onPointerMove(e: React.PointerEvent) {
-    if (!dragging.current || !ready) return;
-    const l = last.current;
-    if (!l) return;
-    const dxNew = dx + (e.clientX - l.x);
-    const dyNew = dy + (e.clientY - l.y);
-    const clamped = clampPan(dxNew, dyNew);
-    setDx(clamped.nx);
-    setDy(clamped.ny);
+    if (!ready || !dragging.current || !last.current) return;
+    const nx = dx + (e.clientX - last.current.x);
+    const ny = dy + (e.clientY - last.current.y);
+    const { nx: cx, ny: cy } = clampPan(nx, ny);
+    setDx(cx); setDy(cy);
     last.current = { x: e.clientX, y: e.clientY };
   }
-  function onPointerUp(e: React.PointerEvent) {
+  function onPointerUp() {
     dragging.current = false;
     last.current = null;
   }
 
-  // Wheel to zoom (cursor-centered)
-  function onWheel(e: React.WheelEvent) {
+  // Wheel/pinch zoom (zoom around cursor)
+  function zoomAt(clientX: number, clientY: number, factor: number) {
     if (!ready) return;
-    e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
-    const cx = rect ? e.clientX - rect.left : size / 2;
-    const cy = rect ? e.clientY - rect.top : size / 2;
+    const cx = rect ? clientX - rect.left : size / 2;
+    const cy = rect ? clientY - rect.top : size / 2;
 
     const oldZoom = zoom;
-    const delta = -e.deltaY; // scroll up = zoom in
-    const zoomStep = (delta > 0 ? 1.05 : 0.95);
-    let newZoom = Math.min(maxZoom, Math.max(minZoom, oldZoom * zoomStep));
+    let newZoom = Math.min(maxZoom, Math.max(minZoom, oldZoom * factor));
     if (newZoom === oldZoom) return;
 
-    // keep the point under cursor stable
     const scaleOld = baseScale * oldZoom;
     const scaleNew = baseScale * newZoom;
 
-    // current image position at cursor in image-space → we adjust pan so same pixel stays under cursor
+    // Keep the pixel under cursor stationary
     const ix = (cx - dx) / scaleOld;
     const iy = (cy - dy) / scaleOld;
 
     const newDx = cx - ix * scaleNew;
     const newDy = cy - iy * scaleNew;
 
-    const clamped = clampPan(newDx, newDy);
+    const { nx, ny } = clampPan(newDx, newDy);
     setZoom(newZoom);
-    setDx(clamped.nx);
-    setDy(clamped.ny);
+    setDx(nx);
+    setDy(ny);
   }
 
-  // Touch pinch to zoom (basic)
-  const pinch = useRef<{ d: number; zx: number; zy: number; z0: number } | null>(null);
+  function onWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    zoomAt(e.clientX, e.clientY, factor);
+  }
+
+  // Touch pinch
+  const pinch = useRef<{ d: number; cx: number; cy: number; z0: number } | null>(null);
   function dist(t1: Touch, t2: Touch) {
     const dx = t1.clientX - t2.clientX;
     const dy = t1.clientY - t2.clientY;
     return Math.hypot(dx, dy);
   }
   function onTouchStart(e: React.TouchEvent) {
+    if (!ready) return;
     if (e.touches.length === 2 && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
       const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-      pinch.current = { d: dist(e.touches[0], e.touches[1]), zx: cx, zy: cy, z0: zoom };
+      pinch.current = { d: dist(e.touches[0], e.touches[1]), cx, cy, z0: zoom };
     } else if (e.touches.length === 1) {
       dragging.current = true;
       last.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -190,30 +216,15 @@ export default function AvatarUploader({
       const p = pinch.current;
       const nd = dist(e.touches[0], e.touches[1]);
       const ratio = nd / p.d;
-      let newZoom = Math.min(maxZoom, Math.max(minZoom, p.z0 * ratio));
-
-      const scaleOld = baseScale * zoom;
-      const scaleNew = baseScale * newZoom;
-
-      const ix = (p.zx - dx) / scaleOld;
-      const iy = (p.zy - dy) / scaleOld;
-
-      const newDx = p.zx - ix * scaleNew;
-      const newDy = p.zy - iy * scaleNew;
-
-      const clamped = clampPan(newDx, newDy);
-      setZoom(newZoom);
-      setDx(clamped.nx);
-      setDy(clamped.ny);
+      zoomAt(p.cx + (containerRef.current?.getBoundingClientRect().left ?? 0),
+             p.cy + (containerRef.current?.getBoundingClientRect().top ?? 0),
+             Math.min(maxZoom, Math.max(minZoom, p.z0 * ratio)) / zoom);
     } else if (e.touches.length === 1 && dragging.current && last.current) {
-      const lx = last.current.x;
-      const ly = last.current.y;
-      const cx = e.touches[0].clientX;
-      const cy = e.touches[0].clientY;
-      const clamped = clampPan(dx + (cx - lx), dy + (cy - ly));
-      setDx(clamped.nx);
-      setDy(clamped.ny);
-      last.current = { x: cx, y: cy };
+      const nx = dx + (e.touches[0].clientX - last.current.x);
+      const ny = dy + (e.touches[0].clientY - last.current.y);
+      const { nx: cx, ny: cy } = clampPan(nx, ny);
+      setDx(cx); setDy(cy);
+      last.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
   }
   function onTouchEnd() {
@@ -222,11 +233,16 @@ export default function AvatarUploader({
     pinch.current = null;
   }
 
+  function onReset() {
+    setZoom(1);
+    recenter(1);
+  }
+
   async function onSave() {
     if (!userId) return alert("Please sign in first.");
-    if (!src || !imgRef.current) return alert("Choose a photo first.");
+    if (!ready || !imgElRef.current) return alert("Choose a photo first.");
 
-    // Render the exact view to a 512x512 PNG
+    // Render what you see to a 512x512 PNG
     const N = 512;
     const c = document.createElement("canvas");
     c.width = N;
@@ -237,13 +253,13 @@ export default function AvatarUploader({
     const scaleRatio = N / size;
     const drawDx = dx * scaleRatio;
     const drawDy = dy * scaleRatio;
-    const drawW = scaledW * (N / size);
-    const drawH = scaledH * (N / size);
+    const drawW = scaledW * scaleRatio;
+    const drawH = scaledH * scaleRatio;
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.clearRect(0, 0, N, N);
-    ctx.drawImage(imgRef.current, drawDx, drawDy, drawW, drawH);
+    ctx.drawImage(imgElRef.current, drawDx, drawDy, drawW, drawH);
 
     const blob: Blob = await new Promise((res) =>
       c.toBlob((b) => res(b as Blob), "image/png", 0.92)
@@ -277,34 +293,33 @@ export default function AvatarUploader({
     onChange?.(pub.publicUrl);
   }
 
-  function onReset() {
-    setZoom(1);
-    // re-center
-    const w = imgW * baseScale * 1;
-    const h = imgH * baseScale * 1;
-    const startX = (size - w) / 2;
-    const startY = (size - h) / 2;
-    const { nx, ny } = clampPan(startX, startY);
-    setDx(nx);
-    setDy(ny);
-  }
+  // Background style (this is the visible “frame”)
+  const bgStyle: React.CSSProperties = src && ready
+    ? {
+        backgroundImage: `url(${src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: `${dx}px ${dy}px`,
+        backgroundSize: `${scaledW}px ${scaledH}px`,
+      }
+    : { background: "#fafafa" };
 
   return (
     <div className="uploader">
       <div className="stack">
         <label className="text-sm">{label}</label>
 
-        {/* Square preview */}
+        {/* Square, clearly framed preview */}
         <div
           ref={containerRef}
-          className="rounded-2xl overflow-hidden border select-none touch-none"
+          className="rounded-2xl overflow-hidden select-none touch-none"
           style={{
             width: size,
             height: size,
-            borderColor: "#e5e7eb",
-            background: "#fafafa",
-            position: "relative",
+            border: "2px solid rgba(196,181,253,.9)",      // lavender frame
+            boxShadow: "inset 0 0 0 1px rgba(0,0,0,.03)",
+            borderRadius: 16,
             cursor: ready ? "grab" : "default",
+            ...bgStyle,
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -314,39 +329,17 @@ export default function AvatarUploader({
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-        >
-          {src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              ref={imgRef}
-              src={src}
-              onLoad={onImgLoad}
-              alt="Avatar"
-              draggable={false}
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                transform: `translate(${dx}px, ${dy}px) scale(${baseScale * zoom})`,
-                transformOrigin: "top left",
-                width: imgW,
-                height: imgH,
-                willChange: "transform",
-                imageRendering: "auto",
-              }}
-            />
-          ) : (
-            <div className="w-full h-full grid place-items-center text-sm text-zinc-500">
-              No photo yet
-            </div>
-          )}
-        </div>
+          aria-label="Drag to position. Scroll to zoom."
+          role="img"
+        />
 
         <input type="file" accept="image/*" onChange={onFile} />
 
         <div className="controls" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-neutral" onClick={onReset}>Reset</button>
-          <button type="button" className="btn btn-brand" onClick={onSave} disabled={!src}>
+          <button type="button" className="btn btn-neutral" onClick={onReset} disabled={!ready}>
+            Reset
+          </button>
+          <button type="button" className="btn btn-brand" onClick={onSave} disabled={!ready}>
             Save photo
           </button>
         </div>
