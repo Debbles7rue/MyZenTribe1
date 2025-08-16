@@ -20,68 +20,65 @@ export default function HomePage() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  return (
-    <main className="min-h-screen bg-[#F4ECFF]">
-      <section className="mx-auto max-w-5xl px-6 py-12 text-center">
-        {/* Logo */}
-        <img
-          src={LOGO_SRC}
-          alt="MyZenTribe Logo"
-          className="mx-auto mb-8 h-24 w-auto"
-          loading="lazy"
-        />
+  const shell: React.CSSProperties = {
+    minHeight: "100vh",
+    backgroundColor: "#F4ECFF", // lavender
+    padding: "48px 16px",
+  };
+  const container: React.CSSProperties = {
+    maxWidth: 880,
+    margin: "0 auto",
+    textAlign: "center",
+  };
+  const logo: React.CSSProperties = {
+    width: 260,
+    height: "auto",
+    display: "block",
+    margin: "0 auto 24px",
+  };
+  const card: React.CSSProperties = {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 16,
+    padding: 24,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.05)",
+  };
+  const h1: React.CSSProperties = { fontSize: 32, fontWeight: 600, margin: 0 };
+  const h2: React.CSSProperties = { fontSize: 24, fontWeight: 600, margin: 0 };
+  const p: React.CSSProperties = { color: "#374151", marginTop: 12, lineHeight: 1.6 };
 
-        {/* Card 1: Welcome + short blurb (white box) */}
-        <div className="mx-auto max-w-3xl rounded-2xl border border-neutral-200 bg-white p-8 shadow">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Welcome to <span className="text-brand-600">MyZenTribe</span>
+  return (
+    <main style={shell}>
+      <section style={container}>
+        {/* Logo */}
+        <img src={LOGO_SRC} alt="MyZenTribe Logo" style={logo} loading="lazy" />
+
+        {/* Card 1: Welcome + blurb (white box) */}
+        <div style={card}>
+          <h1 style={h1}>
+            Welcome to <span style={{ color: "#6d28d9" }}>MyZenTribe</span>
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base text-neutral-700">
+          <p style={{ ...p, maxWidth: 720, margin: "12px auto 0" }}>
             A space to connect, recharge, and share what matters. From daily mindfulness and
             gratitude practices to meaningful events, MyZenTribe makes it easy to find your people
             and build something good together.
           </p>
 
-          {/* Primary CTAs (centered buttons) */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          {/* Centered buttons */}
+          <div style={{ marginTop: 18, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             {!signedIn ? (
               <>
-                <Link href="/signin" className="btn btn-brand">
-                  Sign in
-                </Link>
-                <Link href="/signin" className="btn btn-neutral">
-                  Create profile
-                </Link>
+                <Link href="/signin" className="btn btn-brand">Sign in</Link>
+                <Link href="/signin" className="btn btn-neutral">Create profile</Link>
               </>
             ) : (
               <>
-                <Link href="/calendar" className="btn btn-brand">
-                  Go to Calendar
-                </Link>
-                <Link href="/profile" className="btn btn-neutral">
-                  Open Profile
-                </Link>
+                <Link href="/calendar" className="btn btn-brand">Go to Calendar</Link>
+                <Link href="/profile" className="btn btn-neutral">Open Profile</Link>
               </>
             )}
           </div>
         </div>
 
         {/* Card 2: Our Intention (white box with button inside) */}
-        <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-neutral-200 bg-white p-8 text-left shadow">
-          <h2 className="text-2xl font-semibold">Our Intention</h2>
-          <p className="mt-3 text-neutral-700">
-            To bring people together across local and global communities, support talented small
-            businesses, and encourage every member to play a part in making the world a better
-            place.
-          </p>
-
-          <div className="mt-5">
-            <Link href="/good-vibes" className="btn btn-brand">
-              Our Commitment
-            </Link>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
+        <div style={{ ...ca
