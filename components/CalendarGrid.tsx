@@ -49,24 +49,19 @@ export default function CalendarGrid({
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource;
 
-    // Moon markers (unchanged look)
+    // Moon markers (all-day labels)
     if (r?.moonPhase) {
       return {
-        style: {
-          backgroundColor: "transparent",
-          border: "0",
-          fontWeight: 600,
-          color: "#0f172a",
-        },
+        style: { backgroundColor: "transparent", border: "0", fontWeight: 600, color: "#0f172a" },
         className: "text-[11px] leading-tight",
       };
     }
 
-    // Cancelled events: greyed out + line-through
+    // Cancelled events: grey + line-through
     if (r?.status === "cancelled") {
       return {
         style: {
-          backgroundColor: "rgba(107,114,128,0.15)", // zinc-500 @ ~15%
+          backgroundColor: "rgba(107,114,128,0.15)",
           border: "1px solid #e5e7eb",
           borderRadius: 10,
           color: "#6b7280",
@@ -77,13 +72,9 @@ export default function CalendarGrid({
     }
 
     // Normal events: personal vs business color
-    const color = r?.source === "business" ? "#c4b5fd" /* violet-300 */ : "#60a5fa" /* sky-400 */;
+    const color = r?.source === "business" ? "#c4b5fd" : "#60a5fa";
     return {
-      style: {
-        backgroundColor: color,
-        border: "1px solid #e5e7eb",
-        borderRadius: 10,
-      },
+      style: { backgroundColor: color, border: "1px solid #e5e7eb", borderRadius: 10 },
       className: "text-[11px] leading-tight",
     };
   };
@@ -111,8 +102,7 @@ export default function CalendarGrid({
         timeslots={2}
         scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
         components={{
-          // Hide default RBC toolbar (prevents the duplicated "Today/Month/Week/Day" row)
-          toolbar: () => null,
+          // NOTE: toolbar is ENABLED now (we removed the override that hid it)
           event: ({ event }) => {
             const r = (event as UiEvent).resource || {};
             if (r?.moonPhase) {
@@ -120,11 +110,7 @@ export default function CalendarGrid({
                 r.moonPhase === "moon-full" ? "🌕" :
                 r.moonPhase === "moon-new" ? "🌑" :
                 r.moonPhase === "moon-first" ? "🌓" : "🌗";
-              return (
-                <div className="text-[11px] leading-tight">
-                  {icon} {(event as any).title}
-                </div>
-              );
+              return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
             }
             return (
               <div className="text-[11px] leading-tight">
@@ -133,7 +119,6 @@ export default function CalendarGrid({
             );
           },
         }}
-        eventPropGetter={eventPropGetter}
       />
     </div>
   );
