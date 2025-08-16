@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function SignInPage() {
+export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If already signed in, go to Profile
+  // If already signed in, skip to Profile (kept from your original)
   useEffect(() => {
     let mounted = true;
     supabase.auth.getUser().then(({ data }) => {
@@ -27,15 +27,20 @@ export default function SignInPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+
     setLoading(false);
+
     if (error) {
       setError(error.message || "Sign in failed");
       return;
     }
+
+    // same as your original
     router.replace("/profile");
   }
 
@@ -63,14 +68,7 @@ export default function SignInPage() {
         <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, textAlign: "center" }}>
           Sign in
         </h1>
-        <p
-          style={{
-            marginTop: 8,
-            fontSize: 14,
-            color: "#4b5563",
-            textAlign: "center",
-          }}
-        >
+        <p style={{ marginTop: 8, fontSize: 14, color: "#4b5563", textAlign: "center" }}>
           Use your email and password.
         </p>
 
@@ -145,12 +143,8 @@ export default function SignInPage() {
             fontSize: 14,
           }}
         >
-          <a href="/" className="underline">
-            Back to welcome
-          </a>
-          <a href="/forgot-password" className="underline">
-            Forgot password?
-          </a>
+          <a href="/" className="underline">Back to welcome</a>
+          <a href="/forgot-password" className="underline">Forgot password?</a>
         </div>
       </div>
     </main>
