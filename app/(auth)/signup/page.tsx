@@ -1,111 +1,156 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function SignupPage() {
+export default function SignUpPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  // If already signed in, go to profile
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!mounted) return;
+      if (data.user) router.replace("/profile");
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
-    setMsg(null);
-
-    if (password !== confirm) {
-      setErr("Passwords do not match.");
-      return;
-    }
-
+    setError(null);
+    setInfo(null);
     setLoading(true);
+
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        // if email confirmations are ON, this shows in the email link
         emailRedirectTo: `${window.location.origin}/profile`,
       },
     });
+
     setLoading(false);
 
     if (error) {
-      setErr(error.message);
+      setError(error.message || "Sign up failed");
       return;
     }
 
-    // If confirmations are OFF you'll have a session immediately.
-    if (data.session) {
-      router.replace("/profile");
+    // If email confirmations are enabled, Supabase will NOT return a session
+    if (!data.session) {
+      setInfo("Check your email to confirm your address. After confirming, you’ll be redirected to your profile.");
       return;
     }
 
-    // Otherwise tell the user to verify email.
-    setMsg("Check your email to confirm your account, then sign in.");
+    // If confirmations are disabled, you'll be signed in immediately
+    router.replace("/profile");
   }
 
+  // inline styles so this page looks great even if stylesheets fail to load
+  const bg: React.CSSProperties = {
+    minHeight: "100vh",
+    background: "#F4ECFF",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+  };
+  const card: React.CSSProperties = {
+    width: "100%",
+    maxWidth: 520,
+    background: "#fff",
+    border: "1px solid #E9D8FD",
+    borderRadius: 16,
+    padding: 24,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+  };
+  const h1: React.CSSProperties = {
+    fontSize: 28,
+    fontWeight: 700,
+    margin: 0,
+    textAlign: "center",
+  };
+  const sub: React.CSSProperties = {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 12,
+  };
+  const label: React.CSSProperties = { fontSize: 14, display: "block", marginBottom: 6 };
+  const input: React.CSSProperties = {
+    width: "100%",
+    borderRadius: 12,
+    border: "1px solid #D1D5DB",
+    padding: "10px 12px",
+    outline: "none",
+  };
+  const btnPrimary: React.CSSProperties = {
+    width: "100%",
+    border: "none",
+    borderRadius: 14,
+    padding: "12px 16px",
+    background: "#6D28D9",
+    color: "#fff",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 6px 14px rgba(109,40,217,0.25)",
+  };
+  const row: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    fontSize: 14,
+  };
+  const link: React.CSSProperties = { color: "#6D28D9", textDecoration: "underline" };
+  const alertErr: React.CSSProperties = {
+    marginTop: 8,
+    borderRadius: 12,
+    border: "1px solid #FCA5A5",
+    background: "#FEF2F2",
+    color: "#B91C1C",
+    padding: "8px 12px",
+    fontSize: 14,
+  };
+  const alertInfo: React.CSSProperties = {
+    marginTop: 8,
+    borderRadius: 12,
+    border: "1px solid #A7F3D0",
+    background: "#ECFDF5",
+    color: "#065F46",
+    padding: "8px 12px",
+    fontSize: 14,
+  };
+
   return (
-    <main className="min-h-screen flex items-center justify-center p-6" style={{ background: "#F4ECFF" }}>
-      <div className="w-full max-w-md rounded-2xl border border-purple-100 bg-white p-6 shadow">
-        <h1 className="text-2xl font-semibold mb-2 text-center">Create profile</h1>
-        <p className="text-sm text-neutral-600 mb-4 text-center">Use your email and a password.</p>
+    <main style={bg}>
+      <div style={card}>
+        <h1 style={h1}>Create your profile</h1>
+        <p style={sub}>One quick account to join MyZenTribe.</p>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block">
-            <span className="text-sm">Email</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-              placeholder="you@example.com"
-            />
-          </label>
+        <form onSubmit={onSubmit} style={{ display: "grid", gap: 12, marginTop: 8 }}>
+          <label style={label}>Email</label>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={input}
+            placeholder="you@example.com"
+          />
 
-          <label className="block">
-            <span className="text-sm">Password</span>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-              placeholder="••••••••"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Confirm password</span>
-            <input
-              type="password"
-              required
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-300 px-3 py-2"
-              placeholder="••••••••"
-            />
-          </label>
-
-          {err && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
-          {msg && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg}</div>}
-
-          <button type="submit" disabled={loading} className="btn btn-brand w-full">
-            {loading ? "Creating…" : "Create profile"}
-          </button>
-
-          <div className="flex items-center justify-between text-sm mt-1">
-            <Link href="/" className="underline">Back to welcome</Link>
-            <Link href="/signin" className="underline">Already have an account?</Link>
-          </div>
-        </form>
-      </div>
-    </main>
-  );
-}
+          <label style={{ ...label, marginTop: 6 }}>Password</label>
+          <input
+            type="password"
+            required
+            value={password}
