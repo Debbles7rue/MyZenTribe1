@@ -6,6 +6,12 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useMemo, useState } from "react";
 
+/** MVP flags (keep simple) */
+const SHOW_PHOTOS_ADDON = false; // turn on later when ready
+
+/** Per-day limit (change to 999 for "unlimited") */
+const MAX_PER_DAY = 3;
+
 /** ─── Types ───────────────────────────────────────────── */
 type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose";
 type Plan = "free" | "photos";
@@ -70,6 +76,37 @@ const THEMES: Record<
   },
 };
 
+/** Curated daily gratitude quotes (local, no API) */
+const QUOTES: { text: string; author: string }[] = [
+  { text: "Gratitude turns what we have into enough.", author: "Anonymous" },
+  { text: "Wear gratitude like a cloak and it will feed every corner of your life.", author: "Rumi" },
+  { text: "Acknowledging the good that you already have in your life is the foundation for all abundance.", author: "Eckhart Tolle" },
+  { text: "It is not joy that makes us grateful; it is gratitude that makes us joyful.", author: "David Steindl-Rast" },
+  { text: "The more grateful I am, the more beauty I see.", author: "Mary Davis" },
+  { text: "Enjoy the little things, for one day you may look back and realize they were the big things.", author: "Robert Brault" },
+  { text: "Gratitude is the fairest blossom which springs from the soul.", author: "Henry Ward Beecher" },
+  { text: "Appreciation can change a day, even change a life.", author: "Margaret Cousins" },
+  { text: "When we focus on our gratitude, the tide of disappointment goes out.", author: "Kristin Armstrong" },
+  { text: "Silent gratitude isn’t much use to anyone.", author: "Gertrude Stein" },
+  { text: "Act with kindness, but do not expect gratitude.", author: "Confucius" },
+  { text: "Gratitude unlocks the fullness of life.", author: "Melody Beattie" },
+  { text: "This is a wonderful day; I have never seen this one before.", author: "Maya Angelou" },
+  { text: "The roots of all goodness lie in the soil of appreciation.", author: "Dalai Lama" },
+  { text: "He is a wise man who does not grieve for the things which he has not, but rejoices for those which he has.", author: "Epictetus" },
+  { text: "What we focus on expands. Choose gratitude.", author: "Unknown" },
+  { text: "An attitude of gratitude brings great things.", author: "Yogi Bhajan" },
+  { text: "Gratitude bestows reverence.", author: "John Milton" },
+  { text: "Let us be grateful to people who make us happy.", author: "Marcel Proust" },
+  { text: "The way to develop the best that is in a person is by appreciation and encouragement.", author: "Charles Schwab" },
+];
+
+/** Get a quote index based on the calendar day; allows cycling with an offset */
+function quoteIndexFor(date: Date, offset = 0) {
+  const dayNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+  const idx = (dayNumber + offset) % QUOTES.length;
+  return idx < 0 ? idx + QUOTES.length : idx;
+}
+
 /** ─── Page ────────────────────────────────────────────── */
 export default function GratitudePage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -91,6 +128,9 @@ export default function GratitudePage() {
   const [todayList, setTodayList] = useState<Entry[]>([]);
   const [recent, setRecent] = useState<Entry[]>([]);
 
+  // Daily quote cycling
+  const [quoteOffset, setQuoteOffset] = useState(0);
+
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -108,7 +148,7 @@ export default function GratitudePage() {
     return `${yyyy}-${mm}-${dd}`;
   }, []);
 
-  /** Load settings + entries + add-on flag */
+  /** Load settings + entries (+ optional flags) */
   useEffect(() => {
     if (!userId) return;
     (async () => {
@@ -151,15 +191,16 @@ export default function GratitudePage() {
         setTodayList(all.filter((x) => x.entry_date === today));
         setRecent(all.filter((x) => x.entry_date !== today));
 
-        // add-on flag
-        const { data: addons } = await supabase
-          .from("user_addons")
-          .select("photos_enabled")
-          .eq("user_id", userId)
-          .maybeSingle();
-        setPhotosEnabled(!!addons?.photos_enabled);
+        // optional flags
+        if (SHOW_PHOTOS_ADDON) {
+          const { data: addons } = await supabase
+            .from("user_addons")
+            .select("photos_enabled")
+            .eq("user_id", userId)
+            .maybeSingle();
+          setPhotosEnabled(!!addons?.photos_enabled);
+        }
 
-        // candle placeholder (ignore if table doesn’t exist yet)
         try {
           const { data: candles } = await supabase
             .from("meditation_candles")
@@ -185,15 +226,13 @@ export default function GratitudePage() {
     setSaving(true);
     setError(null);
     try {
-      // settings
       const payload = { user_id: userId, activated: true, recap_frequency: "weekly", theme: themeKey };
       const { error: upErr } = await supabase
         .from("gratitude_settings")
         .upsert(payload, { onConflict: "user_id" });
       if (upErr) throw upErr;
 
-      // optional add-on
-      if (selectedPlan === "photos") {
+      if (SHOW_PHOTOS_ADDON && selectedPlan === "photos") {
         await supabase
           .from("user_addons")
           .upsert(
@@ -230,15 +269,15 @@ export default function GratitudePage() {
     }
   }
 
-  /** Entries (3/day) */
+  /** Entries (MAX_PER_DAY/day) */
   const todayCount = todayList.length;
-  const canAdd = todayCount < 3 && !!userId && !saving;
+  const canAdd = todayCount < MAX_PER_DAY && !!userId && !saving;
 
   async function addEntry() {
     const content = draft.trim();
     if (!content || !userId || !settings?.activated) return;
-    if (todayList.length >= 3) {
-      setError("You’ve reached 3 entries for today. Beautiful work!");
+    if (todayList.length >= MAX_PER_DAY) {
+      setError(`You’ve reached ${MAX_PER_DAY} entries for today. Beautiful work!`);
       return;
     }
     setSaving(true);
@@ -294,10 +333,10 @@ export default function GratitudePage() {
     return filtered.map((e) => ({ id: e.id, summary: summarizeText(e.content), when: new Date(e.created_at) }));
   }, [settings?.activated, settings?.recap_frequency, todayList, recent]);
 
-  /** Photos add-on (load current year thumbnails) */
+  /** Photos add-on (disabled in MVP unless SHOW_PHOTOS_ADDON) */
   const thisYear = new Date().getFullYear();
   async function loadMedia() {
-    if (!userId || !photosEnabled) return;
+    if (!userId || !photosEnabled || !SHOW_PHOTOS_ADDON) return;
     setMediaLoading(true);
     try {
       const start = new Date(`${thisYear}-01-01T00:00:00Z`).toISOString();
@@ -337,58 +376,24 @@ export default function GratitudePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, photosEnabled]);
 
-  /** Uploads */
-  async function onMediaFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (!userId || !files.length) return;
-    setUploading(true);
-    try {
-      for (const f of files) {
-        const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
-        const path = `${userId}/${thisYear}/${crypto.randomUUID()}.${ext}`;
-        const up = await supabase.storage.from("gratitude-media").upload(path, f, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: f.type,
-        });
-        if (up.error) throw up.error;
-        const ins = await supabase.from("gratitude_media").insert({
-          user_id: userId,
-          file_path: path,
-          caption: null,
-          favorite: false,
-        });
-        if (ins.error) throw ins.error;
-      }
-      (e.target as HTMLInputElement).value = "";
-      await loadMedia();
-    } catch (err: any) {
-      alert(err?.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-  async function toggleFavorite(id: string, value: boolean) {
-    await supabase.from("gratitude_media").update({ favorite: !value }).eq("id", id);
-    setMedia((m) => m.map((x) => (x.id === id ? { ...x, favorite: !value } : x)));
-  }
-  async function deleteMedia(id: string, file_path: string) {
-    await supabase.storage.from("gratitude-media").remove([file_path]);
-    await supabase.from("gratitude_media").delete().eq("id", id);
-    setMedia((m) => m.filter((x) => x.id != id));
-  }
+  async function onMediaFiles(_e: React.ChangeEvent<HTMLInputElement>) {/* disabled in MVP */ }
+  async function toggleFavorite(_id: string, _v: boolean) {/* disabled in MVP */ }
+  async function deleteMedia(_id: string, _p: string) {/* disabled in MVP */ }
 
-  /** Theme palette (rename avoids duplicate-name error) */
+  /** Theme palette (avoid name collision) */
   const palette = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
+
+  /** Quote of the day (with cycle button) */
+  const quote = useMemo(() => {
+    const baseIdx = quoteIndexFor(new Date(), quoteOffset);
+    return QUOTES[baseIdx];
+  }, [quoteOffset]);
 
   /** ─── UI blocks ─────────────────────────────────────── */
 
   const [coverError, setCoverError] = useState(false);
   const cover = (
-    <div
-      className="rounded-2xl p-6"
-      style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}
-    >
+    <div className="rounded-2xl p-6" style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}>
       <div className="max-w-4xl mx-auto">
         <div
           className="relative mx-auto overflow-hidden"
@@ -435,10 +440,7 @@ export default function GratitudePage() {
   );
 
   const bookIntro = (
-    <div
-      className="rounded-2xl p-4 md:p-6"
-      style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}
-    >
+    <div className="rounded-2xl p-4 md:p-6" style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}>
       <div className="max-w-5xl mx-auto relative">
         {/* book shell */}
         <div
@@ -465,9 +467,7 @@ export default function GratitudePage() {
 
 Each day, you’ll be guided to write down three things you’re thankful for. They can be as simple as a smile from a stranger, a moment of peace, or as detailed as a story that brought you joy. Over time, these small daily shifts rewire your brain, helping you create a more positive outlook and a deeper sense of well-being.
 
-To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.
-
-Want to make your journey even more special? For just $2.99, you can add photos to your entries and get a personalized end-of-year slideshow—a visual celebration of your most beautiful moments.`}
+To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.`}
             </p>
           </div>
 
@@ -478,13 +478,7 @@ Want to make your journey even more special? For just $2.99, you can add photos 
             <div className="grid gap-3">
               <label className="rounded-2xl border p-3 cursor-pointer">
                 <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="plan"
-                    checked={selectedPlan === "free"}
-                    onChange={() => setSelectedPlan("free")}
-                    style={{ marginTop: 4 }}
-                  />
+                  <input type="radio" name="plan" checked={true} readOnly style={{ marginTop: 4 }} />
                   <div>
                     <div className="font-medium">Free journal</div>
                     <div className="muted text-sm">
@@ -494,23 +488,27 @@ Want to make your journey even more special? For just $2.99, you can add photos 
                 </div>
               </label>
 
-              <label className="rounded-2xl border p-3 cursor-pointer">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="plan"
-                    checked={selectedPlan === "photos"}
-                    onChange={() => setSelectedPlan("photos")}
-                    style={{ marginTop: 4 }}
-                  />
-                  <div>
-                    <div className="font-medium">Photos + Slideshow <span className="opacity-70">($2.99 one-time)</span></div>
-                    <div className="muted text-sm">
-                      Attach photos to entries, star favorites, and enjoy a year-end slideshow.
+              {SHOW_PHOTOS_ADDON && (
+                <label className="rounded-2xl border p-3 cursor-pointer">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="plan"
+                      checked={selectedPlan === "photos"}
+                      onChange={() => setSelectedPlan("photos")}
+                      style={{ marginTop: 4 }}
+                    />
+                    <div>
+                      <div className="font-medium">
+                        Photos + Slideshow <span className="opacity-70">($2.99 one-time)</span>
+                      </div>
+                      <div className="muted text-sm">
+                        Attach photos to entries, star favorites, and enjoy a year-end slideshow.
+                      </div>
                     </div>
                   </div>
-                </div>
-              </label>
+                </label>
+              )}
             </div>
 
             <div className="mt-4">
@@ -600,7 +598,7 @@ Want to make your journey even more special? For just $2.99, you can add photos 
         {/* Left: recap + prefs */}
         <div className="rounded-xl border p-4" style={{ background: palette.leftBg, borderColor: palette.border }}>
           <h2 className="section-title" style={{ marginTop: 0 }}>Feel your glimmers</h2>
-          <p>Close your eyes for a moment and notice where a tiny lift shows up in your body—then write from there.</p>
+          <p>Pause, notice a small lift in your body or mood—then write from that feeling.</p>
 
           <div className="stack" style={{ marginTop: 10 }}>
             <h3 className="section-title" style={{ fontSize: 16 }}>Recap preference</h3>
@@ -641,13 +639,36 @@ Want to make your journey even more special? For just $2.99, you can add photos 
           </div>
         </div>
 
-        {/* Right: today */}
+        {/* Right: Quote + today */}
         <div className="rounded-xl border p-4" style={{ background: palette.rightBg, borderColor: "#e5e7eb" }}>
           <div className="section-row" style={{ marginBottom: 8 }}>
             <h2 className="section-title" style={{ margin: 0 }}>Today</h2>
-            <div className="muted">Glimmers: {todayList.length}/3</div>
+            <div className="muted">Glimmers: {todayList.length}/{MAX_PER_DAY}</div>
           </div>
 
+          {/* Daily quote */}
+          <figure className="rounded-xl border px-3 py-2 mb-3" style={{ borderColor: "#e5e7eb", background: "#fff" }}>
+            <blockquote style={{ fontStyle: "italic", lineHeight: 1.5 }}>
+              “{quote.text}”
+            </blockquote>
+            <figcaption className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              — {quote.author}
+            </figcaption>
+            <div className="right">
+              <button
+                className="btn btn-neutral"
+                onClick={() => setQuoteOffset((n) => n + 1)}
+                aria-label="Show another quote"
+              >
+                Show another
+              </button>
+            </div>
+          </figure>
+
+          {/* Entry input */}
+          <label className="text-sm muted" style={{ display: "block", marginBottom: 6 }}>
+            Write one glimmer and click “Add glimmer”; repeat up to {MAX_PER_DAY} times today.
+          </label>
           <textarea
             className="input"
             rows={4}
@@ -667,6 +688,7 @@ Want to make your journey even more special? For just $2.99, you can add photos 
             </div>
           )}
 
+          {/* Today's entries */}
           {todayList.length > 0 && (
             <div className="stack" style={{ marginTop: 12 }}>
               {todayList.map((e) => (
@@ -685,64 +707,27 @@ Want to make your journey even more special? For just $2.99, you can add photos 
         </div>
       </div>
 
-      {/* Photos area */}
-      <div className="stack" style={{ marginTop: 16 }}>
-        {!photosEnabled ? (
-          <section className="card p-3">
-            <div className="section-row">
-              <h2 className="section-title">Photos & Slideshow</h2>
-              <button
-                className="btn btn-brand"
-                onClick={async () => {
-                  if (!userId) return;
-                  await supabase
-                    .from("user_addons")
-                    .upsert(
-                      { user_id: userId, photos_enabled: true, purchased_at: new Date().toISOString() },
-                      { onConflict: "user_id" }
-                    );
-                  setPhotosEnabled(true);
-                }}
-              >
-                Enable for $2.99
-              </button>
-            </div>
-            <p className="muted">Attach photos, star favorites, and watch your year-end slideshow.</p>
-          </section>
-        ) : (
-          <section className="card p-3">
-            <h2 className="section-title">Photos</h2>
-            <input type="file" accept="image/*" multiple onChange={onMediaFiles} disabled={uploading} />
-            {uploading && <p className="muted">Uploading…</p>}
-            {mediaLoading ? (
-              <p className="muted">Loading photos…</p>
-            ) : media.length === 0 ? (
-              <p className="muted">No photos yet. Upload a few from today.</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" style={{ marginTop: 10 }}>
-                {media.map((it) => (
-                  <div key={it.id} className="rounded-xl overflow-hidden border" style={{ borderColor: "#e5e7eb" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={it.url} alt={it.caption ?? "photo"} className="w-full h-40 object-cover" />
-                    <div className="flex items-center justify-between px-2 py-1 text-sm">
-                      <button
-                        className="underline"
-                        onClick={() => toggleFavorite(it.id, it.favorite)}
-                        style={{ color: it.favorite ? palette.accent : undefined }}
-                      >
-                        {it.favorite ? "★ Favorite" : "☆ Favorite"}
-                      </button>
-                      <button className="underline" onClick={() => deleteMedia(it.id, it.file_path)} style={{ color: "#ef4444" }}>
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+      {/* Photos area — hidden in MVP */}
+      {SHOW_PHOTOS_ADDON && (
+        <div className="stack" style={{ marginTop: 16 }}>
+          {!photosEnabled ? (
+            <section className="card p-3">
+              <div className="section-row">
+                <h2 className="section-title">Photos & Slideshow</h2>
+                <button className="btn btn-brand" onClick={() => alert("Coming soon!")}>
+                  Enable for $2.99
+                </button>
               </div>
-            )}
-          </section>
-        )}
-      </div>
+              <p className="muted">Attach photos, star favorites, and watch your year-end slideshow.</p>
+            </section>
+          ) : (
+            <section className="card p-3">
+              <h2 className="section-title">Photos</h2>
+              <p className="muted">Uploads enabled (feature flagged off in MVP).</p>
+            </section>
+          )}
+        </div>
+      )}
     </section>
   );
 
