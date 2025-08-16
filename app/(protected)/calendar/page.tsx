@@ -5,7 +5,6 @@ import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
 // UI pieces
-import SiteHeader from "@/components/SiteHeader";
 import CalendarHeader from "@/components/CalendarHeader";
 import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
@@ -17,16 +16,9 @@ import type { DBEvent, Visibility } from "@/lib/types";
 
 export default function CalendarPage() {
   /* ---------------- Theme (persist) ---------------- */
-  const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">(
-    "winter"
-  );
+  const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">("winter");
   useEffect(() => {
-    const saved = localStorage.getItem("mzt-theme") as
-      | "spring"
-      | "summer"
-      | "autumn"
-      | "winter"
-      | null;
+    const saved = localStorage.getItem("mzt-theme") as "spring" | "summer" | "autumn" | "winter" | null;
     if (saved) setTheme(saved);
   }, []);
   useEffect(() => {
@@ -37,17 +29,12 @@ export default function CalendarPage() {
   /* ---------------- Session ---------------- */
   const [sessionUser, setSessionUser] = useState<string | null>(null);
   useEffect(() => {
-    supabase
-      .auth
-      .getUser()
-      .then(({ data }) => setSessionUser(data.user?.id ?? null));
+    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
 
   /* ---------------- Filters ---------------- */
   const [mode, setMode] = useState<"whats" | "mine">("whats");
-  const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">(
-    "all"
-  );
+  const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
   const [showMoon, setShowMoon] = useState(true);
   const [query, setQuery] = useState("");
 
@@ -128,11 +115,8 @@ export default function CalendarPage() {
 
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
-    if (!form.title || !form.start || !form.end)
-      return alert("Missing fields.");
+    if (!form.title || !form.start || !form.end) return alert("Missing fields.");
 
-    // keep this 'any' to avoid TS friction if your DBEvent type doesn't include
-    // all of these optional columns yet
     const payload: any = {
       title: form.title,
       description: form.description || null,
@@ -208,15 +192,7 @@ export default function CalendarPage() {
 
   const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
 
-  const onDrop = async ({
-    event,
-    start,
-    end,
-  }: {
-    event: UiEvent;
-    start: Date;
-    end: Date;
-  }) => {
+  const onDrop = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
     const db: DBEvent = event.resource;
     if (!canEdit(db)) return alert("You can only move events you created.");
     const { error } = await supabase
@@ -235,8 +211,7 @@ export default function CalendarPage() {
   /* ---------------- Render ---------------- */
   return (
     <div className="page">
-      <SiteHeader />
-
+      {/* SiteHeader is rendered globally in app/layout.tsx */}
       <div className="container-app">
         <CalendarHeader
           mode={mode}
