@@ -33,9 +33,7 @@ export default function SignUpPage() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/profile`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/profile` },
     });
 
     setLoading(false);
@@ -45,17 +43,18 @@ export default function SignUpPage() {
       return;
     }
 
-    // If email confirmations are enabled, Supabase will NOT return a session
+    // If email confirmations are enabled, there's no session yet.
     if (!data.session) {
-      setInfo("Check your email to confirm your address. After confirming, you’ll be redirected to your profile.");
+      setInfo(
+        "Check your email to confirm your address. After confirming, you’ll be redirected to your profile."
+      );
       return;
     }
 
-    // If confirmations are disabled, you'll be signed in immediately
     router.replace("/profile");
   }
 
-  // inline styles so this page looks great even if stylesheets fail to load
+  // Inline styles so page looks good even if global CSS fails
   const bg: React.CSSProperties = {
     minHeight: "100vh",
     background: "#F4ECFF",
@@ -154,3 +153,29 @@ export default function SignUpPage() {
             type="password"
             required
             value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={input}
+            placeholder="••••••••"
+          />
+
+          {error && <div style={alertErr}>{error}</div>}
+          {info && <div style={alertInfo}>{info}</div>}
+
+          <button type="submit" disabled={loading} style={btnPrimary}>
+            {loading ? "Creating…" : "Create profile"}
+          </button>
+
+          <div style={row}>
+            <a href="/" style={link}>Back to welcome</a>
+            <a href="/signin" style={link}>Have an account? Sign in</a>
+          </div>
+
+          <p style={{ fontSize: 12, color: "#6B7280", textAlign: "center", marginTop: 8 }}>
+            By creating an account you agree to our{" "}
+            <a href="/legal/terms" style={link}>Terms</a>.
+          </p>
+        </form>
+      </div>
+    </main>
+  );
+}
