@@ -1,12 +1,15 @@
 // app/signin/page.tsx
-"use client";
+'use client';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'default-no-store';
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function LoginPage() {
+export default function SignInPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
