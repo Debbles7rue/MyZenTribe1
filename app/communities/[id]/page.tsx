@@ -27,7 +27,7 @@ type Community = {
   about: string | null;
   created_at: string;
   photo_url: string | null;
-  created_by?: string | null; // if present in schema
+  created_by?: string | null;
 };
 
 type MapPin = {
@@ -82,7 +82,6 @@ export default function CommunityPage() {
       const uid = u?.user?.id ?? null;
       if (alive) setMe(uid);
 
-      // Load community
       const { data: c, error: cErr } = await supabase
         .from("communities")
         .select("*")
@@ -97,7 +96,6 @@ export default function CommunityPage() {
       if (!alive) return;
       setCommunity(c as Community);
 
-      // Determine admin: record in community_admins OR created_by match
       let admin = false;
       if (uid) {
         const { data: admins } = await supabase
@@ -110,7 +108,6 @@ export default function CommunityPage() {
       }
       if (alive) setIsAdmin(admin);
 
-      // Load pins for this community via mapping table
       const { data: mapped, error: mErr } = await supabase
         .from("community_circle_communities")
         .select(
@@ -132,7 +129,6 @@ export default function CommunityPage() {
     return () => { alive = false; };
   }, [communityId, router]);
 
-  // Initialize editor when opening
   useEffect(() => {
     if (editing && community) {
       setEditTitle(community.title || "");
@@ -148,7 +144,6 @@ export default function CommunityPage() {
     [community]
   );
 
-  // small helper to build the map props
   const mapCommunities = useMemo<Record<string, MapCommunity>>(() => {
     if (!community) return {};
     return {
@@ -198,11 +193,11 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap community-page">
       <div className="page">
         <div className="container-app">
           {/* Header */}
-          <div className="header-bar">
+          <div className="header-bar community-header">
             <div className="flex items-center gap-2">
               <button className="btn" onClick={() => router.push("/communities")}>Back</button>
               <span className="muted">Created {created}</span>
@@ -222,18 +217,18 @@ export default function CommunityPage() {
             <img
               src={community.photo_url}
               alt=""
-              className="w-full h-auto rounded-xl mb-3"
+              className="w-full h-auto rounded-xl community-cover"
               style={{ maxBlockSize: 360, objectFit: "cover" }}
             />
           )}
 
-          <h1 className="page-title">{community.title}</h1>
-          <div className="muted mb-3">
+          <h1 className="page-title community-title">{community.title}</h1>
+          <div className="muted community-subtitle">
             {community.category || "General"} · {community.zip || "—"}
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-3">
+          <div className="tabbar">
             <button
               onClick={() => setTab("discussion")}
               className={`btn ${tab === "discussion" ? "btn-active" : ""}`}
@@ -261,7 +256,7 @@ export default function CommunityPage() {
           </div>
 
           {/* Panel */}
-          <section className="card p-4">
+          <section className="card card-lg">
             {tab === "discussion" && (
               <>
                 <h3 className="h3 mb-2">Discussion</h3>
@@ -294,7 +289,6 @@ export default function CommunityPage() {
                   </button>
                 </div>
 
-                {/* Mini map */}
                 <div className="mb-3">
                   <MapExplorerClient
                     center={[
@@ -307,11 +301,10 @@ export default function CommunityPage() {
                     ]}
                     pins={pins}
                     communitiesById={mapCommunities}
-                    height={320}
+                    height={340}
                   />
                 </div>
 
-                {/* List */}
                 {pins.length === 0 ? (
                   <p className="muted">No pins yet. Be the first to add one!</p>
                 ) : (
