@@ -16,49 +16,54 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
   const [showQR, setShowQR] = useState(false);
 
   const inviteUrl = useMemo(() => {
-    if (!token) return "";
-    if (typeof window === "undefined") return "";
+    if (!token || typeof window === "undefined") return "";
     return `${window.location.origin}/invite/${token}`;
   }, [token]);
 
+  // keep your external QR service
   const qrUrl = inviteUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(inviteUrl)}`
     : "";
 
+  // 🔁 NEW: permanent token via RPC (no single-use)
   const generate = useCallback(async () => {
     if (!userId) return;
     setBusy(true);
     setErr(null);
     try {
-      const newToken = crypto.randomUUID();
-      const { error } = await supabase.from("friend_invites").insert({
-        token: newToken,
-        target_user: userId,    // who the request will go TO
-        created_by: userId,     // who created this invite
-        single_use: true,
-      });
-      if (error) throw error;
-      setToken(newToken);
+      const { data, error } = await supabase.rpc("get_or_create_reusable_invite", { p_target: userId });
+      if (error || !data) throw error || new Error("Failed to create permanent invite.");
+      setToken(data as string);
       setShowQR(true);
     } catch (e: any) {
-      setErr(e.message || "Failed to create invite.");
+      setErr(e.message || "Failed to create permanent invite.");
     } finally {
       setBusy(false);
     }
   }, [userId]);
 
-  // Load latest invite token created by me (handy after refresh)
+  // Load existing permanent token after refresh (no creation)
   useEffect(() => {
     (async () => {
       if (!userId) return;
+      // try REST read first
       const { data, error } = await supabase
         .from("friend_invites")
-        .select("token, created_at")
+        .select("token")
         .eq("created_by", userId)
-        .order("created_at", { ascending: false })
+        .eq("target_user", userId)
+        .eq("single_use", false)
         .limit(1)
         .maybeSingle();
-      if (!error && data?.token) setToken(data.token);
+
+      if (!error && data?.token) {
+        setToken(data.token);
+        return;
+      }
+
+      // fallback: if REST schema cache is stale, use the RPC to fetch/create
+      const { data: tkn, error: rpcErr } = await supabase.rpc("get_or_create_reusable_invite", { p_target: userId });
+      if (!rpcErr && tkn) setToken(tkn as string);
     })();
   }, [userId]);
 
@@ -98,7 +103,7 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
             style={{ width: 220, height: 220, margin: "0 auto", borderRadius: 12, border: "1px solid #eee" }}
           />
           <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            Scan or share your link. New visitors can send you a friend request.
+            Scan or share your permanent invite link.
           </div>
         </div>
       )}
@@ -108,6 +113,5 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
   );
 
   if (embed) return <div style={{ marginTop: 10, maxWidth: 640 }}>{Content}</div>;
-
   return <section className="card p-3">{Content}</section>;
 }
