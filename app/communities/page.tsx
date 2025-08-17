@@ -1,12 +1,16 @@
 // app/communities/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import type { MapCommunity, MapPin } from "@/components/community/MapExplorerClient";
+
+const MapExplorerClient = dynamic(
+  () => import("@/components/community/MapExplorerClient"),
+  { ssr: false } // <-- critical: avoid "window is not defined"
+);
 
 type Community = {
   id: string;
@@ -15,44 +19,12 @@ type Community = {
   zip: string | null;
 };
 
-type Circle = {
-  id: string;
-  community_id: string;
-  name: string | null;
-  lat: number;
-  lng: number;
-  address: string | null;
-  day_of_week: string | null;
-  time_local: string | null;
-  contact_phone: string | null;
-  contact_email: string | null;
-  website_url: string | null;
-};
+type Circle = MapPin;
 
 const CATEGORIES = [
-  "Wellness",
-  "Meditation",
-  "Yoga",
-  "Breathwork",
-  "Sound Baths",
-  "Drum Circles",
-  "Arts & Crafts",
-  "Nature/Outdoors",
-  "Parenting",
-  "Recovery/Support",
-  "Local Events",
-  "Other",
+  "Wellness","Meditation","Yoga","Breathwork","Sound Baths","Drum Circles",
+  "Arts & Crafts","Nature/Outdoors","Parenting","Recovery/Support","Local Events","Other",
 ];
-
-// Fix Leaflet default marker icons in Next.js
-const DefaultIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function CommunitiesMapExplorer() {
   const [loading, setLoading] = useState(true);
@@ -60,18 +32,17 @@ export default function CommunitiesMapExplorer() {
   const [circles, setCircles] = useState<Circle[]>([]);
 
   // filters
-  const [q, setQ] = useState("");        // text search in community title or circle name
-  const [cat, setCat] = useState("");    // community category
-  const [zip, setZip] = useState("");    // exact zip or prefix
-  const [radius, setRadius] = useState(0); // 0=exact, 25=zip prefix ~nearby
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
+  const [zip, setZip] = useState("");
+  const [radius, setRadius] = useState(0); // 0=exact, 25=zip prefix
 
-  // initial map center (continental US)
-  const [center] = useState<[number, number]>([39.5, -98.35]);
+  const center: [number, number] = [39.5, -98.35]; // USA-ish
 
   async function load() {
     setLoading(true);
 
-    // 1) Pull communities that match filters
+    // Communities
     let cq = supabase
       .from("communities")
       .select("id,title,category,zip")
@@ -82,8 +53,7 @@ export default function CommunitiesMapExplorer() {
     if (q.trim()) cq = cq.ilike("title", `%${q.trim()}%`);
     if (zip.trim()) {
       const z = zip.trim().slice(0, 5);
-      if (radius >= 25) cq = cq.like("zip", `${z.slice(0, 3)}%`);
-      else cq = cq.eq("zip", z);
+      cq = radius >= 25 ? cq.like("zip", `${z.slice(0, 3)}%`) : cq.eq("zip", z);
     }
 
     const { data: comms, error: cErr } = await cq;
@@ -102,7 +72,7 @@ export default function CommunitiesMapExplorer() {
       return;
     }
 
-    // 2) Pull circles for those communities
+    // Circles for those communities
     const { data: circs, error: sErr } = await supabase
       .from("community_circles")
       .select(
@@ -110,6 +80,7 @@ export default function CommunitiesMapExplorer() {
       )
       .in("community_id", commIds)
       .limit(2000);
+
     if (sErr) {
       console.error(sErr);
       setCircles([]);
@@ -137,8 +108,8 @@ export default function CommunitiesMapExplorer() {
   }, []);
 
   const communityById = useMemo(() => {
-    const m: Record<string, Community> = {};
-    communities.forEach((c) => (m[c.id] = c));
+    const m: Record<string, MapCommunity> = {};
+    communities.forEach((c) => (m[c.id] = { id: c.id, title: c.title, category: c.category }));
     return m;
   }, [communities]);
 
@@ -158,25 +129,12 @@ export default function CommunitiesMapExplorer() {
           {/* Filters */}
           <section className="card p-3">
             <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr 120px 140px 120px", gap: 12 }}>
-              <input
-                className="input"
-                placeholder="Search (name, address)…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+              <input className="input" placeholder="Search (name, address)…" value={q} onChange={(e) => setQ(e.target.value)} />
               <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
                 <option value="">All categories</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <input
-                className="input"
-                placeholder="ZIP"
-                value={zip}
-                onChange={(e) => setZip(e.target.value)}
-                maxLength={5}
-              />
+              <input className="input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} maxLength={5} />
               <select className="input" value={radius} onChange={(e) => setRadius(Number(e.target.value))}>
                 <option value={0}>ZIP only</option>
                 <option value={25}>~Nearby (zip prefix)</option>
@@ -185,48 +143,9 @@ export default function CommunitiesMapExplorer() {
             </div>
           </section>
 
-          {/* Map */}
+          {/* Map (client only) */}
           <section className="mt-3">
-            <div style={{ height: 560, borderRadius: 12, overflow: "hidden", border: "1px solid #eee" }}>
-              <MapContainer center={center} zoom={4} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-                <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                {circles.map((pin) => {
-                  const comm = communityById[pin.community_id];
-                  return (
-                    <Marker key={pin.id} position={[pin.lat, pin.lng]}>
-                      <Popup>
-                        <div style={{ maxWidth: 260 }}>
-                          <div style={{ fontWeight: 600 }}>{pin.name || "Untitled pin"}</div>
-                          {comm?.title && (
-                            <div style={{ fontSize: 12, marginTop: 2 }}>
-                              in <Link className="link" href={`/communities/${comm.id}`}>{comm.title}</Link>
-                              {comm?.category ? ` · ${comm.category}` : ""}
-                            </div>
-                          )}
-                          {pin.address && <div style={{ marginTop: 6 }}>{pin.address}</div>}
-                          {(pin.day_of_week || pin.time_local) && (
-                            <div className="muted" style={{ marginTop: 4 }}>
-                              {pin.day_of_week || ""}{pin.day_of_week && pin.time_local ? " · " : ""}{pin.time_local || ""}
-                            </div>
-                          )}
-                          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                            {pin.contact_phone && (
-                              <a className="btn btn-neutral" href={`tel:${pin.contact_phone}`}>Call</a>
-                            )}
-                            {pin.contact_email && (
-                              <a className="btn btn-neutral" href={`mailto:${pin.contact_email}`}>Email</a>
-                            )}
-                            {pin.website_url && (
-                              <a className="btn btn-neutral" href={pin.website_url} target="_blank" rel="noopener noreferrer">Website</a>
-                            )}
-                          </div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  );
-                })}
-              </MapContainer>
-            </div>
+            <MapExplorerClient center={center} pins={circles} communitiesById={communityById} />
             {loading && <p className="muted mt-2">Loading pins…</p>}
             {!loading && circles.length === 0 && (
               <div className="card p-3 mt-2">
