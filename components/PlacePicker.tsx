@@ -1,203 +1,203 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, ZoomControl, LayersControl, useMapEvents } from "react-leaflet";
-import L, { LatLngExpression } from "leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
 
-// Basic pin (you can swap for a nicer icon if you want)
-const pin = new L.Icon({
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-type Place = {
-  lat: number;
-  lng: number;
-  label?: string;
-};
-
+type Place = { lat: number; lng: number; label?: string };
 type Props = {
-  /** Optional initial center if you already know a ZIP/city; defaults to US center */
+  value: Place | null;
+  onChange: (p: Place | null) => void;
   initialQuery?: string;
-  /** Current value (if editing) */
-  value?: Place | null;
-  /** Called whenever user chooses a place */
-  onChange?: (p: Place | null) => void;
-  /** Height of the map */
   height?: number;
 };
 
-function ClickToSetMarker({ onPick }: { onPick: (p: Place) => void }) {
+// Fix default marker in Next/Leaflet
+const markerIcon = new L.Icon({
+  iconUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+function ClickToPlace({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   useMapEvents({
-    click: (e) => onPick({ lat: e.latlng.lat, lng: e.latlng.lng }),
+    click(e) {
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
   });
   return null;
 }
 
-/** Very light geocode using OpenStreetMap's Nominatim (no key).
- *  If you run into rate limits later, we can swap to MapTiler, Mapbox, or Google.
- */
-async function geocode(query: string): Promise<Place | null> {
-  if (!query.trim()) return null;
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(
-    query
-  )}`;
-  const res = await fetch(url, {
-    headers: {
-      // polite hint for some providers; browser will set Referer automatically
-      "Accept-Language": "en",
-    },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data?.length) return null;
-  const item = data[0];
-  return {
-    lat: parseFloat(item.lat),
-    lng: parseFloat(item.lon),
-    label: item.display_name,
-  };
-}
-
 export default function PlacePicker({
-  initialQuery,
   value,
   onChange,
-  height = 360,
+  initialQuery = "",
+  height = 380,
 }: Props) {
-  const [picked, setPicked] = useState<Place | null>(value ?? null);
-  const [query, setQuery] = useState(initialQuery ?? "");
-  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<
+    { display_name: string; lat: string; lon: string }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
 
-  // default to US center if nothing set
-  const center: LatLngExpression = useMemo<LatLngExpression>(() => {
-    if (picked) return [picked.lat, picked.lng];
-    return [39.5, -98.35]; // US-ish
-  }, [picked]);
-
-  useEffect(() => {
-    setPicked(value ?? null);
+  const center = useMemo<[number, number]>(() => {
+    if (value) return [value.lat, value.lng];
+    return [39.5, -98.35]; // USA-ish default
   }, [value]);
 
-  const doSearch = async () => {
-    if (!query.trim()) return;
-    setSearching(true);
-    try {
-      const result = await geocode(query);
-      if (result) {
-        setPicked(result);
-        onChange?.(result);
-      }
-    } finally {
-      setSearching(false);
+  // Nominatim search (no key)
+  async function runSearch(q: string) {
+    if (!q || q.trim().length < 2) {
+      setResults([]);
+      return;
     }
-  };
+    setLoading(true);
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${encodeURIComponent(
+          q
+        )}`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      const data = (await r.json()) as any[];
+      setResults(
+        data.map((d) => ({
+          display_name: d.display_name,
+          lat: d.lat,
+          lon: d.lon,
+        }))
+      );
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const useMyLocation = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setPicked(p);
-        onChange?.(p);
-      },
-      () => {}
-    );
-  };
+  // click outside to close suggestions
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!boxRef.current) return;
+      if (!boxRef.current.contains(e.target as Node)) setResults([]);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
 
   return (
-    <div className="space-y-2">
-      {/* Inline search row */}
-      <div className="flex gap-2">
+    <div style={{ display: "grid", gap: 8 }}>
+      <div ref={boxRef} style={{ position: "relative" }}>
         <input
-          className="input flex-1"
-          placeholder="Search a place or ZIP"
+          className="input"
+          placeholder="Search a place (address, park, city…)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") doSearch();
+            if (e.key === "Enter") runSearch(query);
           }}
         />
-        <button className="btn btn-brand" onClick={doSearch} disabled={searching}>
-          {searching ? "Searching…" : "Search"}
+        <button
+          className="btn"
+          style={{ position: "absolute", right: 6, top: 6 }}
+          onClick={() => runSearch(query)}
+        >
+          Search
         </button>
-        <button className="btn" onClick={useMyLocation}>Locate me</button>
+
+        {results.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "110%",
+              left: 0,
+              right: 0,
+              zIndex: 20,
+              background: "white",
+              border: "1px solid #ddd",
+              borderRadius: 8,
+              maxHeight: 260,
+              overflow: "auto",
+              boxShadow: "0 6px 24px rgba(0,0,0,.12)",
+            }}
+          >
+            {results.map((r, i) => (
+              <button
+                key={i}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "10px 12px",
+                  borderBottom: "1px solid #eee",
+                }}
+                onClick={() => {
+                  setResults([]);
+                  setQuery(r.display_name);
+                  onChange({
+                    lat: parseFloat(r.lat),
+                    lng: parseFloat(r.lon),
+                    label: r.display_name,
+                  });
+                }}
+              >
+                {r.display_name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* The map */}
-      <div style={{ height, borderRadius: 12, overflow: "hidden" }}>
+      <div
+        style={{
+          height,
+          borderRadius: 12,
+          overflow: "hidden",
+          border: "1px solid #eee",
+        }}
+      >
         <MapContainer
           center={center}
-          zoom={picked ? 12 : 4}
+          zoom={value ? 13 : 4}
+          scrollWheelZoom
           style={{ height: "100%", width: "100%" }}
-          zoomControl={false}
-          scrollWheelZoom={true}
-          wheelDebounceTime={20}
-          zoomSnap={0.25}
-          doubleClickZoom={true}
-          keyboard={true}
-          inertia={true}
         >
-          <ZoomControl position="bottomright" />
-
-          <LayersControl position="topright">
-            <LayersControl.BaseLayer checked name="Streets">
-              <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-            </LayersControl.BaseLayer>
-
-            {/* Satellite layer (Esri) */}
-            <LayersControl.BaseLayer name="Satellite">
-              <TileLayer
-                attribution='Tiles &copy; Esri'
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              />
-            </LayersControl.BaseLayer>
-          </LayersControl>
-
-          <ClickToSetMarker
-            onPick={(p) => {
-              setPicked(p);
-              onChange?.(p);
-            }}
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-
-          {picked && (
+          <ClickToPlace
+            onPick={(lat, lng) =>
+              onChange({
+                lat,
+                lng,
+                label:
+                  value?.label ||
+                  `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+              })
+            }
+          />
+          {value && (
             <Marker
-              position={[picked.lat, picked.lng]}
-              icon={pin}
-              draggable={true}
-              eventHandlers={{
-                dragend: (e) => {
-                  const m = e.target as L.Marker;
-                  const ll = m.getLatLng();
-                  const p = { lat: ll.lat, lng: ll.lng, label: picked.label };
-                  setPicked(p);
-                  onChange?.(p);
-                },
-              }}
+              position={[value.lat, value.lng]}
+              icon={markerIcon}
             />
           )}
         </MapContainer>
       </div>
 
-      <div className="text-sm muted">
-        {picked
-          ? `Picked: ${picked.lat.toFixed(5)}, ${picked.lng.toFixed(5)}${
-              picked.label ? ` — ${picked.label}` : ""
-            }`
-          : "Tip: search a city/ZIP or click the map to drop a pin."}
-      </div>
+      {value && (
+        <div className="muted" style={{ fontSize: 12 }}>
+          <strong>Picked:</strong>{" "}
+          {value.label
+            ? value.label
+            : `${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}`}
+        </div>
+      )}
     </div>
   );
 }
