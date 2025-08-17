@@ -1,221 +1,219 @@
 // components/AddCircleForm.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import PlacePicker from "@/components/PlacePicker";
 
-type Props = {
-  communityIds: string[]; // may be []
-  zip: string | null;
-  onClose: () => void;
-  onSaved: () => void;
-};
-
-const CATEGORY_CHOICES = [
-  "Drum Circles","Sound Baths","Yoga","Qi Gong","Meditation","Wellness",
-  "Nature/Outdoors","Arts & Crafts","Parenting","Recovery/Support","Local Events","Other",
+const CATEGORIES = [
+  "Wellness","Meditation","Yoga","Breathwork","Sound Baths","Drum Circles",
+  "Arts & Crafts","Nature/Outdoors","Parenting","Recovery/Support","Local Events","Other",
 ];
 
-export default function AddCircleForm({ communityIds, zip, onClose, onSaved }: Props) {
-  const [saving, setSaving] = useState(false);
+type ServiceRow = { id: string; category: string; schedule: string };
 
-  // questionnaire fields
+export default function AddCircleForm({
+  communityId,
+  zip,
+  onClose,
+  onSaved,
+}: {
+  communityId?: string | null;   // optional per your flow
+  zip?: string | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [name, setName] = useState("");
-  const [address, setAddress] = useState(zip || "");
-  const [dayText, setDayText] = useState<string>("");   // free-text
-  const [timeText, setTimeText] = useState<string>(""); // free-text
+  const [address, setAddress] = useState("");
+  const [place, setPlace] = useState<{lat:number; lng:number; label?:string} | null>(null);
 
-  const [contactPhone, setContactPhone] = useState<string>("");
-  const [contactEmail, setContactEmail] = useState<string>("");
-  const [websiteUrl, setWebsiteUrl] = useState<string>("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
 
-  // MULTI-CATEGORY
-  const [categories, setCategories] = useState<string[]>([]);
-  const [nextCat, setNextCat] = useState<string>("");
+  // multiple services for this pin
+  const [services, setServices] = useState<ServiceRow[]>([
+    { id: crypto.randomUUID(), category: "", schedule: "" },
+  ]);
 
-  const initialQuery = useMemo(() => (zip ? String(zip) : ""), [zip]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function isEmail(v: string) {
-    if (!v) return false;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const categoriesForPin = useMemo(() => {
+    const arr = services
+      .map(s => s.category.trim())
+      .filter(Boolean);
+    return Array.from(new Set(arr));
+  }, [services]);
+
+  function addServiceRow() {
+    setServices(s => [...s, { id: crypto.randomUUID(), category: "", schedule: "" }]);
   }
-  function hasContact() {
-    const phoneOk = contactPhone.trim().length > 0;
-    const emailOk = isEmail(contactEmail);
-    return phoneOk || emailOk;
+  function removeServiceRow(id: string) {
+    setServices(s => s.length <= 1 ? s : s.filter(r => r.id !== id));
   }
-
-  function addCategory() {
-    const c = nextCat.trim();
-    if (!c) return;
-    if (!categories.includes(c)) setCategories([...categories, c]);
-    setNextCat("");
-  }
-  function removeCategory(c: string) {
-    setCategories(categories.filter((x) => x !== c));
-  }
-
-  async function geocode(q: string) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-    const r = await fetch(url, {
-      headers: {
-        "Accept-Language": "en",
-        "User-Agent": "myzentribe/1.0 (contact: site admin)",
-      },
-    });
-    if (!r.ok) throw new Error("Geocoding failed");
-    const arr = (await r.json()) as Array<{ lat: string; lon: string; display_name: string }>;
-    return arr[0] ? { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon), label: arr[0].display_name } : null;
+  function updateService(id: string, patch: Partial<ServiceRow>) {
+    setServices(s => s.map(r => (r.id === id ? { ...r, ...patch } : r)));
   }
 
   async function handleSave() {
-    if (categories.length === 0) {
-      alert("Please add at least one category.");
+    setError(null);
+
+    // basic validations
+    if (!place) {
+      setError("Please pick a spot on the map.");
       return;
     }
-    if (!address.trim()) {
-      alert("Please enter an address or ZIP.");
+    if (!phone.trim() && !email.trim()) {
+      setError("Please provide a phone OR an email so people can contact you.");
       return;
     }
-    if (!hasContact()) {
-      alert("Please add at least a phone number or a valid email so people can reach you.");
+    const filled = services.filter(s => s.category.trim() || s.schedule.trim());
+    if (filled.length === 0) {
+      setError("Add at least one service (category + schedule).");
       return;
     }
 
     setSaving(true);
     try {
-      const picked = await geocode(address.trim() || initialQuery || "");
-      if (!picked) {
-        alert("Couldn't find that address—try a more specific address or city/ZIP.");
-        setSaving(false);
-        return;
-      }
+      // 1) create the pin
+      const insertCircle = {
+        community_id: communityId ?? null,
+        name: name || null,
+        lat: place.lat,
+        lng: place.lng,
+        address: address || place.label || null,
+        contact_phone: phone || null,
+        contact_email: email || null,
+        website_url: website || null,
+        categories: categoriesForPin.length ? categoriesForPin : null, // text[] on the circle
+        // legacy fields (safe to leave null)
+        day_of_week: null,
+        time_local: null,
+      };
 
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id ?? null;
-
-      const normalizedWebsite =
-        websiteUrl.trim() && !/^https?:\/\//i.test(websiteUrl.trim())
-          ? `https://${websiteUrl.trim()}`
-          : websiteUrl.trim() || null;
-
-      const firstCommunity = communityIds[0] ?? null;     // legacy/compat column
-      const firstCategory  = categories[0] ?? null;        // legacy/compat column
-
-      // Insert pin and fetch its id
-      const { data: inserted, error: insErr } = await supabase
+      const { data: circle, error: cErr } = await supabase
         .from("community_circles")
-        .insert({
-          community_id: firstCommunity,   // legacy single
-          name: name.trim() || null,
-          category: firstCategory,        // legacy single
-          categories,                     // multi
-          lat: picked.lat,
-          lng: picked.lng,
-          address: picked.label || address.trim(),
-          day_of_week: dayText || null,   // free text
-          time_local: timeText || null,   // free text
-          contact_phone: contactPhone.trim() || null,
-          contact_email: contactEmail.trim() || null,
-          website_url: normalizedWebsite,
-          created_by: userId,
-        })
-        .select("id")
+        .insert(insertCircle)
+        .select("*")
         .single();
 
-      if (insErr) throw insErr;
-      const circleId = inserted!.id as string;
+      if (cErr) throw cErr;
 
-      // Insert join rows for every selected community (if any)
-      if (communityIds.length > 0) {
-        const rows = communityIds.map((cid) => ({ circle_id: circleId, community_id: cid }));
-        const { error: mapErr } = await supabase
-          .from("community_circle_communities")
-          .insert(rows, { upsert: true });
-        if (mapErr) throw mapErr;
-      }
+      // 2) add services
+      const serviceRows = filled.map(s => ({
+        circle_id: circle.id,
+        category: (s.category || "Other").trim(),
+        schedule_text: (s.schedule || "No set time — contact").trim(),
+      }));
+
+      const { error: sErr } = await supabase
+        .from("circle_services")
+        .insert(serviceRows);
+
+      if (sErr) throw sErr;
 
       onSaved();
-      onClose();
     } catch (e: any) {
-      alert(e.message || "Could not save.");
+      setError(e.message || "Could not save. Please try again.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="card p-4">
-      <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 16 }}>
-        {/* Categories (multi) */}
-        <div className="field">
-          <div className="label">Categories</div>
-          <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 8 }}>
-            <select className="input" value={nextCat} onChange={(e) => setNextCat(e.target.value)}>
-              <option value="">Add another…</option>
-              {CATEGORY_CHOICES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <button className="btn" onClick={addCategory} disabled={!nextCat}>Add</button>
-          </div>
-          {categories.length > 0 ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              {categories.map((c) => (
-                <span key={c} className="tag" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  {c}
-                  <button className="btn btn-xs" onClick={() => removeCategory(c)} title="Remove">×</button>
-                </span>
-              ))}
+    <div className="card p-3">
+      <div className="field">
+        <div className="label">Circle name (optional)</div>
+        <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Saturday Sunset Circle" />
+      </div>
+
+      <div className="field">
+        <div className="label">Address / place</div>
+        <input className="input" value={address} onChange={e => setAddress(e.target.value)} placeholder="(optional) Street, City, ZIP"/>
+      </div>
+
+      <div className="field">
+        <PlacePicker
+          value={place}
+          onChange={(p) => {
+            setPlace(p);
+            if (!address && p?.label) setAddress(p.label);
+          }}
+          initialQuery={zip || ""}
+          height={360}
+        />
+      </div>
+
+      <div className="field">
+        <div className="label">Services (category + schedule)</div>
+
+        {services.map((row, i) => (
+          <div key={row.id} className="card p-3" style={{ marginBottom: 8 }}>
+            <div className="form-grid">
+              <div>
+                <div className="label">Category</div>
+                <select
+                  className="input"
+                  value={row.category}
+                  onChange={(e) => updateService(row.id, { category: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="label">Schedule</div>
+                <input
+                  className="input"
+                  placeholder='e.g., "1st Monday 7–8pm", "No set time — contact"'
+                  value={row.schedule}
+                  onChange={(e) => updateService(row.id, { schedule: e.target.value })}
+                />
+              </div>
+
+              <div className="span-2" style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button className="btn" onClick={() => removeServiceRow(row.id)} disabled={services.length <= 1}>
+                  Remove
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="muted" style={{ marginTop: 6 }}>Add at least one category.</div>
-          )}
-        </div>
-
-        <div className="field">
-          <div className="label">Circle / listing name (optional)</div>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Saturday Sunset Circle" />
-        </div>
-
-        <div className="field">
-          <div className="label">Address / city / ZIP</div>
-          <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, city, or ZIP" />
-          <div className="muted" style={{ fontSize: 12 }}>We’ll place the pin automatically based on this location.</div>
-        </div>
-
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div className="field">
-            <div className="label">Day (free text)</div>
-            <input className="input" value={dayText} onChange={(e) => setDayText(e.target.value)} placeholder='e.g., "First Monday monthly", "No set day"…' />
           </div>
-          <div className="field">
-            <div className="label">Time (free text)</div>
-            <input className="input" value={timeText} onChange={(e) => setTimeText(e.target.value)} placeholder='e.g., "6–8 pm", "Varies — contact for details"' />
-          </div>
-        </div>
-
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div className="field">
-            <div className="label">Contact phone (required if no email)</div>
-            <input className="input" type="tel" inputMode="tel" placeholder="e.g., 555-555-5555" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
-          </div>
-          <div className="field">
-            <div className="label">Contact email (required if no phone)</div>
-            <input className="input" type="email" placeholder="name@example.com" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-            <div className="muted" style={{ fontSize: 12 }}>Provide at least one: phone or email.</div>
-          </div>
-        </div>
-
-        <div className="field">
-          <div className="label">Website (optional)</div>
-          <input className="input" type="url" placeholder="https://your-site.com" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} />
-        </div>
+        ))}
 
         <div className="right">
-          <button className="btn" onClick={onClose} style={{ marginRight: 8 }}>Cancel</button>
-          <button className="btn btn-brand" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save pin"}</button>
+          <button className="btn" onClick={addServiceRow}>Add another service</button>
         </div>
+
+        <div className="muted" style={{ marginTop: 6 }}>
+          You can list multiple offerings here (e.g., Drum Circles, Sound Baths, Qi Gong) with different schedules.
+        </div>
+      </div>
+
+      <div className="form-grid">
+        <div>
+          <div className="label">Contact phone</div>
+          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(xxx) xxx-xxxx" />
+        </div>
+        <div>
+          <div className="label">Contact email</div>
+          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
+        </div>
+      </div>
+
+      <div className="field">
+        <div className="label">Website (optional)</div>
+        <input className="input" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
+      </div>
+
+      {error && <div className="note" style={{ color: "#b91c1c", borderColor: "#fecaca", background: "#fef2f2" }}>{error}</div>}
+
+      <div className="modal-footer">
+        <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
+        <button className="btn btn-brand" onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save circle"}
+        </button>
       </div>
     </div>
   );
