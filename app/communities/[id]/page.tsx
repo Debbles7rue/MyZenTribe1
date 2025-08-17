@@ -9,7 +9,6 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
-// Client-only bits
 const AddPinModal = dynamic(
   () => import("@/components/community/AddPinModal"),
   { ssr: false }
@@ -60,7 +59,6 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"discussion" | "happening" | "about" | "pins">("discussion");
 
-  // edit modal
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editCat, setEditCat] = useState<string>("");
@@ -68,10 +66,8 @@ export default function CommunityPage() {
   const [editAbout, setEditAbout] = useState<string>("");
   const [editPhoto, setEditPhoto] = useState<string>("");
 
-  // admin state
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // pins for this community
   const [pins, setPins] = useState<MapPin[]>([]);
   const [showAddPin, setShowAddPin] = useState(false);
 
@@ -196,7 +192,6 @@ export default function CommunityPage() {
     <div className="page-wrap community-page">
       <div className="page">
         <div className="container-app">
-          {/* Header */}
           <div className="header-bar community-header">
             <div className="flex items-center gap-2">
               <button className="btn" onClick={() => router.push("/communities")}>Back</button>
@@ -212,7 +207,6 @@ export default function CommunityPage() {
             </div>
           </div>
 
-          {/* Cover */}
           {community.photo_url && (
             <img
               src={community.photo_url}
@@ -227,35 +221,13 @@ export default function CommunityPage() {
             {community.category || "General"} · {community.zip || "—"}
           </div>
 
-          {/* Tabs */}
           <div className="tabbar">
-            <button
-              onClick={() => setTab("discussion")}
-              className={`btn ${tab === "discussion" ? "btn-active" : ""}`}
-            >
-              Discussion
-            </button>
-            <button
-              onClick={() => setTab("happening")}
-              className={`btn ${tab === "happening" ? "btn-active" : ""}`}
-            >
-              What’s happening
-            </button>
-            <button
-              onClick={() => setTab("about")}
-              className={`btn ${tab === "about" ? "btn-active" : ""}`}
-            >
-              About
-            </button>
-            <button
-              onClick={() => setTab("pins")}
-              className={`btn ${tab === "pins" ? "btn-active" : ""}`}
-            >
-              Pins
-            </button>
+            <button onClick={() => setTab("discussion")} className={`btn ${tab === "discussion" ? "btn-active" : ""}`}>Discussion</button>
+            <button onClick={() => setTab("happening")}  className={`btn ${tab === "happening"  ? "btn-active" : ""}`}>What’s happening</button>
+            <button onClick={() => setTab("about")}      className={`btn ${tab === "about"      ? "btn-active" : ""}`}>About</button>
+            <button onClick={() => setTab("pins")}       className={`btn ${tab === "pins"       ? "btn-active" : ""}`}>Pins</button>
           </div>
 
-          {/* Panel */}
           <section className="card card-lg">
             {tab === "discussion" && (
               <>
@@ -334,42 +306,47 @@ export default function CommunityPage() {
           <div className="modal-center">
             <div className="modal-panel">
               <h3 className="h3 mb-2">Edit community</h3>
-              <div className="form-grid">
-                <div className="span-2 field">
-                  <div className="label">Title</div>
-                  <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-                </div>
 
-                <div className="field">
-                  <div className="label">Category</div>
-                  <select className="input" value={editCat} onChange={(e) => setEditCat(e.target.value)}>
-                    <option value="">General</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* SCROLLABLE BODY (new) */}
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="span-2 field">
+                    <div className="label">Title</div>
+                    <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                  </div>
 
-                <div className="field">
-                  <div className="label">ZIP</div>
-                  <input className="input" value={editZip} maxLength={5} onChange={(e) => setEditZip(e.target.value)} />
-                </div>
+                  <div className="field">
+                    <div className="label">Category</div>
+                    <select className="input" value={editCat} onChange={(e) => setEditCat(e.target.value)}>
+                      <option value="">General</option>
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="span-2 field">
-                  <div className="label">About</div>
-                  <textarea className="input" rows={4} value={editAbout} onChange={(e) => setEditAbout(e.target.value)} />
-                </div>
+                  <div className="field">
+                    <div className="label">ZIP</div>
+                    <input className="input" value={editZip} maxLength={5} onChange={(e) => setEditZip(e.target.value)} />
+                  </div>
 
-                <div className="span-2">
-                  <CommunityPhotoUploader
-                    value={editPhoto}
-                    onChange={setEditPhoto}
-                    communityId={community.id}
-                    label="Cover photo"
-                  />
+                  <div className="span-2 field">
+                    <div className="label">About</div>
+                    <textarea className="input" rows={4} value={editAbout} onChange={(e) => setEditAbout(e.target.value)} />
+                  </div>
+
+                  <div className="span-2">
+                    <CommunityPhotoUploader
+                      value={editPhoto}
+                      onChange={setEditPhoto}
+                      communityId={community.id}
+                      label="Cover photo"
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* STICKY FOOTER */}
               <div className="modal-footer">
                 <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn btn-brand" onClick={saveEdits}>Save</button>
@@ -379,7 +356,6 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {/* Add pin modal, pre-select this community */}
       {showAddPin && (
         <AddPinModal
           communities={[{ id: community.id, title: community.title, category: community.category, zip: community.zip }]}
