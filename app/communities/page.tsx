@@ -9,7 +9,11 @@ import type { MapCommunity, MapPin } from "@/components/community/MapExplorerCli
 
 const MapExplorerClient = dynamic(
   () => import("@/components/community/MapExplorerClient"),
-  { ssr: false } // <-- critical: avoid "window is not defined"
+  { ssr: false } // map is client-only
+);
+const AddPinModal = dynamic(
+  () => import("@/components/community/AddPinModal"),
+  { ssr: false }
 );
 
 type Community = {
@@ -36,6 +40,9 @@ export default function CommunitiesMapExplorer() {
   const [cat, setCat] = useState("");
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState(0); // 0=exact, 25=zip prefix
+
+  // add-pin modal
+  const [showAdd, setShowAdd] = useState(false);
 
   const center: [number, number] = [39.5, -98.35]; // USA-ish
 
@@ -64,8 +71,10 @@ export default function CommunitiesMapExplorer() {
       setLoading(false);
       return;
     }
-    setCommunities((comms ?? []) as Community[]);
-    const commIds = (comms ?? []).map((c) => c.id);
+    const commList = (comms ?? []) as Community[];
+    setCommunities(commList);
+
+    const commIds = commList.map((c) => c.id);
     if (commIds.length === 0) {
       setCircles([]);
       setLoading(false);
@@ -122,6 +131,7 @@ export default function CommunitiesMapExplorer() {
             <h1 className="page-title" style={{ marginBottom: 0 }}>Communities</h1>
             <div className="controls">
               <Link href="/communities/browse" className="btn btn-neutral">Browse communities</Link>
+              <button className="btn btn-brand" onClick={() => setShowAdd(true)}>Add pin</button>
               <Link href="/communities/new" className="btn btn-brand">Start a community</Link>
             </div>
           </div>
@@ -155,6 +165,18 @@ export default function CommunitiesMapExplorer() {
           </section>
         </div>
       </div>
+
+      {/* Add pin modal */}
+      {showAdd && (
+        <AddPinModal
+          communities={communities}
+          onClose={() => setShowAdd(false)}
+          onSaved={async () => {
+            setShowAdd(false);
+            await load(); // refresh pins after save
+          }}
+        />
+      )}
     </div>
   );
 }
