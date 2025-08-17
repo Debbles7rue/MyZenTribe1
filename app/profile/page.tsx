@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
-import InvitePanelCompact from "@/components/InvitePanelCompact";
+import InviteFriendsInline from "@/components/profile/InviteFriendsInline";
 
 type Profile = {
   id: string;
@@ -98,7 +98,6 @@ export default function ProfilePage() {
               <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
                 {editPersonal ? "Done" : "Edit"}
               </button>
-              {/* Keep Sign out only in SiteHeader to avoid duplicates */}
             </div>
           </div>
 
@@ -119,7 +118,7 @@ export default function ProfilePage() {
               background: "rgba(245, 243, 255, 0.4)",
             }}
           >
-            <div className="profile-header">
+            <div className="profile-header" style={{ gap: 18 }}>
               <AvatarUploader
                 userId={userId}
                 value={p.avatar_url}
@@ -127,23 +126,26 @@ export default function ProfilePage() {
                 label="Profile photo"
                 size={180}
               />
-              <div className="profile-heading">
+              <div className="profile-heading" style={{ minWidth: 0 }}>
                 <div className="profile-name">{displayName}</div>
                 <div className="kpis">
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
+
+                {/* Invite friends embedded under the name/stats */}
+                <InviteFriendsInline embed />
               </div>
             </div>
           </div>
 
-          {/* Two-column layout with narrow right rail */}
+          {/* Two-column layout */}
           <div
             className="columns"
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0,1fr) 280px", // smaller right column
+              gridTemplateColumns: "minmax(0,1fr) 280px",
               gap: 16,
               alignItems: "start",
             }}
@@ -210,10 +212,8 @@ export default function ProfilePage() {
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: compact cards */}
+            {/* RIGHT: compact cards (invite moved to header) */}
             <div className="stack">
-              <InvitePanelCompact userId={userId} />
-
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
                   <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
