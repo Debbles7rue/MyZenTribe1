@@ -1,7 +1,6 @@
-// app/communities/browse/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -10,9 +9,8 @@ type Community = {
   title: string;
   category: string | null;
   zip: string | null;
-  photo_url: string | null;
-  cover_image_url: string | null;
   about: string | null;
+  photo_url: string | null;
   created_at: string;
 };
 
@@ -22,25 +20,21 @@ const CATEGORIES = [
 ];
 
 export default function BrowseCommunities() {
-  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Community[]>([]);
-  const [memberships, setMemberships] = useState<Record<string, boolean>>({});
+
+  // simple search inputs (same as before)
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [zip, setZip] = useState("");
-  const [radius, setRadius] = useState(0);
+  const [radius, setRadius] = useState(0); // 0 = exact zip, 25 = zip prefix
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-  }, []);
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
 
     let query = supabase
       .from("communities")
-      .select("id,title,category,zip,photo_url,cover_image_url,about,created_at")
+      .select("id,title,category,zip,about,photo_url,created_at")
       .order("created_at", { ascending: false })
       .limit(60);
 
@@ -49,8 +43,7 @@ export default function BrowseCommunities() {
 
     if (zip.trim()) {
       const z = zip.trim().slice(0, 5);
-      if (radius >= 25) query = query.like("zip", `${z.slice(0, 3)}%`);
-      else query = query.eq("zip", z);
+      query = radius >= 25 ? query.like("zip", `${z.slice(0, 3)}%`) : query.eq("zip", z);
     }
 
     const { data, error } = await query;
@@ -60,34 +53,28 @@ export default function BrowseCommunities() {
       setLoading(false);
       return;
     }
-
-    const list = (data ?? []) as Community[];
-    setRows(list);
+    setRows((data ?? []) as Community[]);
     setLoading(false);
-
-    // membership map
-    if (userId && list.length) {
-      const ids = list.map((r) => r.id);
-      const { data: memberRows } = await supabase
-        .from("community_members")
-        .select("community_id")
-        .eq("user_id", userId)
-        .in("community_id", ids);
-      const m: Record<string, boolean> = {};
-      (memberRows ?? []).forEach((r: any) => (m[r.community_id] = true));
-      setMemberships(m);
-    } else {
-      setMemberships({});
-    }
-  }
+  }, [q, cat, zip, radius]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [load]);
+
+  // Auto-refresh when the tab regains focus or visibility
+  useEffect(() => {
+    const onFocus = () => load();
+    const onVis = () => { if (!document.hidden) load(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [load]);
 
   return (
-    <div className="page-wrap" style={{ background: "linear-gradient(#FFF7DB, #ffffff)", minHeight: "100vh" }}>
+    <div className="page-wrap" style={{ background: "linear-gradient(#FFF7DB, #ffffff)" }}>
       <div className="page">
         <div className="container-app">
           <div className="header-bar">
@@ -100,54 +87,96 @@ export default function BrowseCommunities() {
 
           {/* search card */}
           <section className="card p-3">
-            <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr 120px 140px 120px", gap: 12 }}>
-              <input className="input" placeholder="Search by title (e.g., drum circles)" value={q} onChange={(e) => setQ(e.target.value)} />
-              <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
-                <option value="">All categories</option>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <input className="input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} maxLength={5} />
-              <select className="input" value={radius} onChange={(e) => setRadius(Number(e.target.value))}>
-                <option value={0}>ZIP only</option>
-                <option value={25}>~Nearby (zip prefix)</option>
-              </select>
-              <button className="btn btn-brand" onClick={load}>Search</button>
+            <div className="stack" style={{ gap: 12 }}>
+              <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr 120px 140px", gap: 12 }}>
+                <input
+                  className="input"
+                  placeholder="Search by title (e.g., drum circles)"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+                <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
+                  <option value="">All categories</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  placeholder="ZIP"
+                  value={zip}
+                  onChange={(e) => setZip(e.target.value)}
+                  maxLength={5}
+                />
+                <select className="input" value={radius} onChange={(e) => setRadius(Number(e.target.value))}>
+                  <option value={0}>ZIP only</option>
+                  <option value={25}>~Nearby (zip prefix)</option>
+                </select>
+              </div>
+
+              <div className="right">
+                <button className="btn btn-brand" onClick={load}>
+                  Search
+                </button>
+              </div>
             </div>
           </section>
 
           {/* results */}
           <section className="stack mt-3">
             {loading && <p className="muted">Loading…</p>}
+
             {!loading && rows.length === 0 && (
-              <div className="card p-3"><p className="muted">No communities yet. Be the first!</p></div>
+              <div className="card p-3">
+                <p className="muted">No communities yet. Be the first!</p>
+              </div>
             )}
-            {!loading && rows.map((c) => {
-              const cover = c.cover_image_url || c.photo_url;
-              return (
-                <div key={c.id} className="card p-3" style={{ display: "grid", gridTemplateColumns: "72px 1fr auto", gap: 12 }}>
-                  <div style={{
-                    width: 72, height: 72, borderRadius: 12,
-                    background: cover ? `center / cover no-repeat url(${cover})` : "linear-gradient(135deg,#c4a6ff,#ff8a65)"
-                  }} />
-                  <div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                      <Link href={`/communities/${c.id}`} className="link"><strong>{c.title || "Untitled"}</strong></Link>
-                      {c.category && <span className="tag">{c.category}</span>}
-                      {c.zip && <span className="muted">· {c.zip}</span>}
-                    </div>
-                    {c.about && (
-                      <p className="muted" style={{ marginTop: 6, marginBottom: 0 }}>
-                        {c.about.slice(0, 120)}{c.about.length > 120 ? "…" : ""}
-                      </p>
-                    )}
-                  </div>
-                  <div className="stack" style={{ alignItems: "end" }}>
-                    <Link href={`/communities/${c.id}`} className="btn btn-neutral">Open</Link>
-                    {memberships[c.id] && <span className="muted" style={{ fontSize: 12 }}>Joined</span>}
-                  </div>
+
+            {!loading && rows.map((c) => (
+              <div
+                key={c.id}
+                className="card p-3"
+                style={{ display: "grid", gridTemplateColumns: "88px 1fr auto", gap: 12 }}
+              >
+                <div style={{ width: 88, height: 88, borderRadius: 12, overflow: "hidden", background: "#f3f4f6" }}>
+                  {c.photo_url ? (
+                    // lazy-loaded img avoids some css background caching quirks
+                    // and tends to refresh more reliably after an edit
+                    <img
+                      src={c.photo_url}
+                      alt=""
+                      loading="lazy"
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: "100%", height: "100%",
+                      background: "linear-gradient(135deg,#c4a6ff,#ff8a65)"
+                    }} />
+                  )}
                 </div>
-              );
-            })}
+
+                <div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                    <Link href={`/communities/${c.id}`} className="link">
+                      <strong>{c.title || "Untitled"}</strong>
+                    </Link>
+                    {c.category && <span className="tag">{c.category}</span>}
+                    {c.zip && <span className="muted">· {c.zip}</span>}
+                  </div>
+                  {c.about && (
+                    <p className="muted" style={{ marginTop: 6, marginBottom: 0 }}>
+                      {c.about.slice(0, 180)}
+                      {c.about.length > 180 ? "…" : ""}
+                    </p>
+                  )}
+                </div>
+
+                <div className="stack" style={{ alignItems: "end" }}>
+                  <Link href={`/communities/${c.id}`} className="btn btn-neutral">Open</Link>
+                </div>
+              </div>
+            ))}
           </section>
         </div>
       </div>
