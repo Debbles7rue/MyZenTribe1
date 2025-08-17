@@ -6,6 +6,10 @@ import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
 import ProfileInviteQR from "@/components/ProfileInviteQR";
+import ProfileModeToggle from "@/components/ProfileModeToggle";
+// ...
+<ProfileInviteQR userId={userId} embed />
+<ProfileModeToggle />
 
 type Profile = {
   id: string;
