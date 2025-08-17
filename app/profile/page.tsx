@@ -173,4 +173,110 @@ export default function ProfilePage() {
           {/* Two-column layout */}
           <div
             className="columns"
-            style={{ display: "grid", gridTemplateColumns: "
+            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
+          >
+            {/* LEFT: about + feed */}
+            <div className="stack">
+              {editPersonal ? (
+                <section className="card p-3">
+                  <h2 className="section-title">Edit your info</h2>
+                  <div className="stack">
+                    <label className="field">
+                      <span className="label">Name</span>
+                      <input
+                        className="input"
+                        value={p.full_name ?? ""}
+                        onChange={(e) => setP({ ...p, full_name: e.target.value })}
+                      />
+                    </label>
+
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                      <label className="field">
+                        <span className="label">Location</span>
+                        <input
+                          className="input"
+                          value={p.location_text ?? ""}
+                          onChange={(e) => setP({ ...p, location_text: e.target.value })}
+                          placeholder="City, State (e.g., Greenville, TX)"
+                        />
+                      </label>
+                      <label className="mt-[1.85rem] flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={!!p.location_is_public}
+                          onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
+                        />
+                        Show on public profile
+                      </label>
+                    </div>
+
+                    <label className="field">
+                      <span className="label">Bio</span>
+                      <textarea
+                        className="input"
+                        rows={4}
+                        value={p.bio ?? ""}
+                        onChange={(e) => setP({ ...p, bio: e.target.value })}
+                      />
+                    </label>
+
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={!!p.show_mutuals}
+                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
+                      />
+                      <span>Show mutual friends</span>
+                    </label>
+
+                    <div className="right">
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>
+                        {saving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <section className="card p-3">
+                  <h2 className="section-title">About</h2>
+                  <div className="stack">
+                    {p.location_is_public && p.location_text ? (
+                      <div><strong>Location:</strong> {p.location_text}</div>
+                    ) : null}
+                    {p.bio && (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>)}
+                    {!p.location_is_public && p.location_text ? (
+                      <div className="muted text-sm">(Location is private)</div>
+                    ) : null}
+                    {!p.location_text && !p.bio && (
+                      <div className="muted">Add a bio and location using Edit.</div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Main feed */}
+              <PhotosFeed userId={userId} />
+            </div>
+
+            {/* RIGHT: gratitude (invite moved into header) */}
+            <div className="stack">
+              <section className="card p-3" style={{ padding: 12 }}>
+                <div className="section-row">
+                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
+                  <a className="btn btn-brand" href="/gratitude">Open</a>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Capture daily gratitude. Prompts & a 30-day healing journal live on the full page.
+                </p>
+              </section>
+              {/* Inbox preview could go here when you're ready */}
+              {/* <InboxPreview /> */}
+            </div>
+          </div>
+
+          {loading && <p className="muted mt-3">Loading…</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
