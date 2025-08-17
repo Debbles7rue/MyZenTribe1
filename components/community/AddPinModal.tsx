@@ -1,7 +1,8 @@
-// components/community/AddPinModal.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
 import AddCircleForm from "@/components/AddCircleForm";
 
 type CommunityLite = {
@@ -20,72 +21,93 @@ export default function AddPinModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [pick, setPick] = useState<string>("");         // dropdown pick
-  const [selected, setSelected] = useState<string[]>([]); // chosen community ids
+  const [selectedId, setSelectedId] = useState<string>("");
+  const backdropRef = useRef<HTMLDivElement | null>(null);
 
-  const byId = useMemo(() => {
-    const m: Record<string, CommunityLite> = {};
-    communities.forEach((c) => (m[c.id] = c));
-    return m;
-  }, [communities]);
+  // Default to first community if any
+  useEffect(() => {
+    if (!selectedId && communities.length > 0) setSelectedId(communities[0].id);
+  }, [communities, selectedId]);
 
-  function addCommunity() {
-    if (!pick) return;
-    if (!selected.includes(pick)) setSelected((s) => [...s, pick]);
-    setPick("");
-  }
-  function removeCommunity(id: string) {
-    setSelected((s) => s.filter((x) => x !== id));
-  }
+  // Lock background scroll & close on ESC
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
 
-  return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-sheet" style={{ maxWidth: 780 }}>
+  const selected = useMemo(
+    () => communities.find((c) => c.id === selectedId) || null,
+    [communities, selectedId]
+  );
+
+  const modal = (
+    <div
+      ref={backdropRef}
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        // click outside sheet closes
+        if (e.target === backdropRef.current) onClose();
+      }}
+    >
+      <div className="modal-sheet" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="h3">Add a pin to the map</h3>
-          <button className="btn" onClick={onClose}>Close</button>
+          <button className="btn" onClick={onClose} aria-label="Close">Close</button>
         </div>
 
-        {/* Multi-community picker (optional) */}
-        <div className="card p-3" style={{ marginBottom: 12 }}>
-          <div className="label">Communities (optional — add one or many)</div>
-          <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 8 }}>
-            <select className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
-              <option value="">Select a community…</option>
-              {communities.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title} {c.category ? `· ${c.category}` : ""} {c.zip ? `· ${c.zip}` : ""}
-                </option>
-              ))}
-            </select>
-            <button className="btn" onClick={addCommunity} disabled={!pick}>Add</button>
+        {communities.length === 0 ? (
+          <div className="card p-4">
+            <p className="mb-2">You don’t have any communities yet.</p>
+            <div className="flex gap-2">
+              <Link href="/communities/new" className="btn btn-brand">Start a community</Link>
+              <button className="btn" onClick={onClose}>Cancel</button>
+            </div>
           </div>
-
-          {selected.length === 0 ? (
-            <div className="muted" style={{ marginTop: 8 }}>
-              No specific community selected — that’s ok! Your pin will still appear on the global map.
+        ) : (
+          <>
+            <div className="field">
+              <div className="label">Community</div>
+              <select
+                className="input"
+                value={selectedId}
+                onChange={(e) => setSelectedId(e.target.value)}
+              >
+                {communities.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title} {c.category ? `· ${c.category}` : ""} {c.zip ? `· ${c.zip}` : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="muted" style={{ fontSize: 12 }}>
+                Your pin will be shown under this community and on the global map.
+              </div>
             </div>
-          ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              {selected.map((id) => (
-                <span key={id} className="tag" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  {byId[id]?.title || id}
-                  <button className="btn btn-xs" onClick={() => removeCommunity(id)} title="Remove">×</button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* The questionnaire form (no map) */}
-        <AddCircleForm
-          key={selected.join("|") || "no-communities"}
-          communityIds={selected}      // <— multiple
-          zip={null}
-          onClose={onClose}
-          onSaved={onSaved}
-        />
+            {selected && (
+              <AddCircleForm
+                key={selected.id}
+                communityId={selected.id}
+                zip={selected.zip}
+                onClose={onClose}
+                onSaved={onSaved}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );
+
+  // Render above everything else
+  return createPortal(modal, document.body);
 }
