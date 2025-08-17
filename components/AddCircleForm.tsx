@@ -1,79 +1,238 @@
-// components/AddCircleForm.tsx
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
-import type { LatLngLiteral } from 'leaflet';
-import { supabase } from '@/lib/supabaseClient';
-
-// Dynamically import the client map with SSR disabled
-const LeafletClient = dynamic(() => import('./LeafletClient'), { ssr: false });
+import { useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
   communityId: string;
-  zip?: string | null;
+  zip: string | null;
   onClose: () => void;
-  onSaved?: () => void;
+  onSaved: () => void;
 };
 
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+const PIN_CATEGORIES = [
+  "Drum Circles",
+  "Sound Baths",
+  "Yoga",
+  "Qi Gong",
+  "Meditation",
+  "Wellness",
+  "Nature/Outdoors",
+  "Arts & Crafts",
+  "Parenting",
+  "Recovery/Support",
+  "Local Events",
+  "Other",
+];
+
 export default function AddCircleForm({ communityId, zip, onClose, onSaved }: Props) {
-  const [name, setName] = useState('');
-  const [picked, setPicked] = useState<LatLngLiteral | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // crude ZIP → center guess (fallback to USA center)
-  const defaultCenter = useMemo<LatLngLiteral>(() => {
-    if (zip && zip.startsWith('75')) return { lat: 33.11, lng: -96.11 }; // North TX-ish
-    return { lat: 39.5, lng: -98.35 }; // CONUS center-ish
-  }, [zip]);
+  // questionnaire fields
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<string>("");
+  const [address, setAddress] = useState(zip || "");
+  const [day, setDay] = useState<string>("");
+  const [timeLocal, setTimeLocal] = useState<string>("");
+  const [contactPhone, setContactPhone] = useState<string>("");
+  const [contactEmail, setContactEmail] = useState<string>("");
+  const [websiteUrl, setWebsiteUrl] = useState<string>("");
 
-  async function save() {
-    if (!picked) return;
-    setSaving(true);
-    const { error } = await supabase.from('community_circles').insert({
-      community_id: communityId,
-      name: name || null,
-      lat: picked.lat,
-      lng: picked.lng,
+  const initialQuery = useMemo(() => (zip ? String(zip) : ""), [zip]);
+
+  function isEmail(v: string) {
+    if (!v) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  }
+  function hasContact() {
+    const phoneOk = contactPhone.trim().length > 0;
+    const emailOk = isEmail(contactEmail);
+    return phoneOk || emailOk;
+  }
+
+  async function geocode(q: string) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+      q
+    )}`;
+    const r = await fetch(url, {
+      headers: {
+        "Accept-Language": "en",
+        // polite UA helps with Nominatim
+        "User-Agent": "myzentribe/1.0 (contact: site admin)",
+      },
     });
-    setSaving(false);
-    if (error) {
-      alert(`Could not save: ${error.message}`);
+    if (!r.ok) throw new Error("Geocoding failed");
+    const arr = (await r.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+    return arr[0] ? { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon), label: arr[0].display_name } : null;
+  }
+
+  async function handleSave() {
+    if (!category) {
+      alert("Please choose a category.");
       return;
     }
-    onSaved?.();
-    onClose();
+    if (!address.trim()) {
+      alert("Please enter an address or ZIP.");
+      return;
+    }
+    if (!hasContact()) {
+      alert("Please add at least a phone number or a valid email so people can reach you.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // 1) Geocode address -> lat/lng
+      const query = address.trim() || initialQuery || "";
+      const picked = await geocode(query);
+      if (!picked) {
+        alert("Couldn't find that address—try a more specific address or city/ZIP.");
+        setSaving(false);
+        return;
+      }
+
+      // 2) Insert into Supabase
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id ?? null;
+
+      const normalizedWebsite =
+        websiteUrl.trim() && !/^https?:\/\//i.test(websiteUrl.trim())
+          ? `https://${websiteUrl.trim()}`
+          : websiteUrl.trim() || null;
+
+      const { error } = await supabase.from("community_circles").insert({
+        community_id: communityId,
+        name: name.trim() || null,
+        category, // <-- new column for filtering
+        lat: picked.lat,
+        lng: picked.lng,
+        address: picked.label || address.trim(),
+        day_of_week: day || null,
+        time_local: timeLocal || null,
+        contact_phone: contactPhone.trim() || null,
+        contact_email: contactEmail.trim() || null,
+        website_url: normalizedWebsite,
+        created_by: userId,
+      });
+
+      if (error) throw error;
+
+      onSaved(); // parent will refresh the big map
+      onClose();
+    } catch (e: any) {
+      alert(e.message || "Could not save.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="card p-4" style={{ inlineSize: 'min(920px, 100%)' }}>
-      <h3 className="h3 mb-3">Add drum circle</h3>
-      <label className="label">Circle name (optional)</label>
-      <input
-        className="input mb-3"
-        placeholder="e.g., Saturday Sunset Circle"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+    <div className="card p-4">
+      <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 16 }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <div className="label">Category</div>
+            <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">Select a category…</option>
+              {PIN_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <div className="label">Circle / listing name (optional)</div>
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Saturday Sunset Circle"
+            />
+          </div>
+        </div>
 
-      <LeafletClient
-        center={picked ?? defaultCenter}
-        marker={picked ?? null}
-        height={420}
-        onPick={(pt) => setPicked(pt)}
-      />
+        <div className="field">
+          <div className="label">Address / city / ZIP</div>
+          <input
+            className="input"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Street, city, or ZIP"
+          />
+          <div className="muted" style={{ fontSize: 12 }}>
+            We’ll place the pin automatically based on this location.
+          </div>
+        </div>
 
-      <div className="right mt-3 flex gap-2">
-        <button className="btn" onClick={onClose} disabled={saving}>
-          Cancel
-        </button>
-        <button
-          className="btn btn-brand"
-          onClick={save}
-          disabled={!picked || saving}
-        >
-          {saving ? 'Saving…' : 'Save circle'}
-        </button>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <div className="label">Day (optional)</div>
+            <select className="input" value={day} onChange={(e) => setDay(e.target.value)}>
+              <option value="">—</option>
+              {DAYS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <div className="label">Time (optional)</div>
+            <input
+              className="input"
+              type="time"
+              value={timeLocal}
+              onChange={(e) => setTimeLocal(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="field">
+            <div className="label">Contact phone (required if no email)</div>
+            <input
+              className="input"
+              type="tel"
+              inputMode="tel"
+              placeholder="e.g., 555-555-5555"
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <div className="label">Contact email (required if no phone)</div>
+            <input
+              className="input"
+              type="email"
+              placeholder="name@example.com"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+            />
+            <div className="muted" style={{ fontSize: 12 }}>
+              Provide at least one: phone or email.
+            </div>
+          </div>
+        </div>
+
+        <div className="field">
+          <div className="label">Website (optional)</div>
+          <input
+            className="input"
+            type="url"
+            placeholder="https://your-site.com"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+          />
+        </div>
+
+        <div className="right">
+          <button className="btn" onClick={onClose} style={{ marginRight: 8 }}>
+            Cancel
+          </button>
+          <button className="btn btn-brand" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save circle"}
+          </button>
+        </div>
       </div>
     </div>
   );
