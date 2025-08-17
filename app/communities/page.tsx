@@ -4,6 +4,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import Link from "next/link"; // add this if missing
+// …rest of your imports
+
+// Somewhere near the top UI (e.g., next to your page title)
+<div className="right">
+  <Link href="/profile" className="btn">Back to profile</Link>
+</div>
 
 type Community = {
   id: string;
