@@ -1,5 +1,6 @@
 "use client";
 
+import BusinessProfilePanel from "@/components/BusinessProfilePanel";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
