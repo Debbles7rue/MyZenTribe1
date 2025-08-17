@@ -13,7 +13,6 @@ export default function BusinessProfilePanel({ userId }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // load from profiles.business_services
   useEffect(() => {
     (async () => {
       if (!userId) return;
@@ -49,23 +48,21 @@ export default function BusinessProfilePanel({ userId }: Props) {
     }
   }
 
-  function cancel() {
-    // Reload current DB state to discard edits
+  async function reload() {
     if (!userId) return;
-    setLoading(true);
-    setError(null);
-    supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("business_services")
       .eq("id", userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        const list = (data?.business_services ?? []) as Service[];
-        setServices(Array.isArray(list) ? list : []);
-        setEditing(false);
-      })
-      .finally(() => setLoading(false));
+      .maybeSingle();
+    if (error) setError(error.message);
+    const list = (data?.business_services ?? []) as Service[];
+    setServices(Array.isArray(list) ? list : []);
+  }
+
+  function cancel() {
+    setEditing(false);
+    reload();
   }
 
   return (
