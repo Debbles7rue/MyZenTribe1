@@ -3,11 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
+import NextLink from "next/link";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
-import Link from "next/link"; // add this if missing
-// …rest of your imports
 
 // At the top of the page’s UI (header area is ideal)
 <div className="right">
