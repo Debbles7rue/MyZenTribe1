@@ -8,6 +8,8 @@ import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
 import ProfileInviteQR from "@/components/ProfileInviteQR";
 
+<small className="muted" style={{display:"block",marginTop:4}}>profile@v-location-toggle</small>
+
 type Profile = {
   id: string;
   full_name: string | null;
