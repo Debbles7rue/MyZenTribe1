@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
-import InviteFriendsInline from "@/components/profile/InviteFriendsInline";
+import ProfileInviteQR from "@/components/ProfileInviteQR";
 
 type Profile = {
   id: string;
@@ -32,12 +32,10 @@ export default function ProfilePage() {
     show_mutuals: true,
   });
 
-  // auth
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // load personal data only
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
@@ -113,10 +111,7 @@ export default function ProfilePage() {
           {/* Identity header */}
           <div
             className="card p-3 mb-3 profile-card"
-            style={{
-              borderColor: "rgba(196, 181, 253, 0.7)",
-              background: "rgba(245, 243, 255, 0.4)",
-            }}
+            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
           >
             <div className="profile-header" style={{ gap: 18 }}>
               <AvatarUploader
@@ -135,7 +130,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Invite friends embedded under the name/stats */}
-                <InviteFriendsInline embed />
+                <ProfileInviteQR userId={userId} embed />
               </div>
             </div>
           </div>
@@ -143,12 +138,7 @@ export default function ProfilePage() {
           {/* Two-column layout */}
           <div
             className="columns"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0,1fr) 280px",
-              gap: 16,
-              alignItems: "start",
-            }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
           >
             {/* LEFT: about + feed */}
             <div className="stack">
@@ -212,7 +202,7 @@ export default function ProfilePage() {
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: compact cards (invite moved to header) */}
+            {/* RIGHT: gratitude (invite moved into header) */}
             <div className="stack">
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
