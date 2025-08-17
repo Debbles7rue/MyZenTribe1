@@ -3,12 +3,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Props = { userId: string | null };
+type Props = {
+  userId: string | null;
+  /** Render without card wrapper so it fits inside the profile header nicely */
+  embed?: boolean;
+};
 
-export default function ProfileInviteQR({ userId }: Props) {
+export default function ProfileInviteQR({ userId, embed = false }: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
 
   const inviteUrl = useMemo(() => {
     if (!token) return "";
@@ -17,9 +22,7 @@ export default function ProfileInviteQR({ userId }: Props) {
   }, [token]);
 
   const qrUrl = inviteUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-        inviteUrl
-      )}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(inviteUrl)}`
     : "";
 
   const generate = useCallback(async () => {
@@ -30,12 +33,13 @@ export default function ProfileInviteQR({ userId }: Props) {
       const newToken = crypto.randomUUID();
       const { error } = await supabase.from("friend_invites").insert({
         token: newToken,
-        target_user: userId,
-        created_by: userId,
+        target_user: userId,    // who the request will go TO
+        created_by: userId,     // who created this invite
         single_use: true,
       });
       if (error) throw error;
       setToken(newToken);
+      setShowQR(true);
     } catch (e: any) {
       setErr(e.message || "Failed to create invite.");
     } finally {
@@ -43,7 +47,7 @@ export default function ProfileInviteQR({ userId }: Props) {
     }
   }, [userId]);
 
-  // Optional: load latest invite created by me
+  // Load latest invite token created by me (handy after refresh)
   useEffect(() => {
     (async () => {
       if (!userId) return;
@@ -60,43 +64,50 @@ export default function ProfileInviteQR({ userId }: Props) {
 
   if (!userId) return null;
 
-  return (
-    <section className="card p-3">
-      <div className="section-row">
-        <h2 className="section-title">Share your profile</h2>
-        <div className="muted">Show this QR to send you a friend request.</div>
+  const Content = (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="label" style={{ fontWeight: 600 }}>Invite friends</div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input className="input" value={inviteUrl} readOnly style={{ minWidth: 260, flex: 1 }} />
+        <button
+          className="btn btn-brand"
+          onClick={() => inviteUrl && navigator.clipboard.writeText(inviteUrl)}
+          disabled={!inviteUrl}
+        >
+          Copy link
+        </button>
+        <button className="btn" onClick={() => setShowQR((v) => !v)} disabled={!inviteUrl && !token}>
+          {showQR ? "Hide QR" : "Show QR"}
+        </button>
+        {!token && (
+          <button className="btn btn-neutral" onClick={generate} disabled={busy}>
+            {busy ? "Generating…" : "Generate"}
+          </button>
+        )}
       </div>
 
-      {token ? (
-        <div className="stack items-center" style={{ alignItems: "center" as any }}>
+      {showQR && token && (
+        <div className="card p-3" style={{ textAlign: "center" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qrUrl}
             alt="Invite QR"
-            style={{ width: 220, height: 220, borderRadius: 12, border: "1px solid #eee" }}
+            width={220}
+            height={220}
+            style={{ width: 220, height: 220, margin: "0 auto", borderRadius: 12, border: "1px solid #eee" }}
           />
-          <div className="controls" style={{ justifyContent: "center" }}>
-            <button
-              className="btn"
-              onClick={() => {
-                navigator.clipboard.writeText(inviteUrl);
-              }}
-            >
-              Copy link
-            </button>
-            <button className="btn btn-neutral" onClick={generate} disabled={busy}>
-              {busy ? "Generating…" : "Regenerate"}
-            </button>
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Scan or share your link. New visitors can send you a friend request.
           </div>
-        </div>
-      ) : (
-        <div className="stack items-center" style={{ alignItems: "center" as any }}>
-          <button className="btn btn-brand" onClick={generate} disabled={busy}>
-            {busy ? "Generating…" : "Generate QR"}
-          </button>
         </div>
       )}
 
       {err && <p className="muted" style={{ color: "#b91c1c" }}>{err}</p>}
-    </section>
+    </div>
   );
+
+  if (embed) return <div style={{ marginTop: 10, maxWidth: 640 }}>{Content}</div>;
+
+  return <section className="card p-3">{Content}</section>;
 }
