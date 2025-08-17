@@ -1,14 +1,11 @@
 "use client";
 
-import ProfileLocationEditor from "@/components/ProfileLocationEditor";
 import SiteHeader from "@/components/SiteHeader";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
 import ProfileInviteQR from "@/components/ProfileInviteQR";
-
-<small className="muted" style={{display:"block",marginTop:4}}>profile@v-location-toggle</small>
 
 type Profile = {
   id: string;
@@ -17,25 +14,11 @@ type Profile = {
   bio: string | null;
   // legacy column (may or may not exist in DB)
   location?: string | null;
-  // new preferred columns
+  // preferred columns
   location_text?: string | null;
   location_is_public?: boolean | null;
   show_mutuals: boolean | null;
 };
-
-{editPersonal ? (
-  <section className="card p-3">
-    <h2 className="section-title">Edit your info</h2>
-    <div className="stack">
-      {/* …your existing Name / Location / Bio … */}
-
-      {/* NEW: privacy-aware location editor */}
-      <ProfileLocationEditor />
-      {/* end new */}
-      …
-    </div>
-  </section>
-) : ( … )}
 
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -64,7 +47,6 @@ export default function ProfilePage() {
       if (!userId) return;
       setLoading(true);
       try {
-        // Use * so we don't error if some columns don't exist yet
         const { data, error } = await supabase
           .from("profiles")
           .select("*")
@@ -73,7 +55,6 @@ export default function ProfilePage() {
         if (error) throw error;
 
         if (data) {
-          // Normalize legacy/new fields
           const normalized: Profile = {
             id: data.id,
             full_name: data.full_name ?? "",
@@ -103,7 +84,7 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
-      // 1) Save core profile fields (incl. location privacy) via your route
+      // Save core fields via your route (handles legacy/new location columns)
       const res = await fetch("/profile/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,7 +98,7 @@ export default function ProfilePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save profile");
 
-      // 2) Save show_mutuals separately (route doesn’t handle it)
+      // Save show_mutuals directly
       const up = await supabase
         .from("profiles")
         .update({ show_mutuals: !!p.show_mutuals })
@@ -135,7 +116,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page-wrap">
-      {/* Remove this if your layout already renders SiteHeader to avoid a duplicate header */}
+      {/* If your layout already renders a header, remove this line to avoid a duplicate */}
       <SiteHeader />
 
       <div className="page">
@@ -179,10 +160,9 @@ export default function ProfilePage() {
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                {/* Invite friends embedded under the name/stats */}
+                {/* Invite friends under name/stats */}
                 <ProfileInviteQR userId={userId} embed />
-                {/* If you add a personal/business toggle, render it here */}
-                {/* <ProfileModeToggle /> */}
+                {/* Place a Personal/Business toggle here later if desired */}
               </div>
             </div>
           </div>
@@ -248,7 +228,7 @@ export default function ProfilePage() {
 
                     <div className="right">
                       <button className="btn btn-brand" onClick={save} disabled={saving}>
-                        {saving ? "Saving…" : "Save"}
+                        {saving ? "Saving..." : "Save"}
                       </button>
                     </div>
                   </div>
@@ -260,13 +240,15 @@ export default function ProfilePage() {
                     {p.location_is_public && p.location_text ? (
                       <div><strong>Location:</strong> {p.location_text}</div>
                     ) : null}
-                    {p.bio && (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>)}
+                    {p.bio ? (
+                      <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
+                    ) : null}
+                    {!p.location_text && !p.bio ? (
+                      <div className="muted">Add a bio and location using Edit.</div>
+                    ) : null}
                     {!p.location_is_public && p.location_text ? (
                       <div className="muted text-sm">(Location is private)</div>
                     ) : null}
-                    {!p.location_text && !p.bio && (
-                      <div className="muted">Add a bio and location using Edit.</div>
-                    )}
                   </div>
                 </section>
               )}
@@ -275,7 +257,7 @@ export default function ProfilePage() {
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: gratitude (invite moved into header) */}
+            {/* RIGHT: gratitude */}
             <div className="stack">
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
@@ -283,15 +265,14 @@ export default function ProfilePage() {
                   <a className="btn btn-brand" href="/gratitude">Open</a>
                 </div>
                 <p className="muted" style={{ fontSize: 12 }}>
-                  Capture daily gratitude. Prompts & a 30-day healing journal live on the full page.
+                  Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
                 </p>
               </section>
-              {/* Inbox preview could go here when you're ready */}
-              {/* <InboxPreview /> */}
+              {/* Inbox preview could go here */}
             </div>
           </div>
 
-          {loading && <p className="muted mt-3">Loading…</p>}
+          {loading && <p className="muted mt-3">Loading...</p>}
         </div>
       </div>
     </div>
