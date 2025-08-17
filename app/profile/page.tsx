@@ -12,7 +12,11 @@ type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  location: string | null;
+  // legacy column (may or may not exist in DB)
+  location?: string | null;
+  // new preferred columns
+  location_text?: string | null;
+  location_is_public?: boolean | null;
   show_mutuals: boolean | null;
 };
 
@@ -29,6 +33,8 @@ export default function ProfilePage() {
     avatar_url: "",
     bio: "",
     location: "",
+    location_text: "",
+    location_is_public: false,
     show_mutuals: true,
   });
 
@@ -41,14 +47,30 @@ export default function ProfilePage() {
       if (!userId) return;
       setLoading(true);
       try {
+        // Use * so we don't error if some columns don't exist yet
         const { data, error } = await supabase
           .from("profiles")
-          .select(`id, full_name, avatar_url, bio, location, show_mutuals`)
+          .select("*")
           .eq("id", userId)
           .maybeSingle();
         if (error) throw error;
-        if (data) setP(data as Profile);
-        else setP(prev => ({ ...prev, id: userId }));
+
+        if (data) {
+          // Normalize legacy/new fields
+          const normalized: Profile = {
+            id: data.id,
+            full_name: data.full_name ?? "",
+            avatar_url: data.avatar_url ?? "",
+            bio: data.bio ?? "",
+            location: data.location ?? "",
+            location_text: (data.location_text ?? data.location) ?? "",
+            location_is_public: data.location_is_public ?? false,
+            show_mutuals: data.show_mutuals ?? true,
+          };
+          setP(normalized);
+        } else {
+          setP(prev => ({ ...prev, id: userId }));
+        }
       } catch {
         setTableMissing(true);
       } finally {
@@ -64,17 +86,27 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
-      const payload: Profile = {
-        ...p,
-        id: userId,
-        full_name: p.full_name?.trim() || null,
-        avatar_url: p.avatar_url?.trim() || null,
-        bio: p.bio?.trim() || null,
-        location: p.location?.trim() || null,
-        show_mutuals: !!p.show_mutuals,
-      };
-      const up = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+      // 1) Save core profile fields (incl. location privacy) via your route
+      const res = await fetch("/profile/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: p.full_name?.trim() || null,
+          bio: p.bio?.trim() || null,
+          location_text: p.location_text?.trim() || null,
+          location_is_public: !!p.location_is_public,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Could not save profile");
+
+      // 2) Save show_mutuals separately (route doesn’t handle it)
+      const up = await supabase
+        .from("profiles")
+        .update({ show_mutuals: !!p.show_mutuals })
+        .eq("id", userId);
       if (up.error) throw up.error;
+
       alert("Saved!");
       setEditPersonal(false);
     } catch (e: any) {
@@ -86,6 +118,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page-wrap">
+      {/* Remove this if your layout already renders SiteHeader to avoid a duplicate header */}
       <SiteHeader />
 
       <div className="page">
@@ -131,6 +164,8 @@ export default function ProfilePage() {
 
                 {/* Invite friends embedded under the name/stats */}
                 <ProfileInviteQR userId={userId} embed />
+                {/* If you add a personal/business toggle, render it here */}
+                {/* <ProfileModeToggle /> */}
               </div>
             </div>
           </div>
@@ -138,87 +173,4 @@ export default function ProfilePage() {
           {/* Two-column layout */}
           <div
             className="columns"
-            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
-          >
-            {/* LEFT: about + feed */}
-            <div className="stack">
-              {editPersonal ? (
-                <section className="card p-3">
-                  <h2 className="section-title">Edit your info</h2>
-                  <div className="stack">
-                    <label className="field">
-                      <span className="label">Name</span>
-                      <input
-                        className="input"
-                        value={p.full_name ?? ""}
-                        onChange={(e) => setP({ ...p, full_name: e.target.value })}
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="label">Location</span>
-                      <input
-                        className="input"
-                        value={p.location ?? ""}
-                        onChange={(e) => setP({ ...p, location: e.target.value })}
-                        placeholder="City, State"
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="label">Bio</span>
-                      <textarea
-                        className="input"
-                        rows={4}
-                        value={p.bio ?? ""}
-                        onChange={(e) => setP({ ...p, bio: e.target.value })}
-                      />
-                    </label>
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={!!p.show_mutuals}
-                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
-                      />
-                      <span>Show mutual friends</span>
-                    </label>
-                    <div className="right">
-                      <button className="btn btn-brand" onClick={save} disabled={saving}>
-                        {saving ? "Saving…" : "Save"}
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              ) : (
-                <section className="card p-3">
-                  <h2 className="section-title">About</h2>
-                  <div className="stack">
-                    {p.location && (<div><strong>Location:</strong> {p.location}</div>)}
-                    {p.bio && (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>)}
-                    {!p.location && !p.bio && (<div className="muted">Add a bio and location using Edit.</div>)}
-                  </div>
-                </section>
-              )}
-
-              {/* Main feed */}
-              <PhotosFeed userId={userId} />
-            </div>
-
-            {/* RIGHT: gratitude (invite moved into header) */}
-            <div className="stack">
-              <section className="card p-3" style={{ padding: 12 }}>
-                <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
-                  <a className="btn btn-brand" href="/gratitude">Open</a>
-                </div>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Capture daily gratitude. Prompts & a 30-day healing journal live on the full page.
-                </p>
-              </section>
-            </div>
-          </div>
-
-          {loading && <p className="muted mt-3">Loading…</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
+            style={{ display: "grid", gridTemplateColumns: "
