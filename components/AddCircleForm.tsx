@@ -1,7 +1,7 @@
 // components/AddCircleForm.tsx
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PlacePicker from "@/components/PlacePicker";
 
@@ -15,7 +15,8 @@ type CommunityLite = { id: string; title: string; category: string | null; zip: 
 type ServiceRow = {
   id: string;
   category: string;        // required, free text (with suggestions)
-  schedule: string;        // free text
+  schedule: string;        // free text, e.g., "1st Monday", "Thursdays"
+  time: string;            // HTML time value "HH:MM" (optional)
   communityIds: string[];  // 0..many; empty = “no community”
 };
 
@@ -41,11 +42,12 @@ export default function AddCircleForm({
   const [website, setWebsite] = useState("");
 
   const [services, setServices] = useState<ServiceRow[]>([
-    { id: crypto.randomUUID(), category: "", schedule: "", communityIds: [...preselectCommunityIds] },
+    { id: crypto.randomUUID(), category: "", schedule: "", time: "", communityIds: [...preselectCommunityIds] },
   ]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const geocodingRef = useRef(false);
 
   // If parent changes preselect ids (e.g., community page), apply to first row
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function AddCircleForm({
   function addRow() {
     setServices((s) => [
       ...s,
-      { id: crypto.randomUUID(), category: "", schedule: "", communityIds: [] },
+      { id: crypto.randomUUID(), category: "", schedule: "", time: "", communityIds: [] },
     ]);
   }
   function removeRow(id: string) {
@@ -75,9 +77,10 @@ export default function AddCircleForm({
   }
 
   function addCommunityToRow(id: string, communityId: string) {
+    if (!communityId) return;
     setServices((s) =>
       s.map((r) =>
-        r.id === id && communityId && !r.communityIds.includes(communityId)
+        r.id === id && !r.communityIds.includes(communityId)
           ? { ...r, communityIds: [...r.communityIds, communityId] }
           : r
       )
@@ -97,20 +100,70 @@ export default function AddCircleForm({
     return /^https?:\/\//i.test(t) ? t : `https://${t}`;
   }
 
+  function combineSchedule(schedule: string, time: string) {
+    const s = schedule.trim();
+    const t = time.trim();
+    if (s && t) return `${s} — ${t}`;
+    if (s) return s;
+    if (t) return t; // if user only picked a time
+    return "No set time — contact";
+  }
+
+  async function geocodeAddress(q: string) {
+    const query = q.trim();
+    if (!query) return null;
+    try {
+      geocodingRef.current = true;
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      const arr = (await r.json()) as any[];
+      if (arr && arr[0]) {
+        const lat = parseFloat(arr[0].lat);
+        const lng = parseFloat(arr[0].lon);
+        return { lat, lng, label: arr[0].display_name as string };
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      geocodingRef.current = false;
+    }
+  }
+
+  // Try to geocode when the user finishes typing the address
+  async function handleAddressBlur() {
+    if (place || !address.trim()) return;
+    const p = await geocodeAddress(address);
+    if (p) setPlace(p);
+  }
+
   async function handleSave() {
     setError(null);
 
+    // Ensure we have a map point: if missing but address is filled, geocode now
+    if (!place && address.trim()) {
+      const p = await geocodeAddress(address);
+      if (p) setPlace(p);
+    }
+
     if (!place) {
-      setError("Please pick a spot on the map.");
+      setError("Please pick a spot on the map (or type an address so we can find it).");
       return;
     }
     if (!phone.trim() && !email.trim()) {
       setError("Please provide a phone OR an email so people can contact you.");
       return;
     }
-    // Validate each service: category required; schedule optional
+    // Validate services
     const cleanServices = services
-      .map((s) => ({ ...s, category: s.category.trim(), schedule: s.schedule.trim() }))
+      .map((s) => ({
+        ...s,
+        category: s.category.trim(),
+        schedule: s.schedule.trim(),
+        time: s.time.trim(),
+      }))
       .filter((s) => s.category.length > 0);
 
     if (cleanServices.length === 0) {
@@ -141,30 +194,26 @@ export default function AddCircleForm({
 
       if (cErr) throw cErr;
 
-      // 2) Insert services for this circle
+      // 2) Insert services for this circle (category + combined schedule)
       const toInsert = cleanServices.map((s) => ({
         circle_id: circle.id,
         category: s.category,
-        schedule_text: s.schedule || "No set time — contact",
+        schedule_text: combineSchedule(s.schedule, s.time),
       }));
       const { data: svcRows, error: sErr } = await supabase
         .from("circle_services")
         .insert(toInsert)
         .select("id, category");
-
       if (sErr) throw sErr;
 
       // 3) Map each service to its chosen communities (can be none)
-      // Build a lookup: service index -> service_id from returned rows
-      // Returned rows are in the same order as insert
-      const rowsByIndex = svcRows || [];
       const svcMaps: { service_id: string; community_id: string }[] = [];
       const circleCommunityUnion = new Set<string>();
 
-      cleanServices.forEach((s, i) => {
-        const svcId = rowsByIndex[i]?.id as string;
-        s.communityIds.forEach((cid) => {
-          svcMaps.push({ service_id: svcId, community_id: cid });
+      (svcRows || []).forEach((row, i) => {
+        const chosen = cleanServices[i]?.communityIds || [];
+        chosen.forEach((cid) => {
+          svcMaps.push({ service_id: row.id, community_id: cid });
           circleCommunityUnion.add(cid);
         });
       });
@@ -182,10 +231,10 @@ export default function AddCircleForm({
           circle_id: circle.id,
           community_id: cid,
         }));
-        // graceful upsert (ignore dups if any)
+        // Correct supabase-js call: use upsert with onConflict
         const { error: ccmErr } = await supabase
           .from("community_circle_communities")
-          .insert(circleMaps, { upsert: true });
+          .upsert(circleMaps, { onConflict: "circle_id,community_id" });
         if (ccmErr) throw ccmErr;
       }
 
@@ -204,7 +253,6 @@ export default function AddCircleForm({
         {SUGGESTED.map((c) => (
           <option key={c} value={c} />
         ))}
-        {/* users can still type anything else */}
       </datalist>
 
       <div className="field">
@@ -223,7 +271,8 @@ export default function AddCircleForm({
           className="input"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="(optional) Street, City, ZIP"
+          onBlur={handleAddressBlur}
+          placeholder="Street, City, ZIP"
         />
       </div>
 
@@ -240,14 +289,14 @@ export default function AddCircleForm({
       </div>
 
       <div className="field">
-        <div className="label">Services (category is required)</div>
+        <div className="label">Services</div>
 
         {services.map((row, i) => (
           <div key={row.id} className="card p-3" style={{ marginBottom: 8 }}>
             <div className="form-grid">
               {/* Category (free text with suggestions) */}
               <div>
-                <div className="label">Category (type or pick)</div>
+                <div className="label">Category (required)</div>
                 <input
                   className="input"
                   list="category-suggestions"
@@ -260,26 +309,34 @@ export default function AddCircleForm({
 
               {/* Schedule (free text) */}
               <div>
-                <div className="label">Schedule</div>
+                <div className="label">Schedule (free text)</div>
                 <input
                   className="input"
-                  placeholder='e.g., "1st Monday 7–8pm", "Thursdays 6:30pm", "No set time — contact"'
+                  placeholder='e.g., "1st Monday", "Thursdays", "No set time — contact"'
                   value={row.schedule}
                   onChange={(e) => patchRow(row.id, { schedule: e.target.value })}
+                />
+              </div>
+
+              {/* Time (visible) */}
+              <div>
+                <div className="label">Time (optional)</div>
+                <input
+                  className="input"
+                  type="time"
+                  value={row.time}
+                  onChange={(e) => patchRow(row.id, { time: e.target.value })}
                 />
               </div>
 
               {/* Communities (multi) */}
               <div className="span-2">
                 <div className="label">Communities (optional — this service can appear in multiple)</div>
-                <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 8 }}>
+                <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 8 }}>
                   <select
                     className="input"
                     value=""
-                    onChange={(e) => {
-                      const cid = e.target.value;
-                      if (cid) addCommunityToRow(row.id, cid);
-                    }}
+                    onChange={(e) => addCommunityToRow(row.id, e.target.value)}
                   >
                     <option value="">Add a community…</option>
                     {communities.map((c) => (
@@ -288,14 +345,6 @@ export default function AddCircleForm({
                       </option>
                     ))}
                   </select>
-                  <button
-                    className="btn"
-                    onClick={() => addCommunityToRow(row.id, "")}
-                    disabled
-                    title="Pick from the list to add"
-                  >
-                    Add
-                  </button>
                 </div>
 
                 {row.communityIds.length === 0 ? (
@@ -307,7 +356,7 @@ export default function AddCircleForm({
                     {row.communityIds.map((cid) => {
                       const c = communities.find((x) => x.id === cid);
                       return (
-                        <span key={cid} className="tag" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span key={cid} className="tag" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", border: "1px solid #e5e7eb", borderRadius: 9999 }}>
                           {c ? c.title : cid}
                           <button className="btn btn-xs" onClick={() => removeCommunityFromRow(row.id, cid)} title="Remove">
                             ×
