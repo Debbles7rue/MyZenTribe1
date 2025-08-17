@@ -21,6 +21,20 @@ type Profile = {
   show_mutuals: boolean | null;
 };
 
+{editPersonal ? (
+  <section className="card p-3">
+    <h2 className="section-title">Edit your info</h2>
+    <div className="stack">
+      {/* …your existing Name / Location / Bio … */}
+
+      {/* NEW: privacy-aware location editor */}
+      <ProfileLocationEditor />
+      {/* end new */}
+      …
+    </div>
+  </section>
+) : ( … )}
+
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
