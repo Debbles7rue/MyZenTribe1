@@ -24,9 +24,6 @@ export default function CommunityPhotoUploader({
   const [uploading, setUploading] = useState(false);
   const display = value || "";
 
-  const path = `${userId}/${Date.now()}-${file.name}`;
-  await supabase.storage.from("community-photos").upload(path, file, { upsert: true });
-
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
