@@ -1,8 +1,7 @@
 // components/community/AddPinModal.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import AddCircleForm from "@/components/AddCircleForm";
 
 type CommunityLite = {
@@ -21,54 +20,68 @@ export default function AddPinModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  // empty string = "No specific community"
-  const [selectedId, setSelectedId] = useState<string>("");
+  const [pick, setPick] = useState<string>("");         // dropdown pick
+  const [selected, setSelected] = useState<string[]>([]); // chosen community ids
 
-  // if you want to auto-select first community, comment this out now that it's optional
-  useEffect(() => {
-    // keep optional; don't auto-pick anything
-  }, []);
+  const byId = useMemo(() => {
+    const m: Record<string, CommunityLite> = {};
+    communities.forEach((c) => (m[c.id] = c));
+    return m;
+  }, [communities]);
 
-  const selected = useMemo(
-    () => communities.find((c) => c.id === selectedId) || null,
-    [communities, selectedId]
-  );
+  function addCommunity() {
+    if (!pick) return;
+    if (!selected.includes(pick)) setSelected((s) => [...s, pick]);
+    setPick("");
+  }
+  function removeCommunity(id: string) {
+    setSelected((s) => s.filter((x) => x !== id));
+  }
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-sheet" style={{ maxWidth: 720 }}>
+      <div className="modal-sheet" style={{ maxWidth: 780 }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="h3">Add a pin to the map</h3>
-          <button className="btn" onClick={onClose} aria-label="Close">
-            Close
-          </button>
+          <button className="btn" onClick={onClose}>Close</button>
         </div>
 
-        {/* Community (optional) */}
-        <div className="field">
-          <div className="label">Community (optional)</div>
-          <select
-            className="input"
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-          >
-            <option value="">No specific community</option>
-            {communities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title} {c.category ? `· ${c.category}` : ""}{" "}
-                {c.zip ? `· ${c.zip}` : ""}
-              </option>
-            ))}
-          </select>
-          <div className="muted" style={{ fontSize: 12 }}>
-            Pins without a community still appear on the global map and can be filtered by category.
+        {/* Multi-community picker (optional) */}
+        <div className="card p-3" style={{ marginBottom: 12 }}>
+          <div className="label">Communities (optional — add one or many)</div>
+          <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 8 }}>
+            <select className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
+              <option value="">Select a community…</option>
+              {communities.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title} {c.category ? `· ${c.category}` : ""} {c.zip ? `· ${c.zip}` : ""}
+                </option>
+              ))}
+            </select>
+            <button className="btn" onClick={addCommunity} disabled={!pick}>Add</button>
           </div>
+
+          {selected.length === 0 ? (
+            <div className="muted" style={{ marginTop: 8 }}>
+              No specific community selected — that’s ok! Your pin will still appear on the global map.
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              {selected.map((id) => (
+                <span key={id} className="tag" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {byId[id]?.title || id}
+                  <button className="btn btn-xs" onClick={() => removeCommunity(id)} title="Remove">×</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* The questionnaire form (no map) */}
         <AddCircleForm
-          key={selectedId || "no-community"}
-          communityId={selected ? selected.id : null}
-          zip={selected?.zip || null}
+          key={selected.join("|") || "no-communities"}
+          communityIds={selected}      // <— multiple
+          zip={null}
           onClose={onClose}
           onSaved={onSaved}
         />
