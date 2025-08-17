@@ -1,11 +1,11 @@
-/* Layout helpers */
+/* ===== Layout helpers ===== */
 .page-wrap { padding-bottom: 40px; }
 .container-app { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 .card { background: var(--brand-bg, #fff); border: 1px solid #e5e7eb; border-radius: 16px; }
 .p-3 { padding: 12px; }
 .mb-3 { margin-bottom: 12px; }
 
-/* Header */
+/* ===== Header ===== */
 .site-header { position: sticky; top: 0; z-index: 40; background: #fff; border-bottom: 1px solid #eee; }
 .header-inner { display:flex; align-items:center; gap:16px; padding: 10px 16px; }
 .brand { display:flex; align-items:center; gap:10px; text-decoration:none; }
@@ -17,7 +17,7 @@
 .auth-area { display:flex; gap:10px; align-items:center; }
 .user-chip { font-size:12px; background:#f3f4f6; padding:6px 10px; border-radius:9999px; }
 
-/* Buttons & inputs */
+/* ===== Buttons & inputs ===== */
 .btn { padding:8px 14px; border-radius:12px; border:1px solid #e5e7eb; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
 .btn-brand { background: var(--brand-accent,#7c3aed); color:#fff; border-color: transparent; }
 .btn-brand:hover { filter: brightness(0.95); }
@@ -25,14 +25,9 @@
 .page { padding: 20px 0; }
 .page-title { font-size:28px; font-weight:700; margin: 8px 0 10px; }
 .header-bar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:10px; }
-/* Modal utilities (used by EventDetails + Create dialog) */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); }
-.modal-center { position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; padding:16px; }
-.modal-panel { width:100%; max-width: 720px; background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:16px; box-shadow:0 12px 40px rgba(0,0,0,.15); }
 
 .form-grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
 .form-grid .span-2 { grid-column: span 2; }
-.modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
 .controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
 
 .segmented { display:inline-flex; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
@@ -52,7 +47,7 @@
 
 .muted { color:#6b7280; }
 
-/* Theme tokens (seasonal) */
+/* ===== Theme tokens (seasonal) ===== */
 :root {
   --brand-bg: #ffffff;
   --brand-accent: #7c3aed; /* purple */
@@ -62,20 +57,15 @@
 [data-theme="autumn"] { --brand-bg:#fff1f2; --brand-accent:#ef4444; }
 [data-theme="winter"] { --brand-bg:#f5f3ff; --brand-accent:#6366f1; }
 
-/* Brand polish */
+/* ===== Brand polish ===== */
 .brand-name { font-weight:700; font-size:20px; color:#111827; letter-spacing:-0.2px; }
 .brand-name .brand-zen { font-style: italic; }
-
-/* (Optional) if you re-enable the logo later, keep it subtle */
 .brand-logo { width:24px; height:24px; border-radius:6px; }
 .brand { gap:8px; }
 
-/* Profile tweaks */
-input[disabled], textarea[disabled] {
-  background: #f9fafb;
-  color: #6b7280;
-}
-/* ---------- Profile layout polish ---------- */
+/* ===== Profile tweaks ===== */
+input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
+
 .profile-card { background: var(--brand-bg,#fff); }
 .profile-header { display:flex; align-items:flex-start; gap:16px; }
 .avatar { width:80px; height:80px; border-radius:16px; object-fit:cover; border:1px solid #e5e7eb; }
@@ -99,15 +89,13 @@ input[disabled], textarea[disabled] {
 .checkbox { display:inline-flex; align-items:center; gap:8px; font-size:14px; }
 .right { display:flex; justify-content:flex-end; }
 
-/* Friendly note */
+/* ===== Friendly note ===== */
 .note { background:#FFFBEB; border:1px solid #FDE68A; border-radius:12px; padding:12px; margin-bottom:12px; }
 .note-title { font-weight:600; margin-bottom:4px; }
 .note .codeblock { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:12px; white-space:pre-wrap; background:#fff; border:1px solid #f3f4f6; border-radius:10px; padding:8px; }
 .linkish { color:#374151; cursor:pointer; text-decoration:underline; }
 
-input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
-
-/* ---------- Home & Commitment (lavender-centered) ---------- */
+/* ===== Home & Commitment (lavender-centered) ===== */
 .lavender-hero {
   background: linear-gradient(180deg, var(--brand-bg, #f5f3ff) 0%, #ffffff 45%);
   border-bottom: 1px solid #eee;
@@ -124,79 +112,20 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 
 /* commitment grid of white cards centered on lavender */
 .commit-wrap { padding: 16px 0 24px; }
-.commit-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  max-width: 960px;
-  margin: 0 auto;
-}
-@media (min-width: 720px) {
-  .commit-grid { grid-template-columns: 1fr 1fr; }
-}
-@media (min-width: 1100px) {
-  .commit-grid { grid-template-columns: 1fr 1fr 1fr; }
-}
-.commit-card { padding: 16px; background: #fff; border-radius: 16px; }
-.commit-title { font-size: 18px; font-weight: 700; margin: 0 0 6px; color: #111827; text-align: center; }
-.commit-text { color: #374151; line-height: 1.6; text-align: center; }
+.commit-grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 960px; margin: 0 auto; }
+@media (min-width: 720px) { .commit-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1100px) { .commit-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.commit-card { background:#fff; border-radius:16px; border:1px solid #e5e7eb; padding:16px; }
+.commit-title { font-size:18px; font-weight:700; margin:0 0 6px; color:#111827; text-align:center; }
+.commit-text { color:#374151; line-height:1.6; text-align:center; }
 
-/* Ensure seasonal lavender shows for winter; other seasons keep their tints */
+/* seasonal lavender */
 [data-theme="winter"] .lavender-hero { background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 45%); }
 [data-theme="autumn"] .lavender-hero { background: linear-gradient(180deg, #fff1f2 0%, #ffffff 45%); }
 [data-theme="summer"] .lavender-hero { background: linear-gradient(180deg, #fff7ed 0%, #ffffff 45%); }
 [data-theme="spring"] .lavender-hero { background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 45%); }
 
-/* ---------- Commitment page: lavender background, stacked long cards ---------- */
-
-/* Full-page lavender backdrop for the commitment route */
-.lavender-page {
-  background: #f5f3ff; /* soft lavender */
-  padding: 10px 0 28px;
-}
-
-/* One long card per row, centered with generous spacing */
-.commit-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;               /* space so the lavender shows between cards */
-  max-width: 980px;        /* comfortable reading width */
-  margin: 0 auto;          /* center within container */
-}
-
-/* Long, elegant card style */
-.commit-long {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e5e7eb;
-  padding: 18px 20px;
-  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02), 0 8px 30px rgba(17, 24, 39, 0.04);
-}
-
-/* Typography */
-.commit-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0 0 6px;
-  color: #111827;
-  text-align: center;
-  letter-spacing: -0.2px;
-}
-.commit-text {
-  color: #374151;
-  line-height: 1.7;
-  font-size: 16px;
-  text-align: center;
-  margin: 0;
-}
-
-/* Make sure the intro header sits nicely on lavender */
-.lavender-page .hero-inner {
-  text-align: center;
-}
-
 /* ===== Home / Welcome / Commitment ===== */
-
 .home-wrap { max-width: 920px; margin: 24px auto; padding: 0 16px; }
 
 /* Brand lockup like your screenshot */
@@ -220,89 +149,66 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
   box-shadow: 0 6px 14px rgba(17,24,39,0.05);
   margin-bottom: 22px;
 }
-.hero-title {
-  margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 700;
-}
-.hero-text {
-  color: #374151;
-  font-size: 16px;
-  margin: 0 0 14px;
-}
+.hero-title { margin: 0 0 8px; font-size: 22px; font-weight: 700; }
+.hero-text { color: #374151; font-size: 16px; margin: 0 0 14px; }
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn.subtle { background: #f8fafc; border-color: #e5e7eb; }
 
-/* Commitment */
-.commitment { margin: 26px 0 40px; }
-.commitment-title { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
-.commitment-sub  { color:#6b7280; margin: 0 0 14px; }
-
-.commitment-grid {
-  display: grid;
-  grid-template-columns: repeat( auto-fit, minmax(240px, 1fr) );
-  gap: 14px;
-}
-.commitment-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 14px 16px;
-}
-.commitment-card h4 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
-}
-.commitment-card p {
-  margin: 0;
-  color: #374151;
-  font-size: 14px;
-}
-
-/* keep seasonal theme tokens already defined; they tint --brand-bg */
-
-/* ===== Why We’re Different (added) ===== */
+/* Why we’re different */
 .why-wrap { margin: 10px 0 36px; }
 .why-title { font-size: 20px; font-weight: 700; margin: 0 0 10px; }
+.why-grid { display: grid; grid-template-columns: repeat( auto-fit, minmax(260px, 1fr) ); gap: 14px; }
+.why-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px; }
+.why-card h4 { margin:0 0 6px; font-size:16px; font-weight:700; color:#111827; }
+.why-card p { margin:0; color:#374151; font-size:14px; }
 
-.why-grid {
-  display: grid;
-  grid-template-columns: repeat( auto-fit, minmax(260px, 1fr) );
-  gap: 14px;
+/* ===== Modal (centered) — consolidated ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 1000;
 }
-.why-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
+.modal-center {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
 }
-.why-card h4 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
-}
-.why-card p {
-  margin: 0;
-  color: #374151;
-  font-size: 14px;
-}
-/* ----- Modal polish for Headless UI dialogs ----- */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); }
-.modal-center  { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.modal-panel   {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 16px;
-  padding: 18px; width: min(760px, calc(100% - 32px));
+.modal-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 18px;
+  width: min(760px, calc(100% - 32px));
   box-shadow: 0 10px 30px rgba(17,24,39,.15);
-}
-.form-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
-@media (min-width: 900px) { .form-grid { grid-template-columns: 1fr 1fr; } }
-.span-2 { grid-column: 1 / -1; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 
-/* Bridge styles for AddPinModal (opens above the map) */
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+.modal-body {
+  overflow: auto;
+  padding-right: 6px;
+  margin-right: -6px;
+}
+.modal-footer {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 10px;
+
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.modal-body img { max-width:100%; height:auto; border-radius:12px; }
+
+/* ===== AddPinModal (sheet above map) ===== */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -313,7 +219,6 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
   padding: 16px;
   z-index: 1000; /* ensure above Leaflet map/UI */
 }
-
 .modal-sheet {
   width: 100%;
   max-width: 720px;
@@ -324,36 +229,14 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
   box-shadow: 0 24px 64px rgba(0,0,0,.25);
   padding: 16px;
 }
+
 /* ===== Community page breathing room ===== */
 .community-page .page { padding: 28px 0 44px; }
 .community-page .community-header { margin-bottom: 18px; }
-
 .community-page .community-cover { margin-bottom: 16px; }
-
-.community-page .community-title {
-  font-size: 34px;
-  line-height: 1.15;
-  margin: 6px 0 6px;
-}
-
-.community-page .community-subtitle {
-  margin-bottom: 16px;
-}
-
-/* pill tab row */
-.community-page .tabbar {
-  display: flex;
-  gap: 12px;
-  margin: 14px 0 18px;
-}
-
-/* larger card padding & rounded corners (local only) */
-.community-page .card-lg {
-  padding: 18px;
-  border-radius: 18px;
-}
-
-/* optional: slightly roomier buttons just on this page */
+.community-page .community-title { font-size: 34px; line-height: 1.15; margin: 6px 0 6px; }
+.community-page .community-subtitle { margin-bottom: 16px; }
+.community-page .tabbar { display: flex; gap: 12px; margin: 14px 0 18px; }
+.community-page .card-lg { padding: 18px; border-radius: 18px; }
 .community-page .tabbar .btn { padding: 9px 14px; }
 .community-page .controls .btn { padding: 10px 14px; }
-
