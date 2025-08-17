@@ -1,24 +1,18 @@
 "use client";
 
-import SiteHeader from "@/components/SiteHeader";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
 import ProfileInviteQR from "@/components/ProfileInviteQR";
 import ProfileModeToggle from "@/components/ProfileModeToggle";
-// ...
-<ProfileInviteQR userId={userId} embed />
-<ProfileModeToggle />
 
 type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  // legacy column (may or may not exist in DB)
   location?: string | null;
-  // preferred columns
   location_text?: string | null;
   location_is_public?: boolean | null;
   show_mutuals: boolean | null;
@@ -88,7 +82,6 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
-      // Save core fields via your route (handles legacy/new location columns)
       const res = await fetch("/profile/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,7 +95,6 @@ export default function ProfilePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save profile");
 
-      // Save show_mutuals directly
       const up = await supabase
         .from("profiles")
         .update({ show_mutuals: !!p.show_mutuals })
@@ -120,8 +112,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page-wrap">
-      {/* If your layout already renders a header, remove this line to avoid a duplicate */}
-      <SiteHeader />
+      {/* Intentionally no <SiteHeader /> here to avoid double header if layout renders one */}
 
       <div className="page">
         <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -164,9 +155,9 @@ export default function ProfilePage() {
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                {/* Invite friends under name/stats */}
+                {/* Invite + Business toggle */}
                 <ProfileInviteQR userId={userId} embed />
-                {/* Place a Personal/Business toggle here later if desired */}
+                <ProfileModeToggle />
               </div>
             </div>
           </div>
@@ -257,22 +248,20 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {/* Main feed */}
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: gratitude */}
+            {/* RIGHT: sidebar */}
             <div className="stack">
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
                   <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
-                  <a className="btn btn-brand" href="/gratitude">Open</a>
                 </div>
                 <p className="muted" style={{ fontSize: 12 }}>
                   Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
                 </p>
+                <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
               </section>
-              {/* Inbox preview could go here */}
             </div>
           </div>
 
