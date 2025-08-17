@@ -9,7 +9,7 @@ import type { MapCommunity, MapPin } from "@/components/community/MapExplorerCli
 
 const MapExplorerClient = dynamic(
   () => import("@/components/community/MapExplorerClient"),
-  { ssr: false } // map is client-only
+  { ssr: false }
 );
 const AddPinModal = dynamic(
   () => import("@/components/community/AddPinModal"),
@@ -131,7 +131,14 @@ export default function CommunitiesMapExplorer() {
             <h1 className="page-title" style={{ marginBottom: 0 }}>Communities</h1>
             <div className="controls">
               <Link href="/communities/browse" className="btn btn-neutral">Browse communities</Link>
-              <button className="btn btn-brand" onClick={() => setShowAdd(true)}>Add pin</button>
+              <button
+                className="btn btn-brand"
+                onClick={() => setShowAdd(true)}
+                disabled={loading}
+                title={loading ? "Loading communities…" : "Add a new pin"}
+              >
+                Add pin
+              </button>
               <Link href="/communities/new" className="btn btn-brand">Start a community</Link>
             </div>
           </div>
@@ -155,7 +162,7 @@ export default function CommunitiesMapExplorer() {
 
           {/* Map (client only) */}
           <section className="mt-3">
-            <MapExplorerClient center={center} pins={circles} communitiesById={communityById} />
+            <MapExplorerClient center={[39.5, -98.35]} pins={circles} communitiesById={communityById} />
             {loading && <p className="muted mt-2">Loading pins…</p>}
             {!loading && circles.length === 0 && (
               <div className="card p-3 mt-2">
