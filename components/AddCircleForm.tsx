@@ -1,3 +1,4 @@
+// components/AddCircleForm.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -59,13 +60,14 @@ export default function AddCircleForm({ communityId, zip, onClose, onSaved }: Pr
     const r = await fetch(url, {
       headers: {
         "Accept-Language": "en",
-        // polite UA helps with Nominatim
-        "User-Agent": "myzentribe/1.0 (contact: site admin)",
+        "User-Agent": "myzentribe/1.0 (contact: site admin)", // polite UA for Nominatim
       },
     });
     if (!r.ok) throw new Error("Geocoding failed");
     const arr = (await r.json()) as Array<{ lat: string; lon: string; display_name: string }>;
-    return arr[0] ? { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon), label: arr[0].display_name } : null;
+    return arr[0]
+      ? { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon), label: arr[0].display_name }
+      : null;
   }
 
   async function handleSave() {
@@ -105,7 +107,7 @@ export default function AddCircleForm({ communityId, zip, onClose, onSaved }: Pr
       const { error } = await supabase.from("community_circles").insert({
         community_id: communityId,
         name: name.trim() || null,
-        category, // <-- new column for filtering
+        category,                     // <-- IMPORTANT: pin category for filtering
         lat: picked.lat,
         lng: picked.lng,
         address: picked.label || address.trim(),
@@ -119,7 +121,7 @@ export default function AddCircleForm({ communityId, zip, onClose, onSaved }: Pr
 
       if (error) throw error;
 
-      onSaved(); // parent will refresh the big map
+      onSaved(); // parent refreshes the big map
       onClose();
     } catch (e: any) {
       alert(e.message || "Could not save.");
