@@ -1,22 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import NextLink from "next/link";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
-import SiteHeader from "@/components/SiteHeader";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
-import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
+import SiteHeader from "@/components/SiteHeader";
+
+// Leaflet needs window; use dynamic import
+const MapContainer = dynamic(() => import("react-leaflet").then(m => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import("react-leaflet").then(m => m.TileLayer), { ssr: false });
+const Marker = dynamic(() => import("react-leaflet").then(m => m.Marker), { ssr: false });
+const Popup = dynamic(() => import("react-leaflet").then(m => m.Popup), { ssr: false });
 
 type Community = {
   id: string;
   title: string;
-  about: string | null;
-  zip: string | null;
   category: string | null;
-  visibility: "public" | "private" | null;
-  cover_url: string | null;
-  created_by: string | null;
+  zip: string | null;
+  about: string | null;
+  photo_url: string | null;
+  created_by: string;
   created_at: string;
 };
 
@@ -26,371 +31,552 @@ type Member = {
   status: "member" | "pending";
 };
 
-type BusinessProfile = {
+type Post = {
   id: string;
-  full_name: string | null;
-  is_business: boolean | null;
-  business_name: string | null;
-  business_zip: string | null;
-  website: string | null;
-  offering_title: string | null;
-  business_logo_url: string | null;
+  community_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  parent_post_id: string | null;
 };
 
-type Tab = "discussion" | "events" | "about" | "directory";
+type Event = {
+  id: string;
+  community_id: string;
+  user_id: string;
+  title: string;
+  start_at: string;
+  end_at: string | null;
+  location: string | null;
+  description: string | null;
+};
 
-export default function CommunityDetailPage() {
+type Listing = {
+  id: string;
+  community_id: string;
+  user_id: string;
+  title: string | null;
+  place_name: string;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  schedule: string | null;
+};
+
+export default function CommunityPage() {
   const params = useParams<{ id: string }>();
-  const communityId = params?.id;
-  const [me, setMe] = useState<string | null>(null);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [c, setC] = useState<Community | null>(null);
-  const [myMember, setMyMember] = useState<Member | null>(null);
-  const [tab, setTab] = useState<Tab>("discussion");
-  const [editMode, setEditMode] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [me, setMe] = useState<Member | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"discussion" | "events" | "map" | "about">("discussion");
+  const [editing, setEditing] = useState(false);
 
-  // Directory
-  const [biz, setBiz] = useState<BusinessProfile[]>([]);
+  // discussion state
+  const [newPost, setNewPost] = useState("");
+  const [posts, setPosts] = useState<Post[]>([]);
+
+  // events state
+  const [events, setEvents] = useState<Event[]>([]);
+  const [evtTitle, setEvtTitle] = useState("");
+  const [evtStart, setEvtStart] = useState("");
+  const [evtEnd, setEvtEnd] = useState("");
+  const [evtLoc, setEvtLoc] = useState("");
+  const [evtDesc, setEvtDesc] = useState("");
+
+  // listings state (map)
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [listTitle, setListTitle] = useState("");
+  const [listPlace, setListPlace] = useState("");
+  const [listAddr, setListAddr] = useState("");
+  const [listLat, setListLat] = useState<string>("");
+  const [listLng, setListLng] = useState<string>("");
+  const [listSchedule, setListSchedule] = useState("");
+
+  // edit community
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [about, setAbout] = useState("");
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!params?.id) return;
+      setLoading(true);
       try {
-        setLoading(true);
-        setError(null);
-
-        // who am I?
-        const { data: auth } = await supabase.auth.getUser();
-        const userId = auth.user?.id ?? null;
-        if (mounted) setMe(userId);
-
-        // get community
-        const { data: comm, error: ce } = await supabase
+        const { data: comm } = await supabase
           .from("communities")
-          .select("id,title,about,zip,category,visibility,cover_url,created_by,created_at")
-          .eq("id", communityId)
+          .select("*")
+          .eq("id", params.id)
           .maybeSingle();
-        if (ce) throw ce;
-        if (!comm) throw new Error("Community not found.");
 
-        if (mounted) setC(comm as Community);
-
-        // my membership (role)
-        if (userId) {
-          const { data: mem, error: meErr } = await supabase
-            .from("community_members")
-            .select("user_id, role, status")
-            .eq("community_id", communityId)
-            .eq("user_id", userId)
-            .maybeSingle();
-          if (!meErr && mem && mounted) setMyMember(mem as Member);
+        if (!comm) {
+          setLoading(false);
+          return;
         }
 
-        // directory (businesses in this community)
-        // NOTE: simplest version: show members with profiles.is_business = true
-        const { data: bizRows } = await supabase
-          .from("community_members")
-          .select("user_id, profiles!inner(id, full_name, is_business, business_name, website, offering_title, business_logo_url, business_zip)")
-          .eq("community_id", communityId)
-          .eq("status", "member");
+        setC(comm as Community);
+        setPhotoUrl(comm.photo_url ?? "");
+        setAbout(comm.about ?? "");
 
-        const list =
-          (bizRows ?? [])
-            .map((r: any) => r.profiles)
-            .filter((p: any) => p?.is_business) as BusinessProfile[];
+        if (userId) {
+          const { data: m } = await supabase
+            .from("community_members")
+            .select("user_id, role, status")
+            .eq("community_id", params.id)
+            .eq("user_id", userId)
+            .maybeSingle();
+          setMe(m as Member | null);
+        }
 
-        if (mounted) setBiz(list);
-      } catch (e: any) {
-        console.error(e);
-        if (mounted) setError(e.message || "Failed to load.");
+        // load top-level posts
+        const { data: p } = await supabase
+          .from("community_posts")
+          .select("*")
+          .eq("community_id", params.id)
+          .is("parent_post_id", null)
+          .order("created_at", { ascending: false });
+        setPosts((p ?? []) as Post[]);
+
+        // load events
+        const { data: ev } = await supabase
+          .from("community_events")
+          .select("*")
+          .eq("community_id", params.id)
+          .order("start_at", { ascending: true });
+        setEvents((ev ?? []) as Event[]);
+
+        // load listings
+        const { data: ls } = await supabase
+          .from("community_listings")
+          .select("*")
+          .eq("community_id", params.id)
+          .order("created_at", { ascending: false });
+        setListings((ls ?? []) as Listing[]);
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
-    })();
-
-    return () => {
-      mounted = false;
     };
-  }, [communityId]);
+    load();
+  }, [params?.id, userId]);
 
-  const amAdmin = useMemo(() => {
-    if (!me || !myMember) return false;
-    return myMember.role === "admin";
-  }, [me, myMember]);
+  const isAdmin = !!me && (me.role === "admin" || c?.created_by === userId);
+  const isMember = !!me && me.status === "member";
 
-  async function joinCommunity() {
-    if (!me || !c) return;
-    try {
-      setSaving(true);
-      const { error: e } = await supabase.from("community_members").upsert({
-        community_id: c.id,
-        user_id: me,
-        status: c.visibility === "private" ? "pending" : "member",
-        role: "member",
-      });
-      if (e) throw e;
-      alert(c.visibility === "private" ? "Requested to join. An admin will approve you." : "Joined!");
-      setMyMember({ user_id: me, role: "member", status: c.visibility === "private" ? "pending" : "member" });
-    } catch (e: any) {
-      alert(e.message || "Join failed");
-    } finally {
-      setSaving(false);
-    }
+  async function createPost() {
+    if (!userId || !c?.id || !newPost.trim()) return;
+    const { data, error } = await supabase.from("community_posts").insert({
+      community_id: c.id,
+      user_id: userId,
+      content: newPost.trim(),
+      parent_post_id: null,
+    }).select().maybeSingle();
+    if (error) return alert(error.message);
+    setPosts([data as Post, ...posts]);
+    setNewPost("");
   }
 
-  async function saveEdits(next: Partial<Community>) {
-    if (!c) return;
-    try {
-      setSaving(true);
-      const payload = {
-        title: (next.title ?? c.title)?.trim(),
-        about: (next.about ?? c.about) || null,
-        zip: (next.zip ?? c.zip) || null,
-        category: (next.category ?? c.category) || null,
-        visibility: (next.visibility ?? c.visibility) || "public",
-        cover_url: (next.cover_url ?? c.cover_url) || null,
-      };
-      const { error } = await supabase.from("communities").update(payload).eq("id", c.id);
-      if (error) throw error;
-      setC({ ...c, ...payload });
-      setEditMode(false);
-      alert("Saved!");
-    } catch (e: any) {
-      alert(e.message || "Save failed");
-    } finally {
-      setSaving(false);
-    }
+  async function replyTo(postId: string, text: string) {
+    if (!userId || !c?.id || !text.trim()) return;
+    const { error } = await supabase.from("community_posts").insert({
+      community_id: c.id,
+      user_id: userId,
+      content: text.trim(),
+      parent_post_id: postId,
+    });
+    if (error) alert(error.message);
   }
 
-  if (loading) {
-    return (
-      <div className="page-wrap">
-        <SiteHeader />
-        <div className="page"><div className="container-app"><p className="muted">Loading…</p></div></div>
-      </div>
-    );
+  async function createEvent() {
+    if (!userId || !c?.id || !evtTitle.trim() || !evtStart) return;
+    const payload = {
+      community_id: c.id,
+      user_id: userId,
+      title: evtTitle.trim(),
+      start_at: new Date(evtStart).toISOString(),
+      end_at: evtEnd ? new Date(evtEnd).toISOString() : null,
+      location: evtLoc || null,
+      description: evtDesc || null,
+    };
+    const { data, error } = await supabase
+      .from("community_events")
+      .insert(payload)
+      .select()
+      .maybeSingle();
+    if (error) return alert(error.message);
+    setEvents([data as Event, ...events]);
+    setEvtTitle(""); setEvtStart(""); setEvtEnd(""); setEvtLoc(""); setEvtDesc("");
   }
 
-  if (error || !c) {
-    return (
-      <div className="page-wrap">
-        <SiteHeader />
-        <div className="page">
-          <div className="container-app">
-            <div className="note">
-              <div className="note-title">Couldn’t open community</div>
-              <div className="note-body">{error || "Unknown error"}</div>
-              <div className="controls" style={{ marginTop: 10 }}>
-                <NextLink className="btn" href="/communities">Back to communities</NextLink>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  async function saveEventToMe(eventId: string) {
+    if (!userId) return;
+    const { error } = await supabase.from("user_event_saves").insert({
+      user_id: userId,
+      event_id: eventId,
+    });
+    if (error) return alert(error.message);
+    alert("Saved to your calendar.");
+  }
+
+  async function createListing() {
+    if (!userId || !c?.id || !listPlace.trim()) return;
+    const payload = {
+      community_id: c.id,
+      user_id: userId,
+      title: listTitle || null,
+      place_name: listPlace.trim(),
+      address: listAddr || null,
+      lat: listLat ? Number(listLat) : null,
+      lng: listLng ? Number(listLng) : null,
+      schedule: listSchedule || null,
+    };
+    const { data, error } = await supabase
+      .from("community_listings")
+      .insert(payload)
+      .select()
+      .maybeSingle();
+    if (error) return alert(error.message);
+    setListings([data as Listing, ...listings]);
+    setListTitle(""); setListPlace(""); setListAddr(""); setListLat(""); setListLng(""); setListSchedule("");
+  }
+
+  async function saveCommunity() {
+    if (!c || !isAdmin) return;
+    const { error } = await supabase.from("communities").update({
+      photo_url: photoUrl || null,
+      about: about || null,
+    }).eq("id", c.id);
+    if (error) return alert(error.message);
+    alert("Saved.");
+    setEditing(false);
   }
 
   return (
     <div className="page-wrap">
       <SiteHeader />
-      <div className="page" style={{ background: "linear-gradient(#fff8e0,#fff)" }}>
+
+      {/* buttery sunshine page background */}
+      <div className="page" style={{ background: "linear-gradient(#fff7e0,#fffaf0)" }}>
         <div className="container-app">
-          <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>{c.title}</h1>
+
+          <div className="section-row">
+            <h1 className="page-title" style={{ marginBottom: 0 }}>{c?.title || "Community"}</h1>
             <div className="controls">
-              <NextLink href="/communities" className="btn">Back</NextLink>
-              {amAdmin && (
-                <button className="btn" onClick={() => setEditMode(!editMode)}>
-                  {editMode ? "Done" : "Edit"}
+              <button className="btn" onClick={() => router.back()}>Back</button>
+              {isMember && <span className="badge">Joined</span>}
+              {isAdmin && (
+                <button className="btn" onClick={() => setEditing(!editing)}>
+                  {editing ? "Done" : "Edit"}
                 </button>
-              )}
-              {!myMember || myMember.status !== "member" ? (
-                <button className="btn btn-brand" onClick={joinCommunity} disabled={saving}>
-                  {c.visibility === "private" ? "Request to join" : "Join"}
-                </button>
-              ) : (
-                <span className="muted" style={{ marginLeft: 8 }}>Joined</span>
               )}
             </div>
           </div>
 
-          {/* Cover */}
-          {c.cover_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={c.cover_url}
-              alt="Community cover"
-              style={{ width: "100%", maxHeight: 280, objectFit: "cover", borderRadius: 12, marginBottom: 12 }}
-            />
+          {c?.photo_url && !editing && (
+            <div className="card p-0 mb-2" style={{ overflow: "hidden" }}>
+              {/* cover photo */}
+              <img src={c.photo_url} alt={c.title} style={{ width: "100%", height: 280, objectFit: "cover" }} />
+            </div>
           )}
 
-          {/* Meta */}
-          <div className="muted" style={{ marginBottom: 12 }}>
-            {c.category || "General"} · {c.zip || "ZIP n/a"} · Created{" "}
-            {c.created_at ? format(new Date(c.created_at), "MMM d, yyyy") : "—"}
-          </div>
+          {editing && (
+            <section className="card p-3 mb-2">
+              <h2 className="section-title">Edit community</h2>
+              <div className="stack">
+                <label className="field">
+                  <span className="label">Cover photo URL</span>
+                  <input className="input" value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="https://…" />
+                </label>
+                <label className="field">
+                  <span className="label">About</span>
+                  <textarea className="input" rows={4} value={about} onChange={e => setAbout(e.target.value)} />
+                </label>
+                <div className="right">
+                  <button className="btn btn-brand" onClick={saveCommunity}>Save</button>
+                </div>
+              </div>
+            </section>
+          )}
 
-          {/* Tabs */}
-          <div className="segmented" role="tablist" aria-label="Community tabs" style={{ marginBottom: 12 }}>
+          {/* meta row */}
+          {c && (
+            <div className="muted mb-2">
+              {c.category && <>{c.category} · </>}
+              {c.zip && <>{c.zip} · </>}
+              Created {format(new Date(c.created_at), "MMM d, yyyy")}
+            </div>
+          )}
+
+          {/* tabs */}
+          <div className="segmented mb-2" role="tablist">
             <button className={`seg-btn ${tab === "discussion" ? "active" : ""}`} onClick={() => setTab("discussion")}>
               Discussion
             </button>
             <button className={`seg-btn ${tab === "events" ? "active" : ""}`} onClick={() => setTab("events")}>
               What’s happening
             </button>
+            <button className={`seg-btn ${tab === "map" ? "active" : ""}`} onClick={() => setTab("map")}>
+              Circles & Map
+            </button>
             <button className={`seg-btn ${tab === "about" ? "active" : ""}`} onClick={() => setTab("about")}>
               About
             </button>
-            <button className={`seg-btn ${tab === "directory" ? "active" : ""}`} onClick={() => setTab("directory")}>
-              Business Directory
-            </button>
           </div>
 
-          {/* Edit card (admins) */}
-          {editMode && amAdmin && (
-            <EditCard c={c} me={me} onSave={saveEdits} />
-          )}
-
-          {/* Tab content */}
+          {/* DISCUSSION */}
           {tab === "discussion" && (
             <section className="card p-3">
               <h2 className="section-title">Discussion</h2>
-              <p className="muted">Threaded discussions coming soon.</p>
+
+              {isMember ? (
+                <div className="mb-2">
+                  <textarea
+                    className="input"
+                    rows={3}
+                    placeholder="Start a new discussion…"
+                    value={newPost}
+                    onChange={e => setNewPost(e.target.value)}
+                  />
+                  <div className="right" style={{ marginTop: 8 }}>
+                    <button className="btn btn-brand" onClick={createPost} disabled={!newPost.trim()}>
+                      Post
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="muted">Join to post.</p>
+              )}
+
+              {posts.length === 0 && <p className="muted">No posts yet.</p>}
+              <div className="stack">
+                {posts.map(p => (
+                  <PostItem key={p.id} post={p} onReply={replyTo} />
+                ))}
+              </div>
             </section>
           )}
 
+          {/* EVENTS */}
           {tab === "events" && (
             <section className="card p-3">
               <h2 className="section-title">What’s happening</h2>
-              <p className="muted">Community events feed coming soon.</p>
-            </section>
-          )}
 
-          {tab === "about" && (
-            <section className="card p-3">
-              <h2 className="section-title">About this community</h2>
-              {c.about ? <div style={{ whiteSpace: "pre-wrap" }}>{c.about}</div> : <p className="muted">No description yet.</p>}
-            </section>
-          )}
-
-          {tab === "directory" && (
-            <section className="card p-3">
-              <h2 className="section-title">Business Directory</h2>
-              <p className="muted" style={{ marginBottom: 12 }}>
-                Members who set up a business page appear here. (Tip: edit your Profile → Business.)
-              </p>
-              {biz.length === 0 ? (
-                <p className="muted">No businesses yet.</p>
-              ) : (
-                <div className="commitment-grid">
-                  {biz.map((p) => (
-                    <div key={p.id} className="commitment-card">
-                      {p.business_logo_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.business_logo_url}
-                          alt={p.business_name || p.full_name || "Logo"}
-                          style={{ width: "100%", borderRadius: 12, marginBottom: 8 }}
-                        />
-                      )}
-                      <h4>{p.business_name || p.full_name || "Business"}</h4>
-                      {p.offering_title && <p className="muted">{p.offering_title}</p>}
-                      <div style={{ fontSize: 12 }} className="muted">
-                        {p.business_zip ? <>ZIP: {p.business_zip}</> : "ZIP not provided"}
-                      </div>
-                      {p.website && (
-                        <a href={p.website} target="_blank" rel="noreferrer" className="btn btn-neutral" style={{ marginTop: 8 }}>
-                          Visit site
-                        </a>
-                      )}
-                    </div>
-                  ))}
+              {isMember && (
+                <div className="grid mb-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                  <label className="field">
+                    <span className="label">Title</span>
+                    <input className="input" value={evtTitle} onChange={e => setEvtTitle(e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="label">Start</span>
+                    <input className="input" type="datetime-local" value={evtStart} onChange={e => setEvtStart(e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="label">End (optional)</span>
+                    <input className="input" type="datetime-local" value={evtEnd} onChange={e => setEvtEnd(e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="label">Location</span>
+                    <input className="input" value={evtLoc} onChange={e => setEvtLoc(e.target.value)} />
+                  </label>
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Description</span>
+                    <textarea className="input" rows={3} value={evtDesc} onChange={e => setEvtDesc(e.target.value)} />
+                  </label>
+                  <div className="right" style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn btn-brand" onClick={createEvent} disabled={!evtTitle || !evtStart}>
+                      Add event
+                    </button>
+                  </div>
                 </div>
               )}
+
+              <div className="stack">
+                {events.length === 0 && <p className="muted">No events yet.</p>}
+                {events.map(e => (
+                  <div key={e.id} className="card p-2">
+                    <div className="section-row">
+                      <div>
+                        <strong>{e.title}</strong>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {format(new Date(e.start_at), "EEE, MMM d p")}
+                          {e.end_at && <> – {format(new Date(e.end_at), "p")}</>}
+                          {e.location && <> · {e.location}</>}
+                        </div>
+                      </div>
+                      <div className="controls">
+                        <button className="btn" onClick={() => saveEventToMe(e.id)}>Save to my calendar</button>
+                      </div>
+                    </div>
+                    {e.description && <p className="mt-1">{e.description}</p>}
+                  </div>
+                ))}
+              </div>
             </section>
           )}
+
+          {/* MAP + LISTINGS */}
+          {tab === "map" && (
+            <section className="card p-3">
+              <h2 className="section-title">Drum circles & map</h2>
+              <p className="muted" style={{ marginTop: -6 }}>
+                Add a circle so others can find it. Click a pin for details.
+              </p>
+
+              {isMember && (
+                <div className="grid mb-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                  <label className="field">
+                    <span className="label">Display name (optional)</span>
+                    <input className="input" value={listTitle} onChange={e => setListTitle(e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="label">Place name</span>
+                    <input className="input" value={listPlace} onChange={e => setListPlace(e.target.value)} placeholder="Park, studio, etc." />
+                  </label>
+                  <label className="field">
+                    <span className="label">Address (optional)</span>
+                    <input className="input" value={listAddr} onChange={e => setListAddr(e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="label">Schedule (optional)</span>
+                    <input className="input" value={listSchedule} onChange={e => setListSchedule(e.target.value)} placeholder="1st & 3rd Thu @ 7pm" />
+                  </label>
+                  <label className="field">
+                    <span className="label">Latitude (optional)</span>
+                    <input className="input" value={listLat} onChange={e => setListLat(e.target.value)} placeholder="33.12345" />
+                  </label>
+                  <label className="field">
+                    <span className="label">Longitude (optional)</span>
+                    <input className="input" value={listLng} onChange={e => setListLng(e.target.value)} placeholder="-96.12345" />
+                  </label>
+                  <div className="right" style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn btn-brand" onClick={createListing} disabled={!listPlace.trim()}>
+                      Add circle
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* map */}
+              <div className="mb-2" style={{ height: 360, borderRadius: 12, overflow: "hidden" }}>
+                <MapContainer
+                  center={[33.1, -96.1]}
+                  zoom={9}
+                  style={{ height: "100%", width: "100%" }}
+                  scrollWheelZoom
+                >
+                  <TileLayer
+                    attribution='&copy; OpenStreetMap'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  {listings
+                    .filter(l => typeof l.lat === "number" && typeof l.lng === "number")
+                    .map(l => (
+                      <Marker key={l.id} position={[Number(l.lat), Number(l.lng)] as any}>
+                        <Popup>
+                          <strong>{l.title || l.place_name}</strong>
+                          {l.address && <div className="muted">{l.address}</div>}
+                          {l.schedule && <div className="muted">{l.schedule}</div>}
+                        </Popup>
+                      </Marker>
+                    ))}
+                </MapContainer>
+              </div>
+
+              <h3 style={{ margin: "10px 0 6px" }}>All circles</h3>
+              {listings.length === 0 && <p className="muted">No circles yet.</p>}
+              <div className="stack">
+                {listings.map(l => (
+                  <div key={l.id} className="card p-2">
+                    <strong>{l.title || l.place_name}</strong>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {l.address || "No address"} {l.schedule && <> · {l.schedule}</>}
+                      {(l.lat != null && l.lng != null) && <> · ({l.lat}, {l.lng})</>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ABOUT */}
+          {tab === "about" && (
+            <section className="card p-3">
+              <h2 className="section-title">About</h2>
+              {c?.about ? <div style={{ whiteSpace: "pre-wrap" }}>{c.about}</div> : <p className="muted">No description yet.</p>}
+            </section>
+          )}
+
+          {loading && <p className="muted mt-2">Loading…</p>}
         </div>
       </div>
     </div>
   );
 }
 
-/** ───────────────────────────── Edit card (admin only) */
-function EditCard({
-  c,
-  me,
-  onSave,
-}: {
-  c: Community;
-  me: string | null;
-  onSave: (next: Partial<Community>) => Promise<void>;
-}) {
-  const [title, setTitle] = useState(c.title);
-  const [about, setAbout] = useState(c.about ?? "");
-  const [zip, setZip] = useState(c.zip ?? "");
-  const [category, setCategory] = useState(c.category ?? "");
-  const [visibility, setVisibility] = useState<"public" | "private">(c.visibility || "public");
-  const [cover, setCover] = useState<string | null>(c.cover_url ?? null);
+/** Child component: simple post item with quick reply */
+function PostItem({ post, onReply }: { post: Post; onReply: (id: string, text: string) => void }) {
+  const [reply, setReply] = useState("");
+  const [replies, setReplies] = useState<Post[] | null>(null);
+  const [open, setOpen] = useState(false);
+
+  async function loadReplies() {
+    const { data } = await supabase
+      .from("community_posts")
+      .select("*")
+      .eq("parent_post_id", post.id)
+      .order("created_at", { ascending: true });
+    setReplies((data ?? []) as Post[]);
+  }
+
+  useEffect(() => {
+    if (open && replies === null) loadReplies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function send() {
+    if (!reply.trim()) return;
+    await onReply(post.id, reply);
+    setReply("");
+    setReplies(null); // reload next open
+    setOpen(true);
+    loadReplies();
+  }
 
   return (
-    <section className="card p-3" style={{ marginBottom: 12 }}>
-      <h2 className="section-title">Edit community</h2>
-      <div className="stack">
-        <label className="field">
-          <span className="label">Title</span>
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="label">Category</span>
-          <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Drum circles, breathwork…" />
-        </label>
-        <label className="field">
-          <span className="label">ZIP</span>
-          <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="label">Visibility</span>
-          <select className="input" value={visibility} onChange={(e) => setVisibility(e.target.value as any)}>
-            <option value="public">Public (anyone can join)</option>
-            <option value="private">Private (request to join)</option>
-          </select>
-        </label>
-
-        <CommunityPhotoUploader
-          value={cover}
-          onChange={setCover}
-          communityId={c.id}
-          userId={me}
-          label="Cover photo"
-        />
-
-        <label className="field">
-          <span className="label">About</span>
-          <textarea className="input" rows={5} value={about} onChange={(e) => setAbout(e.target.value)} />
-        </label>
-
-        <div className="right">
-          <button
-            className="btn btn-brand"
-            onClick={() =>
-              onSave({
-                title,
-                about: about || null,
-                zip: zip || null,
-                category: category || null,
-                visibility,
-                cover_url: cover || null,
-              })
-            }
-          >
-            Save changes
-          </button>
-        </div>
+    <div className="card p-2">
+      <div>{post.content}</div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+        {format(new Date(post.created_at), "MMM d, p")}
       </div>
-    </section>
+
+      <div className="section-row" style={{ marginTop: 8 }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 8 }}>
+          <input className="input" value={reply} onChange={e => setReply(e.target.value)} placeholder="Reply…" />
+          <button className="btn" onClick={send}>Reply</button>
+        </div>
+        <button className="btn" onClick={() => setOpen(!open)}>
+          {open ? "Hide replies" : "View replies"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="stack mt-1">
+          {(replies ?? []).length === 0 && <p className="muted">No replies yet.</p>}
+          {(replies ?? []).map(r => (
+            <div key={r.id} className="card p-2" style={{ background: "#fafafa" }}>
+              {r.content}
+              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                {format(new Date(r.created_at), "MMM d, p")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
