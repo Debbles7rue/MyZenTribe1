@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import type { MapCommunity } from "@/components/community/MapExplorerClient";
+import type { MapCommunity, MapPin } from "@/components/community/MapExplorerClient";
 
 const MapExplorerClient = dynamic(
   () => import("@/components/community/MapExplorerClient"),
@@ -23,20 +23,9 @@ type Community = {
   zip: string | null;
 };
 
-// Pins now include their own category so we can filter by it
-type Circle = {
-  id: string;
-  community_id: string;
-  name: string | null;
-  category: string | null;     // <-- pin category for filtering
-  lat: number;
-  lng: number;
-  address: string | null;
-  day_of_week: string | null;
-  time_local: string | null;
-  contact_phone: string | null;
-  contact_email: string | null;
-  website_url: string | null;
+type Circle = MapPin & {
+  // we may carry categories to filter by service type
+  categories?: string[] | null;
 };
 
 const CATEGORIES = [
@@ -51,30 +40,25 @@ export default function CommunitiesMapExplorer() {
 
   // filters
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState("");    // <-- this now filters by pin.category
+  const [cat, setCat] = useState("");
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState(0); // 0=exact, 25=zip prefix
 
   // add-pin modal
   const [showAdd, setShowAdd] = useState(false);
 
-  const center: [number, number] = [39.5, -98.35]; // USA-ish
-
   async function load() {
     setLoading(true);
 
-    // 1) Fetch communities (we still use ZIP filter here to limit scope)
+    // 1) Load communities according to the header filters
     let cq = supabase
       .from("communities")
       .select("id,title,category,zip")
       .order("created_at", { ascending: false })
       .limit(1000);
 
-    // NOTE: We no longer filter communities by category;
-    // pin filtering is done on the pins themselves below.
-
+    if (cat) cq = cq.eq("category", cat);
     if (q.trim()) cq = cq.ilike("title", `%${q.trim()}%`);
-
     if (zip.trim()) {
       const z = zip.trim().slice(0, 5);
       cq = radius >= 25 ? cq.like("zip", `${z.slice(0, 3)}%`) : cq.eq("zip", z);
@@ -88,34 +72,72 @@ export default function CommunitiesMapExplorer() {
       setLoading(false);
       return;
     }
+
     const commList = (comms ?? []) as Community[];
     setCommunities(commList);
 
     const commIds = commList.map((c) => c.id);
-    if (commIds.length === 0) {
-      setCircles([]);
-      setLoading(false);
-      return;
+
+    // 2) Fetch pins
+    // If communities are selected (or listed by filter), use the mapping table
+    // community_circle_communities to fetch pins tied to those communities.
+    // If there are no communities in the filter, show ALL pins (global map).
+    let pins: Circle[] = [];
+
+    if (commIds.length > 0) {
+      const { data: mapped, error: mErr } = await supabase
+        .from("community_circle_communities")
+        .select(
+          // join: for each mapping, pull the circle fields
+          "community_id, circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories)"
+        )
+        .in("community_id", commIds)
+        .limit(5000);
+
+      if (mErr) {
+        console.error(mErr);
+        setCircles([]);
+        setLoading(false);
+        return;
+      }
+
+      pins =
+        (mapped ?? []).map((r: any) => ({
+          // keep a community_id for MapPin compatibility
+          community_id: r.community_id,
+          id: r.circle.id,
+          name: r.circle.name,
+          lat: r.circle.lat,
+          lng: r.circle.lng,
+          address: r.circle.address,
+          contact_phone: r.circle.contact_phone,
+          contact_email: r.circle.contact_email,
+          website_url: r.circle.website_url,
+          categories: r.circle.categories ?? null,
+        })) as Circle[];
+    } else {
+      // Global view: show all pins (including those with no community mapping)
+      const { data: allCircles, error: aErr } = await supabase
+        .from("community_circles")
+        .select("id,name,lat,lng,address,contact_phone,contact_email,website_url,categories")
+        .limit(5000);
+
+      if (aErr) {
+        console.error(aErr);
+        setCircles([]);
+        setLoading(false);
+        return;
+      }
+
+      pins =
+        (allCircles ?? []).map((r: any) => ({
+          community_id: null as any, // MapPin might not require it visually
+          ...r,
+        })) as Circle[];
     }
 
-    // 2) Fetch pins for those communities (include pin.category)
-    const { data: circs, error: sErr } = await supabase
-      .from("community_circles")
-      .select(
-        "id,community_id,name,category,lat,lng,address,day_of_week,time_local,contact_phone,contact_email,website_url"
-      )
-      .in("community_id", commIds)
-      .limit(2000);
-
-    if (sErr) {
-      console.error(sErr);
-      setCircles([]);
-      setLoading(false);
-      return;
-    }
-
-    // 3) Apply text + category filters to pins
-    let filtered = (circs ?? []) as Circle[];
+    // 3) Apply free-text filter (name/address) and category filter (service categories)
+    let filtered = pins;
 
     if (q.trim()) {
       const qv = q.trim().toLowerCase();
@@ -127,7 +149,7 @@ export default function CommunitiesMapExplorer() {
     }
 
     if (cat) {
-      filtered = filtered.filter((c) => (c.category || "") === cat);
+      filtered = filtered.filter((c) => (c.categories || []).includes(cat));
     }
 
     setCircles(filtered);
@@ -169,28 +191,12 @@ export default function CommunitiesMapExplorer() {
           {/* Filters */}
           <section className="card p-3">
             <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr 120px 140px 120px", gap: 12 }}>
-              <input
-                className="input"
-                placeholder="Search (name, address)…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-
-              {/* Now filters by PIN category */}
+              <input className="input" placeholder="Search (name, address)…" value={q} onChange={(e) => setQ(e.target.value)} />
               <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
                 <option value="">All categories</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-
-              <input
-                className="input"
-                placeholder="ZIP"
-                value={zip}
-                onChange={(e) => setZip(e.target.value)}
-                maxLength={5}
-              />
+              <input className="input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} maxLength={5} />
               <select className="input" value={radius} onChange={(e) => setRadius(Number(e.target.value))}>
                 <option value={0}>ZIP only</option>
                 <option value={25}>~Nearby (zip prefix)</option>
@@ -201,7 +207,7 @@ export default function CommunitiesMapExplorer() {
 
           {/* Map (client only) */}
           <section className="mt-3">
-            <MapExplorerClient center={center} pins={circles} communitiesById={communityById} />
+            <MapExplorerClient center={[39.5, -98.35]} pins={circles} communitiesById={communityById} />
             {loading && <p className="muted mt-2">Loading pins…</p>}
             {!loading && circles.length === 0 && (
               <div className="card p-3 mt-2">
