@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link"; // add this if missing
 // …rest of your imports
