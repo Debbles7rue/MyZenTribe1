@@ -1,501 +1,396 @@
-// app/communities/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
 import NextLink from "next/link";
+import { useParams } from "next/navigation";
 import { format } from "date-fns";
+import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
-
-// At the top of the page’s UI (header area is ideal)
-<div className="right">
-  <Link href="/communities" className="btn">Back</Link>
-</div>
+import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
 type Community = {
   id: string;
   title: string;
-  category: string | null;
-  zip: string | null;
-  photo_url: string | null;
   about: string | null;
+  zip: string | null;
+  category: string | null;
+  visibility: "public" | "private" | null;
+  cover_url: string | null;
   created_by: string | null;
   created_at: string;
-  visibility: "public" | "private";
-  join_question: string | null;
-  invite_token: string; // uuid
 };
 
-type Post = {
+type Member = {
+  user_id: string;
+  role: "admin" | "member";
+  status: "member" | "pending";
+};
+
+type BusinessProfile = {
   id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
+  full_name: string | null;
+  is_business: boolean | null;
+  business_name: string | null;
+  business_zip: string | null;
+  website: string | null;
+  offering_title: string | null;
+  business_logo_url: string | null;
 };
 
-type Event = {
-  id: string;
-  user_id: string;
-  title: string;
-  details: string | null;
-  start_at: string;
-  location: string | null;
-  created_at: string;
-};
+type Tab = "discussion" | "events" | "about" | "directory";
 
-type Pending = {
-  user_id: string;
-  note: string | null;
-  created_at: string;
-};
-
-type Tab = "discussion" | "events" | "about";
-
-export default function CommunityPage() {
+export default function CommunityDetailPage() {
   const params = useParams<{ id: string }>();
   const communityId = params?.id;
-
-  const [userId, setUserId] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("discussion");
-
-  const [c, setC] = useState<Community | null>(null);
-  const [isMember, setIsMember] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [me, setMe] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // posts
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [newPost, setNewPost] = useState("");
-  const [posting, setPosting] = useState(false);
+  const [c, setC] = useState<Community | null>(null);
+  const [myMember, setMyMember] = useState<Member | null>(null);
+  const [tab, setTab] = useState<Tab>("discussion");
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // events
-  const [events, setEvents] = useState<Event[]>([]);
-  const [evTitle, setEvTitle] = useState("");
-  const [evWhen, setEvWhen] = useState(""); // datetime-local
-  const [evWhere, setEvWhere] = useState("");
-  const [evDetails, setEvDetails] = useState("");
-  const [savingEvent, setSavingEvent] = useState(false);
-
-  // private join
-  const [requestNote, setRequestNote] = useState("");
-  const [hasPending, setHasPending] = useState(false);
-
-  // admin pending list
-  const [pending, setPending] = useState<Pending[]>([]);
+  // Directory
+  const [biz, setBiz] = useState<BusinessProfile[]>([]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-  }, []);
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  async function load() {
-    if (!communityId) return;
+        // who am I?
+        const { data: auth } = await supabase.auth.getUser();
+        const userId = auth.user?.id ?? null;
+        if (mounted) setMe(userId);
 
-    setLoading(true);
-
-    const { data, error } = await supabase
-      .from("communities")
-      .select(
-        "id,title,category,zip,photo_url,about,created_by,created_at,visibility,join_question,invite_token"
-      )
-      .eq("id", communityId)
-      .maybeSingle();
-
-    if (error) {
-      console.error(error);
-      setC(null);
-      setLoading(false);
-      return;
-    }
-    setC(data);
-
-    // membership & role
-    if (userId) {
-      const { data: m } = await supabase
-        .from("community_members")
-        .select("role,status,note")
-        .eq("community_id", communityId)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      setIsMember(m?.status === "member");
-      setIsAdmin(m?.role === "admin");
-      setHasPending(m?.status === "pending");
-      setRequestNote(m?.note ?? "");
-    } else {
-      setIsMember(false);
-      setIsAdmin(false);
-      setHasPending(false);
-    }
-
-    // auto-accept invites (?invite=TOKEN) – safe because we read window directly (no Suspense needed)
-    if (data && userId) {
-      const token = typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("invite")
-        : null;
-
-      if (token && token === data.invite_token) {
-        // add or update membership to "member"
-        const { data: exists } = await supabase
-          .from("community_members")
-          .select("status")
-          .eq("community_id", communityId)
-          .eq("user_id", userId)
+        // get community
+        const { data: comm, error: ce } = await supabase
+          .from("communities")
+          .select("id,title,about,zip,category,visibility,cover_url,created_by,created_at")
+          .eq("id", communityId)
           .maybeSingle();
+        if (ce) throw ce;
+        if (!comm) throw new Error("Community not found.");
 
-        if (!exists) {
-          await supabase.from("community_members").insert({
-            community_id: communityId,
-            user_id: userId,
-            role: "member",
-            status: "member",
-            note: "via invite link",
-          });
-        } else if (exists.status !== "member") {
-          await supabase
+        if (mounted) setC(comm as Community);
+
+        // my membership (role)
+        if (userId) {
+          const { data: mem, error: meErr } = await supabase
             .from("community_members")
-            .update({ status: "member", note: "via invite link" })
+            .select("user_id, role, status")
             .eq("community_id", communityId)
-            .eq("user_id", userId);
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (!meErr && mem && mounted) setMyMember(mem as Member);
         }
 
-        setIsMember(true);
-        setHasPending(false);
+        // directory (businesses in this community)
+        // NOTE: simplest version: show members with profiles.is_business = true
+        const { data: bizRows } = await supabase
+          .from("community_members")
+          .select("user_id, profiles!inner(id, full_name, is_business, business_name, website, offering_title, business_logo_url, business_zip)")
+          .eq("community_id", communityId)
+          .eq("status", "member");
+
+        const list =
+          (bizRows ?? [])
+            .map((r: any) => r.profiles)
+            .filter((p: any) => p?.is_business) as BusinessProfile[];
+
+        if (mounted) setBiz(list);
+      } catch (e: any) {
+        console.error(e);
+        if (mounted) setError(e.message || "Failed to load.");
+      } finally {
+        if (mounted) setLoading(false);
       }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [communityId]);
+
+  const amAdmin = useMemo(() => {
+    if (!me || !myMember) return false;
+    return myMember.role === "admin";
+  }, [me, myMember]);
+
+  async function joinCommunity() {
+    if (!me || !c) return;
+    try {
+      setSaving(true);
+      const { error: e } = await supabase.from("community_members").upsert({
+        community_id: c.id,
+        user_id: me,
+        status: c.visibility === "private" ? "pending" : "member",
+        role: "member",
+      });
+      if (e) throw e;
+      alert(c.visibility === "private" ? "Requested to join. An admin will approve you." : "Joined!");
+      setMyMember({ user_id: me, role: "member", status: c.visibility === "private" ? "pending" : "member" });
+    } catch (e: any) {
+      alert(e.message || "Join failed");
+    } finally {
+      setSaving(false);
     }
+  }
 
-    // posts & events
-    const [{ data: pr }, { data: er }] = await Promise.all([
-      supabase
-        .from("community_posts")
-        .select("id,user_id,content,created_at")
-        .eq("community_id", communityId)
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("community_events")
-        .select("id,user_id,title,details,start_at,location,created_at")
-        .eq("community_id", communityId)
-        .order("start_at", { ascending: true })
-        .limit(100),
-    ]);
-
-    setPosts(pr ?? []);
-    setEvents(er ?? []);
-
-    // admin: load pending requests
-    if (data?.visibility === "private" && isAdmin) {
-      const { data: pend } = await supabase
-        .from("community_members")
-        .select("user_id,note,created_at")
-        .eq("community_id", communityId)
-        .eq("status", "pending")
-        .order("created_at", { ascending: true });
-      setPending(pend ?? []);
-    } else {
-      setPending([]);
+  async function saveEdits(next: Partial<Community>) {
+    if (!c) return;
+    try {
+      setSaving(true);
+      const payload = {
+        title: (next.title ?? c.title)?.trim(),
+        about: (next.about ?? c.about) || null,
+        zip: (next.zip ?? c.zip) || null,
+        category: (next.category ?? c.category) || null,
+        visibility: (next.visibility ?? c.visibility) || "public",
+        cover_url: (next.cover_url ?? c.cover_url) || null,
+      };
+      const { error } = await supabase.from("communities").update(payload).eq("id", c.id);
+      if (error) throw error;
+      setC({ ...c, ...payload });
+      setEditMode(false);
+      alert("Saved!");
+    } catch (e: any) {
+      alert(e.message || "Save failed");
+    } finally {
+      setSaving(false);
     }
-
-    setLoading(false);
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, communityId]);
-
-  async function joinPublic() {
-    if (!userId || !communityId) return;
-    await supabase.from("community_members").insert({
-      community_id: communityId,
-      user_id: userId,
-      role: "member",
-      status: "member",
-    });
-    await load();
+  if (loading) {
+    return (
+      <div className="page-wrap">
+        <SiteHeader />
+        <div className="page"><div className="container-app"><p className="muted">Loading…</p></div></div>
+      </div>
+    );
   }
 
-  async function requestPrivate() {
-    if (!userId || !communityId) return;
-    await supabase.from("community_members").insert({
-      community_id: communityId,
-      user_id: userId,
-      role: "member",
-      status: "pending",
-      note: requestNote.trim() || null,
-    });
-    setHasPending(true);
-    await load();
+  if (error || !c) {
+    return (
+      <div className="page-wrap">
+        <SiteHeader />
+        <div className="page">
+          <div className="container-app">
+            <div className="note">
+              <div className="note-title">Couldn’t open community</div>
+              <div className="note-body">{error || "Unknown error"}</div>
+              <div className="controls" style={{ marginTop: 10 }}>
+                <NextLink className="btn" href="/communities">Back to communities</NextLink>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
-
-  async function leave() {
-    if (!userId || !communityId) return;
-    await supabase.from("community_members").delete().eq("community_id", communityId).eq("user_id", userId);
-    await load();
-  }
-
-  async function submitPost() {
-    if (!userId || !communityId || !newPost.trim()) return;
-    setPosting(true);
-    const { error } = await supabase.from("community_posts").insert({
-      community_id: communityId,
-      user_id: userId,
-      content: newPost.trim(),
-    });
-    setPosting(false);
-    if (error) return alert(error.message);
-    setNewPost("");
-    await load();
-  }
-
-  async function deletePost(id: string) {
-    if (!confirm("Delete this post?")) return;
-    await supabase.from("community_posts").delete().eq("id", id);
-    await load();
-  }
-
-  // admin: approve / reject
-  async function approve(user_id: string) {
-    await supabase
-      .from("community_members")
-      .update({ status: "member" })
-      .eq("community_id", communityId)
-      .eq("user_id", user_id);
-    await load();
-  }
-  async function reject(user_id: string) {
-    await supabase
-      .from("community_members")
-      .delete()
-      .eq("community_id", communityId)
-      .eq("user_id", user_id);
-    await load();
-  }
-
-  const inviteUrl =
-    typeof window !== "undefined" && c
-      ? `${window.location.origin}/communities/${c.id}?invite=${c.invite_token}`
-      : "";
-
-  const bg: React.CSSProperties = { background: "linear-gradient(#FFF7DB, #ffffff)", minHeight: "100vh" };
 
   return (
-    <div className="page-wrap" style={bg}>
-      <div className="page">
+    <div className="page-wrap">
+      <SiteHeader />
+      <div className="page" style={{ background: "linear-gradient(#fff8e0,#fff)" }}>
         <div className="container-app">
           <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Community</h1>
+            <h1 className="page-title" style={{ marginBottom: 0 }}>{c.title}</h1>
             <div className="controls">
-              <Link href="/communities" className="btn">Back</Link>
-
-              {/* Join/Leave logic */}
-              {!isMember ? (
-                c?.visibility === "public" ? (
-                  <button className="btn btn-brand" onClick={joinPublic}>Join</button>
-                ) : hasPending ? (
-                  <button className="btn" disabled>Request pending</button>
-                ) : (
-                  <button className="btn btn-brand" onClick={requestPrivate}>Request to join</button>
-                )
+              <NextLink href="/communities" className="btn">Back</NextLink>
+              {amAdmin && (
+                <button className="btn" onClick={() => setEditMode(!editMode)}>
+                  {editMode ? "Done" : "Edit"}
+                </button>
+              )}
+              {!myMember || myMember.status !== "member" ? (
+                <button className="btn btn-brand" onClick={joinCommunity} disabled={saving}>
+                  {c.visibility === "private" ? "Request to join" : "Join"}
+                </button>
               ) : (
-                <button className="btn" onClick={leave}>Leave</button>
+                <span className="muted" style={{ marginLeft: 8 }}>Joined</span>
               )}
             </div>
           </div>
 
-          {/* identity card */}
-          <div className="card p-3">
-            <div style={{ display: "grid", gridTemplateColumns: "96px 1fr auto", gap: 12 }}>
-              <div
-                style={{
-                  width: 96, height: 96, borderRadius: 16,
-                  background: c?.photo_url ? `center / cover no-repeat url(${c.photo_url})` : "linear-gradient(135deg,#c4a6ff,#ff8a65)",
-                }}
-              />
-              <div>
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <strong style={{ fontSize: 20 }}>{c?.title || "Untitled"}</strong>
-                  {c?.category && <span className="tag">{c.category}</span>}
-                  {c?.zip && <span className="muted">· {c.zip}</span>}
-                  <span className="tag">{c?.visibility === "private" ? "Private" : "Public"}</span>
-                  {isAdmin && <span className="tag">Admin</span>}
-                </div>
-                {c?.about && <p className="muted" style={{ marginTop: 6 }}>{c.about}</p>}
-              </div>
+          {/* Cover */}
+          {c.cover_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={c.cover_url}
+              alt="Community cover"
+              style={{ width: "100%", maxHeight: 280, objectFit: "cover", borderRadius: 12, marginBottom: 12 }}
+            />
+          )}
 
-              {/* Invite link */}
-              {c && (
-                <div className="right" style={{ display: "flex", gap: 8, alignItems: "start" }}>
-                  <button
-                    className="btn btn-neutral"
-                    onClick={async () => {
-                      if (!inviteUrl) return;
-                      try {
-                        await navigator.clipboard.writeText(inviteUrl);
-                        alert("Invite link copied!");
-                      } catch {
-                        prompt("Copy the invite link:", inviteUrl);
-                      }
-                    }}
-                  >
-                    Invite link
-                  </button>
-                </div>
-              )}
-            </div>
+          {/* Meta */}
+          <div className="muted" style={{ marginBottom: 12 }}>
+            {c.category || "General"} · {c.zip || "ZIP n/a"} · Created{" "}
+            {c.created_at ? format(new Date(c.created_at), "MMM d, yyyy") : "—"}
           </div>
 
-          {/* Private: request form if not a member and not pending */}
-          {c?.visibility === "private" && !isMember && !hasPending && (
-            <div className="card p-3 mt-2">
-              <h3 style={{ marginTop: 0 }}>Request to join</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
-                {c.join_question || "Tell the admins a little about why you’d like to join."}
+          {/* Tabs */}
+          <div className="segmented" role="tablist" aria-label="Community tabs" style={{ marginBottom: 12 }}>
+            <button className={`seg-btn ${tab === "discussion" ? "active" : ""}`} onClick={() => setTab("discussion")}>
+              Discussion
+            </button>
+            <button className={`seg-btn ${tab === "events" ? "active" : ""}`} onClick={() => setTab("events")}>
+              What’s happening
+            </button>
+            <button className={`seg-btn ${tab === "about" ? "active" : ""}`} onClick={() => setTab("about")}>
+              About
+            </button>
+            <button className={`seg-btn ${tab === "directory" ? "active" : ""}`} onClick={() => setTab("directory")}>
+              Business Directory
+            </button>
+          </div>
+
+          {/* Edit card (admins) */}
+          {editMode && amAdmin && (
+            <EditCard c={c} me={me} onSave={saveEdits} />
+          )}
+
+          {/* Tab content */}
+          {tab === "discussion" && (
+            <section className="card p-3">
+              <h2 className="section-title">Discussion</h2>
+              <p className="muted">Threaded discussions coming soon.</p>
+            </section>
+          )}
+
+          {tab === "events" && (
+            <section className="card p-3">
+              <h2 className="section-title">What’s happening</h2>
+              <p className="muted">Community events feed coming soon.</p>
+            </section>
+          )}
+
+          {tab === "about" && (
+            <section className="card p-3">
+              <h2 className="section-title">About this community</h2>
+              {c.about ? <div style={{ whiteSpace: "pre-wrap" }}>{c.about}</div> : <p className="muted">No description yet.</p>}
+            </section>
+          )}
+
+          {tab === "directory" && (
+            <section className="card p-3">
+              <h2 className="section-title">Business Directory</h2>
+              <p className="muted" style={{ marginBottom: 12 }}>
+                Members who set up a business page appear here. (Tip: edit your Profile → Business.)
               </p>
-              <textarea
-                className="input"
-                rows={3}
-                placeholder="Your answer…"
-                value={requestNote}
-                onChange={(e) => setRequestNote(e.target.value)}
-              />
-              <div className="right" style={{ marginTop: 8 }}>
-                <button className="btn btn-brand" onClick={requestPrivate}>Send request</button>
-              </div>
-            </div>
-          )}
-
-          {/* Admin: pending approvals */}
-          {c?.visibility === "private" && isAdmin && (
-            <div className="card p-3 mt-2">
-              <h3 style={{ marginTop: 0 }}>Pending requests</h3>
-              {pending.length === 0 && <p className="muted">None right now.</p>}
-              <div className="stack">
-                {pending.map((p) => (
-                  <div key={p.user_id} className="card p-3">
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      Requested on {format(new Date(p.created_at), "MMM d, h:mma")}
-                    </div>
-                    {p.note && <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{p.note}</div>}
-                    <div className="right" style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                      <button className="btn btn-brand" onClick={() => approve(p.user_id)}>Approve</button>
-                      <button className="btn" onClick={() => reject(p.user_id)}>Reject</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* tabs */}
-          <div className="card p-3 mt-2">
-            <div className="segmented" role="tablist" aria-label="Community tabs">
-              <button className={`seg-btn ${tab === "discussion" ? "active" : ""}`} onClick={() => setTab("discussion")}>
-                Discussion
-              </button>
-              <button className={`seg-btn ${tab === "events" ? "active" : ""}`} onClick={() => setTab("events")}>
-                What’s happening
-              </button>
-              <button className={`seg-btn ${tab === "about" ? "active" : ""}`} onClick={() => setTab("about")}>
-                About
-              </button>
-            </div>
-
-            {/* DISCUSSION */}
-            {tab === "discussion" && (
-              <div className="stack" style={{ marginTop: 12 }}>
-                {isMember ? (
-                  <div className="stack">
-                    <textarea
-                      className="input"
-                      rows={3}
-                      placeholder="Start a discussion…"
-                      value={newPost}
-                      onChange={(e) => setNewPost(e.target.value)}
-                    />
-                    <div className="right">
-                      <button className="btn btn-brand" onClick={submitPost} disabled={posting}>
-                        {posting ? "Posting…" : "Post"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted">Join to post.</p>
-                )}
-
-                <div className="stack">
-                  {posts.length === 0 && <p className="muted">No posts yet.</p>}
-                  {posts.map((p) => (
-                    <div key={p.id} className="card p-3">
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {format(new Date(p.created_at), "MMM d")} · {p.user_id === userId ? "You" : "Member"}
+              {biz.length === 0 ? (
+                <p className="muted">No businesses yet.</p>
+              ) : (
+                <div className="commitment-grid">
+                  {biz.map((p) => (
+                    <div key={p.id} className="commitment-card">
+                      {p.business_logo_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.business_logo_url}
+                          alt={p.business_name || p.full_name || "Logo"}
+                          style={{ width: "100%", borderRadius: 12, marginBottom: 8 }}
+                        />
+                      )}
+                      <h4>{p.business_name || p.full_name || "Business"}</h4>
+                      {p.offering_title && <p className="muted">{p.offering_title}</p>}
+                      <div style={{ fontSize: 12 }} className="muted">
+                        {p.business_zip ? <>ZIP: {p.business_zip}</> : "ZIP not provided"}
                       </div>
-                      <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{p.content}</div>
-                      {p.user_id === userId && (
-                        <div className="right" style={{ marginTop: 8 }}>
-                          <button className="btn btn-neutral" onClick={() => deletePost(p.id)}>Delete</button>
-                        </div>
+                      {p.website && (
+                        <a href={p.website} target="_blank" rel="noreferrer" className="btn btn-neutral" style={{ marginTop: 8 }}>
+                          Visit site
+                        </a>
                       )}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* EVENTS */}
-            {tab === "events" && (
-              <div className="stack" style={{ marginTop: 12 }}>
-                {isMember ? (
-                  <div className="card p-3">
-                    <h3 style={{ marginTop: 0 }}>Add an event</h3>
-                    <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr", gap: 8 }}>
-                      <input className="input" placeholder="Title" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} />
-                      <input className="input" type="datetime-local" value={evWhen} onChange={(e) => setEvWhen(e.target.value)} />
-                    </div>
-                    <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                      <input className="input" placeholder="Location" value={evWhere} onChange={(e) => setEvWhere(e.target.value)} />
-                      <input className="input" placeholder="Details (optional)" value={evDetails} onChange={(e) => setEvDetails(e.target.value)} />
-                    </div>
-                    <div className="right" style={{ marginTop: 8 }}>
-                      <button className="btn btn-brand" onClick={addEvent} disabled={savingEvent}>
-                        {savingEvent ? "Saving…" : "Save event"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted">Join to add events.</p>
-                )}
-
-                <div className="stack">
-                  {events.length === 0 && <p className="muted">No upcoming events yet.</p>}
-                  {events.map((ev) => (
-                    <div key={ev.id} className="card p-3">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <strong>{ev.title}</strong>
-                        <span className="muted">{format(new Date(ev.start_at), "EEE, MMM d • h:mma")}</span>
-                      </div>
-                      {ev.location && <div className="muted" style={{ marginTop: 4 }}>{ev.location}</div>}
-                      {ev.details && <div style={{ marginTop: 6 }}>{ev.details}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ABOUT */}
-            {tab === "about" && (
-              <div className="stack" style={{ marginTop: 12 }}>
-                <div className="muted">Category: {c?.category || "—"}</div>
-                <div className="muted">ZIP: {c?.zip || "—"}</div>
-                <div style={{ whiteSpace: "pre-wrap" }}>{c?.about || "No description yet."}</div>
-              </div>
-            )}
-          </div>
-
-          {loading && <p className="muted mt-2">Loading…</p>}
+              )}
+            </section>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+/** ───────────────────────────── Edit card (admin only) */
+function EditCard({
+  c,
+  me,
+  onSave,
+}: {
+  c: Community;
+  me: string | null;
+  onSave: (next: Partial<Community>) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(c.title);
+  const [about, setAbout] = useState(c.about ?? "");
+  const [zip, setZip] = useState(c.zip ?? "");
+  const [category, setCategory] = useState(c.category ?? "");
+  const [visibility, setVisibility] = useState<"public" | "private">(c.visibility || "public");
+  const [cover, setCover] = useState<string | null>(c.cover_url ?? null);
+
+  return (
+    <section className="card p-3" style={{ marginBottom: 12 }}>
+      <h2 className="section-title">Edit community</h2>
+      <div className="stack">
+        <label className="field">
+          <span className="label">Title</span>
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="label">Category</span>
+          <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Drum circles, breathwork…" />
+        </label>
+        <label className="field">
+          <span className="label">ZIP</span>
+          <input className="input" value={zip} onChange={(e) => setZip(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="label">Visibility</span>
+          <select className="input" value={visibility} onChange={(e) => setVisibility(e.target.value as any)}>
+            <option value="public">Public (anyone can join)</option>
+            <option value="private">Private (request to join)</option>
+          </select>
+        </label>
+
+        <CommunityPhotoUploader
+          value={cover}
+          onChange={setCover}
+          communityId={c.id}
+          userId={me}
+          label="Cover photo"
+        />
+
+        <label className="field">
+          <span className="label">About</span>
+          <textarea className="input" rows={5} value={about} onChange={(e) => setAbout(e.target.value)} />
+        </label>
+
+        <div className="right">
+          <button
+            className="btn btn-brand"
+            onClick={() =>
+              onSave({
+                title,
+                about: about || null,
+                zip: zip || null,
+                category: category || null,
+                visibility,
+                cover_url: cover || null,
+              })
+            }
+          >
+            Save changes
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
