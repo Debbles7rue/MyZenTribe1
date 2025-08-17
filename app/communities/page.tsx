@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import type { MapCommunity, MapPin } from "@/components/community/MapExplorerClient";
+import type { MapCommunity } from "@/components/community/MapExplorerClient";
 
 const MapExplorerClient = dynamic(
   () => import("@/components/community/MapExplorerClient"),
@@ -23,7 +23,21 @@ type Community = {
   zip: string | null;
 };
 
-type Circle = MapPin;
+// Pins now include their own category so we can filter by it
+type Circle = {
+  id: string;
+  community_id: string;
+  name: string | null;
+  category: string | null;     // <-- pin category for filtering
+  lat: number;
+  lng: number;
+  address: string | null;
+  day_of_week: string | null;
+  time_local: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  website_url: string | null;
+};
 
 const CATEGORIES = [
   "Wellness","Meditation","Yoga","Breathwork","Sound Baths","Drum Circles",
@@ -37,7 +51,7 @@ export default function CommunitiesMapExplorer() {
 
   // filters
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState("");
+  const [cat, setCat] = useState("");    // <-- this now filters by pin.category
   const [zip, setZip] = useState("");
   const [radius, setRadius] = useState(0); // 0=exact, 25=zip prefix
 
@@ -49,15 +63,18 @@ export default function CommunitiesMapExplorer() {
   async function load() {
     setLoading(true);
 
-    // Communities
+    // 1) Fetch communities (we still use ZIP filter here to limit scope)
     let cq = supabase
       .from("communities")
       .select("id,title,category,zip")
       .order("created_at", { ascending: false })
       .limit(1000);
 
-    if (cat) cq = cq.eq("category", cat);
+    // NOTE: We no longer filter communities by category;
+    // pin filtering is done on the pins themselves below.
+
     if (q.trim()) cq = cq.ilike("title", `%${q.trim()}%`);
+
     if (zip.trim()) {
       const z = zip.trim().slice(0, 5);
       cq = radius >= 25 ? cq.like("zip", `${z.slice(0, 3)}%`) : cq.eq("zip", z);
@@ -81,11 +98,11 @@ export default function CommunitiesMapExplorer() {
       return;
     }
 
-    // Circles for those communities
+    // 2) Fetch pins for those communities (include pin.category)
     const { data: circs, error: sErr } = await supabase
       .from("community_circles")
       .select(
-        "id,community_id,name,lat,lng,address,day_of_week,time_local,contact_phone,contact_email,website_url"
+        "id,community_id,name,category,lat,lng,address,day_of_week,time_local,contact_phone,contact_email,website_url"
       )
       .in("community_id", commIds)
       .limit(2000);
@@ -97,7 +114,9 @@ export default function CommunitiesMapExplorer() {
       return;
     }
 
+    // 3) Apply text + category filters to pins
     let filtered = (circs ?? []) as Circle[];
+
     if (q.trim()) {
       const qv = q.trim().toLowerCase();
       filtered = filtered.filter(
@@ -105,6 +124,10 @@ export default function CommunitiesMapExplorer() {
           (c.name || "").toLowerCase().includes(qv) ||
           (c.address || "").toLowerCase().includes(qv)
       );
+    }
+
+    if (cat) {
+      filtered = filtered.filter((c) => (c.category || "") === cat);
     }
 
     setCircles(filtered);
@@ -146,12 +169,28 @@ export default function CommunitiesMapExplorer() {
           {/* Filters */}
           <section className="card p-3">
             <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr 120px 140px 120px", gap: 12 }}>
-              <input className="input" placeholder="Search (name, address)…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input
+                className="input"
+                placeholder="Search (name, address)…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+
+              {/* Now filters by PIN category */}
               <select className="input" value={cat} onChange={(e) => setCat(e.target.value)}>
                 <option value="">All categories</option>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
-              <input className="input" placeholder="ZIP" value={zip} onChange={(e) => setZip(e.target.value)} maxLength={5} />
+
+              <input
+                className="input"
+                placeholder="ZIP"
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+                maxLength={5}
+              />
               <select className="input" value={radius} onChange={(e) => setRadius(Number(e.target.value))}>
                 <option value={0}>ZIP only</option>
                 <option value={25}>~Nearby (zip prefix)</option>
@@ -162,7 +201,7 @@ export default function CommunitiesMapExplorer() {
 
           {/* Map (client only) */}
           <section className="mt-3">
-            <MapExplorerClient center={[39.5, -98.35]} pins={circles} communitiesById={communityById} />
+            <MapExplorerClient center={center} pins={circles} communitiesById={communityById} />
             {loading && <p className="muted mt-2">Loading pins…</p>}
             {!loading && circles.length === 0 && (
               <div className="card p-3 mt-2">
