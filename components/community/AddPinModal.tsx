@@ -21,11 +21,13 @@ export default function AddPinModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // empty string = "No specific community"
   const [selectedId, setSelectedId] = useState<string>("");
 
+  // if you want to auto-select first community, comment this out now that it's optional
   useEffect(() => {
-    if (!selectedId && communities.length > 0) setSelectedId(communities[0].id);
-  }, [communities, selectedId]);
+    // keep optional; don't auto-pick anything
+  }, []);
 
   const selected = useMemo(
     () => communities.find((c) => c.id === selectedId) || null,
@@ -42,52 +44,35 @@ export default function AddPinModal({
           </button>
         </div>
 
-        {communities.length === 0 ? (
-          <div className="card p-4">
-            <p className="mb-2">You don’t have any communities yet.</p>
-            <div className="flex gap-2">
-              <Link href="/communities/new" className="btn btn-brand">
-                Start a community
-              </Link>
-              <button className="btn" onClick={onClose}>
-                Cancel
-              </button>
-            </div>
+        {/* Community (optional) */}
+        <div className="field">
+          <div className="label">Community (optional)</div>
+          <select
+            className="input"
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            <option value="">No specific community</option>
+            {communities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title} {c.category ? `· ${c.category}` : ""}{" "}
+                {c.zip ? `· ${c.zip}` : ""}
+              </option>
+            ))}
+          </select>
+          <div className="muted" style={{ fontSize: 12 }}>
+            Pins without a community still appear on the global map and can be filtered by category.
           </div>
-        ) : (
-          <>
-            <div className="field">
-              <div className="label">Community</div>
-              <select
-                className="input"
-                value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
-              >
-                {communities.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title} {c.category ? `· ${c.category}` : ""}{" "}
-                    {c.zip ? `· ${c.zip}` : ""}
-                  </option>
-                ))}
-              </select>
-              <div className="muted" style={{ fontSize: 12 }}>
-                Your pin will be shown under this community and on the global map.
-              </div>
-            </div>
+        </div>
 
-            {selected && (
-              <AddCircleForm
-                key={selected.id}
-                communityId={selected.id}
-                zip={selected.zip}
-                onClose={onClose}
-                onSaved={onSaved}
-              />
-            )}
-          </>
-        )}
+        <AddCircleForm
+          key={selectedId || "no-community"}
+          communityId={selected ? selected.id : null}
+          zip={selected?.zip || null}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
       </div>
     </div>
   );
 }
-
