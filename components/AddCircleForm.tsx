@@ -1,4 +1,3 @@
-// components/AddCircleForm.tsx
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
@@ -15,8 +14,8 @@ type CommunityLite = { id: string; title: string; category: string | null; zip: 
 type ServiceRow = {
   id: string;
   category: string;        // required, free text (with suggestions)
-  schedule: string;        // free text, e.g., "1st Monday", "Thursdays"
-  time: string;            // HTML time value "HH:MM" (optional)
+  schedule: string;        // free text, e.g., "1st Monday", "Thursdays", "No set time — contact"
+  time: string;            // HTML time "HH:MM" (optional)
   communityIds: string[];  // 0..many; empty = “no community”
 };
 
@@ -45,6 +44,7 @@ export default function AddCircleForm({
     { id: crypto.randomUUID(), category: "", schedule: "", time: "", communityIds: [...preselectCommunityIds] },
   ]);
 
+  const [showMap, setShowMap] = useState(false);     // NEW: map collapsed by default
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const geocodingRef = useRef(false);
@@ -105,7 +105,7 @@ export default function AddCircleForm({
     const t = time.trim();
     if (s && t) return `${s} — ${t}`;
     if (s) return s;
-    if (t) return t; // if user only picked a time
+    if (t) return t;
     return "No set time — contact";
   }
 
@@ -132,7 +132,7 @@ export default function AddCircleForm({
     }
   }
 
-  // Try to geocode when the user finishes typing the address
+  // Auto-geocode after typing the address
   async function handleAddressBlur() {
     if (place || !address.trim()) return;
     const p = await geocodeAddress(address);
@@ -142,7 +142,7 @@ export default function AddCircleForm({
   async function handleSave() {
     setError(null);
 
-    // Ensure we have a map point: if missing but address is filled, geocode now
+    // If we still don't have a pin, try geocoding now
     if (!place && address.trim()) {
       const p = await geocodeAddress(address);
       if (p) setPlace(p);
@@ -156,7 +156,7 @@ export default function AddCircleForm({
       setError("Please provide a phone OR an email so people can contact you.");
       return;
     }
-    // Validate services
+
     const cleanServices = services
       .map((s) => ({
         ...s,
@@ -173,7 +173,7 @@ export default function AddCircleForm({
 
     setSaving(true);
     try {
-      // 1) Create the circle/pin
+      // 1) Create the circle/pin — NOTE: removed day_of_week/time_local entirely
       const { data: circle, error: cErr } = await supabase
         .from("community_circles")
         .insert({
@@ -185,9 +185,7 @@ export default function AddCircleForm({
           contact_phone: phone.trim() || null,
           contact_email: email.trim() || null,
           website_url: normalizeUrl(website),
-          categories: categoriesForPin.length ? categoriesForPin : null, // union for filters
-          day_of_week: null,  // legacy unused
-          time_local: null,   // legacy unused
+          categories: categoriesForPin.length ? categoriesForPin : null,
         })
         .select("*")
         .single();
@@ -231,7 +229,6 @@ export default function AddCircleForm({
           circle_id: circle.id,
           community_id: cid,
         }));
-        // Correct supabase-js call: use upsert with onConflict
         const { error: ccmErr } = await supabase
           .from("community_circle_communities")
           .upsert(circleMaps, { onConflict: "circle_id,community_id" });
@@ -255,6 +252,7 @@ export default function AddCircleForm({
         ))}
       </datalist>
 
+      {/* Core details first (so the map doesn’t push the form down) */}
       <div className="field">
         <div className="label">Listing / pin name (optional)</div>
         <input
@@ -276,16 +274,29 @@ export default function AddCircleForm({
         />
       </div>
 
+      {/* Collapsible map below the form */}
       <div className="field">
-        <PlacePicker
-          value={place}
-          onChange={(p) => {
-            setPlace(p);
-            if (!address && p?.label) setAddress(p.label);
-          }}
-          initialQuery={zip || ""}
-          height={360}
-        />
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setShowMap((v) => !v)}
+          aria-expanded={showMap}
+        >
+          {showMap ? "Hide map" : "Adjust location (optional)"}
+        </button>
+        {showMap && (
+          <div style={{ marginTop: 8 }}>
+            <PlacePicker
+              value={place}
+              onChange={(p) => {
+                setPlace(p);
+                if (!address && p?.label) setAddress(p.label);
+              }}
+              initialQuery={zip || ""}
+              height={360}
+            />
+          </div>
+        )}
       </div>
 
       <div className="field">
@@ -332,20 +343,18 @@ export default function AddCircleForm({
               {/* Communities (multi) */}
               <div className="span-2">
                 <div className="label">Communities (optional — this service can appear in multiple)</div>
-                <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 8 }}>
-                  <select
-                    className="input"
-                    value=""
-                    onChange={(e) => addCommunityToRow(row.id, e.target.value)}
-                  >
-                    <option value="">Add a community…</option>
-                    {communities.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.title} {c.category ? `· ${c.category}` : ""} {c.zip ? `· ${c.zip}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  className="input"
+                  value=""
+                  onChange={(e) => addCommunityToRow(row.id, e.target.value)}
+                >
+                  <option value="">Add a community…</option>
+                  {communities.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} {c.category ? `· ${c.category}` : ""} {c.zip ? `· ${c.zip}` : ""}
+                    </option>
+                  ))}
+                </select>
 
                 {row.communityIds.length === 0 ? (
                   <div className="muted" style={{ marginTop: 6 }}>
