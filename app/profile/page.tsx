@@ -138,12 +138,17 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header */}
+          {/* Identity header (balanced) */}
           <div
             className="card p-3 mb-3 profile-card"
             style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
           >
-            <div className="profile-header" style={{ gap: 18 }}>
+            {/* 3-column grid: photo | compact QR | info */}
+            <div
+              className="grid gap-4"
+              style={{ gridTemplateColumns: "180px 180px 1fr", alignItems: "start" }}
+            >
+              {/* Profile photo */}
               <AvatarUploader
                 userId={userId}
                 value={p.avatar_url}
@@ -151,17 +156,32 @@ export default function ProfilePage() {
                 label="Profile photo"
                 size={180}
               />
-              <div className="profile-heading" style={{ minWidth: 0 }}>
-                <div className="profile-name">{displayName}</div>
-                <div className="kpis">
+
+              {/* Compact QR only (we clip the component so only the QR area shows) */}
+              <div
+                className="rounded-xl ring-1 ring-violet-200/70"
+                style={{ width: 180, height: 180, overflow: "hidden" }}
+              >
+                <div style={{ transform: "scale(1)", transformOrigin: "top left" }}>
+                  {/* Most ProfileInviteQR implementations render QR at the top; clipping keeps it tidy */}
+                  <ProfileInviteQR userId={userId} embed size={180} />
+                </div>
+              </div>
+
+              {/* Name + KPIs */}
+              <div className="profile-heading min-w-0">
+                <div className="profile-name text-xl font-semibold">{displayName}</div>
+                <div className="kpis mt-1 flex gap-4 text-sm">
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
-
-                {/* Invite friends (v2) */}
-                <ProfileInviteQR userId={userId} embed />
               </div>
+            </div>
+
+            {/* Full invite UI below the row (email + link + QR caption) */}
+            <div className="mt-4">
+              <ProfileInviteQR userId={userId} embed />
             </div>
           </div>
 
@@ -253,24 +273,3 @@ export default function ProfilePage() {
 
               <PhotosFeed userId={userId} />
             </div>
-
-            {/* RIGHT: gratitude */}
-            <div className="stack">
-              <section className="card p-3" style={{ padding: 12 }}>
-                <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
-                </div>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
-                </p>
-                <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
-              </section>
-            </div>
-          </div>
-
-          {loading && <p className="muted mt-3">Loading...</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
