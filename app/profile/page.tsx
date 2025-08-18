@@ -11,9 +11,9 @@ type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  location?: string | null;              // legacy
-  location_text?: string | null;         // preferred
-  location_is_public?: boolean | null;   // preferred
+  location?: string | null;
+  location_text?: string | null;
+  location_is_public?: boolean | null;
   show_mutuals: boolean | null;
 };
 
@@ -35,12 +35,10 @@ const ProfilePage: React.FC = () => {
     show_mutuals: true,
   });
 
-  // Load auth user id
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // Load profile row
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
@@ -55,7 +53,7 @@ const ProfilePage: React.FC = () => {
         if (error) throw error;
 
         if (data) {
-          const normalized: Profile = {
+          setP({
             id: data.id,
             full_name: data.full_name ?? "",
             avatar_url: data.avatar_url ?? "",
@@ -64,12 +62,11 @@ const ProfilePage: React.FC = () => {
             location_text: (data.location_text ?? data.location) ?? "",
             location_is_public: data.location_is_public ?? false,
             show_mutuals: data.show_mutuals ?? true,
-          };
-          setP(normalized);
+          });
         } else {
           setP(prev => ({ ...prev, id: userId }));
         }
-      } catch (err) { // <-- important: no optional catch binding
+      } catch (err) {
         setTableMissing(true);
       } finally {
         setLoading(false);
@@ -80,12 +77,11 @@ const ProfilePage: React.FC = () => {
 
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
-  // Save profile (also persists avatar_url)
+  // Save text fields + show_mutuals + avatar_url (when pressing Save)
   const save = async () => {
     if (!userId) return;
     setSaving(true);
     try {
-      // text fields via API route (kept from your app)
       const res = await fetch("/profile/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -99,7 +95,6 @@ const ProfilePage: React.FC = () => {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save profile");
 
-      // and persist avatar_url + show_mutuals directly
       const up = await supabase
         .from("profiles")
         .update({
@@ -107,7 +102,6 @@ const ProfilePage: React.FC = () => {
           show_mutuals: !!p.show_mutuals,
         })
         .eq("id", userId);
-
       if (up.error) throw up.error;
 
       alert("Saved!");
@@ -118,6 +112,19 @@ const ProfilePage: React.FC = () => {
       setSaving(false);
     }
   };
+
+  // Instant DB update when the avatar changes
+  async function onAvatarChange(url: string) {
+    setP(prev => ({ ...prev, avatar_url: url }));
+    if (!userId) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: url || null })
+      .eq("id", userId);
+    if (error) {
+      alert("Could not save photo: " + error.message);
+    }
+  }
 
   return (
     <div className="page-wrap">
@@ -150,7 +157,7 @@ const ProfilePage: React.FC = () => {
               <AvatarUploader
                 userId={userId}
                 value={p.avatar_url}
-                onChange={(url) => setP((prev) => ({ ...prev, avatar_url: url }))}
+                onChange={onAvatarChange}
                 label="Profile photo"
                 size={180}
               />
@@ -162,7 +169,6 @@ const ProfilePage: React.FC = () => {
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                {/* Invite friends (QR smaller, shown first inside the component) */}
                 <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
               </div>
             </div>
@@ -173,7 +179,7 @@ const ProfilePage: React.FC = () => {
             className="columns"
             style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
           >
-            {/* LEFT: about + feed */}
+            {/* LEFT */}
             <div className="stack">
               {editPersonal ? (
                 <section className="card p-3">
@@ -257,7 +263,7 @@ const ProfilePage: React.FC = () => {
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: Gratitude + Messages */}
+            {/* RIGHT */}
             <div className="stack">
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
