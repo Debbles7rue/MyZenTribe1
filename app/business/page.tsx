@@ -18,7 +18,7 @@ type BizFields = {
 export default function BusinessPage() {
   const [userId, setUserId] = useState<string | null>(null);
 
-  // business details
+  // business details (separate from personal)
   const [b, setB] = useState<BizFields>({
     business_name: "",
     business_logo_url: "",
@@ -54,6 +54,7 @@ export default function BusinessPage() {
       if (error) {
         const msg = String(error.message || "").toLowerCase();
         if (msg.includes("column") && msg.includes("does not exist")) {
+          // Columns not created yet – show helper note but keep page usable.
           setDetailsUnavailable(true);
         } else {
           setError(error.message);
@@ -73,7 +74,8 @@ export default function BusinessPage() {
   }, [userId]);
 
   const displayBizName = useMemo(() => b.business_name || "Your business name", [b.business_name]);
-  const displayLogo = useMemo(() => b.business_logo_url || "/placeholder.png", [b.business_logo_url]);
+  // If you have a custom placeholder, swap this path; otherwise a simple empty state
+  const displayLogo = useMemo(() => b.business_logo_url || "", [b.business_logo_url]);
   const showLoc = !!b.business_location_is_public && !!b.business_location_text;
 
   async function saveDetails() {
@@ -113,21 +115,41 @@ export default function BusinessPage() {
 
           <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
 
-          {/* Header: business identity + compact info */}
+          {/* Identity header */}
           <section
             className="card p-3 mb-3"
             style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.35)" }}
           >
             <div className="grid gap-4" style={{ gridTemplateColumns: "140px 1fr", alignItems: "center" }}>
               <div>
+                {/* We purposely DO NOT reuse personal avatar here */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={displayLogo}
-                  alt="Business logo"
-                  width={120}
-                  height={120}
-                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 16, border: "1px solid #eee" }}
-                />
+                {displayLogo ? (
+                  <img
+                    src={displayLogo}
+                    alt="Business logo"
+                    width={120}
+                    height={120}
+                    style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 16, border: "1px solid #eee" }}
+                  />
+                ) : (
+                  <div
+                    aria-label="No business logo"
+                    style={{
+                      width: 120,
+                      height: 120,
+                      borderRadius: 16,
+                      border: "1px dashed #ddd",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: 12,
+                      color: "#777",
+                      background: "#fafafa",
+                    }}
+                  >
+                    Add a logo below
+                  </div>
+                )}
               </div>
               <div className="min-w-0">
                 <h2 className="text-xl font-semibold" style={{ marginBottom: 6 }}>{displayBizName}</h2>
@@ -141,102 +163,127 @@ export default function BusinessPage() {
             </div>
           </section>
 
-          {/* Invite / share (BUSINESS context) */}
-          <section className="card p-3 mb-3">
-            <ProfileInviteQR userId={userId} embed context="business" />
-          </section>
+          {/* Two-column layout: LEFT (details + services) / RIGHT (messages + invite) */}
+          <div
+            className="columns"
+            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
+          >
+            {/* LEFT */}
+            <div className="stack">
+              {/* Business details editor */}
+              <section id="edit-details" className="card p-3">
+                <div className="section-row">
+                  <h2 className="section-title" style={{ marginBottom: 4 }}>Business details</h2>
+                </div>
 
-          {/* Business details editor */}
-          <section id="edit-details" className="card p-3 mb-3">
-            <div className="section-row">
-              <h2 className="section-title" style={{ marginBottom: 4 }}>Business details</h2>
-            </div>
-
-            {detailsUnavailable ? (
-              <div className="stack">
-                <p className="muted">
-                  Business detail columns are missing. Run this SQL once in Supabase, then reload:
-                </p>
-                <pre className="muted" style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>
+                {detailsUnavailable ? (
+                  <div className="stack">
+                    <p className="muted">
+                      Business detail columns are missing. Run this SQL once in Supabase, then reload:
+                    </p>
+                    <pre className="muted" style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>
 {`ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS business_name text,
   ADD COLUMN IF NOT EXISTS business_logo_url text,
   ADD COLUMN IF NOT EXISTS business_bio text,
   ADD COLUMN IF NOT EXISTS business_location_text text,
   ADD COLUMN IF NOT EXISTS business_location_is_public boolean DEFAULT false;`}
-                </pre>
-              </div>
-            ) : detailsLoading ? (
-              <p className="muted">Loading…</p>
-            ) : (
-              <div className="grid gap-4" style={{ gridTemplateColumns: "200px 1fr" }}>
-                <div>
-                  <AvatarUploader
-                    userId={userId}
-                    value={b.business_logo_url ?? ""}
-                    onChange={(url) => setB((prev) => ({ ...prev, business_logo_url: url }))}
-                    label="Business logo"
-                    size={160}
-                  />
-                </div>
-
-                <div className="stack">
-                  <label className="field">
-                    <span className="label">Business name</span>
-                    <input
-                      className="input"
-                      value={b.business_name ?? ""}
-                      onChange={(e) => setB({ ...b, business_name: e.target.value })}
-                      placeholder="Example: The Beautiful Healer"
-                    />
-                  </label>
-
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                    <label className="field">
-                      <span className="label">Business location</span>
-                      <input
-                        className="input"
-                        value={b.business_location_text ?? ""}
-                        onChange={(e) => setB({ ...b, business_location_text: e.target.value })}
-                        placeholder="City, State"
-                      />
-                    </label>
-                    <label className="mt-[1.85rem] flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={!!b.business_location_is_public}
-                        onChange={(e) => setB({ ...b, business_location_is_public: e.target.checked })}
-                      />
-                      Show on business page
-                    </label>
+                    </pre>
                   </div>
+                ) : detailsLoading ? (
+                  <p className="muted">Loading…</p>
+                ) : (
+                  <div className="grid gap-4" style={{ gridTemplateColumns: "200px 1fr" }}>
+                    <div>
+                      {/* Force a distinct instance so it won't preload personal avatar */}
+                      <AvatarUploader
+                        key={`biz-${userId ?? "anon"}`}
+                        userId={userId}
+                        value={b.business_logo_url ?? ""}
+                        onChange={(url) => setB((prev) => ({ ...prev, business_logo_url: url }))}
+                        label="Business logo"
+                        size={160}
+                      />
+                    </div>
 
-                  <label className="field">
-                    <span className="label">Business bio</span>
-                    <textarea
-                      className="input"
-                      rows={4}
-                      value={b.business_bio ?? ""}
-                      onChange={(e) => setB({ ...b, business_bio: e.target.value })}
-                      placeholder="What you offer, specialties, etc."
-                    />
-                  </label>
+                    <div className="stack">
+                      <label className="field">
+                        <span className="label">Business name</span>
+                        <input
+                          className="input"
+                          value={b.business_name ?? ""}
+                          onChange={(e) => setB({ ...b, business_name: e.target.value })}
+                          placeholder="Example: The Beautiful Healer"
+                        />
+                      </label>
 
-                  <div className="right">
-                    <button className="btn btn-brand" onClick={saveDetails} disabled={detailsSaving}>
-                      {detailsSaving ? "Saving…" : "Save business details"}
-                    </button>
+                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <label className="field">
+                          <span className="label">Business location</span>
+                          <input
+                            className="input"
+                            value={b.business_location_text ?? ""}
+                            onChange={(e) => setB({ ...b, business_location_text: e.target.value })}
+                            placeholder="City, State"
+                          />
+                        </label>
+                        <label className="mt-[1.85rem] flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={!!b.business_location_is_public}
+                            onChange={(e) => setB({ ...b, business_location_is_public: e.target.checked })}
+                          />
+                          Show on business page
+                        </label>
+                      </div>
+
+                      <label className="field">
+                        <span className="label">Business bio</span>
+                        <textarea
+                          className="input"
+                          rows={4}
+                          value={b.business_bio ?? ""}
+                          onChange={(e) => setB({ ...b, business_bio: e.target.value })}
+                          placeholder="What you offer, specialties, etc."
+                        />
+                      </label>
+
+                      <div className="right">
+                        <button className="btn btn-brand" onClick={saveDetails} disabled={detailsSaving}>
+                          {detailsSaving ? "Saving…" : "Save business details"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
-            {error && <p className="muted mt-3" style={{ color: "#b91c1c" }}>{error}</p>}
-          </section>
+                )}
+                {error && <p className="muted mt-3" style={{ color: "#b91c1c" }}>{error}</p>}
+              </section>
 
-          {/* Services */}
-          <section className="stack">
-            <BusinessProfilePanel userId={userId} />
-          </section>
+              {/* Services */}
+              <section className="stack">
+                <BusinessProfilePanel userId={userId} />
+              </section>
+            </div>
+
+            {/* RIGHT */}
+            <div className="stack">
+              {/* Messages card */}
+              <section className="card p-3" style={{ padding: 12 }}>
+                <div className="section-row">
+                  <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Chat with clients and collaborators in one place.
+                </p>
+                <a className="btn mt-2" href="/messages">Open</a>
+              </section>
+
+              {/* Business invite / QR (smaller, QR-first) */}
+              <section className="card p-3" style={{ padding: 12 }}>
+                <ProfileInviteQR userId={userId} embed context="business" qrSize={140} />
+              </section>
+            </div>
+          </div>
         </div>
       </div>
     </div>
