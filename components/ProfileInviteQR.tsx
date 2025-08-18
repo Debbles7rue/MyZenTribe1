@@ -66,44 +66,7 @@ export default function ProfileInviteQR({
         Invite friends <span className="muted text-xs">v2</span>
       </div>
 
-      {/* Email input + send */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input
-          className="input"
-          placeholder="friend@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ minWidth: 220, flex: 1 }}
-        />
-        <button
-          className="btn"
-          onClick={sendEmail}
-          disabled={!emailValid || !inviteUrl || loading}
-          title={!inviteUrl ? "Loading invite link..." : ""}
-        >
-          Email invite
-        </button>
-      </div>
-
-      {/* Link + copy */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input
-          className="input"
-          value={inviteUrl}
-          readOnly
-          placeholder={loading ? "Loading invite link..." : ""}
-          style={{ minWidth: 260, flex: 1 }}
-        />
-        <button
-          className="btn btn-brand"
-          onClick={() => inviteUrl && navigator.clipboard.writeText(inviteUrl)}
-          disabled={!inviteUrl || loading}
-        >
-          Copy link
-        </button>
-      </div>
-
-      {/* QR auto (smaller by default) */}
+      {/* QR FIRST */}
       {inviteUrl && (
         <div className="card p-3" style={{ textAlign: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -125,6 +88,43 @@ export default function ProfileInviteQR({
           </div>
         </div>
       )}
+
+      {/* Link + copy */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          className="input"
+          value={inviteUrl}
+          readOnly
+          placeholder={loading ? "Loading invite link..." : ""}
+          style={{ minWidth: 260, flex: 1 }}
+        />
+        <button
+          className="btn btn-brand"
+          onClick={() => inviteUrl && navigator.clipboard.writeText(inviteUrl)}
+          disabled={!inviteUrl || loading}
+        >
+          Copy link
+        </button>
+      </div>
+
+      {/* Email input + send (now AFTER QR) */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          className="input"
+          placeholder="friend@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ minWidth: 220, flex: 1 }}
+        />
+        <button
+          className="btn"
+          onClick={sendEmail}
+          disabled={!emailValid || !inviteUrl || loading}
+          title={!inviteUrl ? "Loading invite link..." : ""}
+        >
+          Email invite
+        </button>
+      </div>
 
       {err && <p className="muted" style={{ color: "#b91c1c" }}>{err}</p>}
     </div>
