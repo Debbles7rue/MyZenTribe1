@@ -138,12 +138,12 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header — two-up row (Photo | QR), then name/counters, then invite form */}
+          {/* Identity header — row 1: Photo | QR; row 2: name/counters; row 3: full invite */}
           <div
             className="card p-3 mb-3 profile-card"
             style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.4)" }}
           >
-            {/* Row 1: Photo | Compact QR */}
+            {/* Row 1 */}
             <div
               className="grid gap-4 justify-start"
               style={{ gridTemplateColumns: "180px 180px" }}
@@ -155,17 +155,12 @@ export default function ProfilePage() {
                 label="Profile photo"
                 size={180}
               />
-
-              {/* Compact QR-only slot (allow svg/img/canvas; hide other UI) */}
-              <div
-                className="qr-compact rounded-xl ring-1 ring-violet-200/70 flex items-center justify-center"
-                style={{ width: 180, height: 180, overflow: "hidden" }}
-              >
-                <ProfileInviteQR userId={userId} embed size={180} />
+              <div className="rounded-xl ring-1 ring-violet-200/70" style={{ width: 180, height: 180 }}>
+                <ProfileInviteQR userId={userId} mode="qr-only" size={180} />
               </div>
             </div>
 
-            {/* Row 2: Name + counters (under both columns) */}
+            {/* Row 2 */}
             <div className="mt-3">
               <div className="profile-name text-xl font-semibold">{displayName}</div>
               <div className="kpis mt-1 flex gap-4 text-sm">
@@ -175,22 +170,10 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Row 3: Full invite UI */}
+            {/* Row 3 */}
             <div className="mt-4">
-              <ProfileInviteQR userId={userId} embed />
+              <ProfileInviteQR userId={userId} embed size={220} />
             </div>
-
-            {/* Only show the QR graphic (svg/img/canvas) in the compact slot above */}
-            <style jsx>{`
-              .qr-compact :global(:where(svg, img, canvas)) {
-                display: block !important;
-                max-width: 100% !important;
-                max-height: 100% !important;
-              }
-              .qr-compact :global(*:not(svg):not(img):not(canvas)) {
-                display: none !important;
-              }
-            `}</style>
           </div>
 
           {/* Two-column layout */}
