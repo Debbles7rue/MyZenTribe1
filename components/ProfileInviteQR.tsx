@@ -3,9 +3,22 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Props = { userId: string | null; embed?: boolean };
+type Props = {
+  userId: string | null;
+  /** Back-compat wrapper style for the full widget */
+  embed?: boolean;
+  /** Render mode: 'full' (inputs + link + QR) or 'qr-only' (just the QR image) */
+  mode?: "full" | "qr-only";
+  /** QR pixel size (applies to both modes). Default 220. */
+  size?: number;
+};
 
-export default function ProfileInviteQR({ userId, embed = false }: Props) {
+export default function ProfileInviteQR({
+  userId,
+  embed = false,
+  mode = "full",
+  size = 220,
+}: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -30,7 +43,7 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
   }, [token]);
 
   const qrUrl = inviteUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(inviteUrl)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(inviteUrl)}`
     : "";
 
   const emailValid = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), [email]);
@@ -42,6 +55,43 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   }, [email, emailValid, inviteUrl]);
 
+  // --- QR-ONLY MODE ---
+  if (mode === "qr-only") {
+    if (!inviteUrl) {
+      // keep the slot stable while loading
+      return (
+        <div
+          className="rounded-xl"
+          style={{
+            width: size,
+            height: size,
+            background: "rgba(0,0,0,0.03)",
+          }}
+          aria-busy="true"
+          aria-label="Loading invite QR"
+        />
+      );
+    }
+
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={qrUrl}
+        alt="Invite QR"
+        width={size}
+        height={size}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 12,
+          border: "1px solid #eee",
+          display: "block",
+        }}
+      />
+    );
+  }
+
+  // --- FULL WIDGET MODE (original behavior) ---
   const Content = (
     <div className="stack" style={{ gap: 8 }}>
       <div className="label" style={{ fontWeight: 600 }}>
@@ -85,16 +135,16 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
         </button>
       </div>
 
-      {/* QR auto */}
+      {/* QR image */}
       {inviteUrl && (
         <div className="card p-3" style={{ textAlign: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qrUrl}
             alt="Invite QR"
-            width={220}
-            height={220}
-            style={{ width: 220, height: 220, margin: "0 auto", borderRadius: 12, border: "1px solid #eee" }}
+            width={size}
+            height={size}
+            style={{ width: size, height: size, margin: "0 auto", borderRadius: 12, border: "1px solid #eee" }}
           />
           <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             Scan the QR or share your link.
