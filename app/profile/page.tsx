@@ -138,41 +138,55 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header — row 1: Photo | QR; row 2: name/counters; row 3: full invite */}
+          {/* Identity header — two clear columns (Avatar | QR + Invite), then name/counters */}
           <div
             className="card p-3 mb-3 profile-card"
             style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.4)" }}
           >
-            {/* Row 1 */}
             <div
-              className="grid gap-4 justify-start"
-              style={{ gridTemplateColumns: "180px 180px" }}
+              className="grid gap-4"
+              style={{
+                gridTemplateColumns: "minmax(220px, 360px) 1fr",
+                alignItems: "start",
+              }}
             >
-              <AvatarUploader
-                userId={userId}
-                value={p.avatar_url}
-                onChange={(url) => setP((prev) => ({ ...prev, avatar_url: url }))}
-                label="Profile photo"
-                size={180}
-              />
-              <div className="rounded-xl ring-1 ring-violet-200/70" style={{ width: 180, height: 180 }}>
-                <ProfileInviteQR userId={userId} mode="qr-only" size={180} />
+              {/* LEFT: Avatar + controls (your existing component) */}
+              <div className="stack">
+                <AvatarUploader
+                  userId={userId}
+                  value={p.avatar_url}
+                  onChange={(url) => setP((prev) => ({ ...prev, avatar_url: url }))}
+                  label="Profile photo"
+                  size={180}
+                />
+                <div className="muted text-xs" style={{ marginTop: 6 }}>
+                  Drag to position. Use your mouse wheel (or pinch) to zoom. We save a 512×512 square.
+                </div>
+              </div>
+
+              {/* RIGHT: Compact QR on top + full invite widget below */}
+              <div className="stack">
+                <div
+                  className="rounded-xl ring-1 ring-violet-200/70"
+                  style={{ width: 180, height: 180 }}
+                >
+                  <ProfileInviteQR userId={userId} mode="qr-only" size={180} />
+                </div>
+
+                <div className="mt-2">
+                  <ProfileInviteQR userId={userId} embed size={220} />
+                </div>
               </div>
             </div>
 
-            {/* Row 2 */}
-            <div className="mt-3">
+            {/* Name + counters under both columns */}
+            <div className="mt-4">
               <div className="profile-name text-xl font-semibold">{displayName}</div>
               <div className="kpis mt-1 flex gap-4 text-sm">
                 <span className="kpi"><strong>0</strong> Followers</span>
                 <span className="kpi"><strong>0</strong> Following</span>
                 <span className="kpi"><strong>0</strong> Friends</span>
               </div>
-            </div>
-
-            {/* Row 3 */}
-            <div className="mt-4">
-              <ProfileInviteQR userId={userId} embed size={220} />
             </div>
           </div>
 
