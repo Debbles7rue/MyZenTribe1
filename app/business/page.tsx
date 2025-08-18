@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import BusinessProfilePanel from "@/components/BusinessProfilePanel";
+import BusinessCard from "@/components/BusinessCard";
+import BusinessInfoEditor from "@/components/BusinessInfoEditor";
 
 export default function BusinessPage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -30,6 +32,17 @@ export default function BusinessPage() {
 
           <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
 
+          {/* Business branding (uses business_* fields only) */}
+          <div className="stack mb-3">
+            <BusinessCard userId={userId} />
+          </div>
+
+          {/* Business details editor (name, logo, bio, location) */}
+          <div className="stack mb-3">
+            <BusinessInfoEditor userId={userId} />
+          </div>
+
+          {/* Services editor/view (still stored on profiles.business_services) */}
           <div className="stack">
             <BusinessProfilePanel userId={userId} />
           </div>
