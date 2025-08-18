@@ -74,7 +74,7 @@ export default function BusinessInfoEditor({ userId }: Props) {
   }
 
   return (
-    <section className="card p-3">
+    <section id="biz-edit" className="card p-3">
       <div className="section-row">
         <h2 className="section-title" style={{ marginBottom: 4 }}>Business details</h2>
       </div>
