@@ -54,7 +54,6 @@ export default function BusinessPage() {
       if (error) {
         const msg = String(error.message || "").toLowerCase();
         if (msg.includes("column") && msg.includes("does not exist")) {
-          // Columns not created yet – show helper note but keep page usable.
           setDetailsUnavailable(true);
         } else {
           setError(error.message);
@@ -142,9 +141,9 @@ export default function BusinessPage() {
             </div>
           </section>
 
-          {/* Invite / share */}
+          {/* Invite / share (BUSINESS context) */}
           <section className="card p-3 mb-3">
-            <ProfileInviteQR userId={userId} embed />
+            <ProfileInviteQR userId={userId} embed context="business" />
           </section>
 
           {/* Business details editor */}
