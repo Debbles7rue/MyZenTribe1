@@ -36,10 +36,12 @@ export default function ProfilePage() {
     show_mutuals: true,
   });
 
+  // fetch authed user id
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
+  // load profile row
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
@@ -50,6 +52,7 @@ export default function ProfilePage() {
           .select("*")
           .eq("id", userId)
           .maybeSingle();
+
         if (error) throw error;
 
         if (data) {
@@ -65,7 +68,7 @@ export default function ProfilePage() {
           };
           setP(normalized);
         } else {
-          setP(prev => ({ ...prev, id: userId }));
+          setP((prev) => ({ ...prev, id: userId }));
         }
       } catch {
         setTableMissing(true);
@@ -73,6 +76,7 @@ export default function ProfilePage() {
         setLoading(false);
       }
     };
+
     load();
   }, [userId]);
 
@@ -92,6 +96,7 @@ export default function ProfilePage() {
           location_is_public: !!p.location_is_public,
         }),
       });
+
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save profile");
 
@@ -99,17 +104,19 @@ export default function ProfilePage() {
         .from("profiles")
         .update({ show_mutuals: !!p.show_mutuals })
         .eq("id", userId);
+
       if (up.error) throw up.error;
 
       alert("Saved!");
       setEditPersonal(false);
     } catch (e: any) {
-      alert(e.message || "Save failed");
+      alert(e?.message || "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
+  // ---------- RENDER ----------
   return (
     <div className="page-wrap">
       <div className="page">
@@ -123,7 +130,7 @@ export default function ProfilePage() {
               <Link href="/messages" className="btn" aria-label="Open messages">
                 Messages
               </Link>
-              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
+              <button className="btn" onClick={() => setEditPersonal((v) => !v)}>
                 {editPersonal ? "Done" : "Edit"}
               </button>
             </div>
@@ -138,12 +145,11 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header (balanced) */}
+          {/* Identity header (balanced grid) */}
           <div
             className="card p-3 mb-3 profile-card"
             style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
           >
-            {/* 3-column grid: photo | compact QR | info */}
             <div
               className="grid gap-4"
               style={{ gridTemplateColumns: "180px 180px 1fr", alignItems: "start" }}
@@ -157,15 +163,12 @@ export default function ProfilePage() {
                 size={180}
               />
 
-              {/* Compact QR only (we clip the component so only the QR area shows) */}
+              {/* Compact QR */}
               <div
-                className="rounded-xl ring-1 ring-violet-200/70"
+                className="rounded-xl ring-1 ring-violet-200/70 flex items-center justify-center"
                 style={{ width: 180, height: 180, overflow: "hidden" }}
               >
-                <div style={{ transform: "scale(1)", transformOrigin: "top left" }}>
-                  {/* Most ProfileInviteQR implementations render QR at the top; clipping keeps it tidy */}
-                  <ProfileInviteQR userId={userId} embed size={180} />
-                </div>
+                <ProfileInviteQR userId={userId} embed size={180} />
               </div>
 
               {/* Name + KPIs */}
@@ -179,7 +182,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Full invite UI below the row (email + link + QR caption) */}
+            {/* Full invite UI below (email + link + large QR caption as your component renders) */}
             <div className="mt-4">
               <ProfileInviteQR userId={userId} embed />
             </div>
@@ -273,3 +276,24 @@ export default function ProfilePage() {
 
               <PhotosFeed userId={userId} />
             </div>
+
+            {/* RIGHT: gratitude */}
+            <div className="stack">
+              <section className="card p-3" style={{ padding: 12 }}>
+                <div className="section-row">
+                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
+                </p>
+                <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
+              </section>
+            </div>
+          </div>
+
+          {loading && <p className="muted mt-3">Loading...</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
