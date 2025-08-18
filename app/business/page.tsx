@@ -1,7 +1,7 @@
 "use client";
 
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import ProfileInviteQR from "@/components/ProfileInviteQR";
@@ -15,10 +15,9 @@ type BizFields = {
   business_location_is_public: boolean | null;
 };
 
-export default function BusinessPage() {
+const BusinessPage: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
 
-  // business details (separate from personal)
   const [b, setB] = useState<BizFields>({
     business_name: "",
     business_logo_url: "",
@@ -26,16 +25,16 @@ export default function BusinessPage() {
     business_location_text: "",
     business_location_is_public: false,
   });
-  const [detailsLoading, setDetailsLoading] = useState(true);
-  const [detailsSaving, setDetailsSaving] = useState(false);
-  const [detailsUnavailable, setDetailsUnavailable] = useState(false);
+
+  const [detailsLoading, setDetailsLoading] = useState<boolean>(true);
+  const [detailsSaving, setDetailsSaving] = useState<boolean>(false);
+  const [detailsUnavailable, setDetailsUnavailable] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // Load business_* fields
   useEffect(() => {
     (async () => {
       if (!userId) return;
@@ -54,7 +53,6 @@ export default function BusinessPage() {
       if (error) {
         const msg = String(error.message || "").toLowerCase();
         if (msg.includes("column") && msg.includes("does not exist")) {
-          // Columns not created yet – show helper note but keep page usable.
           setDetailsUnavailable(true);
         } else {
           setError(error.message);
@@ -74,8 +72,6 @@ export default function BusinessPage() {
   }, [userId]);
 
   const displayBizName = useMemo(() => b.business_name || "Your business name", [b.business_name]);
-  // If you have a custom placeholder, swap this path; otherwise a simple empty state
-  const displayLogo = useMemo(() => b.business_logo_url || "", [b.business_logo_url]);
   const showLoc = !!b.business_location_is_public && !!b.business_location_text;
 
   async function saveDetails() {
@@ -113,46 +109,39 @@ export default function BusinessPage() {
             </div>
           </div>
 
-          <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
+          <div className="h-px bg-violet-200/60 my-3" />
 
-          {/* Identity header */}
+          {/* Identity header (mobile-first) */}
           <section
             className="card p-3 mb-3"
             style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.35)" }}
           >
-            <div className="grid gap-4" style={{ gridTemplateColumns: "140px 1fr", alignItems: "center" }}>
-              <div>
-                {/* We purposely DO NOT reuse personal avatar here */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {displayLogo ? (
+            <div className="flex flex-col md:grid md:grid-cols-[140px_1fr] gap-4 items-start">
+              <div className="shrink-0">
+                {/* Unique business logo */}
+                {b.business_logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={displayLogo}
+                    src={b.business_logo_url}
                     alt="Business logo"
+                    className="rounded-2xl border"
                     width={120}
                     height={120}
-                    style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 16, border: "1px solid #eee" }}
+                    style={{ width: 120, height: 120, objectFit: "cover" }}
                   />
                 ) : (
                   <div
                     aria-label="No business logo"
-                    style={{
-                      width: 120,
-                      height: 120,
-                      borderRadius: 16,
-                      border: "1px dashed #ddd",
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: 12,
-                      color: "#777",
-                      background: "#fafafa",
-                    }}
+                    className="rounded-2xl border border-dashed text-sm text-neutral-600 grid place-items-center"
+                    style={{ width: 120, height: 120, background: "#fafafa" }}
                   >
                     Add a logo below
                   </div>
                 )}
               </div>
+
               <div className="min-w-0">
-                <h2 className="text-xl font-semibold" style={{ marginBottom: 6 }}>{displayBizName}</h2>
+                <h2 className="text-xl font-semibold mb-1">{displayBizName}</h2>
                 <div className="muted">{showLoc ? `Based in ${b.business_location_text}` : "Location hidden"}</div>
                 {b.business_bio ? (
                   <p className="muted mt-2" style={{ whiteSpace: "pre-wrap" }}>{b.business_bio}</p>
@@ -163,17 +152,13 @@ export default function BusinessPage() {
             </div>
           </section>
 
-          {/* Two-column layout: LEFT (details + services) / RIGHT (messages + invite) */}
-          <div
-            className="columns"
-            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
-          >
-            {/* LEFT */}
+          {/* Two-column layout */}
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px] items-start">
+            {/* LEFT: editor + services */}
             <div className="stack">
-              {/* Business details editor */}
               <section id="edit-details" className="card p-3">
                 <div className="section-row">
-                  <h2 className="section-title" style={{ marginBottom: 4 }}>Business details</h2>
+                  <h2 className="section-title mb-1">Business details</h2>
                 </div>
 
                 {detailsUnavailable ? (
@@ -181,7 +166,7 @@ export default function BusinessPage() {
                     <p className="muted">
                       Business detail columns are missing. Run this SQL once in Supabase, then reload:
                     </p>
-                    <pre className="muted" style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>
+                    <pre className="muted text-xs whitespace-pre-wrap">
 {`ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS business_name text,
   ADD COLUMN IF NOT EXISTS business_logo_url text,
@@ -193,11 +178,10 @@ export default function BusinessPage() {
                 ) : detailsLoading ? (
                   <p className="muted">Loading…</p>
                 ) : (
-                  <div className="grid gap-4" style={{ gridTemplateColumns: "200px 1fr" }}>
+                  <div className="grid gap-4 md:grid-cols-[200px_1fr]">
                     <div>
-                      {/* Force a distinct instance so it won't preload personal avatar */}
                       <AvatarUploader
-                        key={`biz-${userId ?? "anon"}`}
+                        key={`biz-${userId ?? "anon"}`} // isolate from personal avatar cache
                         userId={userId}
                         value={b.business_logo_url ?? ""}
                         onChange={(url) => setB((prev) => ({ ...prev, business_logo_url: url }))}
@@ -217,7 +201,7 @@ export default function BusinessPage() {
                         />
                       </label>
 
-                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                      <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                         <label className="field">
                           <span className="label">Business location</span>
                           <input
@@ -227,11 +211,14 @@ export default function BusinessPage() {
                             placeholder="City, State"
                           />
                         </label>
-                        <label className="mt-[1.85rem] flex items-center gap-2 text-sm">
+
+                        <label className="md:mt-[1.85rem] flex items-center gap-2 text-sm">
                           <input
                             type="checkbox"
                             checked={!!b.business_location_is_public}
-                            onChange={(e) => setB({ ...b, business_location_is_public: e.target.checked })}
+                            onChange={(e) =>
+                              setB({ ...b, business_location_is_public: e.target.checked })
+                            }
                           />
                           Show on business page
                         </label>
@@ -253,13 +240,13 @@ export default function BusinessPage() {
                           {detailsSaving ? "Saving…" : "Save business details"}
                         </button>
                       </div>
+
+                      {error && <p className="muted" style={{ color: "#b91c1c" }}>{error}</p>}
                     </div>
                   </div>
                 )}
-                {error && <p className="muted mt-3" style={{ color: "#b91c1c" }}>{error}</p>}
               </section>
 
-              {/* Services */}
               <section className="stack">
                 <BusinessProfilePanel userId={userId} />
               </section>
@@ -267,20 +254,18 @@ export default function BusinessPage() {
 
             {/* RIGHT */}
             <div className="stack">
-              {/* Messages card */}
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
+                  <h3 className="section-title mb-1">Messages</h3>
                 </div>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Chat with clients and collaborators in one place.
-                </p>
+                <p className="muted text-xs sm:text-[12px]">Chat with clients and collaborators in one place.</p>
                 <a className="btn mt-2" href="/messages">Open</a>
               </section>
 
-              {/* Business invite / QR (smaller, QR-first) */}
               <section className="card p-3" style={{ padding: 12 }}>
-                <ProfileInviteQR userId={userId} embed context="business" qrSize={140} />
+                <div className="max-w-sm">
+                  <ProfileInviteQR userId={userId} embed context="business" qrSize={140} />
+                </div>
               </section>
             </div>
           </div>
@@ -288,4 +273,6 @@ export default function BusinessPage() {
       </div>
     </div>
   );
-}
+};
+
+export default BusinessPage;
