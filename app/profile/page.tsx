@@ -81,6 +81,7 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
+      // Save text fields via your API route (kept as-is)
       const res = await fetch("/profile/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,9 +95,13 @@ export default function ProfilePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save profile");
 
+      // ALSO persist avatar_url + show_mutuals directly
       const up = await supabase
         .from("profiles")
-        .update({ show_mutuals: !!p.show_mutuals })
+        .update({
+          avatar_url: p.avatar_url?.trim() || null,
+          show_mutuals: !!p.show_mutuals,
+        })
         .eq("id", userId);
       if (up.error) throw up.error;
 
@@ -152,7 +157,7 @@ export default function ProfilePage() {
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                {/* Invite friends (QR now smaller + shown above email inside component) */}
+                {/* Invite friends (QR smaller, QR-first) */}
                 <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
               </div>
             </div>
@@ -178,103 +183,4 @@ export default function ProfilePage() {
                       />
                     </label>
 
-                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                      <label className="field">
-                        <span className="label">Location</span>
-                        <input
-                          className="input"
-                          value={p.location_text ?? ""}
-                          onChange={(e) => setP({ ...p, location_text: e.target.value })}
-                          placeholder="City, State (for example, Greenville, TX)"
-                        />
-                      </label>
-                      <label className="mt-[1.85rem] flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={!!p.location_is_public}
-                          onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
-                        />
-                        Show on public profile
-                      </label>
-                    </div>
-
-                    <label className="field">
-                      <span className="label">Bio</span>
-                      <textarea
-                        className="input"
-                        rows={4}
-                        value={p.bio ?? ""}
-                        onChange={(e) => setP({ ...p, bio: e.target.value })}
-                      />
-                    </label>
-
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={!!p.show_mutuals}
-                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
-                      />
-                      <span>Show mutual friends</span>
-                    </label>
-
-                    <div className="right">
-                      <button className="btn btn-brand" onClick={save} disabled={saving}>
-                        {saving ? "Saving..." : "Save"}
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              ) : (
-                <section className="card p-3">
-                  <h2 className="section-title">About</h2>
-                  <div className="stack">
-                    {p.location_is_public && p.location_text ? (
-                      <div><strong>Location:</strong> {p.location_text}</div>
-                    ) : null}
-                    {p.bio ? (
-                      <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
-                    ) : null}
-                    {!p.location_text && !p.bio ? (
-                      <div className="muted">Add a bio and location using Edit.</div>
-                    ) : null}
-                    {!p.location_is_public && p.location_text ? (
-                      <div className="muted text-sm">(Location is private)</div>
-                    ) : null}
-                  </div>
-                </section>
-              )}
-
-              <PhotosFeed userId={userId} />
-            </div>
-
-            {/* RIGHT: gratitude + messages */}
-            <div className="stack">
-              <section className="card p-3" style={{ padding: 12 }}>
-                <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
-                </div>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
-                </p>
-                <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
-              </section>
-
-              {/* Messages card directly under Gratitude */}
-              <section className="card p-3" style={{ padding: 12 }}>
-                <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
-                </div>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Connect privately with friends and your community.
-                </p>
-                <a className="btn mt-2" href="/messages">Open</a>
-              </section>
-            </div>
-          </div>
-
-          {loading && <p className="muted mt-3">Loading...</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
+                    <div className="grid gap-3 sm:
