@@ -1,50 +1,6 @@
-"use client";
+// app/business/page.tsx
+import { redirect } from "next/navigation";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import BusinessCard from "@/components/BusinessCard";
-import BusinessInfoEditor from "@/components/BusinessInfoEditor";
-import BusinessProfilePanel from "@/components/BusinessProfilePanel";
-
-export default function BusinessPage() {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-  }, []);
-
-  return (
-    <div className="page-wrap">
-      <div className="page">
-        <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Business</h1>
-            <div className="controls flex items-center gap-2">
-              <a className="btn" href="#biz-edit">Edit details</a>
-              <Link href="/profile" className="btn">Personal profile</Link>
-              <Link href="/messages" className="btn">Messages</Link>
-            </div>
-          </div>
-
-          <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
-
-          {/* Business-only header (placeholders until you save details) */}
-          <div className="stack mb-3">
-            <BusinessCard userId={userId} />
-          </div>
-
-          {/* Editor for business_* fields */}
-          <div className="stack mb-3">
-            <BusinessInfoEditor userId={userId} />
-          </div>
-
-          {/* Services (still stored on profiles.business_services) */}
-          <div className="stack">
-            <BusinessProfilePanel userId={userId} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export default function BusinessRoute() {
+  redirect("/biz");
 }
