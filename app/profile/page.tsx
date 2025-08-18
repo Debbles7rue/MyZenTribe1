@@ -11,9 +11,9 @@ type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  location?: string | null;
-  location_text?: string | null;
-  location_is_public?: boolean | null;
+  location?: string | null;              // legacy
+  location_text?: string | null;         // preferred
+  location_is_public?: boolean | null;   // preferred
   show_mutuals: boolean | null;
 };
 
@@ -77,7 +77,6 @@ const ProfilePage: React.FC = () => {
 
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
-  // Save text fields + show_mutuals + avatar_url (when pressing Save)
   const save = async () => {
     if (!userId) return;
     setSaving(true);
@@ -113,7 +112,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  // Instant DB update when the avatar changes
+  // Save avatar immediately when it changes (better UX; fixes “photo not saving”)
   async function onAvatarChange(url: string) {
     setP(prev => ({ ...prev, avatar_url: url }));
     if (!userId) return;
@@ -121,9 +120,7 @@ const ProfilePage: React.FC = () => {
       .from("profiles")
       .update({ avatar_url: url || null })
       .eq("id", userId);
-    if (error) {
-      alert("Could not save photo: " + error.message);
-    }
+    if (error) alert("Could not save photo: " + error.message);
   }
 
   return (
@@ -139,7 +136,7 @@ const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
+          <div className="h-px bg-violet-200/60 my-3" />
 
           {tableMissing && (
             <div className="note">
@@ -148,20 +145,23 @@ const ProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* Identity header */}
+          {/* Identity header (mobile-first: stack; md+: row) */}
           <div
-            className="card p-3 mb-3 profile-card"
+            className="card p-3 mb-3"
             style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
           >
-            <div className="profile-header" style={{ gap: 18 }}>
-              <AvatarUploader
-                userId={userId}
-                value={p.avatar_url}
-                onChange={onAvatarChange}
-                label="Profile photo"
-                size={180}
-              />
-              <div className="profile-heading" style={{ minWidth: 0 }}>
+            <div className="flex flex-col md:flex-row gap-4 md:gap-5 items-start md:items-center">
+              <div className="shrink-0">
+                <AvatarUploader
+                  userId={userId}
+                  value={p.avatar_url}
+                  onChange={onAvatarChange}
+                  label="Profile photo"
+                  size={160} // a touch smaller so it fits phones nicely
+                />
+              </div>
+
+              <div className="min-w-0 w-full">
                 <div className="profile-name">{displayName}</div>
                 <div className="kpis">
                   <span className="kpi"><strong>0</strong> Followers</span>
@@ -169,16 +169,16 @@ const ProfilePage: React.FC = () => {
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
+                {/* QR block — capped width on small screens */}
+                <div className="max-w-sm">
+                  <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Two-column layout */}
-          <div
-            className="columns"
-            style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 16, alignItems: "start" }}
-          >
+          {/* Two-column layout (1 col on mobile, 2 cols on md+) */}
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px] items-start">
             {/* LEFT */}
             <div className="stack">
               {editPersonal ? (
@@ -194,7 +194,7 @@ const ProfilePage: React.FC = () => {
                       />
                     </label>
 
-                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <label className="field">
                         <span className="label">Location</span>
                         <input
@@ -204,7 +204,7 @@ const ProfilePage: React.FC = () => {
                           placeholder="City, State (for example, Greenville, TX)"
                         />
                       </label>
-                      <label className="mt-[1.85rem] flex items-center gap-2 text-sm">
+                      <label className="md:mt-[1.85rem] flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={!!p.location_is_public}
@@ -269,7 +269,7 @@ const ProfilePage: React.FC = () => {
                 <div className="section-row">
                   <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
                 </div>
-                <p className="muted" style={{ fontSize: 12 }}>
+                <p className="muted text-xs sm:text-[12px]">
                   Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
                 </p>
                 <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
@@ -279,7 +279,7 @@ const ProfilePage: React.FC = () => {
                 <div className="section-row">
                   <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
                 </div>
-                <p className="muted" style={{ fontSize: 12 }}>
+                <p className="muted text-xs sm:text-[12px]">
                   Connect privately with friends and your community.
                 </p>
                 <a className="btn mt-2" href="/messages">Open</a>
