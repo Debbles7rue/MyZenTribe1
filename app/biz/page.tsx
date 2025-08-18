@@ -302,4 +302,22 @@ export default function BizPage() {
               <p className="muted">Loading services…</p>
             ) : servicesEditing ? (
               <div className="stack">
-                <BusinessServicesEditor userId={
+                <BusinessServicesEditor userId={userId} value={services} onChange={setServices} disabled={servicesSaving} />
+                <div className="right flex gap-2">
+                  <button className="btn" onClick={cancelServices} disabled={servicesSaving}>Cancel</button>
+                  <button className="btn btn-brand" onClick={saveServices} disabled={servicesSaving}>
+                    {servicesSaving ? "Saving…" : "Save services"}
+                  </button>
+                </div>
+              </div>
+            ) : hasServices ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {services.map((s, i) => (
+                  <article key={(s.id ?? "") + ":" + i} className="card p-3">
+                    {s.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={s.image_url}
+                        alt={s.title || "Service photo"}
+                        className="mb-2"
+                        style={{ width: "100%", height: 160, objectFit: "cover", borderRadius
