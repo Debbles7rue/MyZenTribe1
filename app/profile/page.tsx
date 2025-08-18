@@ -152,8 +152,8 @@ export default function ProfilePage() {
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                {/* Invite friends (v2) */}
-                <ProfileInviteQR userId={userId} embed context="personal" />
+                {/* Invite friends (QR now smaller + shown above email inside component) */}
+                <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
               </div>
             </div>
           </div>
@@ -247,7 +247,7 @@ export default function ProfilePage() {
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: gratitude */}
+            {/* RIGHT: gratitude + messages */}
             <div className="stack">
               <section className="card p-3" style={{ padding: 12 }}>
                 <div className="section-row">
@@ -257,6 +257,17 @@ export default function ProfilePage() {
                   Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
                 </p>
                 <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
+              </section>
+
+              {/* Messages card directly under Gratitude */}
+              <section className="card p-3" style={{ padding: 12 }}>
+                <div className="section-row">
+                  <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Connect privately with friends and your community.
+                </p>
+                <a className="btn mt-2" href="/messages">Open</a>
               </section>
             </div>
           </div>
