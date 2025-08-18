@@ -69,7 +69,7 @@ const ProfilePage: React.FC = () => {
         } else {
           setP(prev => ({ ...prev, id: userId }));
         }
-      } catch {
+      } catch (err) { // <-- important: no optional catch binding
         setTableMissing(true);
       } finally {
         setLoading(false);
@@ -80,7 +80,7 @@ const ProfilePage: React.FC = () => {
 
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
-  // Save profile (now also persists avatar_url)
+  // Save profile (also persists avatar_url)
   const save = async () => {
     if (!userId) return;
     setSaving(true);
@@ -267,3 +267,25 @@ const ProfilePage: React.FC = () => {
                   Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
                 </p>
                 <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
+              </section>
+
+              <section className="card p-3" style={{ padding: 12 }}>
+                <div className="section-row">
+                  <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Connect privately with friends and your community.
+                </p>
+                <a className="btn mt-2" href="/messages">Open</a>
+              </section>
+            </div>
+          </div>
+
+          {loading && <p className="muted mt-3">Loading...</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProfilePage;
