@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
@@ -66,7 +67,7 @@ const ProfilePage: React.FC = () => {
         } else {
           setP(prev => ({ ...prev, id: userId }));
         }
-      } catch (err) {
+      } catch {
         setTableMissing(true);
       } finally {
         setLoading(false);
@@ -77,6 +78,7 @@ const ProfilePage: React.FC = () => {
 
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
+  // Save text fields + mutuals + avatar (when pressing Save)
   const save = async () => {
     if (!userId) return;
     setSaving(true);
@@ -112,7 +114,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  // Save avatar immediately when it changes (better UX; fixes “photo not saving”)
+  // Save avatar immediately when changed (fixes “photo not saving” race)
   async function onAvatarChange(url: string) {
     setP(prev => ({ ...prev, avatar_url: url }));
     if (!userId) return;
@@ -123,13 +125,38 @@ const ProfilePage: React.FC = () => {
     if (error) alert("Could not save photo: " + error.message);
   }
 
+  // Quick Actions block (Gratitude + Messages)
+  const QuickActions = (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row">
+          <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
+        </div>
+        <p className="muted text-sm">
+          Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
+        </p>
+        <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
+      </section>
+
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row">
+          <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
+        </div>
+        <p className="muted text-sm">Private chat with friends and your community.</p>
+        <a className="btn mt-2" href="/messages">Open</a>
+      </section>
+    </div>
+  );
+
   return (
     <div className="page-wrap">
       <div className="page">
         <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="header-bar">
             <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
-            <div className="controls">
+            <div className="controls flex items-center gap-2">
+              <Link href="/business" className="btn">Business profile</Link>
+              <Link href="/messages" className="btn">Messages</Link>
               <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
                 {editPersonal ? "Done" : "Edit"}
               </button>
@@ -145,42 +172,50 @@ const ProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* Identity header (mobile-first: stack; md+: row) */}
+          {/* Identity header — center on mobile, side-by-side on md+ */}
           <div
             className="card p-3 mb-3"
-            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
+            style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.4)" }}
           >
-            <div className="flex flex-col md:flex-row gap-4 md:gap-5 items-start md:items-center">
+            <div className="flex flex-col items-center text-center md:text-left md:flex-row md:items-start gap-4 md:gap-5">
               <div className="shrink-0">
                 <AvatarUploader
                   userId={userId}
                   value={p.avatar_url}
                   onChange={onAvatarChange}
                   label="Profile photo"
-                  size={160} // a touch smaller so it fits phones nicely
+                  size={160}
                 />
               </div>
 
               <div className="min-w-0 w-full">
                 <div className="profile-name">{displayName}</div>
-                <div className="kpis">
+                <div className="kpis justify-center md:justify-start">
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
                   <span className="kpi"><strong>0</strong> Friends</span>
                 </div>
 
-                {/* QR block — capped width on small screens */}
-                <div className="max-w-sm">
+                {/* QR above invite inputs; capped width and centered on mobile */}
+                <div className="mx-auto md:mx-0 max-w-md mt-2">
                   <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Two-column layout (1 col on mobile, 2 cols on md+) */}
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px] items-start">
-            {/* LEFT */}
+          {/* Mobile-first order:
+              1) Quick actions (Gratitude + Messages)
+              2) About
+              3) Photos feed
+             On md+, Quick actions move to the right sidebar automatically */}
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_320px] items-start">
+            {/* LEFT column */}
             <div className="stack">
+              {/* Quick actions on mobile (top) */}
+              <div className="md:hidden">{QuickActions}</div>
+
+              {/* About */}
               {editPersonal ? (
                 <section className="card p-3">
                   <h2 className="section-title">Edit your info</h2>
@@ -249,10 +284,9 @@ const ProfilePage: React.FC = () => {
                     ) : null}
                     {p.bio ? (
                       <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
-                    ) : null}
-                    {!p.location_text && !p.bio ? (
+                    ) : (
                       <div className="muted">Add a bio and location using Edit.</div>
-                    ) : null}
+                    )}
                     {!p.location_is_public && p.location_text ? (
                       <div className="muted text-sm">(Location is private)</div>
                     ) : null}
@@ -260,30 +294,13 @@ const ProfilePage: React.FC = () => {
                 </section>
               )}
 
+              {/* Photos feed */}
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT */}
-            <div className="stack">
-              <section className="card p-3" style={{ padding: 12 }}>
-                <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
-                </div>
-                <p className="muted text-xs sm:text-[12px]">
-                  Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
-                </p>
-                <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
-              </section>
-
-              <section className="card p-3" style={{ padding: 12 }}>
-                <div className="section-row">
-                  <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
-                </div>
-                <p className="muted text-xs sm:text-[12px]">
-                  Connect privately with friends and your community.
-                </p>
-                <a className="btn mt-2" href="/messages">Open</a>
-              </section>
+            {/* RIGHT column (sidebar) */}
+            <div className="stack hidden md:block">
+              {QuickActions}
             </div>
           </div>
 
