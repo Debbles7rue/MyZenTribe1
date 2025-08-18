@@ -12,9 +12,9 @@ type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  location?: string | null;              // legacy
-  location_text?: string | null;         // preferred
-  location_is_public?: boolean | null;   // preferred
+  location?: string | null;
+  location_text?: string | null;
+  location_is_public?: boolean | null;
   show_mutuals: boolean | null;
 };
 
@@ -36,12 +36,10 @@ export default function ProfilePage() {
     show_mutuals: true,
   });
 
-  // fetch authed user id
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // load profile row
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
@@ -52,7 +50,6 @@ export default function ProfilePage() {
           .select("*")
           .eq("id", userId)
           .maybeSingle();
-
         if (error) throw error;
 
         if (data) {
@@ -76,7 +73,6 @@ export default function ProfilePage() {
         setLoading(false);
       }
     };
-
     load();
   }, [userId]);
 
@@ -96,7 +92,6 @@ export default function ProfilePage() {
           location_is_public: !!p.location_is_public,
         }),
       });
-
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save profile");
 
@@ -104,19 +99,17 @@ export default function ProfilePage() {
         .from("profiles")
         .update({ show_mutuals: !!p.show_mutuals })
         .eq("id", userId);
-
       if (up.error) throw up.error;
 
       alert("Saved!");
       setEditPersonal(false);
     } catch (e: any) {
-      alert(e?.message || "Save failed");
+      alert(e.message || "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
-  // ---------- RENDER ----------
   return (
     <div className="page-wrap">
       <div className="page">
@@ -145,16 +138,16 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header (balanced grid) */}
+          {/* Identity header — balanced */}
           <div
             className="card p-3 mb-3 profile-card"
-            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
+            style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.4)" }}
           >
             <div
               className="grid gap-4"
               style={{ gridTemplateColumns: "180px 180px 1fr", alignItems: "start" }}
             >
-              {/* Profile photo */}
+              {/* Photo */}
               <AvatarUploader
                 userId={userId}
                 value={p.avatar_url}
@@ -163,9 +156,9 @@ export default function ProfilePage() {
                 size={180}
               />
 
-              {/* Compact QR */}
+              {/* Compact QR-only view (hide non-QR content) */}
               <div
-                className="rounded-xl ring-1 ring-violet-200/70 flex items-center justify-center"
+                className="qr-compact rounded-xl ring-1 ring-violet-200/70 flex items-center justify-center"
                 style={{ width: 180, height: 180, overflow: "hidden" }}
               >
                 <ProfileInviteQR userId={userId} embed size={180} />
@@ -182,10 +175,19 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Full invite UI below (email + link + large QR caption as your component renders) */}
+            {/* Full invite UI below */}
             <div className="mt-4">
               <ProfileInviteQR userId={userId} embed />
             </div>
+
+            {/* Scoped CSS to hide everything except the QR image/canvas in the compact slot */}
+            <style jsx>{`
+              .qr-compact :global(*:not(img):not(canvas)) { display: none !important; }
+              .qr-compact :global(img), .qr-compact :global(canvas) {
+                max-width: 100% !important;
+                max-height: 100% !important;
+              }
+            `}</style>
           </div>
 
           {/* Two-column layout */}
