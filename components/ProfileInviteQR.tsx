@@ -3,13 +3,28 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Props = { userId: string | null; embed?: boolean };
+type Props = {
+  userId: string | null;
+  embed?: boolean;
+  /** Distinguish where the invite is coming from; changes the URL so QR codes differ */
+  context?: "personal" | "business";
+  /** QR code size in pixels (square). Defaults to 160. Clamped between 96 and 300. */
+  qrSize?: number;
+};
 
-export default function ProfileInviteQR({ userId, embed = false }: Props) {
+export default function ProfileInviteQR({
+  userId,
+  embed = false,
+  context = "personal",
+  qrSize = 160,
+}: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+
+  // clamp size (avoid extremes / layout breaks)
+  const size = Math.max(96, Math.min(qrSize || 160, 300));
 
   // Load or create the permanent invite token via RPC
   useEffect(() => {
@@ -26,21 +41,24 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
 
   const inviteUrl = useMemo(() => {
     if (!token || typeof window === "undefined") return "";
-    return `${window.location.origin}/invite/${token}`;
-  }, [token]);
+    const base = `${window.location.origin}/invite/${token}`;
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}src=${encodeURIComponent(context)}`;
+  }, [token, context]);
 
   const qrUrl = inviteUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(inviteUrl)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(inviteUrl)}`
     : "";
 
   const emailValid = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), [email]);
 
   const sendEmail = useCallback(() => {
     if (!inviteUrl || !emailValid) return;
-    const subject = encodeURIComponent("Join me on MyZenTribe");
+    const label = context === "business" ? " (Business)" : "";
+    const subject = encodeURIComponent(`Join me on MyZenTribe${label}`);
     const body = encodeURIComponent(`Hi,\n\nHere is my invite link:\n${inviteUrl}\n\nSee you there!`);
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-  }, [email, emailValid, inviteUrl]);
+  }, [email, emailValid, inviteUrl, context]);
 
   const Content = (
     <div className="stack" style={{ gap: 8 }}>
@@ -85,16 +103,22 @@ export default function ProfileInviteQR({ userId, embed = false }: Props) {
         </button>
       </div>
 
-      {/* QR auto */}
+      {/* QR auto (smaller by default) */}
       {inviteUrl && (
         <div className="card p-3" style={{ textAlign: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qrUrl}
             alt="Invite QR"
-            width={220}
-            height={220}
-            style={{ width: 220, height: 220, margin: "0 auto", borderRadius: 12, border: "1px solid #eee" }}
+            width={size}
+            height={size}
+            style={{
+              width: size,
+              height: size,
+              margin: "0 auto",
+              borderRadius: 12,
+              border: "1px solid #eee",
+            }}
           />
           <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             Scan the QR or share your link.
