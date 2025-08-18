@@ -5,12 +5,14 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
   userId: string | null;
-  /** Back-compat wrapper style for the full widget */
+  /** Back-compat: wraps the full widget in a simple container */
   embed?: boolean;
-  /** Render mode: 'full' (inputs + link + QR) or 'qr-only' (just the QR image) */
+  /** 'full' (inputs + link + QR) or 'qr-only' (just QR image) */
   mode?: "full" | "qr-only";
-  /** QR pixel size (applies to both modes). Default 220. */
+  /** Pixel size of QR image */
   size?: number;
+  /** Show the email field/button (ignored in 'qr-only'). Default true */
+  showEmail?: boolean;
 };
 
 export default function ProfileInviteQR({
@@ -18,13 +20,13 @@ export default function ProfileInviteQR({
   embed = false,
   mode = "full",
   size = 220,
+  showEmail = true,
 }: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [email, setEmail] = useState("");
 
-  // Load or create the permanent invite token via RPC
   useEffect(() => {
     (async () => {
       if (!userId) return;
@@ -55,24 +57,18 @@ export default function ProfileInviteQR({
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   }, [email, emailValid, inviteUrl]);
 
-  // --- QR-ONLY MODE ---
+  // --- QR only ---
   if (mode === "qr-only") {
     if (!inviteUrl) {
-      // keep the slot stable while loading
       return (
         <div
           className="rounded-xl"
-          style={{
-            width: size,
-            height: size,
-            background: "rgba(0,0,0,0.03)",
-          }}
+          style={{ width: size, height: size, background: "rgba(0,0,0,0.03)" }}
           aria-busy="true"
           aria-label="Loading invite QR"
         />
       );
     }
-
     // eslint-disable-next-line @next/next/no-img-element
     return (
       <img
@@ -80,42 +76,38 @@ export default function ProfileInviteQR({
         alt="Invite QR"
         width={size}
         height={size}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: 12,
-          border: "1px solid #eee",
-          display: "block",
-        }}
+        style={{ width: size, height: size, borderRadius: 12, border: "1px solid #eee", display: "block" }}
       />
     );
   }
 
-  // --- FULL WIDGET MODE (original behavior) ---
+  // --- Full widget (original) ---
   const Content = (
     <div className="stack" style={{ gap: 8 }}>
       <div className="label" style={{ fontWeight: 600 }}>
         Invite friends <span className="muted text-xs">v2</span>
       </div>
 
-      {/* Email input + send */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input
-          className="input"
-          placeholder="friend@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ minWidth: 220, flex: 1 }}
-        />
-        <button
-          className="btn"
-          onClick={sendEmail}
-          disabled={!emailValid || !inviteUrl || loading}
-          title={!inviteUrl ? "Loading invite link..." : ""}
-        >
-          Email invite
-        </button>
-      </div>
+      {/* Email (optional) */}
+      {showEmail && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            className="input"
+            placeholder="friend@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ minWidth: 220, flex: 1 }}
+          />
+          <button
+            className="btn"
+            onClick={sendEmail}
+            disabled={!emailValid || !inviteUrl || loading}
+            title={!inviteUrl ? "Loading invite link..." : ""}
+          >
+            Email invite
+          </button>
+        </div>
+      )}
 
       {/* Link + copy */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
