@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import BusinessCard from "@/components/BusinessCard";
-import BusinessProfilePanel from "@/components/BusinessProfilePanel";
 import BusinessInfoEditor from "@/components/BusinessInfoEditor";
+import BusinessProfilePanel from "@/components/BusinessProfilePanel";
 
 export default function BusinessPage() {
   const [userId, setUserId] = useState<string | null>(null);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
@@ -20,6 +21,7 @@ export default function BusinessPage() {
           <div className="header-bar">
             <h1 className="page-title" style={{ marginBottom: 0 }}>Business</h1>
             <div className="controls flex items-center gap-2">
+              <a className="btn" href="#biz-edit">Edit details</a>
               <Link href="/profile" className="btn">Personal profile</Link>
               <Link href="/messages" className="btn">Messages</Link>
             </div>
@@ -27,7 +29,7 @@ export default function BusinessPage() {
 
           <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
 
-          {/* Business-only header (no personal fields used) */}
+          {/* Business-only header (placeholders until you save details) */}
           <div className="stack mb-3">
             <BusinessCard userId={userId} />
           </div>
@@ -37,7 +39,7 @@ export default function BusinessPage() {
             <BusinessInfoEditor userId={userId} />
           </div>
 
-          {/* Services (from profiles.business_services JSON) */}
+          {/* Services (still stored on profiles.business_services) */}
           <div className="stack">
             <BusinessProfilePanel userId={userId} />
           </div>
