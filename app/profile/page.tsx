@@ -12,9 +12,9 @@ type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  location?: string | null;
-  location_text?: string | null;
-  location_is_public?: boolean | null;
+  location?: string | null;              // legacy
+  location_text?: string | null;         // preferred
+  location_is_public?: boolean | null;   // preferred
   show_mutuals: boolean | null;
 };
 
@@ -65,7 +65,7 @@ export default function ProfilePage() {
           };
           setP(normalized);
         } else {
-          setP((prev) => ({ ...prev, id: userId }));
+          setP(prev => ({ ...prev, id: userId }));
         }
       } catch {
         setTableMissing(true);
@@ -123,7 +123,7 @@ export default function ProfilePage() {
               <Link href="/messages" className="btn" aria-label="Open messages">
                 Messages
               </Link>
-              <button className="btn" onClick={() => setEditPersonal((v) => !v)}>
+              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
                 {editPersonal ? "Done" : "Edit"}
               </button>
             </div>
@@ -138,16 +138,16 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header — balanced */}
+          {/* Identity header — two-up row (Photo | QR), then name/counters, then invite form */}
           <div
             className="card p-3 mb-3 profile-card"
             style={{ borderColor: "rgba(196,181,253,.7)", background: "rgba(245,243,255,.4)" }}
           >
+            {/* Row 1: Photo | Compact QR */}
             <div
-              className="grid gap-4"
-              style={{ gridTemplateColumns: "180px 180px 1fr", alignItems: "start" }}
+              className="grid gap-4 justify-start"
+              style={{ gridTemplateColumns: "180px 180px" }}
             >
-              {/* Photo */}
               <AvatarUploader
                 userId={userId}
                 value={p.avatar_url}
@@ -156,36 +156,39 @@ export default function ProfilePage() {
                 size={180}
               />
 
-              {/* Compact QR-only view (hide non-QR content) */}
+              {/* Compact QR-only slot (allow svg/img/canvas; hide other UI) */}
               <div
                 className="qr-compact rounded-xl ring-1 ring-violet-200/70 flex items-center justify-center"
                 style={{ width: 180, height: 180, overflow: "hidden" }}
               >
                 <ProfileInviteQR userId={userId} embed size={180} />
               </div>
+            </div>
 
-              {/* Name + KPIs */}
-              <div className="profile-heading min-w-0">
-                <div className="profile-name text-xl font-semibold">{displayName}</div>
-                <div className="kpis mt-1 flex gap-4 text-sm">
-                  <span className="kpi"><strong>0</strong> Followers</span>
-                  <span className="kpi"><strong>0</strong> Following</span>
-                  <span className="kpi"><strong>0</strong> Friends</span>
-                </div>
+            {/* Row 2: Name + counters (under both columns) */}
+            <div className="mt-3">
+              <div className="profile-name text-xl font-semibold">{displayName}</div>
+              <div className="kpis mt-1 flex gap-4 text-sm">
+                <span className="kpi"><strong>0</strong> Followers</span>
+                <span className="kpi"><strong>0</strong> Following</span>
+                <span className="kpi"><strong>0</strong> Friends</span>
               </div>
             </div>
 
-            {/* Full invite UI below */}
+            {/* Row 3: Full invite UI */}
             <div className="mt-4">
               <ProfileInviteQR userId={userId} embed />
             </div>
 
-            {/* Scoped CSS to hide everything except the QR image/canvas in the compact slot */}
+            {/* Only show the QR graphic (svg/img/canvas) in the compact slot above */}
             <style jsx>{`
-              .qr-compact :global(*:not(img):not(canvas)) { display: none !important; }
-              .qr-compact :global(img), .qr-compact :global(canvas) {
+              .qr-compact :global(:where(svg, img, canvas)) {
+                display: block !important;
                 max-width: 100% !important;
                 max-height: 100% !important;
+              }
+              .qr-compact :global(*:not(svg):not(img):not(canvas)) {
+                display: none !important;
               }
             `}</style>
           </div>
