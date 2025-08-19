@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Friend = { id: string; full_name: string | null; avatar_url: string | null };
 
-export default function FriendsPage() {
+export default function FriendsClient() {
   const [userId, setUserId] = useState<string | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [query, setQuery] = useState("");
@@ -23,17 +23,10 @@ export default function FriendsPage() {
     if (!userId) return;
     (async () => {
       setLoading(true);
-      const { data: pairs, error } = await supabase
-        .from("friendships")
-        .select("a,b")
-        .or(`a.eq.${userId},b.eq.${userId}`);
-      if (error) { setLoading(false); return; }
+      const { data: pairs } = await supabase.from("friendships").select("a,b").or(`a.eq.${userId},b.eq.${userId}`);
       const ids = [...new Set((pairs ?? []).map(p => (p.a === userId ? p.b : p.a)))];
       if (!ids.length) { setFriends([]); setLoading(false); return; }
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .in("id", ids);
+      const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", ids);
       setFriends((profiles ?? []).map(p => ({ id: p.id, full_name: p.full_name, avatar_url: p.avatar_url })));
       setLoading(false);
     })();
@@ -80,12 +73,7 @@ export default function FriendsPage() {
       </div>
 
       <div className="mt-4 flex gap-2">
-        <input
-          className="input"
-          placeholder="Search friends…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <input className="input" placeholder="Search friends…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
       {loading ? (
@@ -96,20 +84,12 @@ export default function FriendsPage() {
             <button key={f.id} className="card p-3 text-left hover:bg-zinc-50" onClick={() => setSelected(f)}>
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={(f.avatar_url || "/default-avatar.png") + "?t=1"}
-                  alt=""
-                  width={40}
-                  height={40}
-                  style={{ borderRadius: 9999, objectFit: "cover" }}
-                />
+                <img src={(f.avatar_url || "/default-avatar.png") + "?t=1"} alt="" width={40} height={40} style={{ borderRadius: 9999, objectFit: "cover" }} />
                 <div className="flex-1">
                   <div className="font-medium">{f.full_name || "Member"}</div>
                   <div className="muted text-xs">{f.id}</div>
                 </div>
-                <Link className="btn" href={`/messages?to=${f.id}`} onClick={(e) => e.stopPropagation()}>
-                  Message
-                </Link>
+                <Link className="btn" href={`/messages?to=${f.id}`} onClick={(e) => e.stopPropagation()}>Message</Link>
               </div>
             </button>
           ))}
@@ -124,17 +104,9 @@ export default function FriendsPage() {
             <button className="btn" onClick={() => setSelected(null)}>Close</button>
           </div>
           <p className="muted text-xs mt-1">Only you can see this.</p>
-          <textarea
-            className="input mt-3"
-            rows={5}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="How you met, impressions, reminders…"
-          />
+          <textarea className="input mt-3" rows={5} value={note} onChange={(e) => setNote(e.target.value)} placeholder="How you met, impressions, reminders…" />
           <div className="text-right mt-3">
-            <button className="btn btn-brand" onClick={saveNote} disabled={saving}>
-              {saving ? "Saving…" : "Save note"}
-            </button>
+            <button className="btn btn-brand" onClick={saveNote} disabled={saving}>{saving ? "Saving…" : "Save note"}</button>
           </div>
         </div>
       )}
