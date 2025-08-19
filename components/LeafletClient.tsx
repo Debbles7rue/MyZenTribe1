@@ -1,62 +1,41 @@
 // components/LeafletClient.tsx
-'use client';
+"use client";
 
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
-import type { LatLngLiteral } from 'leaflet';
-import L from 'leaflet';
+import React from "react";
+import { MapContainer as RLMapContainer, TileLayer } from "react-leaflet";
+import type { LatLngExpression, LatLngLiteral } from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-// Optional: marker icon fix (works with local leaflet assets)
-const DefaultIcon = L.icon({
-  iconUrl:
-    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl:
-    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl:
-    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
-type PickerProps = {
-  center: LatLngLiteral;
-  height?: number;
+type Props = {
+  center: LatLngLiteral | [number, number];
   zoom?: number;
-  marker?: LatLngLiteral | null;
-  onPick?: (pt: LatLngLiteral) => void;
+  height?: number; // px
+  children?: React.ReactNode;
 };
 
-function ClickToPick({ onPick }: { onPick?: (pt: LatLngLiteral) => void }) {
-  useMapEvents({
-    click(e) {
-      onPick?.(e.latlng);
-    },
-  });
-  return null;
-}
+export default function LeafletClient({ center, zoom = 13, height = 300, children }: Props) {
+  // Normalize center to LatLngExpression for react-leaflet
+  const centerExpr: LatLngExpression = Array.isArray(center)
+    ? (center as [number, number])
+    : ([center.lat, center.lng] as [number, number]);
 
-export default function LeafletClient({
-  center,
-  height = 380,
-  zoom = 10,
-  marker,
-  onPick,
-}: PickerProps) {
+  // Cast to any to avoid over-strict MapContainerProps mismatch in TS
+  const MapC: any = RLMapContainer as any;
+
   return (
     <div style={{ height }}>
-      <MapContainer
-        center={center}
+      <MapC
+        center={centerExpr}
         zoom={zoom}
         scrollWheelZoom
-        style={{ height: '100%', width: '100%', borderRadius: 12 }}
+        style={{ height: "100%", width: "100%" }}
       >
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {marker && <Marker position={marker} />}
-        <ClickToPick onPick={onPick} />
-      </MapContainer>
+        {children}
+      </MapC>
     </div>
   );
 }
