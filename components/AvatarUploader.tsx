@@ -28,7 +28,7 @@ export default function AvatarUploader({
 
   const src = useMemo(() => preview || value || "/default-avatar.png", [preview, value]);
 
-  async function pickFile() {
+  function pickFile() {
     inputRef.current?.click();
   }
 
@@ -39,13 +39,15 @@ export default function AvatarUploader({
     setBusy(true);
 
     try {
-      // Try to make a friendly, reasonably small JPEG
+      // Prefer a friendly, small JPEG (<=1024px). If decoding fails (e.g., HEIC),
+      // fall back to original file.
       const processed = await tryResizeToJpeg(file, 1024);
       const blob = processed?.blob ?? file;
-      const ext = processed?.ext ?? guessExt(file.type) ?? "bin";
       const contentType = processed?.type ?? (file.type || "application/octet-stream");
 
-      const path = `${userId}/avatar_${Date.now()}.${ext}`;
+      // Use a stable path so we can upsert & cache-bust the preview.
+      const path = `${userId}/avatar.jpg`;
+
       const { error: upErr } = await supabase.storage
         .from(bucket)
         .upload(path, blob, {
@@ -55,7 +57,7 @@ export default function AvatarUploader({
         });
       if (upErr) throw upErr;
 
-      // Get a public URL
+      // Public URL (store the clean URL in DB)
       const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
       const publicUrl = pub.publicUrl;
 
@@ -66,14 +68,14 @@ export default function AvatarUploader({
         .eq("id", userId);
       if (dbErr) throw dbErr;
 
-      // Update UI
-      setPreview(publicUrl);
-      onChange?.(publicUrl);
+      // Update UI; add ?t= to bust CDN/browser cache so the new photo shows instantly
+      const busted = `${publicUrl}?t=${Date.now()}`;
+      setPreview(busted);
+      onChange?.(busted);
     } catch (e: any) {
       setErr(e?.message || "Upload failed");
     } finally {
-      // clear the file input so selecting the same file again still triggers change
-      if (inputRef.current) inputRef.current.value = "";
+      if (inputRef.current) inputRef.current.value = ""; // allow same-file reselect
       setBusy(false);
     }
   }
@@ -102,14 +104,17 @@ export default function AvatarUploader({
           <button className="btn" onClick={pickFile} disabled={!userId || busy}>
             {busy ? "Uploading…" : "Change photo"}
           </button>
+
           <input
             ref={inputRef}
             type="file"
             accept="image/*"
-            capture="environment"
+            // IMPORTANT: no `capture` attribute → allows Photo Library on iOS/Android
+            multiple={false}
             hidden
             onChange={handleFile}
           />
+
           <div className="muted text-xs">
             JPG/PNG/WebP recommended. Large photos are auto-resized.
           </div>
@@ -125,8 +130,8 @@ export default function AvatarUploader({
  * Returns { blob, type, ext } on success, or null if decoding fails (e.g. HEIC on some browsers).
  */
 async function tryResizeToJpeg(file: File, maxDim: number): Promise<{ blob: Blob; type: string; ext: string } | null> {
-  // Some mobile photos (HEIC) may not decode; handle gracefully
   const canUseBitmap = "createImageBitmap" in window;
+
   try {
     const img = await fileToImage(file, canUseBitmap);
     const { canvas, mime } = drawToCanvas(img, maxDim);
@@ -151,7 +156,6 @@ function guessExt(mime?: string | null): string | null {
 }
 
 async function fileToImage(file: File, preferBitmap: boolean): Promise<HTMLImageElement> {
-  // Try createImageBitmap first (fast), then fallback to <img>
   if (preferBitmap) {
     try {
       const bmp = await createImageBitmap(file);
@@ -160,13 +164,12 @@ async function fileToImage(file: File, preferBitmap: boolean): Promise<HTMLImage
       canvas.height = bmp.height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(bmp, 0, 0);
-      // convert to <img> for downstream pipeline
       const img = new Image();
       img.src = canvas.toDataURL("image/jpeg", 0.95);
       await imgDecode(img);
       return img;
     } catch {
-      // fall through to <img> path
+      // fall through
     }
   }
   const url = URL.createObjectURL(file);
@@ -177,18 +180,15 @@ async function fileToImage(file: File, preferBitmap: boolean): Promise<HTMLImage
     await imgDecode(img);
     return img;
   } finally {
-    // Let the browser GC revoke when safe; doing it too early can break decode on some devices.
-    // URL.revokeObjectURL(url) // optional
+    // Avoid early revoke on iOS which can cancel decode
+    // URL.revokeObjectURL(url);
   }
 }
 
 function imgDecode(img: HTMLImageElement) {
   return new Promise<void>((resolve, reject) => {
     if ("decode" in img) {
-      (img as any)
-        .decode()
-        .then(() => resolve())
-        .catch(reject);
+      (img as any).decode().then(() => resolve()).catch(reject);
     } else {
       img.onload = () => resolve();
       img.onerror = () => reject(new Error("Image load failed"));
