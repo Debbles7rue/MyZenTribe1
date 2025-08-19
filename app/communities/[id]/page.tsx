@@ -9,8 +9,12 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
+// Lazy client-only components
 const AddPinModal = dynamic(() => import("@/components/community/AddPinModal"), { ssr: false });
 const MapExplorerClient = dynamic(() => import("@/components/community/MapExplorerClient"), { ssr: false });
+
+// 🔒 Import the MapPin type used by MapExplorerClient to ensure compile-time compatibility
+import type { MapPin as ExplorerMapPin } from "@/components/community/MapExplorerClient";
 
 type Community = {
   id: string;
@@ -23,23 +27,8 @@ type Community = {
   created_by?: string | null;
 };
 
-// NOTE: Add the two fields required by the map component.
-type MapPin = {
-  id: string;
-  community_id: string | null;
-  name: string | null;
-  lat: number | null;
-  lng: number | null;
-  address: string | null;
-  contact_phone: string | null;
-  contact_email: string | null;
-  website_url: string | null;
-  categories?: string[] | null;
-
-  // ✅ Required by MapExplorerClient
-  day_of_week: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  time_local: string; // e.g., "6:30 PM" (empty string is acceptable if unknown)
-};
+// ✅ Use the exact MapPin type expected by MapExplorerClient
+type MapPin = ExplorerMapPin;
 
 type MapCommunity = { id: string; title: string; category: string | null };
 
@@ -64,8 +53,12 @@ function numOrNull(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function defaultDayOfWeek(): 0 | 1 | 2 | 3 | 4 | 5 | 6 {
-  return (new Date().getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 0;
+// Convert possible inputs (number/string/undefined) into the string type the map expects.
+// If no value, we default to today's weekday as a string ("0".."6").
+function toDayOfWeekString(input?: unknown): string {
+  if (typeof input === "string") return input;
+  if (typeof input === "number" && Number.isFinite(input)) return String(input);
+  return String(new Date().getDay()); // "0".."6"
 }
 
 function toPin(communityId: string, circle: any): MapPin {
@@ -80,12 +73,9 @@ function toPin(communityId: string, circle: any): MapPin {
     contact_email: circle.contact_email ?? null,
     website_url: circle.website_url ?? null,
     categories: circle.categories ?? null,
-    // ✅ Provide required fields; use sensible defaults if not present
-    day_of_week:
-      (typeof circle.day_of_week === "number" &&
-        [0, 1, 2, 3, 4, 5, 6].includes(circle.day_of_week)) ?
-        (circle.day_of_week as 0 | 1 | 2 | 3 | 4 | 5 | 6) :
-        defaultDayOfWeek(),
+
+    // ✅ Match MapExplorerClient: day_of_week is a string; time_local is a string
+    day_of_week: toDayOfWeekString(circle.day_of_week),
     time_local: typeof circle.time_local === "string" ? circle.time_local : "",
   };
 }
@@ -145,6 +135,7 @@ export default function CommunityPage() {
       }
       if (alive) setIsAdmin(admin);
 
+      // Include day_of_week and time_local in case they exist on the table; we still default if missing.
       const { data: mapped, error: mErr } = await supabase
         .from("community_circle_communities")
         .select(
@@ -155,8 +146,7 @@ export default function CommunityPage() {
 
       if (mErr) console.error(mErr);
 
-      const mapPins: MapPin[] =
-        (mapped ?? []).map((r: any) => toPin(communityId, r.circle)) ?? [];
+      const mapPins: MapPin[] = (mapped ?? []).map((r: any) => toPin(communityId, r.circle));
       if (alive) setPins(mapPins);
 
       if (alive) setLoading(false);
@@ -336,7 +326,7 @@ export default function CommunityPage() {
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
                     ]}
-                    pins={pins} // ✅ Now each pin includes day_of_week & time_local
+                    pins={pins} // ✅ MapPin[] where day_of_week is a string
                     communitiesById={mapCommunities}
                     height={340}
                   />
@@ -372,7 +362,7 @@ export default function CommunityPage() {
             <div className="modal-panel">
               <h3 className="h3 mb-2">Edit community</h3>
 
-              {/* SCROLLABLE BODY (new) */}
+              {/* SCROLLABLE BODY */}
               <div className="modal-body">
                 <div className="form-grid">
                   <div className="span-2 field">
