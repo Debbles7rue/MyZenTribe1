@@ -1,4 +1,4 @@
-
+// components/SiteHeader.tsx
 "use client";
 
 import Link from "next/link";
@@ -34,11 +34,14 @@ export default function SiteHeader() {
           <Nav href="/communities">Communities</Nav>
           <Nav href="/meditation">Meditation room</Nav>
           <Nav href="/profile">Profile</Nav>
+          <Nav href="/business">Business</Nav>
           <Nav href="/karma">Karma Corner</Nav>
         </nav>
 
         <div className="auth-area">
-          {/* No email or "signed in" chip to keep UI clean */}
+          <Link href="/messages" className={`btn ${pathname === "/messages" ? "btn-brand" : ""}`}>
+            Messages
+          </Link>
           <button className="btn" onClick={signOut} aria-label="Sign out">
             Sign out
           </button>
