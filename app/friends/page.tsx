@@ -1,9 +1,3 @@
-// app/friends/page.tsx
-// ✅ Prevent static prerender on Netlify build:
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -33,34 +27,21 @@ export default function FriendsPage() {
         .from("friendships")
         .select("a,b")
         .or(`a.eq.${userId},b.eq.${userId}`);
-      if (error) {
-        setLoading(false);
-        return;
-      }
-      const ids = [...new Set((pairs ?? []).map((p) => (p.a === userId ? p.b : p.a)))];
-      if (!ids.length) {
-        setFriends([]);
-        setLoading(false);
-        return;
-      }
+      if (error) { setLoading(false); return; }
+      const ids = [...new Set((pairs ?? []).map(p => (p.a === userId ? p.b : p.a)))];
+      if (!ids.length) { setFriends([]); setLoading(false); return; }
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
         .in("id", ids);
-      setFriends(
-        (profiles ?? []).map((p) => ({
-          id: p.id,
-          full_name: p.full_name,
-          avatar_url: p.avatar_url,
-        }))
-      );
+      setFriends((profiles ?? []).map(p => ({ id: p.id, full_name: p.full_name, avatar_url: p.avatar_url })));
       setLoading(false);
     })();
   }, [userId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? friends.filter((f) => (f.full_name ?? "").toLowerCase().includes(q)) : friends;
+    return q ? friends.filter(f => (f.full_name ?? "").toLowerCase().includes(q)) : friends;
   }, [friends, query]);
 
   useEffect(() => {
@@ -111,12 +92,8 @@ export default function FriendsPage() {
         <div className="muted mt-4">Loading…</div>
       ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {filtered.map((f) => (
-            <button
-              key={f.id}
-              className="card p-3 text-left hover:bg-zinc-50"
-              onClick={() => setSelected(f)}
-            >
+          {filtered.map(f => (
+            <button key={f.id} className="card p-3 text-left hover:bg-zinc-50" onClick={() => setSelected(f)}>
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -130,11 +107,7 @@ export default function FriendsPage() {
                   <div className="font-medium">{f.full_name || "Member"}</div>
                   <div className="muted text-xs">{f.id}</div>
                 </div>
-                <Link
-                  className="btn"
-                  href={`/messages?to=${f.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <Link className="btn" href={`/messages?to=${f.id}`} onClick={(e) => e.stopPropagation()}>
                   Message
                 </Link>
               </div>
@@ -147,12 +120,8 @@ export default function FriendsPage() {
       {selected && (
         <div className="mt-6 card p-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">
-              Private note about {selected.full_name || "this friend"}
-            </h2>
-            <button className="btn" onClick={() => setSelected(null)}>
-              Close
-            </button>
+            <h2 className="font-semibold">Private note about {selected.full_name || "this friend"}</h2>
+            <button className="btn" onClick={() => setSelected(null)}>Close</button>
           </div>
           <p className="muted text-xs mt-1">Only you can see this.</p>
           <textarea
