@@ -3,30 +3,16 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Props = {
-  userId: string | null;
-  embed?: boolean;
-  /** Distinguish where the invite is coming from; changes the URL so QR codes differ */
-  context?: "personal" | "business";
-  /** QR code size in pixels (square). Defaults to 160. Clamped between 96 and 300. */
-  qrSize?: number;
-};
+type Props = { userId: string | null; embed?: boolean };
 
-export default function ProfileInviteQR({
-  userId,
-  embed = false,
-  context = "personal",
-  qrSize = 160,
-}: Props) {
+export default function ProfileInviteQR({ userId, embed = false }: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [qrOk, setQrOk] = useState(true);
 
-  // clamp size (avoid extremes / layout breaks)
-  const size = Math.max(96, Math.min(qrSize || 160, 300));
-
-  // Load or create the permanent invite token via RPC
+  // Fetch (or create) a reusable invite token
   useEffect(() => {
     (async () => {
       if (!userId) return;
@@ -39,57 +25,82 @@ export default function ProfileInviteQR({
     })();
   }, [userId]);
 
+  // One canonical link used for BOTH QR and copy
   const inviteUrl = useMemo(() => {
     if (!token || typeof window === "undefined") return "";
-    const base = `${window.location.origin}/invite/${token}`;
-    const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}src=${encodeURIComponent(context)}`;
-  }, [token, context]);
+    // exact same link everywhere; no extra params
+    return new URL(`/invite/${token}`, window.location.origin).toString();
+  }, [token]);
 
-  const qrUrl = inviteUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(inviteUrl)}`
-    : "";
+  // Small QR, cache-busted so CDNs never serve an older data URL
+  const qrSize = 180;
+  const qrUrl = useMemo(() => {
+    if (!inviteUrl) return "";
+    return `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(
+      inviteUrl
+    )}&_cb=${encodeURIComponent(token || "")}`;
+  }, [inviteUrl, token]);
 
   const emailValid = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), [email]);
 
   const sendEmail = useCallback(() => {
     if (!inviteUrl || !emailValid) return;
-    const label = context === "business" ? " (Business)" : "";
-    const subject = encodeURIComponent(`Join me on MyZenTribe${label}`);
+    const subject = encodeURIComponent("Join me on MyZenTribe");
     const body = encodeURIComponent(`Hi,\n\nHere is my invite link:\n${inviteUrl}\n\nSee you there!`);
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-  }, [email, emailValid, inviteUrl, context]);
+  }, [email, emailValid, inviteUrl]);
+
+  const openLink = useCallback(() => {
+    if (!inviteUrl) return;
+    window.open(inviteUrl, "_blank", "noopener,noreferrer");
+  }, [inviteUrl]);
 
   const Content = (
-    <div className="stack" style={{ gap: 8 }}>
+    <div className="stack" style={{ gap: 10 }}>
       <div className="label" style={{ fontWeight: 600 }}>
         Invite friends <span className="muted text-xs">v2</span>
       </div>
 
-      {/* QR FIRST */}
-      {inviteUrl && (
+      {/* QR */}
+      {inviteUrl ? (
         <div className="card p-3" style={{ textAlign: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qrUrl}
             alt="Invite QR"
-            width={size}
-            height={size}
+            width={qrSize}
+            height={qrSize}
             style={{
-              width: size,
-              height: size,
+              width: qrSize,
+              height: qrSize,
               margin: "0 auto",
               borderRadius: 12,
               border: "1px solid #eee",
+              display: qrOk ? "block" : "none",
             }}
+            onError={() => setQrOk(false)}
           />
+          {!qrOk && (
+            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+              (QR preview unavailable; use the link or Open button below)
+            </div>
+          )}
+
           <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             Scan the QR or share your link.
           </div>
+
+          <div className="right mt-2">
+            <button className="btn" onClick={openLink} disabled={!inviteUrl}>
+              Open link
+            </button>
+          </div>
         </div>
+      ) : (
+        <div className="muted">Generating your invite…</div>
       )}
 
-      {/* Link + copy */}
+      {/* Link + copy (same exact URL the QR encodes) */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           className="input"
@@ -107,7 +118,7 @@ export default function ProfileInviteQR({
         </button>
       </div>
 
-      {/* Email input + send (now AFTER QR) */}
+      {/* Email input + send */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           className="input"
@@ -126,7 +137,11 @@ export default function ProfileInviteQR({
         </button>
       </div>
 
-      {err && <p className="muted" style={{ color: "#b91c1c" }}>{err}</p>}
+      {err && (
+        <p className="muted" style={{ color: "#b91c1c" }}>
+          {err}
+        </p>
+      )}
     </div>
   );
 
