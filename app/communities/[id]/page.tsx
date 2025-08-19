@@ -9,14 +9,8 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
-const AddPinModal = dynamic(
-  () => import("@/components/community/AddPinModal"),
-  { ssr: false }
-);
-const MapExplorerClient = dynamic(
-  () => import("@/components/community/MapExplorerClient"),
-  { ssr: false }
-);
+const AddPinModal = dynamic(() => import("@/components/community/AddPinModal"), { ssr: false });
+const MapExplorerClient = dynamic(() => import("@/components/community/MapExplorerClient"), { ssr: false });
 
 type Community = {
   id: string;
@@ -29,6 +23,7 @@ type Community = {
   created_by?: string | null;
 };
 
+// NOTE: Add the two fields required by the map component.
 type MapPin = {
   id: string;
   community_id: string | null;
@@ -40,14 +35,60 @@ type MapPin = {
   contact_email: string | null;
   website_url: string | null;
   categories?: string[] | null;
+
+  // ✅ Required by MapExplorerClient
+  day_of_week: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  time_local: string; // e.g., "6:30 PM" (empty string is acceptable if unknown)
 };
 
 type MapCommunity = { id: string; title: string; category: string | null };
 
 const CATEGORIES = [
-  "Wellness","Meditation","Yoga","Breathwork","Sound Baths","Drum Circles",
-  "Arts & Crafts","Nature/Outdoors","Parenting","Recovery/Support","Local Events","Other",
+  "Wellness",
+  "Meditation",
+  "Yoga",
+  "Breathwork",
+  "Sound Baths",
+  "Drum Circles",
+  "Arts & Crafts",
+  "Nature/Outdoors",
+  "Parenting",
+  "Recovery/Support",
+  "Local Events",
+  "Other",
 ];
+
+// Helpers
+function numOrNull(v: any): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function defaultDayOfWeek(): 0 | 1 | 2 | 3 | 4 | 5 | 6 {
+  return (new Date().getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 0;
+}
+
+function toPin(communityId: string, circle: any): MapPin {
+  return {
+    id: String(circle.id),
+    community_id: communityId,
+    name: circle.name ?? null,
+    lat: numOrNull(circle.lat),
+    lng: numOrNull(circle.lng),
+    address: circle.address ?? null,
+    contact_phone: circle.contact_phone ?? null,
+    contact_email: circle.contact_email ?? null,
+    website_url: circle.website_url ?? null,
+    categories: circle.categories ?? null,
+    // ✅ Provide required fields; use sensible defaults if not present
+    day_of_week:
+      (typeof circle.day_of_week === "number" &&
+        [0, 1, 2, 3, 4, 5, 6].includes(circle.day_of_week)) ?
+        (circle.day_of_week as 0 | 1 | 2 | 3 | 4 | 5 | 6) :
+        defaultDayOfWeek(),
+    time_local: typeof circle.time_local === "string" ? circle.time_local : "",
+  };
+}
 
 export default function CommunityPage() {
   const params = useParams<{ id: string }>();
@@ -107,22 +148,22 @@ export default function CommunityPage() {
       const { data: mapped, error: mErr } = await supabase
         .from("community_circle_communities")
         .select(
-          "circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories)"
+          "circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories,day_of_week,time_local)"
         )
         .eq("community_id", communityId)
         .limit(2000);
 
       if (mErr) console.error(mErr);
+
       const mapPins: MapPin[] =
-        (mapped ?? []).map((r: any) => ({
-          community_id: communityId,
-          ...r.circle,
-        })) ?? [];
+        (mapped ?? []).map((r: any) => toPin(communityId, r.circle)) ?? [];
       if (alive) setPins(mapPins);
 
       if (alive) setLoading(false);
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [communityId, router]);
 
   useEffect(() => {
@@ -194,7 +235,9 @@ export default function CommunityPage() {
         <div className="container-app">
           <div className="header-bar community-header">
             <div className="flex items-center gap-2">
-              <button className="btn" onClick={() => router.push("/communities")}>Back</button>
+              <button className="btn" onClick={() => router.push("/communities")}>
+                Back
+              </button>
               <span className="muted">Created {created}</span>
             </div>
             <div className="controls">
@@ -203,7 +246,9 @@ export default function CommunityPage() {
                   Edit community
                 </button>
               )}
-              <Link href="/communities/browse" className="btn">Browse communities</Link>
+              <Link href="/communities/browse" className="btn">
+                Browse communities
+              </Link>
             </div>
           </div>
 
@@ -222,10 +267,30 @@ export default function CommunityPage() {
           </div>
 
           <div className="tabbar">
-            <button onClick={() => setTab("discussion")} className={`btn ${tab === "discussion" ? "btn-active" : ""}`}>Discussion</button>
-            <button onClick={() => setTab("happening")}  className={`btn ${tab === "happening"  ? "btn-active" : ""}`}>What’s happening</button>
-            <button onClick={() => setTab("about")}      className={`btn ${tab === "about"      ? "btn-active" : ""}`}>About</button>
-            <button onClick={() => setTab("pins")}       className={`btn ${tab === "pins"       ? "btn-active" : ""}`}>Pins</button>
+            <button
+              onClick={() => setTab("discussion")}
+              className={`btn ${tab === "discussion" ? "btn-active" : ""}`}
+            >
+              Discussion
+            </button>
+            <button
+              onClick={() => setTab("happening")}
+              className={`btn ${tab === "happening" ? "btn-active" : ""}`}
+            >
+              What’s happening
+            </button>
+            <button
+              onClick={() => setTab("about")}
+              className={`btn ${tab === "about" ? "btn-active" : ""}`}
+            >
+              About
+            </button>
+            <button
+              onClick={() => setTab("pins")}
+              className={`btn ${tab === "pins" ? "btn-active" : ""}`}
+            >
+              Pins
+            </button>
           </div>
 
           <section className="card card-lg">
@@ -271,7 +336,7 @@ export default function CommunityPage() {
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
                     ]}
-                    pins={pins}
+                    pins={pins} // ✅ Now each pin includes day_of_week & time_local
                     communitiesById={mapCommunities}
                     height={340}
                   />
@@ -312,27 +377,47 @@ export default function CommunityPage() {
                 <div className="form-grid">
                   <div className="span-2 field">
                     <div className="label">Title</div>
-                    <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                    <input
+                      className="input"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                    />
                   </div>
 
                   <div className="field">
                     <div className="label">Category</div>
-                    <select className="input" value={editCat} onChange={(e) => setEditCat(e.target.value)}>
+                    <select
+                      className="input"
+                      value={editCat}
+                      onChange={(e) => setEditCat(e.target.value)}
+                    >
                       <option value="">General</option>
                       {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
                       ))}
                     </select>
                   </div>
 
                   <div className="field">
                     <div className="label">ZIP</div>
-                    <input className="input" value={editZip} maxLength={5} onChange={(e) => setEditZip(e.target.value)} />
+                    <input
+                      className="input"
+                      value={editZip}
+                      maxLength={5}
+                      onChange={(e) => setEditZip(e.target.value)}
+                    />
                   </div>
 
                   <div className="span-2 field">
                     <div className="label">About</div>
-                    <textarea className="input" rows={4} value={editAbout} onChange={(e) => setEditAbout(e.target.value)} />
+                    <textarea
+                      className="input"
+                      rows={4}
+                      value={editAbout}
+                      onChange={(e) => setEditAbout(e.target.value)}
+                    />
                   </div>
 
                   <div className="span-2">
@@ -348,8 +433,12 @@ export default function CommunityPage() {
 
               {/* STICKY FOOTER */}
               <div className="modal-footer">
-                <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
-                <button className="btn btn-brand" onClick={saveEdits}>Save</button>
+                <button className="btn" onClick={() => setEditing(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-brand" onClick={saveEdits}>
+                  Save
+                </button>
               </div>
             </div>
           </div>
@@ -358,17 +447,24 @@ export default function CommunityPage() {
 
       {showAddPin && (
         <AddPinModal
-          communities={[{ id: community.id, title: community.title, category: community.category, zip: community.zip }]}
+          communities={[
+            {
+              id: community.id,
+              title: community.title,
+              category: community.category,
+              zip: community.zip,
+            },
+          ]}
           onClose={() => setShowAddPin(false)}
           onSaved={async () => {
             setShowAddPin(false);
             const { data: mapped } = await supabase
               .from("community_circle_communities")
-              .select("circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories)")
+              .select(
+                "circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories,day_of_week,time_local)"
+              )
               .eq("community_id", communityId);
-            setPins(
-              (mapped ?? []).map((r: any) => ({ community_id: communityId, ...r.circle }))
-            );
+            setPins((mapped ?? []).map((r: any) => toPin(communityId, r.circle)));
           }}
         />
       )}
