@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -12,9 +13,9 @@ type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  location?: string | null;              // legacy
-  location_text?: string | null;         // preferred
-  location_is_public?: boolean | null;   // preferred
+  location?: string | null;
+  location_text?: string | null;
+  location_is_public?: boolean | null;
   show_mutuals: boolean | null;
 };
 
@@ -38,6 +39,7 @@ export default function ProfilePage() {
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editPersonal, setEditPersonal] = useState(false);
+  const [friendsCount, setFriendsCount] = useState<number>(0);
   const isDesktop = useIsDesktop(1024);
 
   const [p, setP] = useState<Profile>({
@@ -89,6 +91,18 @@ export default function ProfilePage() {
       }
     };
     load();
+  }, [userId]);
+
+  // Live friends count from friendships (undirected)
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { count, error } = await supabase
+        .from("friendships")
+        .select("a", { count: "exact", head: true })
+        .or(`a.eq.${userId},b.eq.${userId}`);
+      if (!error && typeof count === "number") setFriendsCount(count);
+    })();
   }, [userId]);
 
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
@@ -229,7 +243,7 @@ export default function ProfilePage() {
                 >
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
-                  <span className="kpi"><strong>0</strong> Friends</span>
+                  <span className="kpi"><strong>{friendsCount}</strong> Friends</span>
                 </div>
 
                 {/* QR above invite inputs */}
