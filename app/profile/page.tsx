@@ -1,4 +1,3 @@
-// app/profile/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -19,7 +18,6 @@ type Profile = {
   show_mutuals: boolean | null;
 };
 
-// simple media hook so we don’t depend on Tailwind breakpoints
 function useIsDesktop(minWidth = 1024) {
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
   useEffect(() => {
@@ -53,24 +51,17 @@ export default function ProfilePage() {
     show_mutuals: true,
   });
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-  }, []);
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, []);
 
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle();
+        const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
         if (error) throw error;
-
         if (data) {
-          const normalized: Profile = {
+          setP({
             id: data.id,
             full_name: data.full_name ?? "",
             avatar_url: data.avatar_url ?? "",
@@ -79,29 +70,19 @@ export default function ProfilePage() {
             location_text: (data.location_text ?? data.location) ?? "",
             location_is_public: data.location_is_public ?? false,
             show_mutuals: data.show_mutuals ?? true,
-          };
-          setP(normalized);
-        } else {
-          setP(prev => ({ ...prev, id: userId }));
-        }
-      } catch {
-        setTableMissing(true);
-      } finally {
-        setLoading(false);
-      }
+          });
+        } else setP(prev => ({ ...prev, id: userId }));
+      } catch { setTableMissing(true); }
+      finally { setLoading(false); }
     };
     load();
   }, [userId]);
 
-  // Live friends count from friendships (undirected)
   useEffect(() => {
     if (!userId) return;
     (async () => {
-      const { count, error } = await supabase
-        .from("friendships")
-        .select("a", { count: "exact", head: true })
-        .or(`a.eq.${userId},b.eq.${userId}`);
-      if (!error && typeof count === "number") setFriendsCount(count);
+      const { count } = await supabase.from("friendships").select("a", { count: "exact", head: true }).or(`a.eq.${userId},b.eq.${userId}`);
+      if (typeof count === "number") setFriendsCount(count);
     })();
   }, [userId]);
 
@@ -111,38 +92,21 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
-      const res = await fetch("/profile/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: p.full_name?.trim() || null,
-          bio: p.bio?.trim() || null,
-          location_text: p.location_text?.trim() || null,
-          location_is_public: !!p.location_is_public,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Could not save profile");
-
-      const up = await supabase
-        .from("profiles")
-        .update({
-          avatar_url: p.avatar_url?.trim() || null,
-          show_mutuals: !!p.show_mutuals,
-        })
-        .eq("id", userId);
-      if (up.error) throw up.error;
-
+      const { error } = await supabase.from("profiles").update({
+        full_name: p.full_name?.trim() || null,
+        bio: p.bio?.trim() || null,
+        location_text: p.location_text?.trim() || null,
+        location_is_public: !!p.location_is_public,
+        avatar_url: p.avatar_url?.trim() || null,
+        show_mutuals: !!p.show_mutuals,
+      }).eq("id", userId);
+      if (error) throw error;
       alert("Saved!");
       setEditPersonal(false);
-    } catch (e: any) {
-      alert(e.message || "Save failed");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e: any) { alert(e.message || "Save failed"); }
+    finally { setSaving(false); }
   };
 
-  // save avatar immediately on change
   async function onAvatarChange(url: string) {
     setP(prev => ({ ...prev, avatar_url: url }));
     if (!userId) return;
@@ -151,31 +115,20 @@ export default function ProfilePage() {
   }
 
   const QuickActions = (
-    <div
-      className="quick-actions"
-      style={{
-        display: "grid",
-        gap: 12,
-        gridTemplateColumns: isDesktop ? "1fr" : "1fr",
-      }}
-    >
+    <div className="quick-actions" style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
       <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row">
-          <h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3>
-        </div>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Capture daily gratitude. Prompts and a 30-day healing journal live on the full page.
-        </p>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Friends</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Browse, search, add private notes.</p>
+        <a className="btn mt-2" href="/friends">Open</a>
+      </section>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Capture daily gratitude.</p>
         <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
       </section>
-
       <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row">
-          <h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3>
-        </div>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Private chat with friends and your community.
-        </p>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Private chat with friends.</p>
         <a className="btn mt-2" href="/messages">Open</a>
       </section>
     </div>
@@ -189,10 +142,9 @@ export default function ProfilePage() {
             <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
             <div className="controls flex items-center gap-2">
               <Link href="/business" className="btn">Business profile</Link>
+              <Link href="/friends" className="btn">Friends</Link>
               <Link href="/messages" className="btn">Messages</Link>
-              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
-                {editPersonal ? "Done" : "Edit"}
-              </button>
+              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>{editPersonal ? "Done" : "Edit"}</button>
             </div>
           </div>
 
@@ -206,65 +158,29 @@ export default function ProfilePage() {
           )}
 
           {/* Identity header */}
-          <div
-            className="card p-3 mb-3 profile-card"
-            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
-          >
-            <div
-              className="profile-header"
-              style={{
-                display: "flex",
-                flexDirection: isDesktop ? "row" : "column",
-                gap: isDesktop ? 18 : 12,
-                alignItems: isDesktop ? "flex-start" : "center",
-                textAlign: isDesktop ? "left" : "center",
-              }}
-            >
+          <div className="card p-3 mb-3 profile-card" style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}>
+            <div className="profile-header" style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", gap: isDesktop ? 18 : 12, alignItems: isDesktop ? "flex-start" : "center", textAlign: isDesktop ? "left" : "center" }}>
               <div className="shrink-0">
-                <AvatarUploader
-                  userId={userId}
-                  value={p.avatar_url}
-                  onChange={onAvatarChange}
-                  label="Profile photo"
-                  size={160}
-                />
+                <AvatarUploader userId={userId} value={p.avatar_url} onChange={onAvatarChange} label="Profile photo" size={160} />
               </div>
-
               <div className="profile-heading" style={{ minWidth: 0, width: "100%" }}>
                 <div className="profile-name">{displayName}</div>
-                <div
-                  className="kpis"
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    justifyContent: isDesktop ? "flex-start" : "center",
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div className="kpis" style={{ display: "flex", gap: 12, justifyContent: isDesktop ? "flex-start" : "center", flexWrap: "wrap" }}>
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
                   <span className="kpi"><strong>{friendsCount}</strong> Friends</span>
                 </div>
 
-                {/* QR above invite inputs */}
+                {/* Invite dropdown (compact) */}
                 <div style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
-                  <ProfileInviteQR userId={userId} embed context="personal" qrSize={140} />
+                  <ProfileInviteQR userId={userId} embed qrSize={180} />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Two-column layout via JS (no Tailwind breakpoints) */}
-          <div
-            className="columns"
-            style={{
-              display: "grid",
-              gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr",
-              gap: 16,
-              alignItems: "start",
-            }}
-          >
-            {/* LEFT: quick actions (mobile only), about, feed */}
+          {/* Columns */}
+          <div className="columns" style={{ display: "grid", gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr", gap: 16, alignItems: "start" }}>
             <div className="stack">
               {!isDesktop && QuickActions}
 
@@ -272,68 +188,31 @@ export default function ProfilePage() {
                 <section className="card p-3">
                   <h2 className="section-title">Edit your info</h2>
                   <div className="stack">
-                    <label className="field">
-                      <span className="label">Name</span>
-                      <input
-                        className="input"
-                        value={p.full_name ?? ""}
-                        onChange={(e) => setP({ ...p, full_name: e.target.value })}
-                      />
+                    <label className="field"><span className="label">Name</span>
+                      <input className="input" value={p.full_name ?? ""} onChange={(e) => setP({ ...p, full_name: e.target.value })} />
                     </label>
 
-                    <div
-                      className="grid"
-                      style={{
-                        display: "grid",
-                        gap: 12,
-                        gridTemplateColumns: isDesktop ? "1fr auto" : "1fr",
-                      }}
-                    >
-                      <label className="field">
-                        <span className="label">Location</span>
-                        <input
-                          className="input"
-                          value={p.location_text ?? ""}
-                          onChange={(e) => setP({ ...p, location_text: e.target.value })}
-                          placeholder="City, State (for example, Greenville, TX)"
-                        />
+                    <div className="grid" style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}>
+                      <label className="field"><span className="label">Location</span>
+                        <input className="input" value={p.location_text ?? ""} onChange={(e) => setP({ ...p, location_text: e.target.value })} placeholder="City, State" />
                       </label>
-                      <label
-                        className="flex items-center gap-2 text-sm"
-                        style={{ display: "flex", alignItems: "center", gap: 8 }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!!p.location_is_public}
-                          onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
-                        />
+                      <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input type="checkbox" checked={!!p.location_is_public} onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} />
                         Show on public profile
                       </label>
                     </div>
 
-                    <label className="field">
-                      <span className="label">Bio</span>
-                      <textarea
-                        className="input"
-                        rows={4}
-                        value={p.bio ?? ""}
-                        onChange={(e) => setP({ ...p, bio: e.target.value })}
-                      />
+                    <label className="field"><span className="label">Bio</span>
+                      <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e) => setP({ ...p, bio: e.target.value })} />
                     </label>
 
                     <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={!!p.show_mutuals}
-                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
-                      />
+                      <input type="checkbox" checked={!!p.show_mutuals} onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} />
                       <span>Show mutual friends</span>
                     </label>
 
                     <div className="right" style={{ textAlign: "right" }}>
-                      <button className="btn btn-brand" onClick={save} disabled={saving}>
-                        {saving ? "Saving..." : "Save"}
-                      </button>
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
                     </div>
                   </div>
                 </section>
@@ -341,17 +220,9 @@ export default function ProfilePage() {
                 <section className="card p-3">
                   <h2 className="section-title">About</h2>
                   <div className="stack">
-                    {p.location_is_public && p.location_text ? (
-                      <div><strong>Location:</strong> {p.location_text}</div>
-                    ) : null}
-                    {p.bio ? (
-                      <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
-                    ) : (
-                      <div className="muted">Add a bio and location using Edit.</div>
-                    )}
-                    {!p.location_is_public && p.location_text ? (
-                      <div className="muted text-sm">(Location is private)</div>
-                    ) : null}
+                    {p.location_is_public && p.location_text ? (<div><strong>Location:</strong> {p.location_text}</div>) : null}
+                    {p.bio ? (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>) : (<div className="muted">Add a bio and location using Edit.</div>)}
+                    {!p.location_is_public && p.location_text ? (<div className="muted text-sm">(Location is private)</div>) : null}
                   </div>
                 </section>
               )}
@@ -359,7 +230,6 @@ export default function ProfilePage() {
               <PhotosFeed userId={userId} />
             </div>
 
-            {/* RIGHT: quick actions (desktop) */}
             {isDesktop && <div className="stack">{QuickActions}</div>}
           </div>
 
