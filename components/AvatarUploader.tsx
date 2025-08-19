@@ -39,15 +39,13 @@ export default function AvatarUploader({
     setBusy(true);
 
     try {
-      // Prefer a friendly, small JPEG (<=1024px). If decoding fails (e.g., HEIC),
-      // fall back to original file.
+      // Resize to max 1024px on the long edge, encode JPEG
       const processed = await tryResizeToJpeg(file, 1024);
       const blob = processed?.blob ?? file;
+      const ext = processed?.ext ?? guessExt(file.type) ?? "bin";
       const contentType = processed?.type ?? (file.type || "application/octet-stream");
 
-      // Use a stable path so we can upsert & cache-bust the preview.
-      const path = `${userId}/avatar.jpg`;
-
+      const path = `${userId}/avatar_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from(bucket)
         .upload(path, blob, {
@@ -57,25 +55,24 @@ export default function AvatarUploader({
         });
       if (upErr) throw upErr;
 
-      // Public URL (store the clean URL in DB)
+      // Public URL
       const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
       const publicUrl = pub.publicUrl;
 
-      // Save to profiles.avatar_url immediately so it persists
+      // Persist immediately
       const { error: dbErr } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
         .eq("id", userId);
       if (dbErr) throw dbErr;
 
-      // Update UI; add ?t= to bust CDN/browser cache so the new photo shows instantly
-      const busted = `${publicUrl}?t=${Date.now()}`;
-      setPreview(busted);
-      onChange?.(busted);
+      // Update UI
+      setPreview(publicUrl);
+      onChange?.(publicUrl);
     } catch (e: any) {
       setErr(e?.message || "Upload failed");
     } finally {
-      if (inputRef.current) inputRef.current.value = ""; // allow same-file reselect
+      if (inputRef.current) inputRef.current.value = "";
       setBusy(false);
     }
   }
@@ -104,19 +101,16 @@ export default function AvatarUploader({
           <button className="btn" onClick={pickFile} disabled={!userId || busy}>
             {busy ? "Uploading…" : "Change photo"}
           </button>
-
           <input
             ref={inputRef}
             type="file"
             accept="image/*"
-            // IMPORTANT: no `capture` attribute → allows Photo Library on iOS/Android
-            multiple={false}
+            // Important: no `capture` so mobile can pick Camera OR Photo Library
             hidden
             onChange={handleFile}
           />
-
           <div className="muted text-xs">
-            JPG/PNG/WebP recommended. Large photos are auto-resized.
+            JPG/PNG/WebP supported. Large photos are auto-resized.
           </div>
           {err && <div className="text-xs" style={{ color: "#b91c1c" }}>{err}</div>}
         </div>
@@ -126,21 +120,18 @@ export default function AvatarUploader({
 }
 
 /**
- * Attempts to decode and resize an image to JPEG.
- * Returns { blob, type, ext } on success, or null if decoding fails (e.g. HEIC on some browsers).
+ * Resize to maxDim and encode JPEG. Returns { blob, type, ext } or null if we can’t decode (e.g., some HEIC).
  */
 async function tryResizeToJpeg(file: File, maxDim: number): Promise<{ blob: Blob; type: string; ext: string } | null> {
-  const canUseBitmap = "createImageBitmap" in window;
-
   try {
-    const img = await fileToImage(file, canUseBitmap);
+    const img = await fileToImage(file);
     const { canvas, mime } = drawToCanvas(img, maxDim);
     const blob: Blob = await new Promise((resolve, reject) =>
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Encode failed"))), mime, 0.85)
     );
     return { blob, type: mime, ext: "jpg" };
   } catch {
-    // Fallback: upload original file as-is (may be HEIC; upload succeeds even if browser can't preview)
+    // Fallback: upload the original (may be HEIC; upload still works even if we can’t preview)
     return null;
   }
 }
@@ -155,15 +146,16 @@ function guessExt(mime?: string | null): string | null {
   return null;
 }
 
-async function fileToImage(file: File, preferBitmap: boolean): Promise<HTMLImageElement> {
-  if (preferBitmap) {
+async function fileToImage(file: File): Promise<HTMLImageElement> {
+  // Try createImageBitmap (fast path). If it fails (e.g., unsupported HEIC), fallback to <img>.
+  if ("createImageBitmap" in window) {
     try {
-      const bmp = await createImageBitmap(file);
+      const bmp = await createImageBitmap(file as any);
       const canvas = document.createElement("canvas");
-      canvas.width = bmp.width;
-      canvas.height = bmp.height;
+      canvas.width = (bmp as any).width;
+      canvas.height = (bmp as any).height;
       const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(bmp, 0, 0);
+      ctx.drawImage(bmp as any, 0, 0);
       const img = new Image();
       img.src = canvas.toDataURL("image/jpeg", 0.95);
       await imgDecode(img);
@@ -172,6 +164,7 @@ async function fileToImage(file: File, preferBitmap: boolean): Promise<HTMLImage
       // fall through
     }
   }
+
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
@@ -180,18 +173,23 @@ async function fileToImage(file: File, preferBitmap: boolean): Promise<HTMLImage
     await imgDecode(img);
     return img;
   } finally {
-    // Avoid early revoke on iOS which can cancel decode
+    // Let browser revoke when safe; revoking too early can break decode on some devices.
     // URL.revokeObjectURL(url);
   }
 }
 
-function imgDecode(img: HTMLImageElement) {
+// ✅ Avoid TS narrowing to `never` by not using `"decode" in img` and prefer event listeners.
+function imgDecode(img: HTMLImageElement): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    if ("decode" in img) {
-      (img as any).decode().then(() => resolve()).catch(reject);
+    const anyImg = img as any;
+    if (typeof anyImg.decode === "function") {
+      anyImg.decode().then(() => resolve()).catch(() => {
+        img.addEventListener("load", () => resolve(), { once: true });
+        img.addEventListener("error", () => reject(new Error("Image load failed")), { once: true });
+      });
     } else {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("Image load failed"));
+      img.addEventListener("load", () => resolve(), { once: true });
+      img.addEventListener("error", () => reject(new Error("Image load failed")), { once: true });
     }
   });
 }
