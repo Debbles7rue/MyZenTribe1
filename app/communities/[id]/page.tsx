@@ -9,11 +9,11 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
-// Lazy client-only components
+// Client-only components
 const AddPinModal = dynamic(() => import("@/components/community/AddPinModal"), { ssr: false });
 const MapExplorerClient = dynamic(() => import("@/components/community/MapExplorerClient"), { ssr: false });
 
-// 🔒 Import the MapPin type used by MapExplorerClient to ensure compile-time compatibility
+// ✅ Import the pin type expected by MapExplorerClient (has day_of_week: string, time_local: string)
 import type { MapPin as ExplorerMapPin } from "@/components/community/MapExplorerClient";
 
 type Community = {
@@ -27,8 +27,10 @@ type Community = {
   created_by?: string | null;
 };
 
-// ✅ Use the exact MapPin type expected by MapExplorerClient
-type MapPin = ExplorerMapPin;
+// ✅ Local pins we keep in this page: same as ExplorerMapPin, plus `categories` for our list UI
+type LocalPin = ExplorerMapPin & {
+  categories?: string[] | null;
+};
 
 type MapCommunity = { id: string; title: string; category: string | null };
 
@@ -53,15 +55,15 @@ function numOrNull(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Convert possible inputs (number/string/undefined) into the string type the map expects.
-// If no value, we default to today's weekday as a string ("0".."6").
+// Map expects a string "0".."6"
 function toDayOfWeekString(input?: unknown): string {
   if (typeof input === "string") return input;
   if (typeof input === "number" && Number.isFinite(input)) return String(input);
-  return String(new Date().getDay()); // "0".."6"
+  return String(new Date().getDay());
 }
 
-function toPin(communityId: string, circle: any): MapPin {
+// Shape one row to a LocalPin (includes categories for our list, but the map won’t need it)
+function toLocalPin(communityId: string, circle: any): LocalPin {
   return {
     id: String(circle.id),
     community_id: communityId,
@@ -72,11 +74,10 @@ function toPin(communityId: string, circle: any): MapPin {
     contact_phone: circle.contact_phone ?? null,
     contact_email: circle.contact_email ?? null,
     website_url: circle.website_url ?? null,
-    categories: circle.categories ?? null,
-
-    // ✅ Match MapExplorerClient: day_of_week is a string; time_local is a string
-    day_of_week: toDayOfWeekString(circle.day_of_week),
+    day_of_week: toDayOfWeekString(circle.day_of_week), // ✅ string
     time_local: typeof circle.time_local === "string" ? circle.time_local : "",
+    // extra (not part of ExplorerMapPin)
+    categories: circle.categories ?? null,
   };
 }
 
@@ -99,7 +100,8 @@ export default function CommunityPage() {
 
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const [pins, setPins] = useState<MapPin[]>([]);
+  // ✅ LocalPin[]
+  const [pins, setPins] = useState<LocalPin[]>([]);
   const [showAddPin, setShowAddPin] = useState(false);
 
   useEffect(() => {
@@ -135,7 +137,7 @@ export default function CommunityPage() {
       }
       if (alive) setIsAdmin(admin);
 
-      // Include day_of_week and time_local in case they exist on the table; we still default if missing.
+      // Include day_of_week & time_local if present; we still default if missing.
       const { data: mapped, error: mErr } = await supabase
         .from("community_circle_communities")
         .select(
@@ -146,8 +148,8 @@ export default function CommunityPage() {
 
       if (mErr) console.error(mErr);
 
-      const mapPins: MapPin[] = (mapped ?? []).map((r: any) => toPin(communityId, r.circle));
-      if (alive) setPins(mapPins);
+      const shaped: LocalPin[] = (mapped ?? []).map((r: any) => toLocalPin(communityId, r.circle));
+      if (alive) setPins(shaped);
 
       if (alive) setLoading(false);
     })();
@@ -208,6 +210,13 @@ export default function CommunityPage() {
     });
     setEditing(false);
   }
+
+  // ✅ Strip extra field before passing to MapExplorerClient
+  const pinsForMap: ExplorerMapPin[] = useMemo(
+    () =>
+      pins.map(({ categories: _omit, ...rest }) => rest),
+    [pins]
+  );
 
   if (loading || !community) {
     return (
@@ -326,7 +335,7 @@ export default function CommunityPage() {
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
                     ]}
-                    pins={pins} // ✅ MapPin[] where day_of_week is a string
+                    pins={pinsForMap}            // ✅ ExplorerMapPin[] (no categories prop)
                     communitiesById={mapCommunities}
                     height={340}
                   />
@@ -454,7 +463,7 @@ export default function CommunityPage() {
                 "circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories,day_of_week,time_local)"
               )
               .eq("community_id", communityId);
-            setPins((mapped ?? []).map((r: any) => toPin(communityId, r.circle)));
+            setPins((mapped ?? []).map((r: any) => toLocalPin(communityId, r.circle)));
           }}
         />
       )}
