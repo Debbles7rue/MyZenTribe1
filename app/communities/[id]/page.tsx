@@ -278,7 +278,7 @@ export default function Page() {
                 </div>
 
                 <div className="mb-3">
-                  {/* Adapter explanation: pass day_of_week as a required string ("0"–"6") */}
+                  {/* Adapter: pass required shapes to the Map component */}
                   <MapExplorerClient
                     center={[
                       pins.length
@@ -288,7 +288,12 @@ export default function Page() {
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
                     ]}
-                    pins={pins.map((p) => ({ ...p, day_of_week: normalizeDowStr(p.day_of_week) }))}
+                    pins={pins.map((p) => ({
+                      ...p,
+                      day_of_week: normalizeDowStr(p.day_of_week),
+                      // 🔧 ensure required string (some DB rows may be null)
+                      time_local: p.time_local ?? "",
+                    }))}
                     communitiesById={mapCommunities}
                     height={340}
                   />
