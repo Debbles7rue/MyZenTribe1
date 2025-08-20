@@ -1,7 +1,7 @@
 // app/meditation/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import "./meditation.css";
@@ -17,7 +17,7 @@ const ENV_LABEL: Record<Env, string> = {
   candles: "Light a Candle for Loved Ones",
 };
 
-// Image paths (change these to your filenames or remote URLs if you like)
+// Background images (change to your own)
 const BG: Record<Env, string> = {
   room: "/meditation/room.jpg",
   beach: "/meditation/beach.jpg",
@@ -27,29 +27,167 @@ const BG: Record<Env, string> = {
   candles: "/meditation/candles.jpg",
 };
 
-// Door texture image
+// Door texture
 const DOOR_TEXTURE = "/meditation/door.jpg";
+
+/* ---------- simple audio mixer ---------- */
+type SoundMode = "nature" | "freq" | "none";
+type FreqKey = "432" | "528" | "639" | "963";
+
+function useAudioMixer() {
+  // two channels we can fade independently
+  const ambientRef = useRef<HTMLAudioElement | null>(null);
+  const freqRef = useRef<HTMLAudioElement | null>(null);
+  const [started, setStarted] = useState(false);
+
+  function make(url?: string | null) {
+    if (!url) return null;
+    const a = new Audio(url);
+    a.loop = true;
+    a.preload = "auto";
+    a.crossOrigin = "anonymous";
+    a.volume = 0;
+    a.onerror = () => {
+      // ignore missing/failed files
+    };
+    return a;
+  }
+
+  function setSrcs(ambient?: string | null, freq?: string | null) {
+    // Stop previous
+    ambientRef.current?.pause();
+    freqRef.current?.pause();
+
+    ambientRef.current = make(ambient);
+    freqRef.current = make(freq);
+
+    if (started) {
+      ambientRef.current?.play().catch(() => {});
+      freqRef.current?.play().catch(() => {});
+    }
+  }
+
+  function ensureStarted() {
+    if (started) return;
+    setStarted(true);
+    ambientRef.current?.play().catch(() => {});
+    freqRef.current?.play().catch(() => {});
+  }
+
+  function fadeTo(target: HTMLAudioElement | null, v: number, ms = 800) {
+    if (!target) return;
+    const steps = 24;
+    const delta = (v - target.volume) / steps;
+    let i = 0;
+    const timer = setInterval(() => {
+      i++;
+      target.volume = Math.max(0, Math.min(1, target.volume + delta));
+      if (i >= steps) clearInterval(timer);
+    }, Math.max(8, Math.floor(ms / steps)));
+  }
+
+  function setVolumes(ambientVol: number, freqVol: number, ms = 800) {
+    fadeTo(ambientRef.current, ambientVol, ms);
+    fadeTo(freqRef.current, freqVol, ms);
+  }
+
+  function stopAll(ms = 500) {
+    fadeTo(ambientRef.current, 0, ms);
+    fadeTo(freqRef.current, 0, ms);
+  }
+
+  return {
+    setSrcs,
+    setVolumes,
+    stopAll,
+    ensureStarted,
+  };
+}
+
+/* Map our scenes to sound files */
+const AMBIENT_FOR_ENV: Record<Env, string | null> = {
+  room: "/audio/fountain.mp3",
+  beach: "/audio/beach_waves.mp3",
+  lake: "/audio/lake_softwater.mp3",
+  creek: "/audio/forest_creek.mp3",
+  abstract: null, // abstract can be silent (or add a soft drone if you have one)
+  candles: "/audio/candle_room_chant.mp3",
+};
+
+// Optional extra nature layer per env (left off by default in this simple mixer)
+// If you want layering (e.g. waves + gulls), just add the gulls into the ambient file
+// or later expand the mixer to three channels.
+const EXTRA_FOR_ENV: Record<Env, string | null> = {
+  room: null,
+  beach: "/audio/seagulls.mp3", // not used by default; see note above
+  lake: null,
+  creek: "/audio/forest_birds.mp3",
+  abstract: null,
+  candles: null,
+};
+
+const FREQ_SRC: Record<FreqKey, string> = {
+  "432": "/audio/tone_432.mp3",
+  "528": "/audio/tone_528.mp3",
+  "639": "/audio/tone_639.mp3",
+  "963": "/audio/tone_963.mp3",
+};
 
 export default function MeditationPage() {
   const [env, setEnv] = useState<Env>("room");
   const [open, setOpen] = useState(false);
-  const [liveNow, setLiveNow] = useState<number>(0);
-  const [lastDay, setLastDay] = useState<number>(0);
+
+  // sound UI
+  const [soundMode, setSoundMode] = useState<SoundMode>("nature");
+  const [volume, setVolume] = useState<number>(0.65);
+  const [freq, setFreq] = useState<FreqKey>("528");
+
+  // stats
+  const [liveNow, setLiveNow] = useState(0);
+  const [lastDay, setLastDay] = useState(0);
   const [loadingCounts, setLoadingCounts] = useState(true);
 
-  // Stats: pull from Supabase if available, otherwise show 0s
+  const mixer = useAudioMixer();
+
+  // whenever env / sound mode / freq / open changes, retune audio
+  useEffect(() => {
+    if (!open) {
+      mixer.stopAll(350);
+      return;
+    }
+    // choose sources
+    const ambient = soundMode === "nature" ? AMBIENT_FOR_ENV[env] : null;
+    const freqSrc = soundMode === "freq" ? FREQ_SRC[freq] : null;
+
+    mixer.setSrcs(ambient, freqSrc);
+    mixer.ensureStarted();
+
+    // ambient gets full volume, freq is a little softer by default
+    const ambVol = soundMode === "nature" ? volume : 0;
+    const freqVol = soundMode === "freq" ? Math.min(1, volume) : 0;
+    mixer.setVolumes(ambVol, freqVol, 700);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [env, soundMode, freq, open]);
+
+  // when user moves the volume
+  useEffect(() => {
+    if (!open) return;
+    const ambVol = soundMode === "nature" ? volume : 0;
+    const freqVol = soundMode === "freq" ? Math.min(1, volume) : 0;
+    mixer.setVolumes(ambVol, freqVol, 250);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume]);
+
+  // Stats pull (best-effort)
   useEffect(() => {
     let alive = true;
-
     async function fetchCounts() {
       try {
-        // live (no ended_at)
         const { count: live } = await supabase
           .from("meditation_sessions")
           .select("id", { head: true, count: "exact" })
           .is("ended_at", null);
 
-        // last 24h (by started_at)
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { count: day } = await supabase
           .from("meditation_sessions")
@@ -67,7 +205,6 @@ export default function MeditationPage() {
         if (alive) setLoadingCounts(false);
       }
     }
-
     fetchCounts();
     const t = setInterval(fetchCounts, 30000);
     return () => {
@@ -85,43 +222,34 @@ export default function MeditationPage() {
     <div className="mz-page">
       <h1 className="mz-title">Enter the Sacred Space</h1>
 
-      {/* SELECTION + DOORS */}
       <section
         className="mz-scene-shell"
         style={{ ["--door-texture" as any]: `url(${DOOR_TEXTURE})` }}
       >
         <div className="mz-scene">
-          {/* soft ambient aura */}
           <div className="mz-aura" />
-          {/* your image as the background */}
           <div
             className="mz-bg-img"
             style={{ ["--bg-img" as any]: `url(${BG[env]})` }}
             aria-hidden
           />
-          {/* animated overlay scene */}
           <Scene env={env} />
         </div>
 
-        {/* The grand doors & side choices */}
+        {/* Doors + choices */}
         <div className={`mz-doorgroup ${open ? "is-open" : ""}`}>
           <div className="mz-door">
             <div className="mz-ancient">ENTER THE SACRED SPACE</div>
-
-            {/* candle sconces */}
             <div className="mz-door-candles">
               <DoorCandle />
               <DoorCandle />
               <DoorCandle />
               <DoorCandle />
             </div>
-
-            {/* two door panels */}
             <div className="mz-door-panel left" />
             <div className="mz-door-panel right" />
           </div>
 
-          {/* choices on both sides */}
           <div className="mz-choices left">
             <Choice label={ENV_LABEL.room} onClick={() => choose("room")} />
             <Choice label={ENV_LABEL.beach} onClick={() => choose("beach")} />
@@ -139,7 +267,6 @@ export default function MeditationPage() {
             />
           </div>
 
-          {/* top-right control when open */}
           {open && (
             <div className="mz-session-hud">
               <button className="mz-chip" onClick={() => setOpen(false)}>
@@ -148,9 +275,63 @@ export default function MeditationPage() {
             </div>
           )}
         </div>
+
+        {/* Sound controls (only show after entering) */}
+        {open && (
+          <div className="mz-controls">
+            <div className="row">
+              <button
+                className={`pill ${soundMode === "nature" ? "active" : ""}`}
+                onClick={() => setSoundMode("nature")}
+              >
+                Nature
+              </button>
+              <button
+                className={`pill ${soundMode === "freq" ? "active" : ""}`}
+                onClick={() => setSoundMode("freq")}
+              >
+                Frequencies
+              </button>
+              <button
+                className={`pill ${soundMode === "none" ? "active" : ""}`}
+                onClick={() => setSoundMode("none")}
+              >
+                No sound
+              </button>
+
+              {soundMode === "freq" && (
+                <div className="select-wrap">
+                  <label className="muted">Tone</label>
+                  <select
+                    className="select"
+                    value={freq}
+                    onChange={(e) => setFreq(e.target.value as FreqKey)}
+                  >
+                    <option value="432">432 Hz</option>
+                    <option value="528">528 Hz</option>
+                    <option value="639">639 Hz</option>
+                    <option value="963">963 Hz</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="vol-wrap">
+                <label className="muted">Volume</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={volume}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* STATS */}
+      {/* Stats */}
       <section className="mz-statsbar">
         <div className="mz-statbox">
           <div className="n">{loadingCounts ? "…" : liveNow}</div>
@@ -175,7 +356,7 @@ export default function MeditationPage() {
   );
 }
 
-/* ---------- small UI pieces ---------- */
+/* ---------- visuals from the previous version ---------- */
 
 function Choice({ label, onClick }: { label: string; onClick: () => void }) {
   return (
@@ -271,7 +452,7 @@ function Scene({ env }: { env: Env }) {
       </div>
     );
   }
-  // sacred room (default)
+  // sacred room
   return (
     <div className="mz-room">
       <div className="shelves">
@@ -310,7 +491,6 @@ function Candle({ size = "mid" as "short" | "mid" | "tall" }) {
     </div>
   );
 }
-
 function MiniCandle() {
   return (
     <div className="mini-candle">
