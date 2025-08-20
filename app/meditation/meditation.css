@@ -1,39 +1,47 @@
 /* app/meditation/meditation.css
-   Sacred / meditative palette — warm candlelight, sage, sea, and indigo.
-   Structure and class names unchanged; only colors/tones updated.
+   Sacred sandstone + stained-glass glow
+   (no external images; all CSS gradients)
 */
 
 /* ===== Palette ===== */
 :root{
-  /* page background (deep charcoal/indigo) */
-  --bg-1:#0e1115;
+  /* deep backdrop */
+  --bg-1:#0f1216;      /* near-black indigo */
   --bg-2:#13171c;
 
-  /* gentle gold accents */
-  --gold-ink:#e8d6a9;
-  --gold-soft:#f3e6c9;
+  /* warm stone + candlelight */
+  --stone-1:#d9c7a7;   /* sandstone light */
+  --stone-2:#b89a6e;   /* sandstone mid */
+  --stone-3:#7a5e3d;   /* sandstone deep */
+  --gold-ink:#f0e3c2;  /* headings / door text */
 
-  /* panels & edges */
-  --panel-bg:rgba(20,22,26,.82);
+  /* panel chrome */
+  --panel-bg:rgba(20,22,26,.84);
   --panel-edge:rgba(255,255,255,.08);
 
   /* chips/buttons */
-  --chip:#1b2027;
-  --chip-on:#28313b;
+  --chip:#1a1f26;
+  --chip-on:#28313a;
 
-  /* candle pieces */
-  --candle-wax:#f3ede6;
+  /* candles */
+  --candle-wax:#f4eee4;
   --flame-core:#ffd89a;
-  --flame-outer:rgba(255,184,86,.72);
-  --halo:rgba(255,220,150,.22);
+  --flame-outer:rgba(255,184,86,.75);
+  --halo:rgba(255,218,140,.22);
 
   /* parchment banner */
-  --sand-card:#efe6d6;
-  --sand-ink:#2a241a;
+  --sand-card:#efe5d2;
+  --sand-ink:#2b261e;
   --sand-border:#e0d4c2;
+
+  /* stained-glass hues (used for gentle light ribbons) */
+  --glass-ruby:#9e3745;
+  --glass-amber:#d38a38;
+  --glass-cobalt:#2a4d88;
+  --glass-teal:#2c6f6b;
+  --glass-amethyst:#5b3e7a;
 }
 
-/* pleasant in dark mode too */
 @media (prefers-color-scheme:dark){
   :root{
     --sand-card:#1c1a16;
@@ -46,14 +54,14 @@
 .mz-page{display:grid;gap:18px}
 .mz-title{font-weight:900;letter-spacing:.05em;margin:6px 0 0}
 
-/* top sandy banner */
+/* top banner */
 .mz-info.top{
   background:var(--sand-card);color:var(--sand-ink);
   border:1px solid var(--sand-border);border-radius:16px;padding:16px
 }
 .mz-info .lead{margin:0 0 10px;font-size:15px;line-height:1.55}
-.mz-link{background:none;border:none;color:#8a6a2f;text-decoration:underline;cursor:pointer;padding:0}
-@media (prefers-color-scheme:dark){ .mz-link{color:#d9c79c} }
+.mz-link{background:none;border:none;color:#87662a;text-decoration:underline;cursor:pointer;padding:0}
+@media (prefers-color-scheme:dark){ .mz-link{color:#d7c69b} }
 .mz-links{margin-top:8px;opacity:.9;line-height:1.6}
 
 /* options panel */
@@ -68,41 +76,44 @@
 .mz-label{font-size:12px;opacity:.86}
 
 /* cards */
-.mz-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.mz-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .mz-card{
-  position:relative;border-radius:12px;height:82px;overflow:hidden;cursor:pointer;
-  border:1px solid var(--panel-edge);color:#f2f6ff;background:#10151b
+  position:relative;border-radius:12px;height:88px;overflow:hidden;cursor:pointer;
+  border:1px solid var(--panel-edge);color:#f2f6ff;background:#0f1419
 }
-.mz-card span{position:absolute;left:12px;bottom:10px;font-size:13px;font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.5)}
-.mz-card.active{outline:2px solid #a6c6d9}
+.mz-card span{position:absolute;left:12px;bottom:10px;font-size:13px;font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.55)}
+.mz-card.active{outline:2px solid #b9cfe0}
 
-/* card looks (muted, natural) */
+/* card looks (muted, sacred) */
 .mz-card.room{
+  /* sandstone slab with arch shadow + candle glow */
   background:
-    radial-gradient(520px 220px at 70% 10%, rgba(243,214,160,.14), transparent 60%),
-    linear-gradient(180deg,#1a1d22,#0f1217);
+    radial-gradient(600px 240px at 78% 0%, rgba(243,214,160,.12), transparent 60%),
+    linear-gradient(180deg, #3b3022 0%, #271f16 35%, #1b1712 100%),
+    linear-gradient(180deg, #cdb691 0%, #a48353 140%);
+  filter:saturate(.85);
 }
 .mz-card.beach{
   background:
-    linear-gradient(180deg,#8db7c2 0%, #477585 55%, #2d5360 100%);
+    linear-gradient(180deg,#89b3c1 0%, #527e8e 55%, #2b5460 100%);
 }
 .mz-card.lake{
   background:
-    linear-gradient(180deg,#6f8daa 0%, #3b5875 55%, #223247 100%);
+    linear-gradient(180deg,#7087a0 0%, #3a5974 55%, #223346 100%);
 }
 .mz-card.creek{
   background:
-    linear-gradient(180deg,#7fb496 0%, #3e6b55 55%, #243f31 100%);
+    linear-gradient(180deg,#78b490 0%, #396b54 55%, #243f31 100%);
 }
 .mz-card.abstract{
   background:
-    radial-gradient(600px 240px at 80% 0%, rgba(170,120,210,.12), transparent 60%),
-    linear-gradient(180deg,#2a1e30,#1a1627);
+    radial-gradient(620px 240px at 80% 0%, rgba(170,120,210,.14), transparent 60%),
+    linear-gradient(180deg,#251b2f,#151224);
 }
 .mz-card.candles{
   background:
-    radial-gradient(600px 240px at 80% 0%, rgba(245,214,160,.16), transparent 60%),
-    linear-gradient(180deg,#16191e,#0f1318);
+    radial-gradient(900px 380px at 80% 0%, rgba(240,190,120,.15), transparent 60%),
+    linear-gradient(180deg,#1a1d22,#11151a);
 }
 
 /* chips / small buttons */
@@ -118,16 +129,16 @@
 .mz-inline-controls{display:flex;gap:8px;margin-top:8px}
 
 /* entering button */
-.mz-actions{margin-top:10px}
+.mz-actions{margin-top:12px}
 .mz-enter-btn{
   padding:12px 28px;border-radius:999px;border:1px solid rgba(255,255,255,.18);
-  background:linear-gradient(180deg,rgba(239,216,170,.18),rgba(239,216,170,.08));
+  background:linear-gradient(180deg,rgba(239,216,170,.22),rgba(239,216,170,.08));
   color:#fff;letter-spacing:.06em;text-transform:uppercase;font-weight:800;cursor:pointer
 }
 .mz-enter-btn.big{padding:14px 34px}
 
 /* stats */
-.mz-stats{display:grid;grid-auto-rows:minmax(0,1fr);gap:8px}
+.mz-stats{display:grid;grid-auto-rows:minmax(0,1fr);gap:10px}
 .mz-stats .stat{
   background:rgba(255,255,255,.05);
   border:1px solid var(--panel-edge);
@@ -136,27 +147,44 @@
 .mz-stats .n{font-size:22px;font-weight:800;line-height:1.1}
 .mz-stats .t{font-size:11px;opacity:.9}
 
-/* scene shell */
+/* scene container */
 .mz-scene-shell{
   border-radius:16px;overflow:hidden;border:1px solid var(--panel-edge);
-  box-shadow:0 10px 30px rgba(0,0,0,.2) inset
+  box-shadow:0 10px 30px rgba(0,0,0,.22) inset
 }
 .mz-scene{
   position:relative;min-height:72vh;
   background:radial-gradient(1200px 900px at 50% 100%,#0a0e12 15%,var(--bg-2) 60%,var(--bg-1))
 }
+
+/* colored “stained glass” light ribbons (re-uses existing .mz-aura element) */
 .mz-aura{
   position:absolute;inset:-20%;
   background:
-    radial-gradient(800px 500px at 50% 90%,rgba(245,230,192,.06),transparent 60%),
-    radial-gradient(700px 420px at 20% 40%,rgba(140,200,210,.05),transparent 60%),
-    radial-gradient(700px 420px at 80% 40%,rgba(140,200,210,.05),transparent 60%);
-  pointer-events:none
+    /* soft cathedral streams */
+    linear-gradient(115deg, transparent 0% 30%,
+      color-mix(in oklab, var(--glass-ruby) 55%, transparent) 38%,
+      transparent 46% 54%,
+      color-mix(in oklab, var(--glass-amber) 60%, transparent) 60%,
+      transparent 68% 76%,
+      color-mix(in oklab, var(--glass-cobalt) 55%, transparent) 82%,
+      transparent 90% 100%),
+    linear-gradient(-115deg, transparent 0% 25%,
+      color-mix(in oklab, var(--glass-teal) 55%, transparent) 33%,
+      transparent 41% 49%,
+      color-mix(in oklab, var(--glass-amethyst) 60%, transparent) 55%,
+      transparent 63% 71%,
+      color-mix(in oklab, var(--glass-amber) 50%, transparent) 77%,
+      transparent 85% 100%),
+    radial-gradient(800px 520px at 50% 88%,rgba(245,225,180,.10),transparent 60%);
+  filter:saturate(.9) blur(.4px);
+  opacity:.60;
+  pointer-events:none;
 }
 
-/* door with soft candlelight */
+/* door */
 .mz-door{position:absolute;inset:0;z-index:5;display:grid;place-items:center;perspective:1200px;
-  background:radial-gradient(820px 520px at 50% 55%,rgba(235,210,150,.07),transparent);
+  background:radial-gradient(900px 560px at 50% 58%,rgba(240,210,160,.10),transparent);
   transition:opacity .4s ease .9s}
 .mz-ancient{
   position:absolute;top:22px;width:100%;text-align:center;text-transform:uppercase;
@@ -164,8 +192,8 @@
   text-shadow:0 2px 6px rgba(0,0,0,.45)
 }
 .mz-door-panel{position:absolute;top:0;bottom:0;width:50%;
-  background:linear-gradient(#3a3226,#1f1a14);
-  border:1px solid var(--panel-edge);box-shadow:inset 0 0 40px rgba(0,0,0,.5);
+  background:linear-gradient(#3b3124,#241d15);
+  border:1px solid var(--panel-edge);box-shadow:inset 0 0 40px rgba(0,0,0,.55);
   transition:transform 1s ease-in-out}
 .mz-door-panel.left{left:0;border-right:none;transform-origin:left}
 .mz-door-panel.right{right:0;border-left:none;transform-origin:right}
@@ -174,13 +202,13 @@
 
 /* candle sconces on door */
 .mz-door-candles{position:absolute;top:12%;left:8%;right:8%;display:flex;justify-content:space-between;pointer-events:none}
-.mz-door-candles .dc{filter:drop-shadow(0 8px 20px rgba(255,200,120,.25))}
+.mz-door-candles .dc{filter:drop-shadow(0 8px 20px rgba(255,200,120,.26))}
 
-/* hud */
+/* HUD */
 .mz-session-hud{position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:6}
 
 /* shelves + candles */
-.mz-shelf{position:absolute;left:6%;width:88%;height:10px;background:linear-gradient(#20252d,#14181e);
+.mz-shelf{position:absolute;left:6%;width:88%;height:10px;background:linear-gradient(#242a31,#151a20);
   border:1px solid var(--panel-edge);box-shadow:0 8px 20px rgba(0,0,0,.5)}
 .mz-shelf.top{top:18%}
 .mz-shelf.mid{top:36%}
@@ -195,21 +223,21 @@
 .mz-candle.mid{--h:60px;--w:22px}
 .mz-candle.tall{--h:86px;--w:26px}
 .mz-candle .wax{width:var(--w);height:var(--h);background:linear-gradient(#fff,var(--candle-wax));border-radius:6px 6px 4px 4px;
-  box-shadow:inset 0 -6px 10px rgba(0,0,0,.2),0 6px 18px rgba(0,0,0,.35)}
+  box-shadow:inset 0 -6px 10px rgba(0,0,0,.22),0 6px 18px rgba(0,0,0,.36)}
 .mz-candle .flame{position:absolute;bottom:calc(var(--h) + 4px);width:14px;height:22px;transform-origin:50% 100%;animation:sway 3s ease-in-out infinite;display:grid;place-items:center}
 .mz-candle .flame .core{width:8px;height:12px;border-radius:40% 40% 60% 60%;
   background:radial-gradient(circle at 50% 35%,#fff 22%,var(--flame-core) 60%,transparent 72%)}
 .mz-candle .flame .glow{position:absolute;width:22px;height:32px;border-radius:50% 50% 60% 60%;
-  background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(1.1px);opacity:.92;animation:flicker 1.8s infinite}
+  background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(1.1px);opacity:.94;animation:flicker 1.8s infinite}
 .mz-candle .halo{position:absolute;width:100px;height:60px;bottom:calc(var(--h) - 2px);border-radius:50%;
   background:radial-gradient(55% 60% at 50% 55%,var(--halo),transparent 70%);filter:blur(8px);opacity:.55;pointer-events:none}
 
-/* fountain (unchanged, but looks softer with the new palette) */
+/* fountain */
 .mz-fountain{position:absolute;left:50%;top:54%;transform:translate(-50%,-50%);width:min(44vw,520px);height:min(44vw,360px);display:grid;place-items:center}
 .mz-fountain .pillar{width:28px;height:120px;background:linear-gradient(#3a4956,#222c35 60%,#1a232c);
   border:1px solid var(--panel-edge);border-radius:10px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
 .mz-fountain .stream{position:absolute;top:calc(50% - 40px);width:4px;height:180px;
-  background:linear-gradient(180deg,rgba(190,230,255,0),rgba(190,230,255,.32),rgba(190,230,255,.08));
+  background:linear-gradient(180deg,rgba(190,230,255,0),rgba(190,230,255,.34),rgba(190,230,255,.10));
   filter:blur(.6px);animation:flow 1.4s linear infinite}
 .mz-fountain .stream.s1{left:calc(50% - 40px);animation-delay:0s}
 .mz-fountain .stream.s2{left:50%;animation-delay:.25s}
@@ -266,7 +294,7 @@
 .mz-abstract .s3{animation-duration:80s;opacity:.1}
 .mz-abstract .s4{animation-duration:100s;opacity:.08}
 
-/* candle wall & form (colors nudged a bit warmer) */
+/* candle wall */
 .mz-candlewall{position:absolute;inset:0;background:radial-gradient(1200px 900px at 50% 80%,#0a0d12,#0c1016)}
 .mz-candlewall .stars{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.12) 1px,transparent 1px);background-size:3px 3px;opacity:.08}
 .mz-candlewall .sconces{position:absolute;top:8%;left:8%;right:8%;display:flex;justify-content:space-between;pointer-events:none}
@@ -290,7 +318,7 @@
 .mz-candle-form .input{width:100%;margin-top:4px;padding:8px 10px;background:#0e1318;color:#e6f0ff;border:1px solid var(--panel-edge);border-radius:8px}
 .mz-candle-form .color-row{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
 .mz-candle-form .chip{padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:#151c24;cursor:pointer}
-.mz-candle-form .chip.on{outline:2px solid #a6c6d9}
+.mz-candle-form .chip.on{outline:2px solid #b9cfe0}
 .mz-candle-form .chip.gold{background:linear-gradient(#fff8dc,#f3e1a7);color:#222}
 .mz-candle-form .chip.white{background:linear-gradient(#fff,#f1f1f1);color:#222}
 .mz-candle-form .chip.rose{background:linear-gradient(#fff,#ffe5e9);color:#222}
@@ -298,10 +326,10 @@
 .mz-candle-form .chip.green{background:linear-gradient(#fff,#dcf3e3);color:#222}
 .mz-candle-form .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 .mz-candle-form .btn{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#141b22;color:#e6f0ff;cursor:pointer}
-.mz-candle-form .btn.brand{background:#20425c;border-color:#2a5878}
+.mz-candle-form .btn.brand{background:#23455e;border-color:#2c5979}
 .mz-candle-form .hint{font-size:11px;opacity:.8;margin-top:6px}
 
-/* animations (unchanged) */
+/* animations */
 @keyframes sway{0%{transform:rotate(.8deg)}50%{transform:rotate(-.8deg)}100%{transform:rotate(.8deg)}}
 @keyframes flicker{0%,100%{opacity:.85;transform:scaleY(1)}40%{opacity:.95;transform:scaleY(1.06)}60%{opacity:.75;transform:scaleY(.96)}}
 @keyframes flow{0%{transform:translateY(-40%);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateY(50%);opacity:0}}
