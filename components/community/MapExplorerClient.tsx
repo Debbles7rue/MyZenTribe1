@@ -23,8 +23,7 @@ export type MapPin = {
   contact_phone: string | null;
   contact_email: string | null;
   website_url: string | null;
-
-  /** Optional free-text note the user can type (e.g., "Sundays 10am", "Aug 24, 7pm") */
+  /** Optional free-text note (e.g., "Sundays 10am", "Aug 24, 7pm") */
   details?: string | null;
 };
 
@@ -45,10 +44,13 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-/** Helper to set the initial view without relying on MapContainer `center` prop typings. */
+/** Set the initial view (and ensure wheel zoom is enabled) without using MapContainer props. */
 function SetView({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
+  // Set view after map mounts
   map.setView(center, zoom);
+  // Make sure wheel zoom is enabled (usually default, but explicit is fine)
+  map.scrollWheelZoom.enable();
   return null;
 }
 
@@ -65,9 +67,8 @@ export default function MapExplorerClient({
 
   return (
     <div style={{ height, borderRadius: 12, overflow: "hidden", border: "1px solid #eee" }}>
-      {/* Intentionally omit the `center` prop (type variances across versions).
-          We set the view via useMap() in a child component. */}
-      <MapContainer zoom={4} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+      {/* Omit center/zoom props to avoid TS type mismatches on some setups. */}
+      <MapContainer style={{ height: "100%", width: "100%" }}>
         <SetView center={center} zoom={4} />
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
