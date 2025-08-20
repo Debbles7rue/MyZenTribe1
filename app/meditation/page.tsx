@@ -1,398 +1,324 @@
+// app/meditation/page.tsx
 "use client";
 
-/**
- * MyZenTribe · Meditation Room
- *
- * Visual vibe: lavender, soft glow, peaceful. Protective watermark is global.
- *
- * Blessing (embedded as requested):
- * "My intention for this site is to bring people together for community, love, support, and fun.
- *  I draw in light from above to dedicate this work for the collective spread of healing, love,
- *  and new opportunities that will enrich the lives of many. I send light, love, and protection
- *  to every user who joins. May this bring hope and inspiration to thousands, if not millions,
- *  around the world. And so it is done, and so it is done."
- */
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { BackgroundSelector } from "@/components/meditation/BackgroundSelector";
-import { SoundPlayer } from "@/components/meditation/SoundPlayer";
-import { TribePulse } from "@/components/meditation/TribePulse";
-import { format } from "date-fns";
+import "./meditation.css";
 
-type Prefs = {
-  bg: "sunset" | "river" | "mandala";
-  sound: "none" | "528hz" | "ocean" | "rain";
-  volume: number;
-  is_anonymous: boolean;
+type Env = "room" | "beach" | "lake" | "creek" | "abstract" | "candles";
+
+const ENV_LABEL: Record<Env, string> = {
+  room: "Sacred Room",
+  beach: "Stunning Beach",
+  lake: "Peaceful Lake",
+  creek: "Forest Creek",
+  abstract: "Meditative Patterns",
+  candles: "Light a Candle for Loved Ones",
 };
 
-type SessionRow = {
-  id: string;
-  started_at: string;
-  ended_at: string | null;
+// Image paths (change these to your filenames or remote URLs if you like)
+const BG: Record<Env, string> = {
+  room: "/meditation/room.jpg",
+  beach: "/meditation/beach.jpg",
+  lake: "/meditation/lake.jpg",
+  creek: "/meditation/creek.jpg",
+  abstract: "/meditation/abstract.jpg",
+  candles: "/meditation/candles.jpg",
 };
 
-function cls(...parts: (string | false | null | undefined)[]) {
-  return parts.filter(Boolean).join(" ");
-}
+// Door texture image
+const DOOR_TEXTURE = "/meditation/door.jpg";
 
-export default function MeditationRoomPage() {
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+export default function MeditationPage() {
+  const [env, setEnv] = useState<Env>("room");
+  const [open, setOpen] = useState(false);
+  const [liveNow, setLiveNow] = useState<number>(0);
+  const [lastDay, setLastDay] = useState<number>(0);
+  const [loadingCounts, setLoadingCounts] = useState(true);
 
-  const [prefs, setPrefs] = useState<Prefs>({
-    bg: "sunset",
-    sound: "none",
-    volume: 0.5,
-    is_anonymous: true,
-  });
-
-  const [activeSession, setActiveSession] = useState<SessionRow | null>(null);
-  const [timerMins, setTimerMins] = useState<number>(15);
-  const [timerEndsAt, setTimerEndsAt] = useState<Date | null>(null);
-
-  // Auth bootstrap
+  // Stats: pull from Supabase if available, otherwise show 0s
   useEffect(() => {
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUserId(user?.id ?? null);
-      setLoading(false);
+    let alive = true;
 
-      if (user?.id) {
-        // load prefs or upsert defaults
-        const { data: existing } = await supabase
-          .from("meditation_prefs")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (existing) {
-          setPrefs({
-            bg: existing.bg,
-            sound: existing.sound,
-            volume: Number(existing.volume),
-            is_anonymous: !!existing.is_anonymous,
-          });
-        } else {
-          await supabase.from("meditation_prefs").insert({
-            user_id: user.id,
-            bg: "sunset",
-            sound: "none",
-            volume: 0.5,
-            is_anonymous: true,
-          });
-        }
-
-        // If they have a currently running session, find it
-        const { data: sessionRows } = await supabase
+    async function fetchCounts() {
+      try {
+        // live (no ended_at)
+        const { count: live } = await supabase
           .from("meditation_sessions")
-          .select("*")
-          .eq("user_id", user.id)
-          .is("ended_at", null)
-          .order("started_at", { ascending: false })
-          .limit(1);
+          .select("id", { head: true, count: "exact" })
+          .is("ended_at", null);
 
-        if (sessionRows && sessionRows.length > 0) {
-          setActiveSession(sessionRows[0]);
-        }
+        // last 24h (by started_at)
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { count: day } = await supabase
+          .from("meditation_sessions")
+          .select("id", { head: true, count: "exact" })
+          .gte("started_at", since);
+
+        if (!alive) return;
+        setLiveNow(live ?? 0);
+        setLastDay(day ?? 0);
+      } catch {
+        if (!alive) return;
+        setLiveNow(0);
+        setLastDay(0);
+      } finally {
+        if (alive) setLoadingCounts(false);
       }
-    })();
+    }
+
+    fetchCounts();
+    const t = setInterval(fetchCounts, 30000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, []);
 
-  // Start a session (and optional timer)
-  async function startSession() {
-    if (!userId) return;
-    const { data, error } = await supabase
-      .from("meditation_sessions")
-      .insert({
-        user_id: userId,
-        is_anonymous: prefs.is_anonymous,
-      })
-      .select("*")
-      .single();
-
-    if (!error && data) {
-      setActiveSession(data);
-      if (timerMins > 0) {
-        setTimerEndsAt(new Date(Date.now() + timerMins * 60_000));
-      }
-    }
+  function choose(next: Env) {
+    setEnv(next);
+    setOpen(true);
   }
-
-  // Stop session
-  async function stopSession() {
-    if (!activeSession) return;
-    await supabase
-      .from("meditation_sessions")
-      .update({ ended_at: new Date().toISOString() })
-      .eq("id", activeSession.id);
-    setActiveSession(null);
-    setTimerEndsAt(null);
-  }
-
-  // Save prefs
-  async function updatePrefs(next: Partial<Prefs>) {
-    const merged = { ...prefs, ...next };
-    setPrefs(merged);
-    if (!userId) return;
-    await supabase
-      .from("meditation_prefs")
-      .upsert({
-        user_id: userId,
-        bg: merged.bg,
-        sound: merged.sound,
-        volume: merged.volume,
-        is_anonymous: merged.is_anonymous,
-      });
-  }
-
-  // Timer tick
-  useEffect(() => {
-    if (!timerEndsAt || !activeSession) return;
-    const t = setInterval(() => {
-      if (Date.now() >= timerEndsAt.getTime()) {
-        stopSession(); // Auto-stop on timer end
-      }
-    }, 1000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timerEndsAt, activeSession]);
-
-  const bgClass = useMemo(() => {
-    switch (prefs.bg) {
-      case "river":
-        return "bg-gradient-to-b from-blue-100 via-indigo-100 to-purple-100";
-      case "mandala":
-        return "bg-gradient-to-b from-fuchsia-100 via-purple-100 to-violet-100";
-      case "sunset":
-      default:
-        return "bg-gradient-to-b from-purple-100 via-violet-100 to-rose-100";
-    }
-  }, [prefs.bg]);
-
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] grid place-items-center">
-        <p className="text-sm text-zinc-500">Loading…</p>
-      </div>
-    );
-  }
-
-  if (!userId) {
-    return (
-      <div className={cls("min-h-[80vh] grid place-items-center", bgClass)}>
-        <div className="max-w-lg w-full rounded-xl bg-white/80 shadow p-6 text-center">
-          <h1 className="text-2xl font-semibold mb-2">Meditation Room</h1>
-          <p className="text-zinc-600 mb-4">
-            Sign in to join the 24/7 flow of healing energy.
-          </p>
-          <Link
-            href="/login"
-            className="inline-block rounded-lg px-4 py-2 bg-brand-500 text-white"
-          >
-            Sign in
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const endsLabel =
-    activeSession && timerEndsAt
-      ? `Ends ${format(timerEndsAt, "h:mm a")}`
-      : activeSession
-      ? "Live"
-      : "Ready";
 
   return (
-    <div className={cls("min-h-[100vh] pb-20", bgClass)}>
-      <div className="mx-auto max-w-4xl px-4 pt-10">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Meditation Room</h1>
-            <p className="text-sm text-zinc-600">
-              Our collective intention: keep a gentle, continuous flow of
-              healing energy around the world — 24/7.
-            </p>
-          </div>
-          <div className="hidden sm:block text-right">
-            <TribePulse />
-          </div>
+    <div className="mz-page">
+      <h1 className="mz-title">Enter the Sacred Space</h1>
+
+      {/* SELECTION + DOORS */}
+      <section
+        className="mz-scene-shell"
+        style={{ ["--door-texture" as any]: `url(${DOOR_TEXTURE})` }}
+      >
+        <div className="mz-scene">
+          {/* soft ambient aura */}
+          <div className="mz-aura" />
+          {/* your image as the background */}
+          <div
+            className="mz-bg-img"
+            style={{ ["--bg-img" as any]: `url(${BG[env]})` }}
+            aria-hidden
+          />
+          {/* animated overlay scene */}
+          <Scene env={env} />
         </div>
 
-        {/* Controls */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-xl bg-white/90 p-4 shadow">
-            <h2 className="font-medium mb-2">Background</h2>
-            <BackgroundSelector
-              value={prefs.bg}
-              onChange={(bg) => updatePrefs({ bg })}
-            />
-          </div>
+        {/* The grand doors & side choices */}
+        <div className={`mz-doorgroup ${open ? "is-open" : ""}`}>
+          <div className="mz-door">
+            <div className="mz-ancient">ENTER THE SACRED SPACE</div>
 
-          <div className="rounded-xl bg-white/90 p-4 shadow">
-            <h2 className="font-medium mb-2">Sound</h2>
-            <SoundPlayer
-              sound={prefs.sound}
-              volume={prefs.volume}
-              onChangeSound={(sound) => updatePrefs({ sound })}
-              onChangeVolume={(volume) => updatePrefs({ volume })}
-            />
-            <p className="mt-2 text-xs text-zinc-500">
-              Upload audio files later (e.g., <code>/public/audio/528hz.mp3</code>,
-              <code>/public/audio/ocean.mp3</code>). Player is ready.
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-white/90 p-4 shadow">
-            <h2 className="font-medium mb-2">Privacy</h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={prefs.is_anonymous}
-                onChange={(e) => updatePrefs({ is_anonymous: e.target.checked })}
-              />
-              Meditate anonymously
-            </label>
-
-            <div className="mt-4">
-              <h3 className="text-sm font-medium mb-1">Timer</h3>
-              <div className="flex flex-wrap gap-2">
-                {[10, 15, 20, 30, 45, 60].map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setTimerMins(m)}
-                    className={cls(
-                      "px-3 py-1 rounded-lg border",
-                      timerMins === m ? "bg-brand-500 text-white border-brand-500" : "bg-white"
-                    )}
-                  >
-                    {m}m
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-4 flex items-center gap-3">
-                {!activeSession ? (
-                  <button
-                    onClick={startSession}
-                    className="rounded-lg px-4 py-2 bg-emerald-600 text-white"
-                  >
-                    Start
-                  </button>
-                ) : (
-                  <button
-                    onClick={stopSession}
-                    className="rounded-lg px-4 py-2 bg-rose-600 text-white"
-                  >
-                    Stop
-                  </button>
-                )}
-                <span className="text-xs text-zinc-600">{endsLabel}</span>
-              </div>
+            {/* candle sconces */}
+            <div className="mz-door-candles">
+              <DoorCandle />
+              <DoorCandle />
+              <DoorCandle />
+              <DoorCandle />
             </div>
-          </div>
-        </div>
 
-        {/* Live Pulse (mobile) */}
-        <div className="mt-6 sm:hidden">
-          <TribePulse />
-        </div>
-
-        {/* Actions */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-xl bg-white/90 p-4 shadow">
-            <h2 className="font-medium mb-2">Schedule a Meditation</h2>
-            <ScheduleBlock />
+            {/* two door panels */}
+            <div className="mz-door-panel left" />
+            <div className="mz-door-panel right" />
           </div>
 
-            <div className="rounded-xl bg-white/90 p-4 shadow">
-              <h2 className="font-medium mb-2">Light a Candle (coming soon)</h2>
-              <p className="text-sm text-zinc-600">
-                Honor someone special with a $0.99 digital candle and dedication.
-                This will appear on your profile or meditation journal.
-              </p>
-              <button
-                disabled
-                className="mt-3 rounded-lg px-3 py-2 border text-zinc-400 cursor-not-allowed"
-              >
-                Coming after Stripe setup
+          {/* choices on both sides */}
+          <div className="mz-choices left">
+            <Choice label={ENV_LABEL.room} onClick={() => choose("room")} />
+            <Choice label={ENV_LABEL.beach} onClick={() => choose("beach")} />
+            <Choice label={ENV_LABEL.lake} onClick={() => choose("lake")} />
+          </div>
+          <div className="mz-choices right">
+            <Choice label={ENV_LABEL.creek} onClick={() => choose("creek")} />
+            <Choice
+              label={ENV_LABEL.abstract}
+              onClick={() => choose("abstract")}
+            />
+            <Choice
+              label={ENV_LABEL.candles}
+              onClick={() => choose("candles")}
+            />
+          </div>
+
+          {/* top-right control when open */}
+          {open && (
+            <div className="mz-session-hud">
+              <button className="mz-chip" onClick={() => setOpen(false)}>
+                ← Change setting
               </button>
             </div>
+          )}
         </div>
+      </section>
+
+      {/* STATS */}
+      <section className="mz-statsbar">
+        <div className="mz-statbox">
+          <div className="n">{loadingCounts ? "…" : liveNow}</div>
+          <div className="t">meditating now</div>
+        </div>
+        <div className="mz-statbox">
+          <div className="n">{loadingCounts ? "…" : lastDay}</div>
+          <div className="t">in the last 24 hours</div>
+        </div>
+        <div className="mz-linksbar">
+          <span className="muted">Learn more: </span>
+          <Link className="mz-link" href="/whats-new">
+            collective meditation
+          </Link>
+          <span className="muted"> · </span>
+          <Link className="mz-link" href="/communities">
+            communities
+          </Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------- small UI pieces ---------- */
+
+function Choice({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button className="mz-choice" onClick={onClick}>
+      <span className="flame">
+        <span className="glow" />
+        <span className="core" />
+      </span>
+      <span className="label">{label}</span>
+    </button>
+  );
+}
+
+function DoorCandle() {
+  return (
+    <div className="dc">
+      <div className="flame">
+        <span className="glow" />
+        <span className="core" />
       </div>
     </div>
   );
 }
 
-/** Simple scheduler that creates a personal signup row now; later we can sync with your calendar/events */
-function ScheduleBlock() {
-  const [startISO, setStartISO] = useState<string>("");
-  const [minutes, setMinutes] = useState<number>(15);
-  const [ok, setOk] = useState<string | null>(null);
-
-  async function schedule() {
-    setOk(null);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    if (!startISO) {
-      setOk("Please pick a start time.");
-      return;
-    }
-
-    const { error } = await supabase.from("meditation_signups").insert({
-      user_id: user.id,
-      start_at: startISO,
-      duration_minutes: minutes,
-    });
-
-    setOk(error ? "Something went wrong." : "Scheduled! You’ll see this in your signups.");
+function Scene({ env }: { env: Env }) {
+  if (env === "beach") {
+    return (
+      <div className="mz-beach">
+        <div className="sea">
+          <div className="wave w1" />
+          <div className="wave w2" />
+          <div className="wave w3" />
+        </div>
+      </div>
+    );
   }
-
-  return (
-    <div>
-      <div className="flex flex-col gap-2">
-        <label className="text-sm">
-          Start time
-          <input
-            className="mt-1 w-full rounded-lg border px-3 py-2"
-            type="datetime-local"
-            value={startISO}
-            onChange={(e) => setStartISO(e.target.value)}
-          />
-        </label>
-
-        <label className="text-sm">
-          Duration (minutes)
-          <input
-            className="mt-1 w-full rounded-lg border px-3 py-2"
-            type="number"
-            min={5}
-            max={240}
-            value={minutes}
-            onChange={(e) => setMinutes(parseInt(e.target.value || "15", 10))}
-          />
-        </label>
+  if (env === "lake") {
+    return (
+      <div className="mz-lake">
+        <div className="water">
+          <div className="ripple r1" />
+          <div className="ripple r2" />
+          <div className="ripple r3" />
+        </div>
       </div>
-
-      <div className="mt-3 flex items-center gap-3">
-        <button onClick={schedule} className="rounded-lg px-3 py-2 bg-brand-500 text-white">
-          Save
+    );
+  }
+  if (env === "creek") {
+    return (
+      <div className="mz-creek">
+        <div className="stream">
+          <div className="flow f0" />
+          <div className="flow f1" />
+          <div className="flow f2" />
+          <div className="flow f3" />
+          <div className="flow f4" />
+          <div className="flow f5" />
+          <div className="flow f6" />
+          <div className="flow f7" />
+        </div>
+      </div>
+    );
+  }
+  if (env === "abstract") {
+    return (
+      <div className="mz-abstract">
+        <div className="swirl s1" />
+        <div className="swirl s2" />
+        <div className="swirl s3" />
+        <div className="swirl s4" />
+      </div>
+    );
+  }
+  if (env === "candles") {
+    return (
+      <div className="mz-candlewall">
+        <div className="wall-grid">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="tribute white">
+              <div className="name">Loved One</div>
+              <div className="holder">
+                <MiniCandle />
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          className="mz-chip add"
+          onClick={() => alert("Candle creator coming soon ✨")}
+        >
+          + Add a candle
         </button>
-        {ok && <span className="text-sm text-zinc-600">{ok}</span>}
       </div>
+    );
+  }
+  // sacred room (default)
+  return (
+    <div className="mz-room">
+      <div className="shelves">
+        <div className="shelf top" />
+        <div className="shelf mid" />
+        <div className="candles">
+          <Candle size="tall" />
+          <Candle size="mid" />
+          <Candle size="short" />
+          <Candle size="mid" />
+          <Candle size="tall" />
+        </div>
+      </div>
+      <div className="fountain">
+        <div className="pillar" />
+        <div className="stream s1" />
+        <div className="stream s2" />
+        <div className="stream s3" />
+        <div className="ripple r1" />
+        <div className="ripple r2" />
+        <div className="ripple r3" />
+      </div>
+    </div>
+  );
+}
 
-      <p className="mt-2 text-xs text-zinc-500">
-        Later we can auto-create a personal calendar event + notification.
-      </p>
+function Candle({ size = "mid" as "short" | "mid" | "tall" }) {
+  return (
+    <div className={`candle ${size}`}>
+      <div className="wax" />
+      <div className="flame">
+        <span className="glow" />
+        <span className="core" />
+      </div>
+      <div className="halo" />
+    </div>
+  );
+}
+
+function MiniCandle() {
+  return (
+    <div className="mini-candle">
+      <div className="wax" />
+      <div className="flame">
+        <span className="glow" />
+        <span className="core" />
+      </div>
     </div>
   );
 }
