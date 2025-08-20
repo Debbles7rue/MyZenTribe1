@@ -30,12 +30,26 @@ type MapPin = {
   lat: number;
   lng: number;
   address: string | null;
-  categories?: string[] | null;
+  categories: string[] | null; // REQUIRED here to satisfy narrowing
   contact_phone: string | null;
   contact_email: string | null;
   website_url: string | null;
 
   /** Optional free-text note (e.g., "Sundays 10am", "Aug 24, 7pm"). */
+  details?: string | null;
+};
+
+type RawPin = {
+  id: string;
+  community_id: string;
+  name: string | null;
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
+  categories: string[] | null; // required in raw shape too
+  contact_phone: string | null;
+  contact_email: string | null;
+  website_url: string | null;
   details?: string | null;
 };
 
@@ -101,7 +115,7 @@ export default function Page() {
       }
       if (alive) setIsAdmin(admin);
 
-      // Load pins mapped to this community (no strict date fields; details stays optional)
+      // Load pins mapped to this community (no strict date fields; 'details' stays optional text)
       const { data: mapped, error: mErr } = await supabase
         .from("community_circle_communities")
         .select(
@@ -112,25 +126,39 @@ export default function Page() {
 
       if (mErr) console.error(mErr);
 
-      const rawPins = (mapped ?? []).map((r: any) => ({
+      const rawPins: RawPin[] = (mapped ?? []).map((r: any) => ({
         id: r.circle.id as string,
         community_id: communityId as string,
         name: (r.circle?.name ?? null) as string | null,
-        lat: r.circle?.lat as number | null,
-        lng: r.circle?.lng as number | null,
+        lat: (r.circle?.lat ?? null) as number | null,
+        lng: (r.circle?.lng ?? null) as number | null,
         address: (r.circle?.address ?? null) as string | null,
         categories: (r.circle?.categories ?? null) as string[] | null,
         contact_phone: (r.circle?.contact_phone ?? null) as string | null,
         contact_email: (r.circle?.contact_email ?? null) as string | null,
         website_url: (r.circle?.website_url ?? null) as string | null,
-
-        // If your DB later adds a 'details' column, you can map it like:
-        // details: (r.circle?.details ?? null) as string | null,
+        // details: (r.circle?.details ?? null) as string | null, // enable if DB adds a 'details' column
       }));
 
-      const mapPins: MapPin[] = rawPins.filter(
-        (p): p is MapPin => typeof p.lat === "number" && typeof p.lng === "number"
-      ) as MapPin[];
+      // Build the final typed pins WITHOUT a type predicate
+      const mapPins: MapPin[] = rawPins.reduce<MapPin[]>((acc, p) => {
+        if (typeof p.lat === "number" && typeof p.lng === "number") {
+          acc.push({
+            id: p.id,
+            community_id: p.community_id,
+            name: p.name,
+            lat: p.lat,
+            lng: p.lng,
+            address: p.address,
+            categories: p.categories,
+            contact_phone: p.contact_phone,
+            contact_email: p.contact_email,
+            website_url: p.website_url,
+            details: p.details ?? null,
+          });
+        }
+        return acc;
+      }, []);
 
       if (alive) setPins(mapPins);
       if (alive) setLoading(false);
@@ -303,7 +331,6 @@ export default function Page() {
                             {p.categories?.join(", ")}
                           </div>
                         )}
-                        {/* Optional: preview details line in the list too */}
                         {p.details && (
                           <div className="muted" style={{ fontSize: 12 }}>
                             Details: {p.details}
@@ -385,22 +412,39 @@ export default function Page() {
               .from("community_circle_communities")
               .select("circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories)")
               .eq("community_id", communityId);
-            const rawPins = (mapped ?? []).map((r: any) => ({
+
+            const rawPins: RawPin[] = (mapped ?? []).map((r: any) => ({
               id: r.circle.id as string,
               community_id: communityId as string,
               name: (r.circle?.name ?? null) as string | null,
-              lat: r.circle?.lat as number | null,
-              lng: r.circle?.lng as number | null,
+              lat: (r.circle?.lat ?? null) as number | null,
+              lng: (r.circle?.lng ?? null) as number | null,
               address: (r.circle?.address ?? null) as string | null,
               categories: (r.circle?.categories ?? null) as string[] | null,
               contact_phone: (r.circle?.contact_phone ?? null) as string | null,
               contact_email: (r.circle?.contact_email ?? null) as string | null,
               website_url: (r.circle?.website_url ?? null) as string | null,
-              // details: (r.circle?.details ?? null) as string | null, // enable if/when your DB adds this column
             }));
-            const mapPins: MapPin[] = rawPins.filter(
-              (p): p is MapPin => typeof p.lat === "number" && typeof p.lng === "number"
-            ) as MapPin[];
+
+            const mapPins: MapPin[] = rawPins.reduce<MapPin[]>((acc, p) => {
+              if (typeof p.lat === "number" && typeof p.lng === "number") {
+                acc.push({
+                  id: p.id,
+                  community_id: p.community_id,
+                  name: p.name,
+                  lat: p.lat,
+                  lng: p.lng,
+                  address: p.address,
+                  categories: p.categories,
+                  contact_phone: p.contact_phone,
+                  contact_email: p.contact_email,
+                  website_url: p.website_url,
+                  details: p.details ?? null,
+                });
+              }
+              return acc;
+            }, []);
+
             setPins(mapPins);
           }}
         />
