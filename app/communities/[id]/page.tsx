@@ -34,7 +34,7 @@ type MapPin = {
   contact_email: string | null;
   website_url: string | null;
   categories?: string[] | null;
-  // keep optional + string to match DB
+  // DB shape (string or null). Map component requires a non-null string.
   day_of_week?: string | null;
   time_local?: string | null;
 };
@@ -46,20 +46,21 @@ const CATEGORIES = [
   "Arts & Crafts","Nature/Outdoors","Parenting","Recovery/Support","Local Events","Other",
 ];
 
-// --- Adapter: normalize day_of_week to a required 0..6 number for MapExplorerClient ---
-function normalizeDow(day: string | null | undefined): number {
-  if (day == null) return 0; // default Sunday
+/** Adapter: normalize a DB day_of_week (string | null | e.g. "Sun", "0") into a required string "0"–"6". */
+function normalizeDowStr(day: string | null | undefined): string {
+  if (day == null || day === "") return "0";
+  // numeric string already?
   const n = Number(day);
-  if (!Number.isNaN(n) && n >= 0 && n <= 6) return n;
+  if (!Number.isNaN(n) && n >= 0 && n <= 6) return String(n);
   const s = String(day).toLowerCase();
-  if (s.startsWith("sun")) return 0;
-  if (s.startsWith("mon")) return 1;
-  if (s.startsWith("tue")) return 2;
-  if (s.startsWith("wed")) return 3;
-  if (s.startsWith("thu")) return 4;
-  if (s.startsWith("fri")) return 5;
-  if (s.startsWith("sat")) return 6;
-  return 0;
+  if (s.startsWith("sun")) return "0";
+  if (s.startsWith("mon")) return "1";
+  if (s.startsWith("tue")) return "2";
+  if (s.startsWith("wed")) return "3";
+  if (s.startsWith("thu")) return "4";
+  if (s.startsWith("fri")) return "5";
+  if (s.startsWith("sat")) return "6";
+  return "0";
 }
 
 export default function Page() {
@@ -131,8 +132,7 @@ export default function Page() {
         (mapped ?? []).map((r: any) => ({
           community_id: communityId,
           ...r.circle,
-          // keep DB string/null; adapter will convert at render time
-          day_of_week: r.circle?.day_of_week ?? null,
+          day_of_week: r.circle?.day_of_week ?? null, // keep raw (string|null)
           time_local: r.circle?.time_local ?? null,
         })) ?? [];
       if (alive) setPins(mapPins);
@@ -288,8 +288,8 @@ export default function Page() {
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
                     ]}
-                    // 🔧 Adapter: ensure required numeric day_of_week for the Map component
-                    pins={pins.map((p) => ({ ...p, day_of_week: normalizeDow(p.day_of_week) }))}
+                    {/* Adapter: ensure required string day_of_week for the Map component */}
+                    pins={pins.map((p) => ({ ...p, day_of_week: normalizeDowStr(p.day_of_week) }))}
                     communitiesById={mapCommunities}
                     height={340}
                   />
