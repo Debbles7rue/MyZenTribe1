@@ -19,11 +19,13 @@ export type MapPin = {
   lat: number;
   lng: number;
   address: string | null;
-  day_of_week: string | null;
-  time_local: string | null;
+  categories?: string[] | null;
   contact_phone: string | null;
   contact_email: string | null;
   website_url: string | null;
+
+  /** Optional free-text note the user can type (e.g., "Sundays 10am", "Aug 24, 7pm") */
+  details?: string | null;
 };
 
 type Props = {
@@ -43,10 +45,9 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-/** Helper to set the initial view without using the MapContainer `center` prop. */
+/** Helper to set the initial view without relying on MapContainer `center` prop typings. */
 function SetView({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
-  // setView once on mount (and if deps change)
   map.setView(center, zoom);
   return null;
 }
@@ -64,8 +65,9 @@ export default function MapExplorerClient({
 
   return (
     <div style={{ height, borderRadius: 12, overflow: "hidden", border: "1px solid #eee" }}>
-      {/* Note: We intentionally omit the `center` prop to avoid type issues across versions */}
-      <MapContainer zoom={4} scrollWheelZoom={true} style={{ height: "100%", width: "100%" }}>
+      {/* Intentionally omit the `center` prop (type variances across versions).
+          We set the view via useMap() in a child component. */}
+      <MapContainer zoom={4} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
         <SetView center={center} zoom={4} />
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
@@ -91,11 +93,16 @@ export default function MapExplorerClient({
 
                   {pin.address && <div style={{ marginTop: 6 }}>{pin.address}</div>}
 
-                  {(pin.day_of_week || pin.time_local) && (
+                  {/* Optional free-text details */}
+                  {pin.details && (
                     <div className="muted" style={{ marginTop: 4 }}>
-                      {pin.day_of_week || ""}
-                      {pin.day_of_week && pin.time_local ? " · " : ""}
-                      {pin.time_local || ""}
+                      Details: {pin.details}
+                    </div>
+                  )}
+
+                  {(pin.categories?.length ?? 0) > 0 && (
+                    <div style={{ fontSize: 12, marginTop: 6 }}>
+                      Tags: {pin.categories?.join(", ")}
                     </div>
                   )}
 
