@@ -1,3 +1,4 @@
+# netlify.toml
 
 [build]
   command = "npm run build"
@@ -7,7 +8,12 @@
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
   NPM_FLAGS = "--no-audit --no-fund"
+  NODE_OPTIONS = "--max-old-space-size=4096"   # Optional: fewer OOM surprises on larger builds
 
 # Use the official Next.js plugin for proper routing/SSR
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# Optional: a simple flag you can check in code (process.env.NEXT_PUBLIC_APP_ENV)
+[context.production.environment]
+  NEXT_PUBLIC_APP_ENV = "production"
