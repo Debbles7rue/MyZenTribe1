@@ -22,7 +22,7 @@ const ENV_LABEL: Record<Environment, string> = {
   lake: 'Peaceful Lake',
   creek: 'Forest Creek',
   abstract: 'Meditative Patterns',
-  candles: 'Candles for Loved Ones',
+  candles: 'Light a candle for loved ones', // ⬅️ updated label
 };
 
 const SOUND_LABEL: Record<SoundOpt, string> = {
@@ -70,14 +70,12 @@ export default function MeditationPage() {
   const [candleColor, setCandleColor] =
     useState<'gold'|'white'|'rose'|'blue'|'green'>('gold');
 
-  // anonymous id used for sessions/candles if not logged in
   useEffect(() => {
     if (!localStorage.getItem('mz_anon_id')) {
       localStorage.setItem('mz_anon_id', crypto.randomUUID());
     }
   }, []);
 
-  // audio engine
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -89,7 +87,6 @@ export default function MeditationPage() {
     }
   }, [soundOn, entered, volume, audioSrc]);
 
-  // stats
   useEffect(() => {
     let t: NodeJS.Timeout | null = null;
     const fetchStats = async () => {
@@ -117,7 +114,6 @@ export default function MeditationPage() {
     return () => { if (t) clearInterval(t); };
   }, []);
 
-  // heartbeat
   useEffect(() => {
     if (!sessionId) return;
     const beat = async () => {
@@ -129,7 +125,6 @@ export default function MeditationPage() {
     return () => clearInterval(h);
   }, [sessionId]);
 
-  // load tribute candles if that room is selected
   useEffect(() => {
     if (env !== 'candles') return;
     (async () => {
@@ -153,7 +148,7 @@ export default function MeditationPage() {
           );
         }
       } catch {
-        // table may not exist yet — fail silently
+        // table might not exist yet — ignore
       }
     })();
   }, [env]);
@@ -234,10 +229,9 @@ export default function MeditationPage() {
 
   return (
     <div className="mz-page">
-      {/* Title */}
       <h1 className="mz-title">Enter the Sacred Space</h1>
 
-      {/* NEW: Gentle sandy info banner at the very top */}
+      {/* Top sandy banner */}
       <section className="mz-info top">
         <p className="lead">
           When many people meditate together, our nervous systems entrain,
@@ -341,11 +335,18 @@ export default function MeditationPage() {
         <div className={`mz-scene ${entered ? 'entered' : ''}`}>
           <div className="mz-aura" />
 
+          {/* DOOR with candles */}
           {!hideDoor && (
             <div className={`mz-door ${doorOpen ? 'is-open' : ''}`}>
               <div className="mz-ancient">ENTER THE SACRED SPACE</div>
               <div className="mz-door-panel left" />
               <div className="mz-door-panel right" />
+              {/* NEW: candle sconces on the door */}
+              <div className="mz-door-candles">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="dc"><Candle height="mid" /></div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -413,7 +414,6 @@ export default function MeditationPage() {
 }
 
 /* ===== Scenes ===== */
-
 function SacredRoom() {
   return (
     <>
