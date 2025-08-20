@@ -1,7 +1,4 @@
+// next.config.js
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  // IMPORTANT: Do NOT set `output: 'export'` for Netlify SSR
-};
-
+const nextConfig = {};
 module.exports = nextConfig;
