@@ -47,9 +47,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 /** Set the initial view (and ensure wheel zoom is enabled) without using MapContainer props. */
 function SetView({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
-  // Set view after map mounts
   map.setView(center, zoom);
-  // Make sure wheel zoom is enabled (usually default, but explicit is fine)
   map.scrollWheelZoom.enable();
   return null;
 }
@@ -66,14 +64,21 @@ export default function MapExplorerClient({
   );
 
   return (
-    <div style={{ height, borderRadius: 12, overflow: "hidden", border: "1px solid #eee" }}>
+    <div
+      style={{
+        position: "relative",
+        height,
+        borderRadius: 12,
+        overflow: "hidden",
+        border: "1px solid #eee",
+      }}
+    >
       {/* Omit center/zoom props to avoid TS type mismatches on some setups. */}
       <MapContainer style={{ height: "100%", width: "100%" }}>
         <SetView center={center} zoom={4} />
-        <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {/* Remove `attribution` prop to dodge TileLayer typing quirk */}
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
         {safePins.map((pin) => {
           const comm = communitiesById[pin.community_id];
           return (
@@ -135,6 +140,21 @@ export default function MapExplorerClient({
           );
         })}
       </MapContainer>
+
+      {/* Simple attribution overlay to keep OSM credit visible */}
+      <div
+        style={{
+          position: "absolute",
+          right: 8,
+          bottom: 6,
+          background: "rgba(255,255,255,0.8)",
+          borderRadius: 6,
+          padding: "2px 6px",
+          fontSize: 11,
+        }}
+      >
+        © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors
+      </div>
     </div>
   );
 }
