@@ -3,12 +3,12 @@ const path = require("path");
 
 module.exports = {
   reactStrictMode: true,
-  // Keep type/lint errors from blocking deploy while we stabilize
+  // Keep builds moving while we stabilize types/lint (optional; remove later if you like)
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
   webpack: (config) => {
-    // When Next's telemetry requires 'ci-info', point it to our local stub
+    // Alias 'ci-info' to our local stub to satisfy Next telemetry import
     config.resolve.alias["ci-info"] = path.resolve(__dirname, "stubs/ci-info.js");
     return config;
   },
