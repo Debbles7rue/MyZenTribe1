@@ -49,7 +49,6 @@ const CATEGORIES = [
 /** Adapter: normalize a DB day_of_week (string | null | e.g. "Sun", "0") into a required string "0"–"6". */
 function normalizeDowStr(day: string | null | undefined): string {
   if (day == null || day === "") return "0";
-  // numeric string already?
   const n = Number(day);
   if (!Number.isNaN(n) && n >= 0 && n <= 6) return String(n);
   const s = String(day).toLowerCase();
@@ -279,6 +278,7 @@ export default function Page() {
                 </div>
 
                 <div className="mb-3">
+                  {/* Adapter explanation: pass day_of_week as a required string ("0"–"6") */}
                   <MapExplorerClient
                     center={[
                       pins.length
@@ -288,7 +288,6 @@ export default function Page() {
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
                     ]}
-                    {/* Adapter: ensure required string day_of_week for the Map component */}
                     pins={pins.map((p) => ({ ...p, day_of_week: normalizeDowStr(p.day_of_week) }))}
                     communitiesById={mapCommunities}
                     height={340}
