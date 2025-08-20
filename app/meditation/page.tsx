@@ -1,11 +1,12 @@
 // app/meditation/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import "./meditation.css";
 
+/** Environments shown behind the doors */
 type Env = "room" | "beach" | "lake" | "creek" | "abstract" | "candles";
 
 const ENV_LABEL: Record<Env, string> = {
@@ -17,7 +18,7 @@ const ENV_LABEL: Record<Env, string> = {
   candles: "Light a Candle for Loved Ones",
 };
 
-// Background images (change to your own)
+/** Image paths (swap these for your own files in /public/meditation/) */
 const BG: Record<Env, string> = {
   room: "/meditation/room.jpg",
   beach: "/meditation/beach.jpg",
@@ -27,15 +28,15 @@ const BG: Record<Env, string> = {
   candles: "/meditation/candles.jpg",
 };
 
-// Door texture
+/** Door wood texture + your subtle “protection shield” */
 const DOOR_TEXTURE = "/meditation/door.jpg";
+const SHIELD_IMG = "/meditation/shield.png"; // <— upload that image here
 
-/* ---------- simple audio mixer ---------- */
+/* ---------------------- audio mixer (optional, simple) --------------------- */
 type SoundMode = "nature" | "freq" | "none";
 type FreqKey = "432" | "528" | "639" | "963";
 
 function useAudioMixer() {
-  // two channels we can fade independently
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const freqRef = useRef<HTMLAudioElement | null>(null);
   const [started, setStarted] = useState(false);
@@ -47,20 +48,14 @@ function useAudioMixer() {
     a.preload = "auto";
     a.crossOrigin = "anonymous";
     a.volume = 0;
-    a.onerror = () => {
-      // ignore missing/failed files
-    };
     return a;
   }
 
   function setSrcs(ambient?: string | null, freq?: string | null) {
-    // Stop previous
     ambientRef.current?.pause();
     freqRef.current?.pause();
-
     ambientRef.current = make(ambient);
     freqRef.current = make(freq);
-
     if (started) {
       ambientRef.current?.play().catch(() => {});
       freqRef.current?.play().catch(() => {});
@@ -96,36 +91,18 @@ function useAudioMixer() {
     fadeTo(freqRef.current, 0, ms);
   }
 
-  return {
-    setSrcs,
-    setVolumes,
-    stopAll,
-    ensureStarted,
-  };
+  return { setSrcs, setVolumes, stopAll, ensureStarted };
 }
 
-/* Map our scenes to sound files */
+/** scene -> default ambient sound file (optional; missing files are OK) */
 const AMBIENT_FOR_ENV: Record<Env, string | null> = {
   room: "/audio/fountain.mp3",
   beach: "/audio/beach_waves.mp3",
   lake: "/audio/lake_softwater.mp3",
   creek: "/audio/forest_creek.mp3",
-  abstract: null, // abstract can be silent (or add a soft drone if you have one)
+  abstract: null,
   candles: "/audio/candle_room_chant.mp3",
 };
-
-// Optional extra nature layer per env (left off by default in this simple mixer)
-// If you want layering (e.g. waves + gulls), just add the gulls into the ambient file
-// or later expand the mixer to three channels.
-const EXTRA_FOR_ENV: Record<Env, string | null> = {
-  room: null,
-  beach: "/audio/seagulls.mp3", // not used by default; see note above
-  lake: null,
-  creek: "/audio/forest_birds.mp3",
-  abstract: null,
-  candles: null,
-};
-
 const FREQ_SRC: Record<FreqKey, string> = {
   "432": "/audio/tone_432.mp3",
   "528": "/audio/tone_528.mp3",
@@ -133,52 +110,58 @@ const FREQ_SRC: Record<FreqKey, string> = {
   "963": "/audio/tone_963.mp3",
 };
 
+/* --------------------------- Candle DB Row type ---------------------------- */
+type CandleRow = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  message: string | null;
+  color: "white" | "gold" | "blue" | "violet" | "rose";
+  lit_at: string;
+  expires_at: string;
+};
+
 export default function MeditationPage() {
   const [env, setEnv] = useState<Env>("room");
   const [open, setOpen] = useState(false);
 
-  // sound UI
+  // sound
   const [soundMode, setSoundMode] = useState<SoundMode>("nature");
   const [volume, setVolume] = useState<number>(0.65);
   const [freq, setFreq] = useState<FreqKey>("528");
+  const mixer = useAudioMixer();
 
-  // stats
+  // simple stats
   const [liveNow, setLiveNow] = useState(0);
   const [lastDay, setLastDay] = useState(0);
   const [loadingCounts, setLoadingCounts] = useState(true);
 
-  const mixer = useAudioMixer();
+  // candles
+  const [candles, setCandles] = useState<CandleRow[]>([]);
+  const [candlesLoading, setCandlesLoading] = useState(false);
+  const [showCandleModal, setShowCandleModal] = useState(false);
 
-  // whenever env / sound mode / freq / open changes, retune audio
+  // sound re-tune when env/mode change
   useEffect(() => {
     if (!open) {
       mixer.stopAll(350);
       return;
     }
-    // choose sources
     const ambient = soundMode === "nature" ? AMBIENT_FOR_ENV[env] : null;
     const freqSrc = soundMode === "freq" ? FREQ_SRC[freq] : null;
-
     mixer.setSrcs(ambient, freqSrc);
     mixer.ensureStarted();
-
-    // ambient gets full volume, freq is a little softer by default
-    const ambVol = soundMode === "nature" ? volume : 0;
-    const freqVol = soundMode === "freq" ? Math.min(1, volume) : 0;
-    mixer.setVolumes(ambVol, freqVol, 700);
+    mixer.setVolumes(soundMode === "nature" ? volume : 0, soundMode === "freq" ? volume : 0, 700);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [env, soundMode, freq, open]);
 
-  // when user moves the volume
   useEffect(() => {
     if (!open) return;
-    const ambVol = soundMode === "nature" ? volume : 0;
-    const freqVol = soundMode === "freq" ? Math.min(1, volume) : 0;
-    mixer.setVolumes(ambVol, freqVol, 250);
+    mixer.setVolumes(soundMode === "nature" ? volume : 0, soundMode === "freq" ? volume : 0, 250);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volume]);
 
-  // Stats pull (best-effort)
+  // stats polling
   useEffect(() => {
     let alive = true;
     async function fetchCounts() {
@@ -207,11 +190,24 @@ export default function MeditationPage() {
     }
     fetchCounts();
     const t = setInterval(fetchCounts, 30000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
+    return () => { alive = false; clearInterval(t); };
   }, []);
+
+  // fetch candles when “Candles” scene opens
+  useEffect(() => {
+    if (env !== "candles" || !open) return;
+    (async () => {
+      setCandlesLoading(true);
+      const { data, error } = await supabase
+        .from("candle_offerings")
+        .select("*")
+        .gte("expires_at", new Date().toISOString())
+        .order("lit_at", { ascending: false })
+        .limit(120);
+      if (!error) setCandles((data ?? []) as CandleRow[]);
+      setCandlesLoading(false);
+    })();
+  }, [env, open]);
 
   function choose(next: Env) {
     setEnv(next);
@@ -228,23 +224,18 @@ export default function MeditationPage() {
       >
         <div className="mz-scene">
           <div className="mz-aura" />
-          <div
-            className="mz-bg-img"
-            style={{ ["--bg-img" as any]: `url(${BG[env]})` }}
-            aria-hidden
-          />
-          <Scene env={env} />
+          <div className="mz-bg-img" style={{ ["--bg-img" as any]: `url(${BG[env]})` }} />
+          {/* 🔒 subtle protective shield overlay */}
+          <div className="mz-shield" style={{ ["--shield-img" as any]: `url(${SHIELD_IMG})` }} />
+          <Scene env={env} candles={candles} loadingCandles={candlesLoading} onAddCandle={() => setShowCandleModal(true)} />
         </div>
 
-        {/* Doors + choices */}
+        {/* Doors + choices at the front */}
         <div className={`mz-doorgroup ${open ? "is-open" : ""}`}>
           <div className="mz-door">
             <div className="mz-ancient">ENTER THE SACRED SPACE</div>
             <div className="mz-door-candles">
-              <DoorCandle />
-              <DoorCandle />
-              <DoorCandle />
-              <DoorCandle />
+              <DoorCandle /><DoorCandle /><DoorCandle /><DoorCandle />
             </div>
             <div className="mz-door-panel left" />
             <div className="mz-door-panel right" />
@@ -257,14 +248,8 @@ export default function MeditationPage() {
           </div>
           <div className="mz-choices right">
             <Choice label={ENV_LABEL.creek} onClick={() => choose("creek")} />
-            <Choice
-              label={ENV_LABEL.abstract}
-              onClick={() => choose("abstract")}
-            />
-            <Choice
-              label={ENV_LABEL.candles}
-              onClick={() => choose("candles")}
-            />
+            <Choice label={ENV_LABEL.abstract} onClick={() => choose("abstract")} />
+            <Choice label={ENV_LABEL.candles} onClick={() => choose("candles")} />
           </div>
 
           {open && (
@@ -276,37 +261,24 @@ export default function MeditationPage() {
           )}
         </div>
 
-        {/* Sound controls (only show after entering) */}
+        {/* Sound controls */}
         {open && (
           <div className="mz-controls">
             <div className="row">
-              <button
-                className={`pill ${soundMode === "nature" ? "active" : ""}`}
-                onClick={() => setSoundMode("nature")}
-              >
+              <button className={`pill ${soundMode === "nature" ? "active" : ""}`} onClick={() => setSoundMode("nature")}>
                 Nature
               </button>
-              <button
-                className={`pill ${soundMode === "freq" ? "active" : ""}`}
-                onClick={() => setSoundMode("freq")}
-              >
+              <button className={`pill ${soundMode === "freq" ? "active" : ""}`} onClick={() => setSoundMode("freq")}>
                 Frequencies
               </button>
-              <button
-                className={`pill ${soundMode === "none" ? "active" : ""}`}
-                onClick={() => setSoundMode("none")}
-              >
+              <button className={`pill ${soundMode === "none" ? "active" : ""}`} onClick={() => setSoundMode("none")}>
                 No sound
               </button>
 
               {soundMode === "freq" && (
                 <div className="select-wrap">
                   <label className="muted">Tone</label>
-                  <select
-                    className="select"
-                    value={freq}
-                    onChange={(e) => setFreq(e.target.value as FreqKey)}
-                  >
+                  <select className="select" value={freq} onChange={(e) => setFreq(e.target.value as FreqKey)}>
                     <option value="432">432 Hz</option>
                     <option value="528">528 Hz</option>
                     <option value="639">639 Hz</option>
@@ -317,14 +289,7 @@ export default function MeditationPage() {
 
               <div className="vol-wrap">
                 <label className="muted">Volume</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={volume}
-                  onChange={(e) => setVolume(parseFloat(e.target.value))}
-                />
+                <input type="range" min={0} max={1} step={0.01} value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} />
               </div>
             </div>
           </div>
@@ -343,64 +308,68 @@ export default function MeditationPage() {
         </div>
         <div className="mz-linksbar">
           <span className="muted">Learn more: </span>
-          <Link className="mz-link" href="/whats-new">
-            collective meditation
-          </Link>
+          <Link className="mz-link" href="/whats-new">collective meditation</Link>
           <span className="muted"> · </span>
-          <Link className="mz-link" href="/communities">
-            communities
-          </Link>
+          <Link className="mz-link" href="/communities">communities</Link>
         </div>
       </section>
+
+      {/* Candle create modal */}
+      {showCandleModal && (
+        <CandleModal
+          onClose={() => setShowCandleModal(false)}
+          onSaved={(row) => {
+            // optimistically add to wall
+            setCandles((prev) => [row, ...prev]);
+            setShowCandleModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/* ---------- visuals from the previous version ---------- */
+/* ------------------------------ Visual pieces ------------------------------ */
 
 function Choice({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button className="mz-choice" onClick={onClick}>
-      <span className="flame">
-        <span className="glow" />
-        <span className="core" />
-      </span>
+      <span className="flame"><span className="glow" /><span className="core" /></span>
       <span className="label">{label}</span>
     </button>
   );
 }
-
 function DoorCandle() {
   return (
     <div className="dc">
-      <div className="flame">
-        <span className="glow" />
-        <span className="core" />
-      </div>
+      <div className="flame"><span className="glow" /><span className="core" /></div>
     </div>
   );
 }
 
-function Scene({ env }: { env: Env }) {
+/** Room overlays (water fountain + shelves) + other scenes + Candle wall */
+function Scene({
+  env,
+  candles,
+  loadingCandles,
+  onAddCandle,
+}: {
+  env: Env;
+  candles: CandleRow[];
+  loadingCandles: boolean;
+  onAddCandle: () => void;
+}) {
   if (env === "beach") {
     return (
       <div className="mz-beach">
-        <div className="sea">
-          <div className="wave w1" />
-          <div className="wave w2" />
-          <div className="wave w3" />
-        </div>
+        <div className="sea"><div className="wave w1" /><div className="wave w2" /><div className="wave w3" /></div>
       </div>
     );
   }
   if (env === "lake") {
     return (
       <div className="mz-lake">
-        <div className="water">
-          <div className="ripple r1" />
-          <div className="ripple r2" />
-          <div className="ripple r3" />
-        </div>
+        <div className="water"><div className="ripple r1" /><div className="ripple r2" /><div className="ripple r3" /></div>
       </div>
     );
   }
@@ -408,14 +377,8 @@ function Scene({ env }: { env: Env }) {
     return (
       <div className="mz-creek">
         <div className="stream">
-          <div className="flow f0" />
-          <div className="flow f1" />
-          <div className="flow f2" />
-          <div className="flow f3" />
-          <div className="flow f4" />
-          <div className="flow f5" />
-          <div className="flow f6" />
-          <div className="flow f7" />
+          <div className="flow f0" /><div className="flow f1" /><div className="flow f2" /><div className="flow f3" />
+          <div className="flow f4" /><div className="flow f5" /><div className="flow f6" /><div className="flow f7" />
         </div>
       </div>
     );
@@ -423,10 +386,7 @@ function Scene({ env }: { env: Env }) {
   if (env === "abstract") {
     return (
       <div className="mz-abstract">
-        <div className="swirl s1" />
-        <div className="swirl s2" />
-        <div className="swirl s3" />
-        <div className="swirl s4" />
+        <div className="swirl s1" /><div className="swirl s2" /><div className="swirl s3" /><div className="swirl s4" />
       </div>
     );
   }
@@ -434,70 +394,124 @@ function Scene({ env }: { env: Env }) {
     return (
       <div className="mz-candlewall">
         <div className="wall-grid">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="tribute white">
-              <div className="name">Loved One</div>
-              <div className="holder">
-                <MiniCandle />
-              </div>
+          {loadingCandles && <div className="loading">Loading candles…</div>}
+          {!loadingCandles && candles.length === 0 && (
+            <div className="loading">Be the first to light a candle ✨</div>
+          )}
+          {candles.map((c) => (
+            <div key={c.id} className={`tribute ${c.color}`}>
+              <div className="name" title={c.message ?? ""}>{c.name}</div>
+              <div className="holder"><RealCandle color={c.color} /></div>
             </div>
           ))}
         </div>
-        <button
-          className="mz-chip add"
-          onClick={() => alert("Candle creator coming soon ✨")}
-        >
-          + Add a candle
-        </button>
+        <button className="mz-chip add" onClick={onAddCandle}>+ Add a candle</button>
       </div>
     );
   }
-  // sacred room
   return (
     <div className="mz-room">
       <div className="shelves">
-        <div className="shelf top" />
-        <div className="shelf mid" />
+        <div className="shelf top" /><div className="shelf mid" />
         <div className="candles">
-          <Candle size="tall" />
-          <Candle size="mid" />
-          <Candle size="short" />
-          <Candle size="mid" />
-          <Candle size="tall" />
+          <DecorCandle size="tall" /><DecorCandle size="mid" /><DecorCandle size="short" /><DecorCandle size="mid" /><DecorCandle size="tall" />
         </div>
       </div>
       <div className="fountain">
         <div className="pillar" />
-        <div className="stream s1" />
-        <div className="stream s2" />
-        <div className="stream s3" />
-        <div className="ripple r1" />
-        <div className="ripple r2" />
-        <div className="ripple r3" />
+        <div className="stream s1" /><div className="stream s2" /><div className="stream s3" />
+        <div className="ripple r1" /><div className="ripple r2" /><div className="ripple r3" />
       </div>
     </div>
   );
 }
 
-function Candle({ size = "mid" as "short" | "mid" | "tall" }) {
+/* Decorative candles used in the room */
+function DecorCandle({ size = "mid" as "short" | "mid" | "tall" }) {
   return (
     <div className={`candle ${size}`}>
       <div className="wax" />
-      <div className="flame">
-        <span className="glow" />
-        <span className="core" />
-      </div>
+      <div className="flame"><span className="glow" /><span className="core" /></div>
       <div className="halo" />
     </div>
   );
 }
-function MiniCandle() {
+
+/* The realistic candle for the Candle Wall */
+function RealCandle({ color }: { color: CandleRow["color"] }) {
   return (
-    <div className="mini-candle">
-      <div className="wax" />
-      <div className="flame">
-        <span className="glow" />
-        <span className="core" />
+    <div className={`real-candle ${color}`}>
+      <div className="rc-wax" />
+      <div className="rc-flame"><span className="rc-glow" /><span className="rc-core" /></div>
+      <div className="rc-halo" />
+      <div className="rc-melt a" /><div className="rc-melt b" />
+    </div>
+  );
+}
+
+/* Modal to add a candle */
+function CandleModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: (row: CandleRow) => void;
+}) {
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  const [color, setColor] = useState<CandleRow["color"]>("white");
+  const [saving, setSaving] = useState(false);
+  const valid = name.trim().length > 0;
+
+  async function submit() {
+    if (!valid || saving) return;
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("candle_offerings")
+      .insert([{ name: name.trim(), message: message.trim() || null, color }])
+      .select("*")
+      .single();
+    setSaving(false);
+    if (error) {
+      alert(error.message);
+    } else if (data) {
+      onSaved(data as CandleRow);
+    }
+  }
+
+  return (
+    <div className="mz-modal-overlay" role="dialog" aria-modal="true">
+      <div className="mz-modal">
+        <h3 className="h3">Light a candle</h3>
+        <div className="mz-modal-body">
+          <label className="field">
+            <span className="label">Name</span>
+            <input className="input" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="Loved one's name" />
+          </label>
+          <label className="field">
+            <span className="label">Message (optional)</span>
+            <textarea className="input" rows={3} maxLength={140} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="A short intention or prayer" />
+          </label>
+          <label className="field">
+            <span className="label">Candle color</span>
+            <select className="input" value={color} onChange={(e) => setColor(e.target.value as CandleRow["color"])}>
+              <option value="white">White</option>
+              <option value="gold">Gold</option>
+              <option value="blue">Blue</option>
+              <option value="violet">Violet</option>
+              <option value="rose">Rose</option>
+            </select>
+          </label>
+          <div className="preview">
+            <RealCandle color={color} />
+          </div>
+        </div>
+        <div className="mz-modal-footer">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-brand" disabled={!valid || saving} onClick={submit}>
+            {saving ? "Saving…" : "Light candle"}
+          </button>
+        </div>
       </div>
     </div>
   );
