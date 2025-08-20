@@ -25,18 +25,18 @@ type Community = {
 
 type MapPin = {
   id: string;
-  community_id: string | null;
+  community_id: string;
   name: string | null;
-  lat: number | null;
-  lng: number | null;
+  lat: number;
+  lng: number;
   address: string | null;
+  categories?: string[] | null;
   contact_phone: string | null;
   contact_email: string | null;
   website_url: string | null;
-  categories?: string[] | null;
-  // DB shape (string or null). Map component requires a non-null string.
-  day_of_week?: string | null;
-  time_local?: string | null;
+
+  /** Optional free-text note (e.g., "Sundays 10am", "Aug 24, 7pm"). */
+  details?: string | null;
 };
 
 type MapCommunity = { id: string; title: string; category: string | null };
@@ -45,22 +45,6 @@ const CATEGORIES = [
   "Wellness","Meditation","Yoga","Breathwork","Sound Baths","Drum Circles",
   "Arts & Crafts","Nature/Outdoors","Parenting","Recovery/Support","Local Events","Other",
 ];
-
-/** Adapter: normalize a DB day_of_week (string | null | e.g. "Sun", "0") into a required string "0"–"6". */
-function normalizeDowStr(day: string | null | undefined): string {
-  if (day == null || day === "") return "0";
-  const n = Number(day);
-  if (!Number.isNaN(n) && n >= 0 && n <= 6) return String(n);
-  const s = String(day).toLowerCase();
-  if (s.startsWith("sun")) return "0";
-  if (s.startsWith("mon")) return "1";
-  if (s.startsWith("tue")) return "2";
-  if (s.startsWith("wed")) return "3";
-  if (s.startsWith("thu")) return "4";
-  if (s.startsWith("fri")) return "5";
-  if (s.startsWith("sat")) return "6";
-  return "0";
-}
 
 export default function Page() {
   const params = useParams<{ id: string }>();
@@ -117,25 +101,38 @@ export default function Page() {
       }
       if (alive) setIsAdmin(admin);
 
-      // Load pins mapped to this community
+      // Load pins mapped to this community (no strict date fields; details stays optional)
       const { data: mapped, error: mErr } = await supabase
         .from("community_circle_communities")
         .select(
-          "circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories,day_of_week,time_local)"
+          "circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories)"
         )
         .eq("community_id", communityId)
         .limit(2000);
 
       if (mErr) console.error(mErr);
-      const mapPins: MapPin[] =
-        (mapped ?? []).map((r: any) => ({
-          community_id: communityId,
-          ...r.circle,
-          day_of_week: r.circle?.day_of_week ?? null, // keep raw (string|null)
-          time_local: r.circle?.time_local ?? null,
-        })) ?? [];
-      if (alive) setPins(mapPins);
 
+      const rawPins = (mapped ?? []).map((r: any) => ({
+        id: r.circle.id as string,
+        community_id: communityId as string,
+        name: (r.circle?.name ?? null) as string | null,
+        lat: r.circle?.lat as number | null,
+        lng: r.circle?.lng as number | null,
+        address: (r.circle?.address ?? null) as string | null,
+        categories: (r.circle?.categories ?? null) as string[] | null,
+        contact_phone: (r.circle?.contact_phone ?? null) as string | null,
+        contact_email: (r.circle?.contact_email ?? null) as string | null,
+        website_url: (r.circle?.website_url ?? null) as string | null,
+
+        // If your DB later adds a 'details' column, you can map it like:
+        // details: (r.circle?.details ?? null) as string | null,
+      }));
+
+      const mapPins: MapPin[] = rawPins.filter(
+        (p): p is MapPin => typeof p.lat === "number" && typeof p.lng === "number"
+      ) as MapPin[];
+
+      if (alive) setPins(mapPins);
       if (alive) setLoading(false);
     })();
     return () => { alive = false; };
@@ -278,7 +275,6 @@ export default function Page() {
                 </div>
 
                 <div className="mb-3">
-                  {/* Adapter: pass required shapes to the Map component */}
                   <MapExplorerClient
                     center={[
                       pins.length
@@ -287,13 +283,8 @@ export default function Page() {
                       pins.length
                         ? (pins.reduce((s, p) => s + (p.lng ?? 0), 0) / pins.length) || -98.35
                         : -98.35,
-                    ]}
-                    pins={pins.map((p) => ({
-                      ...p,
-                      day_of_week: normalizeDowStr(p.day_of_week),
-                      // 🔧 ensure required string (some DB rows may be null)
-                      time_local: p.time_local ?? "",
-                    }))}
+                    ] as [number, number]}
+                    pins={pins}
                     communitiesById={mapCommunities}
                     height={340}
                   />
@@ -310,6 +301,12 @@ export default function Page() {
                         {(p.categories?.length ?? 0) > 0 && (
                           <div className="muted" style={{ fontSize: 12 }}>
                             {p.categories?.join(", ")}
+                          </div>
+                        )}
+                        {/* Optional: preview details line in the list too */}
+                        {p.details && (
+                          <div className="muted" style={{ fontSize: 12 }}>
+                            Details: {p.details}
                           </div>
                         )}
                       </li>
@@ -386,16 +383,25 @@ export default function Page() {
             setShowAddPin(false);
             const { data: mapped } = await supabase
               .from("community_circle_communities")
-              .select("circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories,day_of_week,time_local)")
+              .select("circle:community_circles!inner(id,name,lat,lng,address,contact_phone,contact_email,website_url,categories)")
               .eq("community_id", communityId);
-            setPins(
-              (mapped ?? []).map((r: any) => ({
-                community_id: communityId,
-                ...r.circle,
-                day_of_week: r.circle?.day_of_week ?? null,
-                time_local: r.circle?.time_local ?? null,
-              }))
-            );
+            const rawPins = (mapped ?? []).map((r: any) => ({
+              id: r.circle.id as string,
+              community_id: communityId as string,
+              name: (r.circle?.name ?? null) as string | null,
+              lat: r.circle?.lat as number | null,
+              lng: r.circle?.lng as number | null,
+              address: (r.circle?.address ?? null) as string | null,
+              categories: (r.circle?.categories ?? null) as string[] | null,
+              contact_phone: (r.circle?.contact_phone ?? null) as string | null,
+              contact_email: (r.circle?.contact_email ?? null) as string | null,
+              website_url: (r.circle?.website_url ?? null) as string | null,
+              // details: (r.circle?.details ?? null) as string | null, // enable if/when your DB adds this column
+            }));
+            const mapPins: MapPin[] = rawPins.filter(
+              (p): p is MapPin => typeof p.lat === "number" && typeof p.lng === "number"
+            ) as MapPin[];
+            setPins(mapPins);
           }}
         />
       )}
