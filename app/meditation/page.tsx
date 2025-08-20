@@ -1,243 +1,245 @@
 // app/meditation/page.tsx
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 
 type EnvId = "sacred" | "beach" | "lake" | "creek" | "patterns" | "candles";
 
-type EnvConfig = {
+type Env = {
   id: EnvId;
   label: string;
-  // Use image for GIFs; you can also add video later if you want
   image?: string; // served from /public
-  // optional audio loop for ambience (you can drop files in /public/sounds)
-  sound?: string;
 };
 
-const ENVS: EnvConfig[] = [
-  { id: "sacred",   label: "Sacred Room", image: "/meditation/sacred-room.jpg" },
-  { id: "beach",    label: "Stunning Beach", image: "/meditation/beach.jpg", sound: "/sounds/beach-waves.mp3" },
-  { id: "lake",     label: "Peaceful Lake", image: "/meditation/lake.jpg", sound: "/sounds/lake-breeze.mp3" },
-  // ⬇⬇ Your GIF goes here
-  { id: "creek",    label: "Forest Creek", image: "/meditation/forest-creek.gif", sound: "/sounds/forest-creek.mp3" },
-  { id: "patterns", label: "Meditative Patterns", image: "/meditation/patterns.jpg" },
-  { id: "candles",  label: "Light a candle for loved ones", image: "/meditation/candle-room.jpg" },
+const LEFT: Env[] = [
+  { id: "sacred",   label: "Sacred Room",            image: "/meditation/sacred-room.jpg" },
+  { id: "beach",    label: "Stunning Beach",         image: "/meditation/beach.jpg" },
+  { id: "lake",     label: "Peaceful Lake",          image: "/meditation/lake.jpg" },
 ];
 
+const RIGHT: Env[] = [
+  // 👉 your animated GIF
+  { id: "creek",    label: "Forest Creek",           image: "/meditation/forest-creek.gif" },
+  { id: "patterns", label: "Meditative Patterns",    image: "/meditation/patterns.jpg" },
+  { id: "candles",  label: "Light a Candle for Loved Ones", image: "/meditation/candle-room.jpg" },
+];
+
+const ALL = [...LEFT, ...RIGHT];
+
 export default function MeditationPage() {
-  const [selected, setSelected] = useState<EnvId | null>("creek"); // default to show your GIF immediately
-  const [soundMode, setSoundMode] = useState<"nature" | "frequency" | "off">("off");
-  const [volume, setVolume] = useState(0.6);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // default to creek so you can instantly see your GIF
+  const [selected, setSelected] = useState<EnvId>("creek");
 
-  const envMap = useMemo(() => {
-    const m: Record<EnvId, EnvConfig> = {} as any;
-    ENVS.forEach((e) => (m[e.id] = e));
-    return m;
-  }, []);
-
-  const current = selected ? envMap[selected] : null;
-
-  // pick audio source based on selection + sound mode
-  const audioSrc = useMemo(() => {
-    if (!current || soundMode === "off") return undefined;
-    if (soundMode === "frequency") return "/sounds/432hz.mp3"; // drop a file later or change name
-    return current.sound; // nature sounds by default, if provided
-  }, [current, soundMode]);
+  const current = useMemo(() => {
+    return ALL.find((e) => e.id === selected);
+  }, [selected]);
 
   return (
     <div className="page-wrap">
       <div className="page">
         <div className="container-app">
 
-          {/* Intro banner */}
-          <section className="mx-auto mb-5 rounded-xl p-4"
-                   style={{ background: "#eee4d8", color: "#3a2d1f", border: "1px solid #e3dccf" }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Enter the Sacred Space</div>
-            <div style={{ lineHeight: 1.5 }}>
+          {/* header / intro */}
+          <h1 className="page-title">Enter the Sacred Space</h1>
+
+          <section className="intro-card">
+            <p>
               When many people meditate together, our nervous systems entrain, stress drops, and compassion rises.
-              Our aim is to keep a gentle wave of presence moving around the globe—<b>24/7</b>.{" "}
-              <Link href="/whats-new" className="link">Learn more about collective meditation</Link>
-            </div>
+              Our aim is to keep a gentle wave of presence moving around the globe—<b>24/7</b>.
+              <span className="spacer" />
+              <Link className="link" href="/whats-new">Learn more about collective meditation</Link>
+            </p>
           </section>
 
-          {/* Panel with options */}
-          <section className="card card-lg" style={{ background: "#2b2d30", color: "#e9e4dc" }}>
-            <div className="muted mb-2">Environment</div>
-            <div className="env-grid">
-              {ENVS.map((env) => (
+          <section className="door-layout">
+            {/* Left choices */}
+            <div className="side">
+              {LEFT.map((env) => (
                 <button
                   key={env.id}
-                  className={`env-pill ${selected === env.id ? "env-pill-active" : ""}`}
+                  className={`choice ${selected === env.id ? "choice-on" : ""}`}
                   onClick={() => setSelected(env.id)}
                 >
-                  <span>{env.label}</span>
+                  <span className="candle-dot" />
+                  <span className="choice-label">{env.label}</span>
                 </button>
               ))}
             </div>
 
-            <div className="muted mt-4">Sound</div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                className={`chip ${soundMode === "nature" ? "chip-on" : ""}`}
-                onClick={() => setSoundMode("nature")}
-              >
-                Nature sounds
-              </button>
-              <button
-                className={`chip ${soundMode === "frequency" ? "chip-on" : ""}`}
-                onClick={() => setSoundMode("frequency")}
-              >
-                Frequencies
-              </button>
-              <button
-                className={`chip ${soundMode === "off" ? "chip-on" : ""}`}
-                onClick={() => setSoundMode("off")}
-              >
-                No sound
-              </button>
-
-              <div className="flex items-center gap-2" style={{ marginLeft: "auto" }}>
-                <span className="muted">Volume</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={volume}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    setVolume(v);
-                    if (audioRef.current) audioRef.current.volume = v;
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <button className="btn btn-brand"
-                      onClick={() => {
-                        // If candles was chosen, route them over
-                        if (selected === "candles") window.location.href = "/meditation/candles";
-                      }}>
-                {selected === "candles" ? "Go to Candle Room" : "Enter"}
-              </button>
-            </div>
-          </section>
-
-          {/* Big room view */}
-          <section className="mt-6">
-            <div className="room-frame">
-              {/* Use <img> for GIF animation (next/image can freeze GIFs) */}
-              {current?.image && (
-                <img
-                  src={current.image}
-                  alt={current.label}
-                  className="room-bg"
-                />
-              )}
-
-              <div className="room-overlay">
-                <div className="room-title">ENTER THE SACRED SPACE</div>
-              </div>
-            </div>
-
-            {/* Ambient audio */}
-            {audioSrc && (
-              <audio
-                ref={audioRef}
-                src={audioSrc}
-                autoPlay
-                loop
-                onCanPlay={() => {
-                  if (audioRef.current) audioRef.current.volume = volume;
+            {/* The “door” / room */}
+            <div className="door">
+              <div
+                className="door-bg"
+                // Use inline style to ensure GIFs animate and images show reliably
+                style={{
+                  backgroundImage: current?.image
+                    ? `url(${current.image})`
+                    : "url(/meditation/door-parchment.jpg)",
                 }}
               />
-            )}
+              <div className="door-top-title">ENTER THE SACRED SPACE</div>
+
+              {selected === "candles" && (
+                <button
+                  className="enter-btn"
+                  onClick={() => (window.location.href = "/meditation/candles")}
+                >
+                  Go to Candle Room
+                </button>
+              )}
+            </div>
+
+            {/* Right choices */}
+            <div className="side">
+              {RIGHT.map((env) => (
+                <button
+                  key={env.id}
+                  className={`choice ${selected === env.id ? "choice-on" : ""}`}
+                  onClick={() => setSelected(env.id)}
+                >
+                  <span className="candle-dot" />
+                  <span className="choice-label">{env.label}</span>
+                </button>
+              ))}
+            </div>
           </section>
 
-          {/* Counters (simple placeholders; wire to Supabase later) */}
-          <section className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="counter-card">
-              <div className="big">0</div>
-              <div className="muted">meditating now</div>
+          {/* Counters (wire to Supabase later) */}
+          <section className="counters">
+            <div className="counter">
+              <div className="num">0</div>
+              <div className="cap">meditating now</div>
             </div>
-            <div className="counter-card">
-              <div className="big">0</div>
-              <div className="muted">in the last 24 hours</div>
+            <div className="counter">
+              <div className="num">0</div>
+              <div className="cap">in the last 24 hours</div>
             </div>
           </section>
         </div>
       </div>
 
+      {/* Style block – lighter, “sandy” palette with strong contrast */}
       <style jsx global>{`
-        .env-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
+        :root {
+          --sand-1: #faf5ec;
+          --sand-2: #f3ebdd;
+          --sand-3: #e7dbc3;
+          --ink: #2a241c;
+          --ink-soft: #4a4339;
+          --brand-gold: #c9b27f;
         }
-        @media (min-width: 960px) {
-          .env-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
-        }
-        .env-pill {
-          text-align: left;
-          padding: 16px 18px;
+
+        body { background: radial-gradient(1200px 500px at 50% -200px, #efe7da, #e5dccb 60%, #ddd1bd 100%); }
+
+        .page-title { color: var(--ink); }
+
+        .intro-card {
+          background: var(--sand-2);
+          color: var(--ink);
+          border: 1px solid var(--sand-3);
           border-radius: 14px;
-          background: linear-gradient(180deg, #504a45, #2f2b28);
-          border: 1px solid #5b524a;
-          color: #f3eee6;
+          padding: 12px 14px;
+          margin-bottom: 16px;
+        }
+        .intro-card .spacer { display: inline-block; width: 10px; }
+        .link { text-decoration: underline; color: #4d4a40; }
+
+        .door-layout {
+          display: grid;
+          grid-template-columns: 1fr minmax(520px, 820px) 1fr;
+          gap: 16px;
+          align-items: stretch;
+        }
+
+        .side {
+          display: grid;
+          gap: 12px;
+          align-content: start;
+        }
+
+        .choice {
+          display: grid;
+          grid-template-columns: 18px 1fr;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 14px;
+          background: rgba(255,255,255,.72);
+          color: var(--ink);
+          border: 1px solid var(--sand-3);
+          border-radius: 14px;
           font-weight: 600;
-          transition: transform .08s ease, box-shadow .08s ease;
+          box-shadow: 0 2px 8px rgba(0,0,0,.08);
+          transition: transform .06s ease, box-shadow .06s ease, background .06s ease;
         }
-        .env-pill:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.25); }
-        .env-pill-active {
-          outline: 2px solid #d7c7a6;
-          background: linear-gradient(180deg, #6a5e55, #3a342f);
+        .choice:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 22px rgba(0,0,0,.12);
+          background: rgba(255,255,255,.85);
         }
+        .choice-on {
+          outline: 2px solid var(--brand-gold);
+          background: #fff;
+        }
+        .candle-dot {
+          width: 10px; height: 14px; border-radius: 3px;
+          background: linear-gradient(#ffe8a9, #ffbf5b);
+          box-shadow: 0 0 10px #ffd98c, 0 0 2px #fff inset;
+        }
+        .choice-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .chip {
-          padding: 8px 12px;
-          border-radius: 999px;
-          border: 1px solid #6b6660;
-          background: #3a3a3a;
-          color: #f1eadf;
-          font-size: 14px;
-        }
-        .chip-on { background: #d7c7a6; color: #2a241c; border-color: #d7c7a6; }
-
-        .room-frame {
+        .door {
           position: relative;
-          height: min(70vh, 720px);
           border-radius: 18px;
           overflow: hidden;
-          border: 1px solid #e3dccf;
-          background: #201a15;
+          border: 1px solid var(--sand-3);
+          background: #f1eadf;
+          min-height: 520px;
+          box-shadow: 0 14px 40px rgba(0,0,0,.12);
         }
-        .room-bg {
+        .door-bg {
           position: absolute; inset: 0;
-          width: 100%; height: 100%;
-          object-fit: cover;
+          background-size: cover;
+          background-position: center;
+          filter: brightness(1.02) contrast(1.02);
         }
-        .room-overlay {
+        /* gentle “cathedral light” overlay instead of heavy darkness */
+        .door::after {
+          content: "";
           position: absolute; inset: 0;
-          background: radial-gradient(ellipse at 50% 20%, rgba(255,248,225,.18), transparent 55%);
-          display: grid; place-items: start center;
-          padding-top: 24px;
+          background:
+            radial-gradient(700px 220px at 50% 8%, rgba(255,248,228,.55), transparent 60%),
+            radial-gradient(900px 500px at 50% 100%, rgba(255,255,255,.22), transparent 60%);
           pointer-events: none;
         }
-        .room-title {
-          color: #e8d9b8;
+        .door-top-title {
+          position: absolute; top: 14px; left: 0; right: 0;
+          text-align: center;
           letter-spacing: .22em;
-          font-weight: 600;
+          font-weight: 700;
+          color: #5d4b2c;
+          text-shadow: 0 1px 0 #fff;
         }
-        .counter-card {
-          border: 1px solid #e3dccf;
-          border-radius: 14px;
-          padding: 14px 16px;
-          background: #f6f1e8;
+        .enter-btn {
+          position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+          padding: 10px 16px; border-radius: 12px;
+          background: var(--brand-gold); color: #221b0f;
+          border: 1px solid #b59f6c; font-weight: 700;
+          box-shadow: 0 6px 16px rgba(0,0,0,.18);
         }
-        .big { font-size: 32px; font-weight: 700; }
+
+        .counters {
+          margin-top: 18px;
+          display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+        }
+        .counter {
+          background: #fff;
+          border: 1px solid var(--sand-3);
+          border-radius: 14px; padding: 14px;
+          color: var(--ink);
+        }
+        .counter .num { font-size: 28px; font-weight: 800; line-height: 1; }
+        .counter .cap { opacity: .75; margin-top: 4px; }
       `}</style>
     </div>
   );
