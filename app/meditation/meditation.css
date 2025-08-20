@@ -1,4 +1,4 @@
-/* app/meditation/meditation.css — Image-backed grand doors + scenes */
+/* app/meditation/meditation.css */
 
 /* palette */
 :root{
@@ -8,6 +8,7 @@
   --candle-wax:#f4eee4; --flame-core:#ffd89a; --flame-outer:rgba(255,184,86,.75); --halo:rgba(255,218,140,.22);
 }
 .muted{opacity:.75}
+.h3{font-weight:800;margin:0 0 10px}
 
 /* page layout */
 .mz-page{display:grid;gap:18px}
@@ -22,6 +23,28 @@
 
 /* Background image layer (uses --bg-img) */
 .mz-bg-img{position:absolute;inset:0;background-image:var(--bg-img);background-size:cover;background-position:center;opacity:.9;filter:saturate(.92)}
+
+/* 🔒 shield overlay (very subtle) */
+.mz-shield{
+  position:absolute; inset:0;
+  background-image: var(--shield-img);
+  background-repeat: no-repeat;
+  background-position: center 52%;
+  background-size: min(60vmin, 720px) auto;
+  opacity: .06;
+  mix-blend-mode: soft-light;
+  filter: contrast(90%) saturate(85%);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: shieldFloat 24s ease-in-out infinite;
+  -webkit-mask-image: radial-gradient(65% 58% at 50% 52%, rgba(0,0,0,.95), rgba(0,0,0,.75) 55%, rgba(0,0,0,0) 85%);
+          mask-image: radial-gradient(65% 58% at 50% 52%, rgba(0,0,0,.95), rgba(0,0,0,.75) 55%, rgba(0,0,0,0) 85%);
+}
+@keyframes shieldFloat{
+  0%{transform:translateY(0) rotate(0.1deg) scale(1);opacity:.06}
+  50%{transform:translateY(-4px) rotate(-0.2deg) scale(1.01);opacity:.07}
+  100%{transform:translateY(0) rotate(0.1deg) scale(1);opacity:.06}
+}
 
 /* door group */
 .mz-doorgroup{position:absolute;inset:0;display:grid;place-items:center}
@@ -116,15 +139,28 @@
 /* candle wall */
 .mz-candlewall{position:absolute;inset:0}
 .mz-candlewall .wall-grid{position:absolute;left:6%;right:6%;bottom:10%;top:20%;display:grid;grid-template-columns:repeat(6,1fr);gap:16px 22px;align-content:end}
+.mz-candlewall .loading{grid-column:1/-1;color:#eef2f7;opacity:.85;text-align:center}
 .mz-candlewall .tribute{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:6px 4px 10px;text-align:center;color:#eef2f7;font-size:12px}
 .mz-candlewall .tribute .name{margin-bottom:6px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,.5)}
-.mz-candlewall .tribute .holder{display:grid;place-items:center;height:56px}
-.mini-candle{position:relative;width:12px;height:28px}
-.mini-candle .wax{width:12px;height:24px;background:linear-gradient(#fff,#f1f1f1);border-radius:4px}
-.mini-candle .flame{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:12px;height:16px;display:grid;place-items:center}
-.mini-candle .glow{position:absolute;width:12px;height:16px;border-radius:50% 50% 60% 60%;background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(.7px);opacity:.95;animation:flicker 1.8s infinite}
-.mini-candle .core{width:6px;height:9px;border-radius:40% 40% 60% 60%;background:radial-gradient(circle at 50% 35%,#fff 22%,var(--flame-core) 60%,transparent 72%)}
+.mz-candlewall .tribute .holder{display:grid;place-items:center;height:80px}
 .mz-candlewall .add{position:absolute;right:14px;bottom:14px}
+
+/* realistic candle */
+.real-candle{position:relative;width:22px;height:60px;display:inline-block}
+.real-candle .rc-wax{position:absolute;bottom:0;left:0;right:0;height:56px;border-radius:6px;background:linear-gradient(#fff,#f2eee8);box-shadow:inset 0 -6px 10px rgba(0,0,0,.22),0 6px 18px rgba(0,0,0,.36)}
+.real-candle .rc-flame{position:absolute;left:50%;transform:translateX(-50%);bottom:60px;width:14px;height:22px;display:grid;place-items:center;animation:sway 3s ease-in-out infinite}
+.real-candle .rc-glow{position:absolute;width:22px;height:32px;border-radius:50% 50% 60% 60%;background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(1.1px);opacity:.95;animation:flicker 1.8s infinite}
+.real-candle .rc-core{width:8px;height:12px;border-radius:40% 40% 60% 60%;background:radial-gradient(circle at 50% 35%,#fff 22%,var(--flame-core) 60%,transparent 72%)}
+.real-candle .rc-halo{position:absolute;width:100px;height:60px;left:50%;transform:translateX(-50%);bottom:38px;border-radius:50%;background:radial-gradient(55% 60% at 50% 55%,var(--halo),transparent 70%);filter:blur(8px);opacity:.55;pointer-events:none}
+.real-candle .rc-melt{position:absolute;bottom:40px;width:5px;border-radius:3px;background:linear-gradient(#fff,#f2eee8);box-shadow:inset 0 -4px 6px rgba(0,0,0,.18)}
+.real-candle .rc-melt.a{left:6px;height:16px}
+.real-candle .rc-melt.b{right:6px;height:10px}
+
+/* color glows */
+.real-candle.gold  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(255,220,120,.28),transparent 70%)}
+.real-candle.blue  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(120,180,255,.28),transparent 70%)}
+.real-candle.violet.rc-halo, .real-candle.violet  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(180,120,255,.28),transparent 70%)}
+.real-candle.rose  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(255,160,180,.28),transparent 70%)}
 
 /* stats bar */
 .mz-statsbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-start;border:1px solid var(--panel-edge);border-radius:12px;padding:10px;background:var(--panel-bg)}
@@ -133,6 +169,17 @@
 .mz-statbox .t{font-size:11px;opacity:.9}
 .mz-linksbar{margin-left:auto;font-size:12px}
 .mz-link{color:#d7c69b;text-decoration:underline}
+
+/* modal */
+.mz-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:40}
+.mz-modal{background:#0f141a;border:1px solid var(--panel-edge);border-radius:12px;width:min(560px,92vw);padding:16px}
+.mz-modal-body{display:grid;gap:10px}
+.field .label{display:block;font-size:12px;opacity:.8;margin-bottom:4px}
+.input{background:#131b23;color:#e7effa;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px}
+.preview{display:grid;place-items:center;height:120px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);border-radius:10px}
+.mz-modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
+.btn{background:#202a34;border:1px solid rgba(255,255,255,.12);color:#e6f0ff;padding:8px 12px;border-radius:10px;cursor:pointer}
+.btn-brand{background:#2a3440}
 
 /* animations */
 @keyframes sway{0%{transform:rotate(.8deg)}50%{transform:rotate(-.8deg)}100%{transform:rotate(.8deg)}}
