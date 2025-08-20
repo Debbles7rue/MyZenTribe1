@@ -11,13 +11,13 @@ import {
 import type { LatLngExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-type LatLng = { lat: number; lng: number };
+type LatLng = { lat: number; lng: number; label?: string }; // 👈 allow optional label
 
 type Props = {
   /** Current value (marker position). */
   value?: LatLng | null;
   /** Called when user clicks on the map. */
-  onChange?: (coords: LatLng) => void;
+  onChange?: (coords: LatLng) => void; // 👈 now may include label
   /** Map height in px. */
   height?: number;
   /** Zoom used when value is set. */
@@ -29,6 +29,7 @@ type Props = {
 function ClickCapture({ onPick }: { onPick?: (p: LatLng) => void }) {
   useMapEvents({
     click(e) {
+      // We don’t have a label from a plain click; consumer can reverse-geocode if desired.
       onPick?.({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
