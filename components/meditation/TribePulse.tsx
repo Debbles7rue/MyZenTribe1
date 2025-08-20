@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-/** Returns cells for the last 24h in 15-min bins, with intensity based on concurrency */
 function binsFromSessions(sessions: { started_at: string; ended_at: string }[]) {
   const now = Date.now();
   const startWindow = now - 24 * 60 * 60 * 1000;
-  const binMs = 15 * 60 * 1000; // 15 min
+  const binMs = 15 * 60 * 1000;
   const binCount = Math.ceil((now - startWindow) / binMs);
-
   const counts = new Array(binCount).fill(0);
 
   for (const s of sessions) {
@@ -18,22 +16,14 @@ function binsFromSessions(sessions: { started_at: string; ended_at: string }[]) 
     const start = Math.max(a, startWindow);
     const end = Math.min(b, now);
     if (end <= start) continue;
-
     const startIdx = Math.floor((start - startWindow) / binMs);
     const endIdx = Math.ceil((end - startWindow) / binMs);
-    for (let i = startIdx; i < endIdx; i++) {
-      counts[i] += 1;
-    }
+    for (let i = startIdx; i < endIdx; i++) counts[i] += 1;
   }
 
-  // Coverage percent
   const coveredBins = counts.filter((c) => c > 0).length;
   const coveragePct = Math.round((coveredBins / counts.length) * 100);
-
-  // Current concurrent
-  const currentIdx = counts.length - 1;
-  const concurrentNow = counts[currentIdx] || 0;
-
+  const concurrentNow = counts[counts.length - 1] || 0;
   return { counts, coveragePct, concurrentNow };
 }
 
@@ -50,23 +40,21 @@ export function TribePulse() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 30_000); // refresh every 30s
+    const t = setInterval(load, 30_000);
     return () => clearInterval(t);
   }, []);
 
   const { counts, coveragePct, concurrentNow } = useMemo(() => binsFromSessions(rows), [rows]);
-
-  // simple intensity: 0..3
   const max = counts.length ? Math.max(...counts) : 0;
   const scale = (n: number) => (max <= 1 ? (n > 0 ? 2 : 0) : Math.min(3, Math.ceil((n / max) * 3)));
 
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-sm text-zinc-600">
+        <div className="text-xs text-zinc-600">
           {loading ? "Loading pulse…" : `${coveragePct}% of last 24h had at least one meditator`}
         </div>
-        <div className="text-sm font-medium">{concurrentNow} live now</div>
+        <div className="text-xs font-medium">{concurrentNow} live now</div>
       </div>
       <div className="grid grid-cols-24 gap-0.5">
         {counts.map((c, i) => (
@@ -81,7 +69,7 @@ export function TribePulse() {
                 ? "h-2 rounded bg-emerald-400"
                 : "h-2 rounded bg-emerald-600"
             }
-            title={`${c} meditator(s) in this interval`}
+            title={`${c} meditator(s)`}
           />
         ))}
       </div>
