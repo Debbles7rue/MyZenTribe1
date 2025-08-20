@@ -1,8 +1,8 @@
+// app/layout.tsx (or ./layout.tsx if that's where your file lives)
 import "./globals.css";
 import { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import Link from "next/link";
-import { ThemeProvider } from "next-themes";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,30 +22,30 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <header className="sticky top-0 z-40 border-b bg-white/70 dark:bg-zinc-950/70 backdrop-blur">
-            <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-3">
-                <div className="size-9 rounded-full bg-brand-500 animate-pulse-soft shadow-xl" />
-                <span className="font-semibold">MyZenTribe</span>
-              </Link>
-              <nav className="ml-auto flex gap-4 text-sm">
-                <Link href="/events">Events</Link>
-                <Link href="/communities">Communities</Link>
-                <Link href="/meditation">Meditation</Link>
-                <Link href="/journal">Gratitude</Link>
-                <Link href="/karma">Karma Corner</Link>
-                <Link href="/whats-new">What's New</Link>
-                <Link href="/feedback">Feedback</Link>
-                <Link href="/auth">Login</Link>
-              </nav>
-            </div>
-          </header>
-          <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
-          <footer className="mt-20 border-t py-8 text-center text-xs opacity-70">
-            © {new Date().getFullYear()} MyZenTribe — All love, no spam.
-          </footer>
-        </ThemeProvider>
+        <header className="sticky top-0 z-40 border-b bg-white/70 dark:bg-zinc-950/70 backdrop-blur">
+          <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-3">
+              <div className="size-9 rounded-full bg-brand-500 animate-pulse-soft shadow-xl" />
+              <span className="font-semibold">MyZenTribe</span>
+            </Link>
+            <nav className="ml-auto flex gap-4 text-sm">
+              <Link href="/events">Events</Link>
+              <Link href="/communities">Communities</Link>
+              <Link href="/meditation">Meditation</Link>
+              <Link href="/journal">Gratitude</Link>
+              <Link href="/karma">Karma Corner</Link>
+              <Link href="/whats-new">What's New</Link>
+              <Link href="/feedback">Feedback</Link>
+              <Link href="/auth">Login</Link>
+            </nav>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+
+        <footer className="mt-20 border-t py-8 text-center text-xs opacity-70">
+          © {new Date().getFullYear()} MyZenTribe — All love, no spam.
+        </footer>
       </body>
     </html>
   );
