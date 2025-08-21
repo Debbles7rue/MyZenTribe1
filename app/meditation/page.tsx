@@ -4,7 +4,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 
-type EnvId = "sacred" | "beach" | "lake" | "creek" | "patterns" | "candles";
+type EnvId =
+  | "sacred"
+  | "beach"
+  | "lake"
+  | "creek"
+  | "fire"
+  | "patterns"
+  | "candles";
 
 type Env = {
   id: EnvId;
@@ -19,7 +26,8 @@ const LEFT_ENVS: Env[] = [
 ];
 
 const RIGHT_ENVS: Env[] = [
-  { id: "creek",    label: "Forest Creek",                   image: "/meditation/forest-creek.gif" }, // <-- your GIF
+  { id: "creek",    label: "Forest Creek",                   image: "/meditation/forest-creek.gif" },
+  { id: "fire",     label: "Crackling Fire",                 image: "/meditation/hearth.jpg" },
   { id: "patterns", label: "Meditative Patterns",            image: "/meditation/patterns.jpg" },
   { id: "candles",  label: "Light a Candle for Loved Ones",  image: "/meditation/candle-room.jpg" },
 ];
@@ -27,21 +35,17 @@ const RIGHT_ENVS: Env[] = [
 const ALL = [...LEFT_ENVS, ...RIGHT_ENVS];
 
 export default function MeditationPage() {
-  // default to creek so you immediately see movement if the GIF is present
-  const [selected, setSelected] = useState<EnvId>("creek");
+  const [selected, setSelected] = useState<EnvId>("creek"); // default so you can see motion if GIF exists
   const [doorsOpen, setDoorsOpen] = useState(false);
 
   const current = useMemo(() => ALL.find((e) => e.id === selected), [selected]);
 
   function choose(id: EnvId) {
     setSelected(id);
-    // close the doors when choosing a new scene
-    setDoorsOpen(false);
+    setDoorsOpen(false); // reset doors so ENTER reveals the new scene
   }
 
-  function enter(e?: React.MouseEvent) {
-    // optional: prevent door toggle when the Enter button is clicked
-    e?.stopPropagation();
+  function onEnter() {
     if (selected === "candles") {
       window.location.href = "/meditation/candles";
       return;
@@ -49,16 +53,8 @@ export default function MeditationPage() {
     setDoorsOpen(true);
   }
 
-  function toggleDoor() {
-    // click anywhere on the door/room to open/close
-    setDoorsOpen((prev) => !prev);
-  }
-
-  function onDoorKey(e: React.KeyboardEvent) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleDoor();
-    }
+  function onClose() {
+    setDoorsOpen(false);
   }
 
   return (
@@ -89,16 +85,8 @@ export default function MeditationPage() {
               ))}
             </div>
 
-            {/* The room + doors (clickable area) */}
-            <div
-              className="mz-door"
-              onClick={toggleDoor}
-              onKeyDown={onDoorKey}
-              role="button"
-              tabIndex={0}
-              aria-label="Meditation door"
-              aria-expanded={doorsOpen}
-            >
+            {/* The room with double doors (ENTER to open) */}
+            <div className="mz-door">
               {/* background scene */}
               <div
                 className="mz-doorBg"
@@ -110,20 +98,35 @@ export default function MeditationPage() {
                 }}
               />
 
-              {/* soft cathedral light overlay */}
+              {/* light overlay */}
               <div className="mz-lightOverlay" />
 
               {/* title */}
               <div className="mz-doorTitle">ENTER THE SACRED SPACE</div>
 
-              {/* double doors */}
-              <div className={`mz-panel mz-panel--left ${doorsOpen ? "is-open" : ""}`} />
-              <div className={`mz-panel mz-panel--right ${doorsOpen ? "is-open" : ""}`} />
+              {/* center seam line (subtle) */}
+              <div className="mz-seam" aria-hidden />
 
-              {/* Enter still available, but not required */}
-              <button className="mz-enterBtn" onClick={enter}>
-                ENTER
-              </button>
+              {/* hinged panels – use ONE photo and split via background-position */}
+              <div
+                className={`mz-panel mz-panel--left ${doorsOpen ? "is-open" : ""}`}
+                aria-hidden
+              />
+              <div
+                className={`mz-panel mz-panel--right ${doorsOpen ? "is-open" : ""}`}
+                aria-hidden
+              />
+
+              {/* handles */}
+              <span className="mz-handle mz-handle--left" aria-hidden />
+              <span className="mz-handle mz-handle--right" aria-hidden />
+
+              {/* controls */}
+              {!doorsOpen ? (
+                <button className="mz-enterBtn" onClick={onEnter}>ENTER</button>
+              ) : (
+                <button className="mz-enterBtn" onClick={onClose}>Close Doors</button>
+              )}
             </div>
 
             {/* Right options */}
@@ -156,6 +159,7 @@ export default function MeditationPage() {
         </div>
       </div>
 
+      {/* Styles */}
       <style jsx global>{`
         :root {
           --sand-1: #faf5ec;
@@ -163,8 +167,7 @@ export default function MeditationPage() {
           --sand-3: #e7dbc3;
           --ink: #2a241c;
           --gold: #c9b27f;
-          --door-wood-1: #5c462f;
-          --door-wood-2: #3f2f20;
+          --door-edge: rgba(255,255,255,.18);
         }
 
         body { background: radial-gradient(1200px 500px at 50% -200px, #efe7da, #e5dccb 60%, #ddd1bd 100%); }
@@ -226,15 +229,16 @@ export default function MeditationPage() {
           overflow: hidden;
           border: 1px solid var(--sand-3);
           background: #f1eadf;
-          min-height: 560px;
+          min-height: 580px;
           box-shadow: 0 14px 40px rgba(0,0,0,.12);
-          cursor: pointer; /* indicates click-to-open */
+          /* 3D space for the hinge rotation */
+          perspective: 1400px;
         }
+
         .mz-doorBg {
           position: absolute; inset: 0;
-          background-size: cover;
-          background-position: center;
-          transition: filter .4s ease;
+          background-size: cover; background-position: center;
+          transition: filter .5s ease;
           z-index: 0;
         }
 
@@ -243,31 +247,70 @@ export default function MeditationPage() {
           background:
             radial-gradient(700px 220px at 50% 8%, rgba(255,248,228,.55), transparent 60%),
             radial-gradient(900px 500px at 50% 100%, rgba(255,255,255,.22), transparent 60%);
-          pointer-events: none;
-          z-index: 1;
+          pointer-events: none; z-index: 1;
         }
 
         .mz-doorTitle {
           position: absolute; top: 14px; left: 0; right: 0;
           text-align: center; letter-spacing: .22em; font-weight: 700;
-          color: #5d4b2c; text-shadow: 0 1px 0 #fff;
-          z-index: 4; pointer-events: none;
+          color: #5d4b2c; text-shadow: 0 1px 0 #fff; z-index: 5; pointer-events: none;
         }
 
-        /* Double doors */
+        /* Subtle center seam (over the background, under the panels) */
+        .mz-seam {
+          position: absolute; top: 0; bottom: 0; left: 50%;
+          width: 1px; transform: translateX(-0.5px);
+          background: linear-gradient(to bottom, rgba(0,0,0,.25), rgba(0,0,0,.08), rgba(0,0,0,.25));
+          z-index: 2;
+          opacity: .35;
+          pointer-events: none;
+        }
+
+        /* Double doors using ONE image split in CSS */
         .mz-panel {
           position: absolute; top: 0; bottom: 0; width: 50%;
-          background:
-            linear-gradient(to bottom, rgba(255,255,255,.12), rgba(0,0,0,.15)),
-            linear-gradient(90deg, var(--door-wood-1), var(--door-wood-2));
-          box-shadow: inset 0 0 40px rgba(0,0,0,.25);
-          z-index: 3;
-          transition: transform .85s cubic-bezier(.18,.82,.2,1);
+          z-index: 4;
+          /* Use the same source image for both halves */
+          background-image: url("/meditation/doors.jpg"); /* <--- drop your door photo here */
+          background-size: 200% 100%; /* 2x width so each half shows its side */
+          box-shadow:
+            inset 0 0 40px rgba(0,0,0,.28),  /* depth */
+            0 10px 30px rgba(0,0,0,.18);     /* cast shadow on the scene */
+          transition: transform 1s cubic-bezier(.18,.82,.2,1), box-shadow .6s ease;
+          transform-style: preserve-3d;
+          backface-visibility: hidden;
         }
-        .mz-panel--left  { left: 0;  transform: translateX(0%);  border-right: 1px solid rgba(255,255,255,.18); }
-        .mz-panel--right { right: 0; transform: translateX(0%);  border-left:  1px solid rgba(255,255,255,.18); }
-        .mz-panel.is-open.mz-panel--left  { transform: translateX(-101%); }
-        .mz-panel.is-open.mz-panel--right { transform: translateX(101%); }
+        .mz-panel::after {
+          /* inner vignette for richness */
+          content: "";
+          position: absolute; inset: 0;
+          box-shadow: inset 0 0 60px rgba(0,0,0,.25);
+          pointer-events: none;
+        }
+        .mz-panel--left  {
+          left: 0; transform-origin: left center;
+          background-position: left center;
+          border-right: 1px solid var(--door-edge);
+        }
+        .mz-panel--right {
+          right: 0; transform-origin: right center;
+          background-position: right center;
+          border-left: 1px solid var(--door-edge);
+        }
+        .mz-panel--left.is-open  { transform: rotateY(-100deg); }
+        .mz-panel--right.is-open { transform: rotateY(100deg); }
+
+        /* Handles (simple brass circles) */
+        .mz-handle {
+          position: absolute;
+          top: 50%; transform: translateY(-50%);
+          width: 18px; height: 18px; border-radius: 50%;
+          background: radial-gradient(circle at 30% 30%, #fff2c0, #b48e47 55%, #6a5529 100%);
+          box-shadow: 0 2px 4px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.7);
+          z-index: 6;
+        }
+        .mz-handle--left  { left: calc(50% - 40px); }
+        .mz-handle--right { right: calc(50% - 40px); }
 
         .mz-enterBtn {
           position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -275,8 +318,7 @@ export default function MeditationPage() {
           background: var(--gold); color: #221b0f;
           border: 1px solid #b59f6c; font-weight: 700;
           box-shadow: 0 6px 16px rgba(0,0,0,.18);
-          z-index: 4;
-          cursor: pointer;  /* distinct from door click */
+          z-index: 6; cursor: pointer;
         }
 
         .mz-counters {
