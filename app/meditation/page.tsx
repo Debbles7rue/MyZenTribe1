@@ -13,21 +13,21 @@ type Env = {
 };
 
 const LEFT_ENVS: Env[] = [
-  { id: "sacred",   label: "Sacred Room",              image: "/meditation/sacred-room.jpg" },
-  { id: "beach",    label: "Stunning Beach",           image: "/meditation/beach.jpg" },
-  { id: "lake",     label: "Peaceful Lake",            image: "/meditation/lake.jpg" },
+  { id: "sacred",   label: "Sacred Room",                    image: "/meditation/sacred-room.jpg" },
+  { id: "beach",    label: "Stunning Beach",                 image: "/meditation/beach.jpg" },
+  { id: "lake",     label: "Peaceful Lake",                  image: "/meditation/lake.jpg" },
 ];
 
 const RIGHT_ENVS: Env[] = [
-  { id: "creek",    label: "Forest Creek",             image: "/meditation/forest-creek.gif" }, // your GIF
-  { id: "patterns", label: "Meditative Patterns",      image: "/meditation/patterns.jpg" },
-  { id: "candles",  label: "Light a Candle for Loved Ones", image: "/meditation/candle-room.jpg" },
+  { id: "creek",    label: "Forest Creek",                   image: "/meditation/forest-creek.gif" }, // <-- your GIF
+  { id: "patterns", label: "Meditative Patterns",            image: "/meditation/patterns.jpg" },
+  { id: "candles",  label: "Light a Candle for Loved Ones",  image: "/meditation/candle-room.jpg" },
 ];
 
 const ALL = [...LEFT_ENVS, ...RIGHT_ENVS];
 
 export default function MeditationPage() {
-  // default to creek so you can immediately see your GIF background
+  // default to creek so you immediately see movement if the GIF is present
   const [selected, setSelected] = useState<EnvId>("creek");
   const [doorsOpen, setDoorsOpen] = useState(false);
 
@@ -35,16 +35,30 @@ export default function MeditationPage() {
 
   function choose(id: EnvId) {
     setSelected(id);
-    // close the doors (so the next ENTER re-opens them into the new scene)
+    // close the doors when choosing a new scene
     setDoorsOpen(false);
   }
 
-  function enter() {
+  function enter(e?: React.MouseEvent) {
+    // optional: prevent door toggle when the Enter button is clicked
+    e?.stopPropagation();
     if (selected === "candles") {
       window.location.href = "/meditation/candles";
       return;
     }
     setDoorsOpen(true);
+  }
+
+  function toggleDoor() {
+    // click anywhere on the door/room to open/close
+    setDoorsOpen((prev) => !prev);
+  }
+
+  function onDoorKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleDoor();
+    }
   }
 
   return (
@@ -75,8 +89,16 @@ export default function MeditationPage() {
               ))}
             </div>
 
-            {/* The room + doors */}
-            <div className="mz-door">
+            {/* The room + doors (clickable area) */}
+            <div
+              className="mz-door"
+              onClick={toggleDoor}
+              onKeyDown={onDoorKey}
+              role="button"
+              tabIndex={0}
+              aria-label="Meditation door"
+              aria-expanded={doorsOpen}
+            >
               {/* background scene */}
               <div
                 className="mz-doorBg"
@@ -88,7 +110,7 @@ export default function MeditationPage() {
                 }}
               />
 
-              {/* “cathedral light” overlay */}
+              {/* soft cathedral light overlay */}
               <div className="mz-lightOverlay" />
 
               {/* title */}
@@ -98,8 +120,8 @@ export default function MeditationPage() {
               <div className={`mz-panel mz-panel--left ${doorsOpen ? "is-open" : ""}`} />
               <div className={`mz-panel mz-panel--right ${doorsOpen ? "is-open" : ""}`} />
 
-              {/* enter button */}
-              <button className="mz-enterBtn" onClick={enter} aria-label="Enter">
+              {/* Enter still available, but not required */}
+              <button className="mz-enterBtn" onClick={enter}>
                 ENTER
               </button>
             </div>
@@ -134,7 +156,6 @@ export default function MeditationPage() {
         </div>
       </div>
 
-      {/* Styles */}
       <style jsx global>{`
         :root {
           --sand-1: #faf5ec;
@@ -207,6 +228,7 @@ export default function MeditationPage() {
           background: #f1eadf;
           min-height: 560px;
           box-shadow: 0 14px 40px rgba(0,0,0,.12);
+          cursor: pointer; /* indicates click-to-open */
         }
         .mz-doorBg {
           position: absolute; inset: 0;
@@ -254,6 +276,7 @@ export default function MeditationPage() {
           border: 1px solid #b59f6c; font-weight: 700;
           box-shadow: 0 6px 16px rgba(0,0,0,.18);
           z-index: 4;
+          cursor: pointer;  /* distinct from door click */
         }
 
         .mz-counters {
