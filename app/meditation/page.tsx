@@ -41,7 +41,6 @@ export default function MeditationPage() {
   }
 
   function onEnter() {
-    // route to candle wall if that option is chosen
     if (selected === "candles") {
       window.location.href = "/meditation/candles";
       return;
@@ -54,7 +53,8 @@ export default function MeditationPage() {
   }
 
   return (
-    <div className="page-wrap">
+    // LIFT the whole meditation UI above any global header (fixes unclickable buttons)
+    <div className="page-wrap mz-root">
       <div className="page">
         <div className="container-app">
           <h1 className="page-title">Enter the Sacred Space</h1>
@@ -85,13 +85,16 @@ export default function MeditationPage() {
 
             {/* DOOR FRAME */}
             <div className={`mz-door ${doorsOpen ? "is-immersive" : ""}`}>
+              {/* OPTIONAL protection shield overlay (only visible when doors are closed) */}
+              <img src="/meditation/shield.png" alt="" className="mz-shield" aria-hidden />
+
               {/* scene background (behind the doors) */}
               <div
                 className="mz-doorBg"
                 style={{
                   backgroundImage: current?.image
                     ? `url(${current.image})`
-                    : "url(/meditation/door-parchment.jpg)",
+                    : "url(/meditation/sacred-room.jpg)", // reliable fallback
                   filter: doorsOpen ? "none" : "blur(1px) brightness(0.98)",
                 }}
               />
@@ -185,6 +188,9 @@ export default function MeditationPage() {
           --lanternInset: -8px;
         }
 
+        /* Lift this page above any sticky header that might overlap/capture clicks */
+        .mz-root { position: relative; z-index: 999; }
+
         body {
           background: radial-gradient(
               1200px 500px at 50% -200px,
@@ -272,11 +278,12 @@ export default function MeditationPage() {
           inset: 0;
           border-radius: 0;
           min-height: 100vh;
-          z-index: 60;
+          z-index: 1000;
           box-shadow: none;
         }
         .mz-door.is-immersive .mz-doorTitle,
-        .mz-door.is-immersive .mz-seam {
+        .mz-door.is-immersive .mz-seam,
+        .mz-door.is-immersive .mz-shield {
           display: none;
         }
 
@@ -333,6 +340,16 @@ export default function MeditationPage() {
           z-index: 2;
           opacity: 0.35;
           pointer-events: none;
+        }
+
+        /* OPTIONAL shield overlay on closed doors only */
+        .mz-shield {
+          position: absolute; inset: 0;
+          object-fit: cover;
+          opacity: .28;
+          mix-blend-mode: screen;
+          pointer-events: none;
+          z-index: 2;
         }
 
         /* DOOR PANELS (single 1920 image) */
@@ -395,12 +412,8 @@ export default function MeditationPage() {
             inset 0 1px 1px rgba(255, 255, 255, 0.7);
           z-index: 6;
         }
-        .mz-handle--left {
-          left: calc(50% - 40px);
-        }
-        .mz-handle--right {
-          right: calc(50% - 40px);
-        }
+        .mz-handle--left { left: calc(50% - 40px); }
+        .mz-handle--right { right: calc(50% - 40px); }
 
         /* Lantern overlays (static) */
         .mz-lantern {
@@ -413,13 +426,8 @@ export default function MeditationPage() {
           filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35))
             brightness(1.02);
         }
-        .mz-lantern--left {
-          left: var(--lanternInset);
-        }
-        .mz-lantern--right {
-          right: var(--lanternInset);
-          transform: scaleX(-1);
-        }
+        .mz-lantern--left { left: var(--lanternInset); }
+        .mz-lantern--right { right: var(--lanternInset); transform: scaleX(-1); }
 
         .mz-enterBtn {
           position: absolute;
@@ -460,12 +468,8 @@ export default function MeditationPage() {
           background: #333;
           transform-origin: center;
         }
-        .mz-closeBtn::before {
-          transform: translate(-50%, -50%) rotate(45deg);
-        }
-        .mz-closeBtn::after {
-          transform: translate(-50%, -50%) rotate(-45deg);
-        }
+        .mz-closeBtn::before { transform: translate(-50%, -50%) rotate(45deg); }
+        .mz-closeBtn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
 
         .mz-counters {
           margin-top: 18px;
@@ -480,26 +484,13 @@ export default function MeditationPage() {
           padding: 14px;
           color: var(--ink);
         }
-        .mz-num {
-          font-size: 28px;
-          font-weight: 800;
-          line-height: 1;
-        }
-        .mz-cap {
-          opacity: 0.75;
-          margin-top: 4px;
-        }
+        .mz-num { font-size: 28px; font-weight: 800; line-height: 1; }
+        .mz-cap { opacity: 0.75; margin-top: 4px; }
 
         @media (max-width: 880px) {
-          .mz-grid {
-            grid-template-columns: 1fr;
-          }
-          .mz-side {
-            grid-template-columns: 1fr 1fr;
-          }
-          .mz-lantern {
-            display: none; /* hide on small screens for simplicity */
-          }
+          .mz-grid { grid-template-columns: 1fr; }
+          .mz-side { grid-template-columns: 1fr 1fr; }
+          .mz-lantern { display: none; } /* keep it clean on small screens */
         }
       `}</style>
     </div>
