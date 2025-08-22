@@ -1,6 +1,12 @@
 // app/auth/callback/route.ts
 import { NextResponse } from "next/server";
 
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const redirect = url.searchParams.get("redirect") || "/calendar";
+  return NextResponse.redirect(new URL(redirect, url.origin));
+}
+
 export async function POST(request: Request) {
   const { access_token, refresh_token } = await request.json();
 
