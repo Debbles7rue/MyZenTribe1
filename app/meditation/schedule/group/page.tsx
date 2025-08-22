@@ -1,6 +1,9 @@
+// app/meditation/schedule/group/page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -21,12 +24,6 @@ function download(filename: string, text: string) {
   const a = document.createElement("a");
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
-}
-
-export default function GroupPage() {
-  const sp = useSearchParams();
-  const code = sp.get("code");
-  return code ? <InviteLanding code={code} /> : <CreateGroup />;
 }
 
 function CreateGroup() {
@@ -167,6 +164,20 @@ function InviteLanding({ code }: { code: string }) {
 
       <style jsx>{styles}</style>
     </main>
+  );
+}
+
+function GroupRouter() {
+  const sp = useSearchParams();
+  const code = sp.get("code");
+  return code ? <InviteLanding code={code} /> : <CreateGroup />;
+}
+
+export default function GroupPage() {
+  return (
+    <Suspense fallback={<main className="wrap">Loading…</main>}>
+      <GroupRouter />
+    </Suspense>
   );
 }
 
