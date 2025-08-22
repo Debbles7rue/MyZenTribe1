@@ -4,6 +4,7 @@ import { Dialog } from "@headlessui/react";
 import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import React from "react";
 
 type Visibility = "public" | "friends" | "private" | "community";
 type Status = "scheduled" | "cancelled";
@@ -19,8 +20,6 @@ type DBEvent = {
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
-
-  // optional columns (UI tolerates if they don't exist in DB)
   status?: Status | null;
   cancellation_reason?: string | null;
 };
@@ -38,7 +37,46 @@ function safeDate(d?: string | null): Date | null {
   return isNaN(x.getTime()) ? null : x;
 }
 
-export default function EventDetails({
+/** ---------- Error Boundary so the modal never crashes the whole app ---------- */
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void },
+  { hasError: boolean; err?: any }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, err: undefined };
+  }
+  static getDerivedStateFromError(err: any) {
+    return { hasError: true, err };
+  }
+  componentDidCatch(err: any) {
+    // Optional: log to Supabase/console
+    console.error("EventDetails error:", err);
+  }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <Dialog open={true} onClose={this.props.onClose} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl">
+            <Dialog.Title className="text-lg font-semibold">We hit a snag</Dialog.Title>
+            <p className="mt-2 text-sm text-neutral-700">
+              The event couldn’t be displayed due to a data issue. Try refreshing, or edit the event
+              details from your calendar if something (like time) is missing.
+            </p>
+            <div className="mt-4 flex justify-end">
+              <button className="btn" onClick={this.props.onClose}>Close</button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+    );
+  }
+}
+
+/** ------------------------------ Main component ------------------------------ */
+function EventDetailsInner({
   event,
   onClose,
 }: {
@@ -76,12 +114,12 @@ export default function EventDetails({
       location: event.location ?? "",
     });
     (async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("event_comments")
         .select("id, body, created_at, user_id")
         .eq("event_id", event.id)
         .order("created_at", { ascending: true });
-      if (!error) setComments(data || []);
+      setComments(data || []);
     })();
   }, [event?.id]);
 
@@ -95,12 +133,8 @@ export default function EventDetails({
 
   const when = useMemo(() => {
     try {
-      if (start && end) {
-        return `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`;
-      }
-      if (start) {
-        return format(start, "EEE, MMM d · p");
-      }
+      if (start && end) return `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`;
+      if (start) return format(start, "EEE, MMM d · p");
       return "Time TBA";
     } catch {
       return "Time TBA";
@@ -118,10 +152,7 @@ export default function EventDetails({
       user_id: me,
       body: newBody.trim(),
     } as any);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) return alert(error.message);
     setNewBody("");
     const { data } = await supabase
       .from("event_comments")
@@ -138,10 +169,7 @@ export default function EventDetails({
       location: form.location.trim() || null,
     };
     const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) return alert(error.message);
     setEvt((prev) => (prev ? ({ ...prev, ...payload } as DBEvent) : prev));
     setEditing(false);
   }
@@ -153,10 +181,7 @@ export default function EventDetails({
       .from("events")
       .update({ status: "cancelled", cancellation_reason: reason } as any)
       .eq("id", evt.id);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) return alert(error.message);
     setEvt((prev) =>
       prev ? ({ ...prev, status: "cancelled", cancellation_reason: reason } as DBEvent) : prev
     );
@@ -168,10 +193,7 @@ export default function EventDetails({
       .from("events")
       .update({ status: "scheduled", cancellation_reason: null } as any)
       .eq("id", evt.id);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) return alert(error.message);
     setEvt((prev) =>
       prev ? ({ ...prev, status: "scheduled", cancellation_reason: null } as DBEvent) : prev
     );
@@ -182,9 +204,7 @@ export default function EventDetails({
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
-          {/* scrollable content */}
           <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
-            {/* Banner image (capped height) */}
             <img
               src={evt.image_path || "/event-placeholder.jpg"}
               alt={evt.title || ""}
@@ -236,13 +256,10 @@ export default function EventDetails({
                       {editing ? "Done" : "Edit"}
                     </button>
                   )}
-                  <button className="btn" onClick={onClose}>
-                    Close
-                  </button>
+                  <button className="btn" onClick={onClose}>Close</button>
                 </div>
               </div>
 
-              {/* Cancelled notice */}
               {isCancelled && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <div className="font-medium">This event is cancelled.</div>
@@ -250,7 +267,6 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* When & where */}
               <div className="card p-3">
                 <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
                   {when}
@@ -279,7 +295,6 @@ export default function EventDetails({
                 ) : null}
               </div>
 
-              {/* Description */}
               <div className="card p-3">
                 <div className="mb-1 text-sm font-medium">Details</div>
                 {editing ? (
@@ -297,29 +312,21 @@ export default function EventDetails({
                 )}
                 {editing && (
                   <div className="mt-3 flex justify-end">
-                    <button className="btn btn-brand" onClick={saveEdits}>
-                      Save changes
-                    </button>
+                    <button className="btn btn-brand" onClick={saveEdits}>Save changes</button>
                   </div>
                 )}
               </div>
 
-              {/* Owner-only actions: Cancel / Reinstate */}
               {isOwner && (
                 <div className="flex items-center justify-end gap-2">
                   {!isCancelled ? (
-                    <button className="btn btn-danger" onClick={cancelEvent}>
-                      Cancel event
-                    </button>
+                    <button className="btn btn-danger" onClick={cancelEvent}>Cancel event</button>
                   ) : (
-                    <button className="btn btn-brand" onClick={reinstateEvent}>
-                      Reinstate event
-                    </button>
+                    <button className="btn btn-brand" onClick={reinstateEvent}>Reinstate event</button>
                   )}
                 </div>
               )}
 
-              {/* Comments */}
               <div className="card p-3">
                 <div className="mb-2 text-sm font-medium">Comments</div>
                 {comments.length === 0 ? (
@@ -329,7 +336,9 @@ export default function EventDetails({
                     {comments.map((c) => (
                       <li key={c.id} className="text-sm">
                         <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
-                        <div className="text-xs text-neutral-500">{new Date(c.created_at).toLocaleString()}</div>
+                        <div className="text-xs text-neutral-500">
+                          {new Date(c.created_at).toLocaleString()}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -342,9 +351,7 @@ export default function EventDetails({
                     onChange={(e) => setNewBody(e.target.value)}
                     placeholder="Write a comment…"
                   />
-                  <button className="btn btn-brand" onClick={postComment}>
-                    Post
-                  </button>
+                  <button className="btn btn-brand" onClick={postComment}>Post</button>
                 </div>
               </div>
             </div>
@@ -352,5 +359,13 @@ export default function EventDetails({
         </Dialog.Panel>
       </div>
     </Dialog>
+  );
+}
+
+export default function EventDetails(props: { event: DBEvent | null; onClose: () => void }) {
+  return (
+    <ErrorBoundary onClose={props.onClose}>
+      <EventDetailsInner {...props} />
+    </ErrorBoundary>
   );
 }
