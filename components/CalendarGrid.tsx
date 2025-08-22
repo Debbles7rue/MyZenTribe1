@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useMemo } from "react";
 import { Calendar, Views, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
@@ -28,6 +29,7 @@ export default function CalendarGrid({
   date, setDate, view, setView,
   onSelectSlot, onSelectEvent, onDrop, onResize
 }: Props) {
+  // Convert DB rows to RBC events
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
       dbEvents.map((e) => ({
@@ -41,25 +43,33 @@ export default function CalendarGrid({
     [dbEvents]
   );
 
+  // Merge with moon events (which should be allDay=true and end=next day)
   const mergedEvents = useMemo(
     () => [...dbUiEvents, ...(showMoon ? moonEvents : [])],
     [dbUiEvents, moonEvents, showMoon]
   );
 
+  // Styles per event
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource;
 
-    // Moon markers (all-day labels)
+    // MOON markers: render like a tiny icon (no background/border)
     if (r?.moonPhase) {
       return {
-        style: { backgroundColor: "transparent", border: "0", fontWeight: 600, color: "#0f172a" },
-        className: "text-[11px] leading-tight",
+        className: "mzt-moon-event",
+        style: {
+          background: "transparent",
+          border: 0,
+          padding: 0,
+          boxShadow: "none",
+        },
       };
     }
 
-    // Cancelled events: grey + line-through
+    // Cancelled events
     if (r?.status === "cancelled") {
       return {
+        className: "mzt-event",
         style: {
           backgroundColor: "rgba(107,114,128,0.15)",
           border: "1px solid #e5e7eb",
@@ -67,16 +77,32 @@ export default function CalendarGrid({
           color: "#6b7280",
           textDecoration: "line-through",
         },
-        className: "text-[11px] leading-tight",
       };
     }
 
-    // Normal events: personal vs business color
+    // Normal events: personal vs business colors
     const color = r?.source === "business" ? "#c4b5fd" : "#60a5fa";
     return {
+      className: "mzt-event",
       style: { backgroundColor: color, border: "1px solid #e5e7eb", borderRadius: 10 },
-      className: "text-[11px] leading-tight",
     };
+  };
+
+  // Custom renderer: moons = emoji only; normal events = title
+  const EventCell = ({ event }: { event: RBCEvent }) => {
+    const r = (event as UiEvent).resource || {};
+    if (r?.moonPhase) {
+      const icon =
+        r.moonPhase === "moon-full" ? "🌕" :
+        r.moonPhase === "moon-new" ? "🌑" :
+        r.moonPhase === "moon-first" ? "🌓" : "🌗";
+      return <span className="mzt-moon-emoji" aria-label="moon-phase">{icon}</span>;
+    }
+    return (
+      <span className="mzt-event-title">
+        {(event as any).title}
+      </span>
+    );
   };
 
   return (
@@ -95,31 +121,45 @@ export default function CalendarGrid({
         date={date}
         onNavigate={setDate}
         onSelectSlot={onSelectSlot}
-        onSelectEvent={onSelectEvent}
+        onSelectEvent={(e) => onSelectEvent(e as UiEvent)}
         onEventDrop={onDrop}
         onEventResize={onResize}
         step={30}
         timeslots={2}
         scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
         components={{
-          // NOTE: toolbar is ENABLED now (we removed the override that hid it)
-          event: ({ event }) => {
-            const r = (event as UiEvent).resource || {};
-            if (r?.moonPhase) {
-              const icon =
-                r.moonPhase === "moon-full" ? "🌕" :
-                r.moonPhase === "moon-new" ? "🌑" :
-                r.moonPhase === "moon-first" ? "🌓" : "🌗";
-              return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
-            }
-            return (
-              <div className="text-[11px] leading-tight">
-                <div className="font-medium">{(event as any).title}</div>
-              </div>
-            );
-          },
+          event: EventCell,
         }}
+        eventPropGetter={eventPropGetter}
       />
+
+      {/* TINY CSS touch-ups so moon icons sit neatly inside cells */}
+      <style jsx global>{`
+        /* Shrink event chips so the calendar stays tidy */
+        .rbc-month-view .rbc-event {
+          margin: 1px 2px;
+        }
+        .mzt-event-title {
+          font-size: 11px;
+          line-height: 1.2;
+        }
+
+        /* Make moon markers look like icons, not pills */
+        .mzt-moon-event {
+          background: transparent !important;
+          border: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          height: auto !important;
+          line-height: 1 !important;
+        }
+        .mzt-moon-emoji {
+          font-size: 14px;
+          display: inline-block;
+          vertical-align: middle;
+          transform: translateY(-1px); /* optical alignment */
+        }
+      `}</style>
     </div>
   );
 }
