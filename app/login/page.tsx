@@ -1,24 +1,29 @@
+// app/login/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
-  // change this to "/cal" only if your calendar really lives at /cal right now
+  // Fallback if no ?redirect= is provided
   const AFTER_LOGIN = "/calendar";
 
   const router = useRouter();
+  const search = useSearchParams();
+  const redirectTarget = search?.get("redirect") || AFTER_LOGIN;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // If already signed in, bounce immediately to the redirect target
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace(AFTER_LOGIN);
+      if (data.session) router.replace(redirectTarget);
     });
-  }, [router, AFTER_LOGIN]);
+  }, [router, redirectTarget]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +41,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace(AFTER_LOGIN);
+    router.replace(redirectTarget);
   };
 
   return (
@@ -79,7 +84,9 @@ export default function LoginPage() {
           </button>
 
           <p className="text-sm text-gray-500 mt-2">
-            <a href="/forgot-password" className="text-indigo-600 hover:underline">Forgot password?</a>
+            <a href="/forgot-password" className="text-indigo-600 hover:underline">
+              Forgot password?
+            </a>
           </p>
         </form>
       </div>
