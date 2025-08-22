@@ -49,8 +49,26 @@ export default function LoginPage() {
       return;
     }
 
-    // Give the session a tick to propagate, then navigate
-    setTimeout(() => router.replace(redirectTarget), 50);
+    // 1) read the session tokens client-side
+    const { data: sessionData } = await supabase.auth.getSession();
+    const access_token = sessionData.session?.access_token;
+    const refresh_token = sessionData.session?.refresh_token;
+
+    // 2) tell the server to set the HTTP-only cookie so middleware sees it
+    try {
+      await fetch("/auth/callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ access_token, refresh_token }),
+      });
+    } catch (err) {
+      // Even if this fails, try to navigate; worst case middleware redirects back.
+      console.warn("cookie sync failed", err);
+    }
+
+    // 3) navigate
+    router.replace(redirectTarget);
   };
 
   return (
