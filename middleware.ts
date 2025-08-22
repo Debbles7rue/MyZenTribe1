@@ -45,11 +45,11 @@ async function hasProfileRow(token: string, userId: string) {
 }
 
 function extractAccessToken(req: NextRequest): string | null {
-  // Newer helpers set 'sb-access-token'
+  // Preferred cookie (set by our callback route)
   const direct = req.cookies.get("sb-access-token")?.value;
   if (direct) return direct;
 
-  // Older helper used 'supabase-auth-token' JSON cookie: ["access","refresh"]
+  // Legacy cookie (if you ever used the old helper)
   const legacy = req.cookies.get("supabase-auth-token")?.value;
   if (legacy) {
     try {
@@ -63,7 +63,7 @@ function extractAccessToken(req: NextRequest): string | null {
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // Allow assets, api, and auth/onboarding routes
+  // Allow assets, api, and public/auth routes
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
@@ -81,15 +81,13 @@ export async function middleware(req: NextRequest) {
 
   if (!isProtected(pathname)) return NextResponse.next();
 
-  // Require Supabase access token
   const accessToken = extractAccessToken(req);
   if (!accessToken) {
     const to = new URL(SIGNIN_PATH, req.url);
     to.searchParams.set("redirect", pathname + search);
     return NextResponse.redirect(to);
-    }
+  }
 
-  // Verify token
   const user = await getUserFromSupabase(accessToken);
   if (!user) {
     const to = new URL(SIGNIN_PATH, req.url);
@@ -97,7 +95,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(to);
   }
 
-  // Optionally require profile row
   if (REQUIRE_PROFILE) {
     const ok = await hasProfileRow(accessToken, user.id);
     if (!ok) {
