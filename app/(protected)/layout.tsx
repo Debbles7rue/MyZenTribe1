@@ -1,42 +1,59 @@
+// app/(protected)/layout.tsx
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import SiteHeader from "@/components/SiteHeader";
+
+const SIGNIN_PATH = "/login"; // keep this consistent app-wide
 
 export default function ProtectedLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
-    async function check() {
+    const redirectToLogin = () => {
+      const next = pathname || "/";
+      router.replace(`${SIGNIN_PATH}?next=${encodeURIComponent(next)}`);
+    };
+
+    const check = async () => {
       const { data } = await supabase.auth.getUser();
-      if (!mounted) return;
-      if (!data.user) router.replace("/signin");
+      if (!active) return;
+
+      if (!data.user) {
+        redirectToLogin();
+        return; // don't mark ready until authenticated
+      }
       setReady(true);
-    }
+    };
+
     check();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-      if (!mounted) return;
-      if (!session?.user) router.replace("/signin");
+    const { data: listener } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (!active) return;
+      if (!session?.user) {
+        setReady(false);
+        redirectToLogin();
+      } else {
+        setReady(true);
+      }
     });
 
     return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
+      active = false;
+      listener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, pathname]);
 
-  if (!ready) return null;
+  if (!ready) {
+    // Keep layout stable while we check auth; header comes from the root layout.
+    return <div style={{ minHeight: "50vh" }} />;
+  }
 
-  return (
-    <div className="min-h-screen">
-      <SiteHeader />
-      {children}
-    </div>
-  );
+  // IMPORTANT: do not render <SiteHeader /> here—root layout already includes it.
+  return <>{children}</>;
 }
