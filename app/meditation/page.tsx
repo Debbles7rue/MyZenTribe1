@@ -5,20 +5,18 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 
 type EnvId = "sacred" | "beach" | "creek" | "fire" | "patterns" | "candles";
-
 type Env = { id: EnvId; label: string; image?: string };
 
 const LEFT_ENVS: Env[] = [
-  { id: "sacred", label: "Sacred Room",    image: "/meditation/sacred-room.jpg" },
-  { id: "beach",  label: "Stunning Beach", image: "/meditation/beach.jpg" },
-  // Lake removed by request
+  { id: "sacred", label: "Sacred Room",    image: "/mz/sacred-room.jpg" },
+  { id: "beach",  label: "Stunning Beach", image: "/mz/beach.jpg" },
 ];
 
 const RIGHT_ENVS: Env[] = [
-  { id: "creek",    label: "Forest Creek",                  image: "/meditation/forest-creek.gif" },
-  { id: "fire",     label: "Crackling Fire",                image: "/meditation/hearth.jpg" },
-  { id: "patterns", label: "Meditative Patterns",           image: "/meditation/patterns.jpg" },
-  { id: "candles",  label: "Light a Candle for Loved Ones", image: "/meditation/candle-room.jpg" },
+  { id: "creek",    label: "Forest Creek",                  image: "/mz/forest-creek.gif" },
+  { id: "fire",     label: "Crackling Fire",                image: "/mz/hearth.jpg" },
+  { id: "patterns", label: "Meditative Patterns",           image: "/mz/patterns.jpg" },
+  { id: "candles",  label: "Light a Candle for Loved Ones", image: "/mz/candle-room.jpg" },
 ];
 
 const ALL = [...LEFT_ENVS, ...RIGHT_ENVS];
@@ -82,8 +80,8 @@ export default function MeditationPage() {
 
             {/* DOOR FRAME */}
             <div className={`mz-door ${doorsOpen ? "is-immersive" : ""}`}>
-              {/* Optional protection overlay (hidden when immersive) */}
-              <img src="/meditation/shield.png" alt="" className="mz-shield" aria-hidden />
+              {/* Optional shield (hidden when immersive) */}
+              <img src="/mz/shield.png" alt="" className="mz-shield" aria-hidden />
 
               {/* scene background (behind the doors) */}
               <div
@@ -91,7 +89,7 @@ export default function MeditationPage() {
                 style={{
                   backgroundImage: current?.image
                     ? `url(${current.image})`
-                    : "url(/meditation/sacred-room.jpg)",
+                    : "url(/mz/sacred-room.jpg)",
                   filter: doorsOpen ? "none" : "blur(1px) brightness(0.98)",
                 }}
               />
@@ -146,6 +144,18 @@ export default function MeditationPage() {
               <div className="mz-cap">in the last 24 hours</div>
             </div>
           </section>
+
+          {/* footer CTA */}
+          <section className="mz-scheduleFooter">
+            <div className="mz-scheduleCard">
+              <div className="mz-scheduleCopy">
+                Ready to host a group meditation?
+              </div>
+              <Link href="/calendar" className="mz-scheduleBtn mz-scheduleBtn--lg">
+                Schedule a Meditation
+              </Link>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -170,6 +180,7 @@ export default function MeditationPage() {
           font-size: 14px;
           text-decoration: none;
           color: var(--ink);
+          white-space: nowrap;
         }
         .mz-scheduleBtn:hover { filter: brightness(0.98); }
 
@@ -275,7 +286,7 @@ export default function MeditationPage() {
 
         .mz-panel {
           position: absolute; top: 0; bottom: 0; width: 50%; z-index: 4;
-          background-image: url("/meditation/doors-1920.webp");
+          background-image: url("/mz/doors-1920.webp");
           background-size: 200% 100%;
           box-shadow: inset 0 0 40px rgba(0,0,0,0.28), 0 10px 30px rgba(0,0,0,0.18);
           transition: transform 1s cubic-bezier(0.18, 0.82, 0.2, 1), box-shadow 0.6s;
@@ -326,9 +337,18 @@ export default function MeditationPage() {
         .mz-num { font-size: 28px; font-weight: 800; line-height: 1; }
         .mz-cap { opacity: 0.75; margin-top: 4px; }
 
+        .mz-scheduleFooter { margin-top: 14px; }
+        .mz-scheduleCard {
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          background: #fff; border: 1px solid var(--sand-3); border-radius: 14px; padding: 14px 16px;
+        }
+        .mz-scheduleCopy { color: var(--ink); font-weight: 600; }
+
         @media (max-width: 880px) {
           .mz-grid { grid-template-columns: 1fr; }
           .mz-side { grid-template-columns: 1fr 1fr; }
+          .mz-scheduleCard { flex-direction: column; align-items: stretch; }
+          .mz-scheduleBtn--lg { text-align: center; }
         }
       `}</style>
     </div>
