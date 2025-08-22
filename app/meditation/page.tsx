@@ -1,8 +1,8 @@
-// app/meditation/page.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { usePresenceCount, useTrackPresence } from "@/hooks/usePresence";
 
 type EnvId = "sacred" | "beach" | "creek" | "fire" | "patterns" | "candles";
 type Env = { id: EnvId; label: string; image?: string };
@@ -25,6 +25,10 @@ export default function MeditationPage() {
   const [selected, setSelected] = useState<EnvId>("creek");
   const [doorsOpen, setDoorsOpen] = useState(false);
   const current = useMemo(() => ALL.find((e) => e.id === selected), [selected]);
+
+  // When doors are open, we advertise ourselves in the presence channel for that room
+  const topic = `mz:env:${selected}`;
+  useTrackPresence(topic, doorsOpen && selected !== "candles");
 
   function choose(id: EnvId) {
     setSelected(id);
@@ -49,9 +53,14 @@ export default function MeditationPage() {
         <div className="container-app">
           <div className="mz-header">
             <h1 className="page-title">Enter the Sacred Space</h1>
-            <Link href="/calendar" className="mz-scheduleBtn">
-              Schedule a Meditation
-            </Link>
+            <div className="mz-actions">
+              <Link href="/meditation/lounge" className="mz-scheduleBtn">
+                Public Lounge (chat)
+              </Link>
+              <Link href="/calendar" className="mz-scheduleBtn">
+                Schedule a Meditation
+              </Link>
+            </div>
           </div>
 
           <section className="mz-intro">
@@ -66,15 +75,13 @@ export default function MeditationPage() {
           <section className="mz-grid">
             <div className="mz-side">
               {LEFT_ENVS.map((env) => (
-                <button
+                <EnvButton
                   key={env.id}
-                  className={`mz-choice ${selected === env.id ? "mz-choice--on" : ""}`}
+                  id={env.id}
+                  label={env.label}
+                  on={selected === env.id}
                   onClick={() => choose(env.id)}
-                  aria-pressed={selected === env.id}
-                >
-                  <span className="mz-candle" aria-hidden />
-                  <span className="mz-label">{env.label}</span>
-                </button>
+                />
               ))}
             </div>
 
@@ -121,15 +128,13 @@ export default function MeditationPage() {
 
             <div className="mz-side">
               {RIGHT_ENVS.map((env) => (
-                <button
+                <EnvButton
                   key={env.id}
-                  className={`mz-choice ${selected === env.id ? "mz-choice--on" : ""}`}
+                  id={env.id}
+                  label={env.label}
+                  on={selected === env.id}
                   onClick={() => choose(env.id)}
-                  aria-pressed={selected === env.id}
-                >
-                  <span className="mz-candle" aria-hidden />
-                  <span className="mz-label">{env.label}</span>
-                </button>
+                />
               ))}
             </div>
           </section>
@@ -144,18 +149,6 @@ export default function MeditationPage() {
               <div className="mz-cap">in the last 24 hours</div>
             </div>
           </section>
-
-          {/* footer CTA */}
-          <section className="mz-scheduleFooter">
-            <div className="mz-scheduleCard">
-              <div className="mz-scheduleCopy">
-                Ready to host a group meditation?
-              </div>
-              <Link href="/calendar" className="mz-scheduleBtn mz-scheduleBtn--lg">
-                Schedule a Meditation
-              </Link>
-            </div>
-          </section>
         </div>
       </div>
 
@@ -168,10 +161,10 @@ export default function MeditationPage() {
           --door-edge: rgba(255, 255, 255, 0.18);
         }
 
-        /* keep meditation UI above any sticky header that might steal clicks */
         .mz-root { position: relative; z-index: 999; }
 
         .mz-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .mz-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .mz-scheduleBtn {
           border: 1px solid #dfd6c4;
           background: linear-gradient(#fff, #f5efe6);
@@ -180,7 +173,6 @@ export default function MeditationPage() {
           font-size: 14px;
           text-decoration: none;
           color: var(--ink);
-          white-space: nowrap;
         }
         .mz-scheduleBtn:hover { filter: brightness(0.98); }
 
@@ -213,7 +205,7 @@ export default function MeditationPage() {
         }
         .mz-choice {
           display: grid;
-          grid-template-columns: 18px 1fr;
+          grid-template-columns: 18px 1fr auto; /* <- space for the pill */
           align-items: center;
           gap: 10px;
           padding: 12px 14px;
@@ -235,6 +227,15 @@ export default function MeditationPage() {
           box-shadow: 0 0 10px #ffd98c, 0 0 2px #fff inset;
         }
         .mz-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .mz-pill {
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid var(--sand-3);
+          background: #efe7da;
+          font-size: 12px;
+          color: #6b5a3c;
+        }
 
         .mz-door {
           position: relative;
@@ -337,20 +338,33 @@ export default function MeditationPage() {
         .mz-num { font-size: 28px; font-weight: 800; line-height: 1; }
         .mz-cap { opacity: 0.75; margin-top: 4px; }
 
-        .mz-scheduleFooter { margin-top: 14px; }
-        .mz-scheduleCard {
-          display: flex; align-items: center; justify-content: space-between; gap: 12px;
-          background: #fff; border: 1px solid var(--sand-3); border-radius: 14px; padding: 14px 16px;
-        }
-        .mz-scheduleCopy { color: var(--ink); font-weight: 600; }
-
         @media (max-width: 880px) {
           .mz-grid { grid-template-columns: 1fr; }
           .mz-side { grid-template-columns: 1fr 1fr; }
-          .mz-scheduleCard { flex-direction: column; align-items: stretch; }
-          .mz-scheduleBtn--lg { text-align: center; }
         }
       `}</style>
     </div>
+  );
+}
+
+/** Small button component with the presence badge */
+function EnvButton({
+  id,
+  label,
+  on,
+  onClick,
+}: {
+  id: EnvId;
+  label: string;
+  on: boolean;
+  onClick: () => void;
+}) {
+  const here = usePresenceCount(`mz:env:${id}`);
+  return (
+    <button className={`mz-choice ${on ? "mz-choice--on" : ""}`} onClick={onClick}>
+      <span className="mz-candle" aria-hidden />
+      <span className="mz-label">{label}</span>
+      <span className="mz-pill">{here}</span>
+    </button>
   );
 }
