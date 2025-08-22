@@ -12,15 +12,15 @@ type DBEvent = {
   id: string;
   title: string;
   description: string | null;
-  start_time: string;
-  end_time: string;
+  start_time: string | null;
+  end_time: string | null;
   visibility: Visibility;
   created_by: string;
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
 
-  // NEW (optional at runtime until SQL added)
+  // optional columns (UI tolerates if they don't exist in DB)
   status?: Status | null;
   cancellation_reason?: string | null;
 };
@@ -31,6 +31,12 @@ type Comment = {
   created_at: string;
   user_id: string;
 };
+
+function safeDate(d?: string | null): Date | null {
+  if (!d) return null;
+  const x = new Date(d);
+  return isNaN(x.getTime()) ? null : x;
+}
 
 export default function EventDetails({
   event,
@@ -47,11 +53,11 @@ export default function EventDetails({
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // local copy of the event so UI updates immediately on save/cancel
+  // local copy so UI updates optimistically
   const [evt, setEvt] = useState<DBEvent | null>(null);
   useEffect(() => {
-    setEvt(event);
-  }, [event?.id]);
+    setEvt(event ?? null);
+  }, [event?.id, event]);
 
   // comments
   const [comments, setComments] = useState<Comment[]>([]);
@@ -70,30 +76,36 @@ export default function EventDetails({
       location: event.location ?? "",
     });
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("event_comments")
         .select("id, body, created_at, user_id")
         .eq("event_id", event.id)
         .order("created_at", { ascending: true });
-      setComments(data || []);
+      if (!error) setComments(data || []);
     })();
   }, [event?.id]);
 
   if (!open || !evt) return null;
 
-  const isOwner = me && evt.created_by === me;
+  const isOwner = !!me && evt.created_by === me;
   const isCancelled = (evt.status ?? "scheduled") === "cancelled";
 
-  const start = new Date(evt.start_time);
-  const end = new Date(evt.end_time);
-  const when = useMemo(
-    () =>
-      `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`.replace(
-        "AM",
-        "AM"
-      ),
-    [evt.start_time, evt.end_time]
-  );
+  const start = safeDate(evt.start_time);
+  const end = safeDate(evt.end_time);
+
+  const when = useMemo(() => {
+    try {
+      if (start && end) {
+        return `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`;
+      }
+      if (start) {
+        return format(start, "EEE, MMM d · p");
+      }
+      return "Time TBA";
+    } catch {
+      return "Time TBA";
+    }
+  }, [evt.start_time, evt.end_time]);
 
   const mapUrl = evt.location
     ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
@@ -105,8 +117,11 @@ export default function EventDetails({
       event_id: evt.id,
       user_id: me,
       body: newBody.trim(),
-    });
-    if (error) return alert(error.message);
+    } as any);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setNewBody("");
     const { data } = await supabase
       .from("event_comments")
@@ -118,14 +133,16 @@ export default function EventDetails({
 
   async function saveEdits() {
     const payload = {
-      title: form.title.trim(),
+      title: form.title.trim() || "Untitled event",
       description: form.description.trim() || null,
       location: form.location.trim() || null,
     };
     const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
-    if (error) return alert(error.message);
-    // reflect changes locally right away
-    setEvt((prev) => (prev ? { ...prev, ...payload } as DBEvent : prev));
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setEvt((prev) => (prev ? ({ ...prev, ...payload } as DBEvent) : prev));
     setEditing(false);
   }
 
@@ -134,9 +151,12 @@ export default function EventDetails({
     const reason = window.prompt("Cancel this event? Optional: add a reason") || null;
     const { error } = await supabase
       .from("events")
-      .update({ status: "cancelled", cancellation_reason: reason })
+      .update({ status: "cancelled", cancellation_reason: reason } as any)
       .eq("id", evt.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setEvt((prev) =>
       prev ? ({ ...prev, status: "cancelled", cancellation_reason: reason } as DBEvent) : prev
     );
@@ -146,9 +166,12 @@ export default function EventDetails({
     if (!isOwner) return;
     const { error } = await supabase
       .from("events")
-      .update({ status: "scheduled", cancellation_reason: null })
+      .update({ status: "scheduled", cancellation_reason: null } as any)
       .eq("id", evt.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setEvt((prev) =>
       prev ? ({ ...prev, status: "scheduled", cancellation_reason: null } as DBEvent) : prev
     );
@@ -223,9 +246,7 @@ export default function EventDetails({
               {isCancelled && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <div className="font-medium">This event is cancelled.</div>
-                  {evt.cancellation_reason ? (
-                    <div className="mt-1">{evt.cancellation_reason}</div>
-                  ) : null}
+                  {evt.cancellation_reason ? <div className="mt-1">{evt.cancellation_reason}</div> : null}
                 </div>
               )}
 
@@ -308,9 +329,7 @@ export default function EventDetails({
                     {comments.map((c) => (
                       <li key={c.id} className="text-sm">
                         <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
-                        <div className="text-xs text-neutral-500">
-                          {new Date(c.created_at).toLocaleString()}
-                        </div>
+                        <div className="text-xs text-neutral-500">{new Date(c.created_at).toLocaleString()}</div>
                       </li>
                     ))}
                   </ul>
