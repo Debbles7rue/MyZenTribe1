@@ -1,42 +1,36 @@
-// app/login/page.tsx
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  // Read ?redirect=... on the client (no Suspense needed)
-  const redirectTarget = useMemo(() => {
+  // Read ?next=... safely on the client
+  const nextUrl = useMemo(() => {
     if (typeof window === "undefined") return "/calendar";
-    try {
-      const url = new URL(window.location.href);
-      return url.searchParams.get("redirect") || "/calendar";
-    } catch {
-      return "/calendar";
-    }
+    const params = new URLSearchParams(window.location.search);
+    const n = params.get("next");
+    return n && n.startsWith("/") ? n : "/calendar";
   }, []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  // If already signed in, go immediately
+  // if already signed in, go straight to nextUrl
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace(redirectTarget);
+      if (data.session) router.replace(nextUrl);
     });
-  }, [router, redirectTarget]);
+  }, [router, nextUrl]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    setErrorMsg(null);
+    setStatus("loading");
+    setErrorMsg("");
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -44,40 +38,22 @@ export default function LoginPage() {
     });
 
     if (error) {
+      setStatus("error");
       setErrorMsg(error.message || "Login failed");
-      setSubmitting(false);
       return;
     }
-
-    // 1) read the session tokens client-side
-    const { data: sessionData } = await supabase.auth.getSession();
-    const access_token = sessionData.session?.access_token;
-    const refresh_token = sessionData.session?.refresh_token;
-
-    // 2) tell the server to set the HTTP-only cookie so middleware sees it
-    try {
-      await fetch("/auth/callback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ access_token, refresh_token }),
-      });
-    } catch (err) {
-      // Even if this fails, try to navigate; worst case middleware redirects back.
-      console.warn("cookie sync failed", err);
-    }
-
-    // 3) navigate
-    router.replace(redirectTarget);
-  };
+    router.replace(nextUrl);
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow">
         <h1 className="text-2xl font-semibold mb-2">Log in</h1>
-        <p className="text-sm text-neutral-600 mb-4">Use your email and password.</p>
+        <p className="text-sm text-neutral-600 mb-4">
+          Use your email and password.
+        </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">
             <span className="text-sm">Email</span>
             <input
@@ -102,16 +78,25 @@ export default function LoginPage() {
             />
           </label>
 
-          {errorMsg && <p className="text-sm text-rose-600">{errorMsg}</p>}
+          {status === "error" && (
+            <p className="text-sm text-rose-600">
+              {errorMsg || "Login failed"}
+            </p>
+          )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button type="submit" disabled={submitting} className="btn btn-brand w-full">
-              {submitting ? "Signing in…" : "Sign in"}
-            </button>
-            <a href="/forgot-password" className="btn w-full flex items-center justify-center">
+          <button
+            type="submit"
+            disabled={status === "loading"}
+            className="btn btn-brand w-full"
+          >
+            {status === "loading" ? "Signing in…" : "Sign in"}
+          </button>
+
+          <p className="text-sm text-gray-500 mt-2">
+            <a href="/forgot-password" className="text-indigo-600 hover:underline">
               Forgot password?
             </a>
-          </div>
+          </p>
         </form>
       </div>
     </main>
