@@ -1,112 +1,36 @@
-// middleware.ts
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+// middleware.ts  (REPLACE ENTIRE FILE)
+import { NextResponse, type NextRequest } from "next/server";
+import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 
-// CONFIG
-const SIGNIN_PATH = "/login";      // your working login page
-const REQUIRE_PROFILE = true;      // set false if you only require auth
-const PROTECTED = [
-  "/meditation",
-  "/communities",
-  "/calendar",
-  "/lounge",
-  "/schedule",
-  "/profile",
+const SIGNIN_PATH = "/login";
+
+// Only protect these paths
+const PROTECTED: RegExp[] = [
+  /^\/calendar(\/|$)/,
+  /^\/meditation\/schedule(\/|$)/,
+  /^\/communities(\/|$)/,
 ];
 
-function isProtected(pathname: string) {
-  return PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/"));
-}
-
-// Supabase REST calls (no client lib needed)
-async function getUserFromSupabase(token: string) {
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`;
-  const res = await fetch(url, {
-    headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as { id: string } | null;
-}
-
-async function hasProfileRow(token: string, userId: string) {
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=id&id=eq.${userId}`;
-  const res = await fetch(url, {
-    headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) return false;
-  const rows = (await res.json()) as Array<{ id: string }>;
-  return Array.isArray(rows) && rows.length > 0;
-}
-
-function extractAccessToken(req: NextRequest): string | null {
-  // Preferred cookie (set by our callback route)
-  const direct = req.cookies.get("sb-access-token")?.value;
-  if (direct) return direct;
-
-  // Legacy cookie (if you ever used the old helper)
-  const legacy = req.cookies.get("supabase-auth-token")?.value;
-  if (legacy) {
-    try {
-      const arr = JSON.parse(legacy);
-      if (Array.isArray(arr) && typeof arr[0] === "string") return arr[0];
-    } catch {}
-  }
-  return null;
-}
-
 export async function middleware(req: NextRequest) {
-  const { pathname, search } = req.nextUrl;
+  const url = req.nextUrl.clone();
+  const res = NextResponse.next();
 
-  // Allow assets, api, and public/auth routes
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/favicon") ||
-    pathname.startsWith("/robots") ||
-    pathname.startsWith("/sitemap") ||
-    pathname.startsWith("/signin") ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/auth") ||
-    pathname === "/"
-  ) {
-    return NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
+  const { data: { session } } = await supabase.auth.getSession();
+
+  // if requesting a protected route and not signed in, bounce to login
+  const isProtected = PROTECTED.some((re) => re.test(url.pathname));
+  if (isProtected && !session) {
+    const redirectTo = `${SIGNIN_PATH}?redirect=${encodeURIComponent(url.pathname + url.search)}`;
+    return NextResponse.redirect(new URL(redirectTo, url.origin));
   }
 
-  if (!isProtected(pathname)) return NextResponse.next();
-
-  const accessToken = extractAccessToken(req);
-  if (!accessToken) {
-    const to = new URL(SIGNIN_PATH, req.url);
-    to.searchParams.set("redirect", pathname + search);
-    return NextResponse.redirect(to);
-  }
-
-  const user = await getUserFromSupabase(accessToken);
-  if (!user) {
-    const to = new URL(SIGNIN_PATH, req.url);
-    to.searchParams.set("redirect", pathname + search);
-    return NextResponse.redirect(to);
-  }
-
-  if (REQUIRE_PROFILE) {
-    const ok = await hasProfileRow(accessToken, user.id);
-    if (!ok) {
-      const to = new URL("/onboarding", req.url);
-      to.searchParams.set("redirect", pathname + search);
-      return NextResponse.redirect(to);
-    }
-  }
-
-  return NextResponse.next();
+  return res;
 }
 
 export const config = {
-  matcher: ["/((?!.*\\.[\\w]+$).*)"], // run on all pages except static files
+  matcher: [
+    // run on everything except static/_next
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|images/|public/).*)",
+  ],
 };
