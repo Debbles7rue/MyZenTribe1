@@ -4,21 +4,18 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
-// UI pieces
 import CalendarHeader from "@/components/CalendarHeader";
 import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 
-// Helpers / types
 import { useMoon } from "@/hooks/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 export default function CalendarPage() {
-  /* ---------------- Theme (persist) ---------------- */
   const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">("winter");
   useEffect(() => {
-    const saved = localStorage.getItem("mzt-theme") as "spring" | "summer" | "autumn" | "winter" | null;
+    const saved = localStorage.getItem("mzt-theme") as any;
     if (saved) setTheme(saved);
   }, []);
   useEffect(() => {
@@ -26,23 +23,19 @@ export default function CalendarPage() {
     localStorage.setItem("mzt-theme", theme);
   }, [theme]);
 
-  /* ---------------- Session ---------------- */
   const [sessionUser, setSessionUser] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
 
-  /* ---------------- Filters ---------------- */
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
   const [showMoon, setShowMoon] = useState(true);
   const [query, setQuery] = useState("");
 
-  /* ---------------- Calendar state ---------------- */
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
 
-  /* ---------------- Data ---------------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -50,32 +43,50 @@ export default function CalendarPage() {
     if (!sessionUser) return;
     setLoading(true);
 
+    // Fetch all events (you were already doing this)
     const { data, error } = await supabase
       .from("events")
       .select("*")
       .order("start_time", { ascending: true });
 
-    if (!error && data) {
-      let list = data as DBEvent[];
+    let list = (!error && data ? (data as DBEvent[]) : []);
 
-      if (mode === "mine") {
-        list = list.filter((e) => e.created_by === sessionUser);
-      }
-      if (typeFilter !== "all") {
-        list = list.filter((e) => (e.source || "personal") === typeFilter);
-      }
-      if (query.trim()) {
-        const q = query.toLowerCase();
-        list = list.filter(
-          (e) =>
-            e.title.toLowerCase().includes(q) ||
-            (e.description ?? "").toLowerCase().includes(q) ||
-            (e.location ?? "").toLowerCase().includes(q)
-        );
-      }
-      setEvents(list);
+    // ALSO fetch events I RSVP'd to (so "mine" shows them too)
+    let rsvpEvents: DBEvent[] = [];
+    const rsvpIdsRes = await supabase
+      .from("event_attendees")
+      .select("event_id")
+      .eq("user_id", sessionUser);
+
+    if (!rsvpIdsRes.error && (rsvpIdsRes.data?.length || 0) > 0) {
+      const ids = rsvpIdsRes.data!.map((r: any) => r.event_id);
+      const byIds = await supabase.from("events").select("*").in("id", ids);
+      if (!byIds.error && byIds.data) rsvpEvents = byIds.data as DBEvent[];
     }
 
+    // Merge RSVPs into the list (de-dup)
+    const byId = new Map<string, DBEvent>();
+    [...list, ...rsvpEvents].forEach((e) => byId.set((e as any).id, e));
+    list = Array.from(byId.values());
+
+    // Filters (same as before)
+    if (mode === "mine") {
+      list = list.filter((e) => e.created_by === sessionUser || rsvpEvents.some((r) => (r as any).id === (e as any).id));
+    }
+    if (typeFilter !== "all") {
+      list = list.filter((e) => ((e as any).source || "personal") === typeFilter);
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(
+        (e) =>
+          e.title.toLowerCase().includes(q) ||
+          ((e as any).description ?? "").toLowerCase().includes(q) ||
+          ((e as any).location ?? "").toLowerCase().includes(q)
+      );
+    }
+
+    setEvents(list);
     setLoading(false);
   }
 
@@ -83,18 +94,15 @@ export default function CalendarPage() {
     if (sessionUser) load();
   }, [sessionUser, mode, typeFilter, query]);
 
-  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "event_attendees" }, load)
       .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    return () => { supabase.removeChannel(ch); };
   }, [sessionUser, mode, typeFilter, query]);
 
-  /* ---------------- Create modal ---------------- */
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -147,38 +155,23 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------------- Moon overlay (fixed end date) ---------------- */
   const moonUi = useMoon(date.getFullYear(), showMoon);
   const moonUiEvents: UiEvent[] = useMemo(
     () =>
       moonUi.map((m) => {
         const start = m.start as Date;
-        // IMPORTANT: all-day events must end the NEXT day to render inside the cell
         const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
-        return {
-          id: m.id,
-          title: m.title,
-          start,
-          end,
-          allDay: true,
-          resource: { moonPhase: (m as any).resource.moonPhase },
-        };
+        return { id: m.id, title: m.title, start, end, allDay: true, resource: { moonPhase: (m as any).resource.moonPhase } };
       }),
     [moonUi]
   );
 
-  /* ---------------- Click/drag handlers ---------------- */
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    if (view === Views.MONTH) {
-      setDate(start);
-      setView(Views.DAY);
-      return;
-    }
-    const toLocal = (d: Date) =>
-      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    if (view === Views.MONTH) { setDate(start); setView(Views.DAY); return; }
+    const toLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
     setOpenCreate(true);
   };
@@ -189,7 +182,7 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   };
 
-  const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
+  const canEdit = (e: DBEvent) => sessionUser && (e as any).created_by === sessionUser;
 
   const onDrop = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
     const db: DBEvent = event.resource;
@@ -197,17 +190,14 @@ export default function CalendarPage() {
     const { error } = await supabase
       .from("events")
       .update({ start_time: start.toISOString(), end_time: end.toISOString() })
-      .eq("id", db.id);
-    if (error) alert(error.message);
-    else load();
+      .eq("id", (db as any).id);
+    if (error) alert(error.message); else load();
   };
 
   const onResize = onDrop;
 
-  /* ---------------- Render ---------------- */
   return (
     <div className="page">
-      {/* SiteHeader is rendered globally in app/layout.tsx */}
       <div className="container-app">
         <CalendarHeader
           mode={mode}
@@ -238,9 +228,7 @@ export default function CalendarPage() {
         />
 
         {loading && <p className="muted mt-3">Loading…</p>}
-        <p className="muted mt-2 text-xs">
-          🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter
-        </p>
+        <p className="muted mt-2 text-xs">🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter</p>
       </div>
 
       <CreateEventModal
