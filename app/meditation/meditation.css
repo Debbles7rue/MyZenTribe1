@@ -1,192 +1,240 @@
-/* app/meditation/meditation.css */
-
-/* palette */
-:root{
-  --bg-1:#0f1216; --bg-2:#13171c;
-  --panel-bg:rgba(20,22,26,.84); --panel-edge:rgba(255,255,255,.08);
-  --gold-ink:#f0e3c2;
-  --candle-wax:#f4eee4; --flame-core:#ffd89a; --flame-outer:rgba(255,184,86,.75); --halo:rgba(255,218,140,.22);
-}
-.muted{opacity:.75}
-.h3{font-weight:800;margin:0 0 10px}
-
-/* page layout */
-.mz-page{display:grid;gap:18px}
-.mz-title{font-weight:900;letter-spacing:.05em;margin:6px 0 0}
-
-/* shell + scene */
-.mz-scene-shell{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--panel-edge)}
-.mz-scene{position:relative;min-height:78vh;background:radial-gradient(1200px 900px at 50% 100%,#0a0e12 15%,var(--bg-2) 60%,var(--bg-1))}
-.mz-aura{position:absolute;inset:-20%;pointer-events:none;filter:saturate(.9) blur(.4px);opacity:.52;
-  background:radial-gradient(800px 520px at 50% 88%,rgba(245,225,180,.12),transparent 60%);
+:root {
+  --sand-2: #f3ebdd;
+  --sand-3: #e7dbc3;
+  --ink: #2a241c;
+  --gold: #c9b27f;
+  --door-edge: rgba(255, 255, 255, 0.18);
 }
 
-/* Background image layer (uses --bg-img) */
-.mz-bg-img{position:absolute;inset:0;background-image:var(--bg-img);background-size:cover;background-position:center;opacity:.9;filter:saturate(.92)}
-
-/* 🔒 shield overlay (very subtle) */
-.mz-shield{
-  position:absolute; inset:0;
-  background-image: var(--shield-img);
-  background-repeat: no-repeat;
-  background-position: center 52%;
-  background-size: min(60vmin, 720px) auto;
-  opacity: .06;
-  mix-blend-mode: soft-light;
-  filter: contrast(90%) saturate(85%);
-  pointer-events: none;
-  will-change: transform, opacity;
-  animation: shieldFloat 24s ease-in-out infinite;
-  -webkit-mask-image: radial-gradient(65% 58% at 50% 52%, rgba(0,0,0,.95), rgba(0,0,0,.75) 55%, rgba(0,0,0,0) 85%);
-          mask-image: radial-gradient(65% 58% at 50% 52%, rgba(0,0,0,.95), rgba(0,0,0,.75) 55%, rgba(0,0,0,0) 85%);
-}
-@keyframes shieldFloat{
-  0%{transform:translateY(0) rotate(0.1deg) scale(1);opacity:.06}
-  50%{transform:translateY(-4px) rotate(-0.2deg) scale(1.01);opacity:.07}
-  100%{transform:translateY(0) rotate(0.1deg) scale(1);opacity:.06}
+/* soft page backdrop */
+body {
+  background: radial-gradient(
+    1200px 500px at 50% -200px,
+    #efe7da,
+    #e5dccb 60%,
+    #ddd1bd 100%
+  );
 }
 
-/* door group */
-.mz-doorgroup{position:absolute;inset:0;display:grid;place-items:center}
-.mz-doorgroup.is-open .mz-door{opacity:0;pointer-events:none;transition:opacity .6s ease .9s}
-.mz-doorgroup.is-open .mz-choices{pointer-events:none;opacity:0;transition:opacity .35s ease}
+/* keep meditation UI above sticky headers so buttons always click */
+.mz-root { position: relative; z-index: 999; }
 
-.mz-door{position:absolute;inset:12% 10%;border-radius:18px;display:grid;place-items:center;perspective:1400px;transition:opacity .35s ease}
-.mz-ancient{position:absolute;top:24px;width:100%;text-align:center;text-transform:uppercase;letter-spacing:.22em;color:var(--gold-ink);font-weight:800;font-size:14px;text-shadow:0 2px 6px rgba(0,0,0,.45);z-index:3}
-.mz-door-candles{position:absolute;top:16%;left:10%;right:10%;display:flex;justify-content:space-between;z-index:2}
-.mz-door-candles .dc{filter:drop-shadow(0 8px 20px rgba(255,200,120,.26))}
-.mz-door-panel{position:absolute;top:0;bottom:0;width:50%;
+/* header */
+.mz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.mz-headerActions { display: flex; gap: 8px; }
+.mz-scheduleBtn {
+  border: 1px solid #dfd6c4;
+  background: linear-gradient(#fff, #f5efe6);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.mz-scheduleBtn:hover { filter: brightness(0.98); }
+
+/* intro */
+.mz-intro {
+  background: var(--sand-2);
+  border: 1px solid var(--sand-3);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 12px 0 14px;
+  color: var(--ink);
+}
+
+/* grid */
+.mz-grid {
+  display: grid;
+  grid-template-columns: 1fr minmax(560px, 860px) 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* buttons */
+.mz-side {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  position: relative;
+  z-index: 3;
+}
+.mz-choice {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--sand-3);
+  background: #ffffffcc;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: transform 0.06s, box-shadow 0.06s, background 0.06s;
+  cursor: pointer;
+  text-align: left;
+}
+.mz-choice:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.12); }
+.mz-choice--on { outline: 2px solid var(--gold); background: #fff; }
+
+.mz-candle {
+  width: 10px; height: 14px; border-radius: 3px;
+  background: linear-gradient(#ffe8a9, #ffbf5b);
+  box-shadow: 0 0 10px #ffd98c, 0 0 2px #fff inset;
+}
+.mz-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mz-pill {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f2efe7;
+  border: 1px solid #e3dcc7;
+}
+
+/* door frame */
+.mz-door {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--sand-3);
+  background: #f1eadf;
+  min-height: 580px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.12);
+  perspective: 1400px;
+  z-index: 10;
+}
+.mz-door.is-immersive {
+  position: fixed;
+  inset: 0;
+  border-radius: 0;
+  min-height: 100vh;
+  z-index: 1000;
+  box-shadow: none;
+}
+.mz-door.is-immersive .mz-doorTitle,
+.mz-door.is-immersive .mz-seam,
+.mz-door.is-immersive .mz-shield {
+  display: none;
+}
+
+/* background */
+.mz-doorBg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  transition: filter 0.5s; z-index: 0;
+}
+/* optional video */
+.mz-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; z-index: 0;
+}
+
+/* glow overlays */
+.mz-lightOverlay {
+  position: absolute; inset: 0;
   background:
-    linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.54)),
-    var(--door-texture, linear-gradient(#3b3124,#241d15));
-  background-size:cover;background-position:center;
-  border:1px solid var(--panel-edge);box-shadow:inset 0 0 40px rgba(0,0,0,.55);
-  transition:transform 1s ease-in-out
+    radial-gradient(700px 220px at 50% 8%, rgba(255,248,228,0.55), transparent 60%),
+    radial-gradient(900px 500px at 50% 100%, rgba(255,255,255,0.22), transparent 60%);
+  pointer-events: none; z-index: 1;
 }
-.mz-door-panel.left{left:0;transform-origin:left}
-.mz-door-panel.right{right:0;transform-origin:right}
-.mz-doorgroup.is-open .mz-door-panel.left{transform:rotateY(-78deg)}
-.mz-doorgroup.is-open .mz-door-panel.right{transform:rotateY(78deg)}
 
-/* choices */
-.mz-choices{position:absolute;top:18%;width:280px;display:flex;flex-direction:column;gap:12px}
-.mz-choices.left{left:22px}
-.mz-choices.right{right:22px}
-.mz-choice{position:relative;display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(17,21,26,.88);border:1px solid var(--panel-edge);border-radius:12px;color:#eef4ff;cursor:pointer}
-.mz-choice .label{font-weight:700;font-size:13px;text-align:left}
-.mz-choice .flame{position:relative;width:22px;height:28px;display:grid;place-items:center}
-.mz-choice .glow{position:absolute;width:22px;height:28px;border-radius:50% 50% 60% 60%;background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(1px);opacity:.9;animation:flicker 1.8s infinite}
-.mz-choice .core{position:relative;width:10px;height:14px;border-radius:40% 40% 60% 60%;background:radial-gradient(circle at 50% 35%,#fff 22%,var(--flame-core) 60%,transparent 72%)}
+/* title & seam */
+.mz-doorTitle {
+  position: absolute;
+  top: 14px; left: 0; right: 0;
+  text-align: center;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  color: #5d4b2c;
+  text-shadow: 0 1px 0 #fff;
+  z-index: 5;
+  pointer-events: none;
+}
+.mz-seam {
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  width: 1px; transform: translateX(-0.5px);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0.08), rgba(0,0,0,0.25));
+  z-index: 2; opacity: 0.35; pointer-events: none;
+}
 
-/* HUD */
-.mz-session-hud{position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:6}
-.mz-chip{background:#141b22;border:1px solid rgba(255,255,255,.12);color:#e6f0ff;padding:8px 12px;border-radius:10px;cursor:pointer}
+/* optional shield overlay */
+.mz-shield {
+  position: absolute; inset: 0; object-fit: cover;
+  opacity: .28; mix-blend-mode: screen; pointer-events: none; z-index: 2;
+}
 
-/* -- SOUND CONTROLS -- */
-.mz-controls{position:absolute;left:14px;bottom:14px;z-index:7;background:var(--panel-bg);border:1px solid var(--panel-edge);border-radius:12px;padding:10px 12px;backdrop-filter:blur(6px);display:inline-flex}
-.mz-controls .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.mz-controls .pill{background:#1a232b;border:1px solid rgba(255,255,255,.1);color:#e6f0ff;padding:8px 12px;border-radius:999px;cursor:pointer}
-.mz-controls .pill.active{background:#24303a}
-.mz-controls .select-wrap{display:flex;gap:6px;align-items:center;margin-left:6px}
-.mz-controls .select{background:#1a232b;color:#e6f0ff;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 10px}
-.mz-controls .vol-wrap{display:flex;gap:6px;align-items:center;margin-left:8px}
-.mz-controls input[type="range"]{accent-color:#d7c69b;width:140px}
+/* door panels */
+.mz-panel {
+  position: absolute; top: 0; bottom: 0; width: 50%; z-index: 4;
+  background-image: url("/mz/doors-1920.webp");
+  background-size: 200% 100%;
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.28), 0 10px 30px rgba(0,0,0,0.18);
+  transition: transform 1s cubic-bezier(0.18, 0.82, 0.2, 1), box-shadow 0.6s;
+  transform-style: preserve-3d; backface-visibility: hidden;
+}
+.mz-panel::after {
+  content: "";
+  position: absolute; inset: 0;
+  box-shadow: inset 0 0 60px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.mz-panel--left  { left: 0; transform-origin: left center;  background-position: left center;  border-right: 1px solid var(--door-edge); }
+.mz-panel--right { right: 0; transform-origin: right center; background-position: right center; border-left: 1px solid var(--door-edge); }
+.mz-panel--left.is-open  { transform: rotateY(-100deg); }
+.mz-panel--right.is-open { transform: rotateY(100deg); }
 
-/* sacred room overlays */
-.mz-room{position:absolute;inset:0}
-.mz-room .shelves .shelf{position:absolute;left:8%;width:84%;height:10px;background:linear-gradient(#242a31,#151a20);border:1px solid var(--panel-edge);box-shadow:0 8px 20px rgba(0,0,0,.5)}
-.mz-room .shelves .top{top:22%}
-.mz-room .shelves .mid{top:38%}
-.mz-room .shelves .candles{position:absolute;left:10%;right:10%;top:26%;display:flex;gap:42px;justify-content:center}
-.candle{--h:60px;--w:22px;position:relative;display:inline-flex;align-items:end;justify-content:center}
-.candle.short{--h:40px;--w:18px}.candle.tall{--h:86px;--w:26px}
-.candle .wax{width:var(--w);height:var(--h);background:linear-gradient(#fff,var(--candle-wax));border-radius:6px 6px 4px 4px;box-shadow:inset 0 -6px 10px rgba(0,0,0,.22),0 6px 18px rgba(0,0,0,.36)}
-.candle .flame{position:absolute;bottom:calc(var(--h) + 4px);width:14px;height:22px;transform-origin:50% 100%;animation:sway 3s ease-in-out infinite;display:grid;place-items:center}
-.candle .glow{position:absolute;width:22px;height:32px;border-radius:50% 50% 60% 60%;background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(1.1px);opacity:.94;animation:flicker 1.8s infinite}
-.candle .core{width:8px;height:12px;border-radius:40% 40% 60% 60%;background:radial-gradient(circle at 50% 35%,#fff 22%,var(--flame-core) 60%,transparent 72%)}
-.candle .halo{position:absolute;width:100px;height:60px;bottom:calc(var(--h) - 2px);border-radius:50%;background:radial-gradient(55% 60% at 50% 55%,var(--halo),transparent 70%);filter:blur(8px);opacity:.55;pointer-events:none}
+/* handles */
+.mz-handle {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff2c0, #b48e47 55%, #6a5529 100%);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.7);
+  z-index: 6;
+}
+.mz-handle--left  { left: calc(50% - 40px); }
+.mz-handle--right { right: calc(50% - 40px); }
 
-.mz-room .fountain{position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);width:min(44vw,520px);height:min(44vw,360px)}
-.mz-room .pillar{position:absolute;left:50%;top:22%;transform:translateX(-50%);width:28px;height:120px;background:linear-gradient(#3a4956,#222c35 60%,#1a232c);border:1px solid var(--panel-edge);border-radius:10px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
-.mz-room .stream{position:absolute;top:calc(50% - 40px);width:4px;height:180px;background:linear-gradient(180deg,rgba(190,230,255,0),rgba(190,230,255,.34),rgba(190,230,255,.10));filter:blur(.6px);animation:flow 1.4s linear infinite}
-.mz-room .stream.s1{left:calc(50% - 40px)}.mz-room .stream.s2{left:50%}.mz-room .stream.s3{left:calc(50% + 40px)}
-.mz-room .ripple{position:absolute;bottom:8%;left:35%;width:30%;aspect-ratio:1/.2;border-radius:50%;border:1px solid rgba(170,215,240,.32);filter:blur(.3px);animation:ripple 3.4s ease-out infinite;opacity:.7}
-.mz-room .r1{animation-delay:0s}.mz-room .r2{animation-delay:1.1s}.mz-room .r3{animation-delay:2.2s}
+/* controls */
+.mz-enterBtn {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  padding: 10px 16px; border-radius: 12px;
+  background: var(--gold); color: #221b0f; border: 1px solid #b59f6c;
+  font-weight: 700; box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  z-index: 6; cursor: pointer;
+}
+.mz-closeBtn {
+  position: absolute; top: 14px; right: 14px; width: 36px; height: 36px;
+  border-radius: 999px; background: rgba(255,255,255,0.9);
+  border: 1px solid var(--sand-3); box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  z-index: 7; cursor: pointer;
+}
+.mz-closeBtn::before, .mz-closeBtn::after {
+  content: ""; position: absolute; top: 50%; left: 50%; width: 16px; height: 2px; background: #333; transform-origin: center;
+}
+.mz-closeBtn::before { transform: translate(-50%, -50%) rotate(45deg); }
+.mz-closeBtn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
 
-/* beach overlays */
-.mz-beach{position:absolute;inset:0}
-.mz-beach .sea{position:absolute;left:0;right:0;bottom:12%;height:28%;overflow:hidden}
-.mz-beach .wave{position:absolute;left:-30%;right:-30%;height:60%;opacity:.7;background:radial-gradient(ellipse at top,rgba(255,255,255,.55),transparent 60%);animation:wave 8s linear infinite}
-.mz-beach .w1{top:0%;animation-duration:11s}.mz-beach .w2{top:15%;animation-duration:9s}.mz-beach .w3{top:28%;animation-duration:7s}
+/* counters */
+.mz-counters {
+  margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.mz-counter {
+  background: #fff; border: 1px solid var(--sand-3); border-radius: 14px; padding: 14px; color: var(--ink);
+}
+.mz-num { font-size: 28px; font-weight: 800; line-height: 1; }
+.mz-cap { opacity: 0.75; margin-top: 4px; }
 
-/* lake overlays */
-.mz-lake{position:absolute;inset:0}
-.mz-lake .water{position:absolute;left:0;right:0;bottom:16%;height:28%;overflow:hidden}
-.mz-lake .ripple{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:20%;height:30%;border-radius:50%;border:1px solid rgba(160,205,225,.3);animation:lakeRipple 6s infinite ease-out}
-.mz-lake .r1{animation-delay:0s}.mz-lake .r2{animation-delay:2s}.mz-lake .r3{animation-delay:4s}
-
-/* creek overlays */
-.mz-creek{position:absolute;inset:0}
-.mz-creek .stream{position:absolute;left:0;right:0;bottom:16%;height:30%;overflow:hidden}
-.mz-creek .flow{position:absolute;top:10%;bottom:10%;width:6%;background:linear-gradient(180deg,rgba(120,210,230,.18),rgba(120,210,230,.65) 40%,rgba(120,210,230,.18));filter:blur(.4px);animation:creekFlow 3.6s linear infinite}
-.mz-creek .f0{left:10%}.mz-creek .f1{left:18%}.mz-creek .f2{left:26%}.mz-creek .f3{left:34%}.mz-creek .f4{left:42%}.mz-creek .f5{left:50%}.mz-creek .f6{left:58%}.mz-creek .f7{left:66%}
-
-/* abstract overlays */
-.mz-abstract{position:absolute;inset:0;display:grid;place-items:center}
-.mz-abstract .swirl{position:absolute;width:140vmax;height:140vmax;background:conic-gradient(from 0deg,#1a1422,#253053,#1a1422,#253053,#1a1422);mix-blend-mode:screen;opacity:.12;animation:swirl 40s linear infinite;border-radius:50%}
-.mz-abstract .s2{animation-duration:60s;opacity:.16}.mz-abstract .s3{animation-duration:80s;opacity:.1}.mz-abstract .s4{animation-duration:100s;opacity:.08}
-
-/* candle wall */
-.mz-candlewall{position:absolute;inset:0}
-.mz-candlewall .wall-grid{position:absolute;left:6%;right:6%;bottom:10%;top:20%;display:grid;grid-template-columns:repeat(6,1fr);gap:16px 22px;align-content:end}
-.mz-candlewall .loading{grid-column:1/-1;color:#eef2f7;opacity:.85;text-align:center}
-.mz-candlewall .tribute{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:6px 4px 10px;text-align:center;color:#eef2f7;font-size:12px}
-.mz-candlewall .tribute .name{margin-bottom:6px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,.5)}
-.mz-candlewall .tribute .holder{display:grid;place-items:center;height:80px}
-.mz-candlewall .add{position:absolute;right:14px;bottom:14px}
-
-/* realistic candle */
-.real-candle{position:relative;width:22px;height:60px;display:inline-block}
-.real-candle .rc-wax{position:absolute;bottom:0;left:0;right:0;height:56px;border-radius:6px;background:linear-gradient(#fff,#f2eee8);box-shadow:inset 0 -6px 10px rgba(0,0,0,.22),0 6px 18px rgba(0,0,0,.36)}
-.real-candle .rc-flame{position:absolute;left:50%;transform:translateX(-50%);bottom:60px;width:14px;height:22px;display:grid;place-items:center;animation:sway 3s ease-in-out infinite}
-.real-candle .rc-glow{position:absolute;width:22px;height:32px;border-radius:50% 50% 60% 60%;background:radial-gradient(40% 45% at 50% 30%,var(--flame-outer),transparent 70%);filter:blur(1.1px);opacity:.95;animation:flicker 1.8s infinite}
-.real-candle .rc-core{width:8px;height:12px;border-radius:40% 40% 60% 60%;background:radial-gradient(circle at 50% 35%,#fff 22%,var(--flame-core) 60%,transparent 72%)}
-.real-candle .rc-halo{position:absolute;width:100px;height:60px;left:50%;transform:translateX(-50%);bottom:38px;border-radius:50%;background:radial-gradient(55% 60% at 50% 55%,var(--halo),transparent 70%);filter:blur(8px);opacity:.55;pointer-events:none}
-.real-candle .rc-melt{position:absolute;bottom:40px;width:5px;border-radius:3px;background:linear-gradient(#fff,#f2eee8);box-shadow:inset 0 -4px 6px rgba(0,0,0,.18)}
-.real-candle .rc-melt.a{left:6px;height:16px}
-.real-candle .rc-melt.b{right:6px;height:10px}
-
-/* color glows */
-.real-candle.gold  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(255,220,120,.28),transparent 70%)}
-.real-candle.blue  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(120,180,255,.28),transparent 70%)}
-.real-candle.violet.rc-halo, .real-candle.violet  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(180,120,255,.28),transparent 70%)}
-.real-candle.rose  .rc-halo{background:radial-gradient(55% 60% at 50% 55%,rgba(255,160,180,.28),transparent 70%)}
-
-/* stats bar */
-.mz-statsbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-start;border:1px solid var(--panel-edge);border-radius:12px;padding:10px;background:var(--panel-bg)}
-.mz-statbox{min-width:140px;background:rgba(255,255,255,.05);border:1px solid var(--panel-edge);border-radius:10px;padding:10px 14px}
-.mz-statbox .n{font-size:20px;font-weight:800}
-.mz-statbox .t{font-size:11px;opacity:.9}
-.mz-linksbar{margin-left:auto;font-size:12px}
-.mz-link{color:#d7c69b;text-decoration:underline}
-
-/* modal */
-.mz-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:40}
-.mz-modal{background:#0f141a;border:1px solid var(--panel-edge);border-radius:12px;width:min(560px,92vw);padding:16px}
-.mz-modal-body{display:grid;gap:10px}
-.field .label{display:block;font-size:12px;opacity:.8;margin-bottom:4px}
-.input{background:#131b23;color:#e7effa;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px}
-.preview{display:grid;place-items:center;height:120px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);border-radius:10px}
-.mz-modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
-.btn{background:#202a34;border:1px solid rgba(255,255,255,.12);color:#e6f0ff;padding:8px 12px;border-radius:10px;cursor:pointer}
-.btn-brand{background:#2a3440}
-
-/* animations */
-@keyframes sway{0%{transform:rotate(.8deg)}50%{transform:rotate(-.8deg)}100%{transform:rotate(.8deg)}}
-@keyframes flicker{0%,100%{opacity:.85;transform:scaleY(1)}40%{opacity:.95;transform:scaleY(1.06)}60%{opacity:.75;transform:scaleY(.96)}}
-@keyframes flow{0%{transform:translateY(-40%);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateY(50%);opacity:0}}
-@keyframes ripple{0%{transform:scale(.6);opacity:.5}100%{transform:scale(1.2);opacity:0}}
-@keyframes wave{0%{transform:translateX(0)}100%{transform:translateX(30%)}}
-@keyframes lakeRipple{0%{transform:translate(-50%,-50%) scale(.7);opacity:.7}100%{transform:translate(-50%,-50%) scale(1.35);opacity:0}}
-@keyframes creekFlow{0%{transform:translateY(-20%)}100%{transform:translateY(40%)}}
-@keyframes swirl{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+/* responsive */
+@media (max-width: 880px) {
+  .mz-grid { grid-template-columns: 1fr; }
+  .mz-side { grid-template-columns: 1fr 1fr; }
+}
