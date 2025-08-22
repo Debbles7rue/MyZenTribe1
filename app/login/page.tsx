@@ -1,11 +1,13 @@
 // app/login/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function LoginPage() {
+function LoginContent() {
   // Fallback if no ?redirect= is provided
   const AFTER_LOGIN = "/calendar";
 
@@ -91,5 +93,13 @@ export default function LoginPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen flex items-center justify-center p-6">Loading…</main>}>
+      <LoginContent />
+    </Suspense>
   );
 }
