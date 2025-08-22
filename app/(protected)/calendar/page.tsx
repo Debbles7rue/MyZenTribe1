@@ -1,5 +1,15 @@
 "use client";
 
+import { useRequireAuth } from "@/lib/useRequireAuth";
+// ...your existing imports
+
+export default function CalendarPage() {
+  const { ready } = useRequireAuth();
+  if (!ready) return null; // or a spinner
+
+  // ...rest of your page exactly as-is
+}
+
 import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
