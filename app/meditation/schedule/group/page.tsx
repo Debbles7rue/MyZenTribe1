@@ -1,63 +1,91 @@
-// app/meditation/schedule/group/page.tsx
 "use client";
 
 export const dynamic = "force-dynamic";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
-function toIcsDate(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    d.getUTCFullYear().toString() +
-    pad(d.getUTCMonth() + 1) +
-    pad(d.getUTCDate()) + "T" +
-    pad(d.getUTCHours()) +
-    pad(d.getUTCMinutes()) +
-    pad(d.getUTCSeconds()) + "Z"
-  );
-}
-function download(filename: string, text: string) {
-  const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
+const ENVS = [
+  { id: "sacred", label: "Sacred Room" },
+  { id: "beach", label: "Stunning Beach" },
+  { id: "creek", label: "Forest Creek" },
+  { id: "fire", label: "Crackling Fire" },
+  { id: "patterns", label: "Meditative Patterns" },
+];
 
 function CreateGroup() {
-  const now = useMemo(() => {
+  const router = useRouter();
+
+  const nowLocal = useMemo(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + 5 - (d.getMinutes() % 5));
     d.setSeconds(0);
-    return d;
+    return d.toISOString().slice(0, 16);
   }, []);
 
   const [title, setTitle] = useState("Group Meditation");
-  const [start, setStart] = useState(now.toISOString().slice(0,16));
+  const [start, setStart] = useState(nowLocal);
   const [duration, setDuration] = useState(20);
   const [env, setEnv] = useState("sacred");
-  const [code, setCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleCreate() {
+  async function create() {
     setSaving(true);
-    const c = crypto.randomUUID().slice(0,8);
-    setCode(c);
+    setError(null);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      window.location.href = "/login?redirect=/meditation/schedule/group";
+      return;
+    }
+
+    const starts = new Date(start);
+    const ends = new Date(starts.getTime() + duration * 60000);
+    const event_type = `meditation:${env}`;
+    const invite_code = crypto.randomUUID().slice(0, 8);
+
+    const { data, error } = await supabase
+      .from("events")
+      .insert([{
+        title,
+        description: null,
+        location: null,
+        start_time: starts.toISOString(),
+        end_time: ends.toISOString(),
+        visibility: "public",      // or "group" if you use that label in your UI
+        created_by: user.id,
+        event_type,
+        rsvp_public: true,
+        community_id: null,
+        image_path: null,
+        source: "personal",
+        invite_code
+      }])
+      .select("invite_code")
+      .single();
+
     setSaving(false);
+    if (error || !data) {
+      setError(error?.message || "Could not create event");
+      return;
+    }
+
+    const url = `${window.location.origin}/meditation/schedule/group?code=${encodeURIComponent(data.invite_code!)}`;
+    setShareUrl(url);
   }
 
-  const shareUrl = code ? `${typeof window !== "undefined" ? window.location.origin : ""}/meditation/schedule/group?code=${code}` : "";
-
   return (
-    <main className="wrap">
-      <header className="head">
-        <h1 className="title">Schedule: Group Session</h1>
+    <main className="page container-app">
+      <header className="mz-header" style={{ marginBottom: 12 }}>
+        <h1 className="page-title">Schedule: Group Session</h1>
         <Link href="/meditation/schedule" className="btn">← Back</Link>
       </header>
 
-      <div className="grid">
+      <div className="grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <label className="field">
           <span className="lab">Title</span>
           <input className="input" value={title} onChange={(e)=>setTitle(e.target.value)} />
@@ -78,91 +106,113 @@ function CreateGroup() {
         <label className="field">
           <span className="lab">Environment</span>
           <select className="input" value={env} onChange={(e)=>setEnv(e.target.value)}>
-            {["sacred","beach","creek","fire","patterns"].map(id => <option key={id} value={id}>{id}</option>)}
+            {ENVS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
         </label>
       </div>
 
-      <div className="actions">
-        <button className="btn brand" disabled={saving} onClick={handleCreate}>
-          {saving ? "Creating…" : "Create session & get link"}
+      {error && <p className="text-rose-600" style={{ marginTop: 8 }}>{error}</p>}
+
+      <div style={{ marginTop: 16 }}>
+        <button className="btn btn-brand" onClick={create} disabled={saving}>
+          {saving ? "Creating…" : "Create session & get invite link"}
         </button>
       </div>
 
-      {code && (
-        <div className="card">
-          <h3>Invite link</h3>
-          <div className="row">
+      {shareUrl && (
+        <div className="card" style={{ marginTop: 16, padding: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Invite link</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input className="input" readOnly value={shareUrl} onFocus={(e)=>e.currentTarget.select()} />
-            <button className="btn" onClick={()=>navigator.clipboard.writeText(shareUrl)}>Copy</button>
+            <button className="btn" onClick={()=>navigator.clipboard.writeText(shareUrl!)}>Copy</button>
           </div>
-          <p className="muted">Share this link with your community or friends.</p>
-          <Link className="btn" href={`/meditation/schedule/group?code=${code}`}>Open invite page</Link>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Share this with your community/friends. When they RSVP, it will appear on their calendar.
+          </p>
+          <Link href={shareUrl} className="btn" style={{ marginTop: 8, display: "inline-block" }}>
+            Open invite page
+          </Link>
         </div>
       )}
-
-      <style jsx>{styles}</style>
     </main>
   );
 }
 
 function InviteLanding({ code }: { code: string }) {
-  const [name, setName] = useState("");
-  const [duration] = useState(20);
+  const router = useRouter();
+  const [event, setEvent] = useState<any>(null);
+  const [busy, setBusy] = useState(true);
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const start = useMemo(() => {
-    // For a backend-less demo, set "now + 1 hour".
-    const d = new Date(Date.now() + 60 * 60 * 1000);
-    d.setSeconds(0);
-    return d;
-  }, []);
+  useEffect(() => {
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        window.location.href = `/login?redirect=${encodeURIComponent(`/meditation/schedule/group?code=${code}`)}`;
+        return;
+      }
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("invite_code", code)
+        .maybeSingle();
+      if (error || !data) setError(error?.message || "Invite not found");
+      else setEvent(data);
+      setBusy(false);
+    })();
+  }, [code]);
 
-  function addToCalendar() {
-    const end = new Date(start.getTime() + duration * 60000);
-    const ics = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//MyZenTribe//Group//EN",
-      "BEGIN:VEVENT",
-      `UID:${code}@myzentribe`,
-      `DTSTAMP:${toIcsDate(new Date())}`,
-      `DTSTART:${toIcsDate(start)}`,
-      `DTEND:${toIcsDate(end)}`,
-      `SUMMARY:Group Meditation`,
-      `DESCRIPTION:Join via MyZenTribe. Invite code ${code}.`,
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ].join("\r\n");
-    download("group-meditation.ics", ics);
+  async function rsvp() {
+    setJoining(true);
+    setError(null);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      window.location.href = `/login?redirect=${encodeURIComponent(`/meditation/schedule/group?code=${code}`)}`;
+      return;
+    }
+    const { error } = await supabase
+      .from("event_attendees")
+      .upsert([{ event_id: event.id, user_id: user.id, status: "going" }]);
+
+    setJoining(false);
+    if (error) {
+      setError(error.message || "Could not RSVP");
+      return;
+    }
+    router.replace("/calendar");
   }
 
-  function rsvp() {
-    if (!name.trim()) { alert("Please enter your name."); return; }
-    alert(`Thanks, ${name.trim()} — you’re on the list!`);
-    setName("");
-  }
+  if (busy) return <main className="page container-app">Loading…</main>;
+  if (!event) return <main className="page container-app">{error || "Invite not found"}</main>;
 
   return (
-    <main className="wrap">
-      <header className="head">
-        <h1 className="title">You’re invited ✨</h1>
+    <main className="page container-app">
+      <header className="mz-header" style={{ marginBottom: 12 }}>
+        <h1 className="page-title">You’re invited ✨</h1>
         <Link href="/meditation/schedule" className="btn">← Back</Link>
       </header>
 
-      <p><b>When:</b> {start.toLocaleString()}</p>
-      <p><b>Invite code:</b> {code}</p>
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>{event.title}</div>
+        <div style={{ opacity: 0.75 }}>
+          {new Date(event.start_time).toLocaleString()} — {new Date(event.end_time).toLocaleTimeString()}
+        </div>
+        <div style={{ opacity: 0.75, marginTop: 4 }}>
+          Environment: {(event.event_type || "").replace("meditation:", "") || "sacred"}
+        </div>
 
-      <div className="actions">
-        <button className="btn brand" onClick={addToCalendar}>Add to my calendar (.ics)</button>
+        {error && <p className="text-rose-600" style={{ marginTop: 8 }}>{error}</p>}
+
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button className="btn btn-brand" onClick={rsvp} disabled={joining}>
+            {joining ? "Adding…" : "RSVP · Save to my calendar"}
+          </button>
+          <Link className="btn" href={`/meditation?env=${encodeURIComponent((event.event_type||"").replace("meditation:",""))}&autostart=1`}>
+            Go meditate
+          </Link>
+        </div>
       </div>
-
-      <h3>RSVP</h3>
-      <div className="row">
-        <input className="input" value={name} onChange={(e)=>setName(e.target.value)} placeholder="Your name" />
-        <button className="btn" onClick={rsvp}>I’m joining</button>
-      </div>
-
-      <style jsx>{styles}</style>
     </main>
   );
 }
@@ -175,25 +225,8 @@ function GroupRouter() {
 
 export default function GroupPage() {
   return (
-    <Suspense fallback={<main className="wrap">Loading…</main>}>
+    <Suspense fallback={<main className="page container-app">Loading…</main>}>
       <GroupRouter />
     </Suspense>
   );
 }
-
-const styles = `
-  .wrap { max-width: 900px; margin:0 auto; padding:24px; }
-  .head { display:flex; align-items:center; justify-content:space-between; }
-  .title { font-size:26px; }
-  .btn { border:1px solid #dfd6c4; background:linear-gradient(#fff,#f5efe6); border-radius:10px; padding:8px 12px; text-decoration:none; color:#2a241c; }
-  .brand { border-color:#d8c49b; background:linear-gradient(#ffe9be,#f7dca6); box-shadow:0 2px 6px rgba(150,110,20,.15); }
-  .grid { display:grid; gap:12px; grid-template-columns:1fr 1fr; margin-top:12px; }
-  .field { display:grid; gap:6px; }
-  .lab { font-size:12px; opacity:.7; }
-  .input { padding:10px 12px; border:1px solid #e6dcc6; border-radius:10px; background:#fff; width:100%; }
-  .actions { margin:12px 0; }
-  .row { display:flex; gap:8px; align-items:center; }
-  .muted { opacity:.72; }
-  .card { background:#faf7f1; border:1px solid #e7e0d2; border-radius:16px; padding:16px; margin-top:16px; }
-  @media (max-width:720px) { .grid { grid-template-columns:1fr; } .row { flex-direction:column; align-items:stretch; } }
-`;
