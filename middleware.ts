@@ -1,16 +1,10 @@
 // middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 
-/**
- * CONFIG
- * - SIGNIN_PATH: your working login route (you said /login is correct)
- * - REQUIRE_PROFILE: set to true to also require a row in public.profiles for access
- * - PROTECTED: all routes (and subroutes) that should be members-only
- */
-const SIGNIN_PATH = "/login";
-const REQUIRE_PROFILE = true;
+// CONFIG
+const SIGNIN_PATH = "/login";      // your working login page
+const REQUIRE_PROFILE = true;      // set false if you only require auth
 const PROTECTED = [
   "/meditation",
   "/communities",
@@ -24,61 +18,98 @@ function isProtected(pathname: string) {
   return PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
+// Supabase REST calls (no client lib needed)
+async function getUserFromSupabase(token: string) {
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/user`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as { id: string } | null;
+}
+
+async function hasProfileRow(token: string, userId: string) {
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=id&id=eq.${userId}`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) return false;
+  const rows = (await res.json()) as Array<{ id: string }>;
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+function extractAccessToken(req: NextRequest): string | null {
+  // Newer helpers set 'sb-access-token'
+  const direct = req.cookies.get("sb-access-token")?.value;
+  if (direct) return direct;
+
+  // Older helper used 'supabase-auth-token' JSON cookie: ["access","refresh"]
+  const legacy = req.cookies.get("supabase-auth-token")?.value;
+  if (legacy) {
+    try {
+      const arr = JSON.parse(legacy);
+      if (Array.isArray(arr) && typeof arr[0] === "string") return arr[0];
+    } catch {}
+  }
+  return null;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // Always allow static assets, API, and auth/onboarding pages to pass
+  // Allow assets, api, and auth/onboarding routes
   if (
-    pathname.startsWith("/_next") ||      // Next.js assets
-    pathname.startsWith("/api") ||        // API routes
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/robots") ||
     pathname.startsWith("/sitemap") ||
-    pathname.startsWith("/signin") ||     // legacy compat
-    pathname.startsWith("/login") ||      // your login page
-    pathname.startsWith("/onboarding") || // first-time profile setup
-    pathname.startsWith("/auth") ||       // Supabase OAuth callbacks
-    pathname === "/"                      // homepage (public)
+    pathname.startsWith("/signin") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/auth") ||
+    pathname === "/"
   ) {
     return NextResponse.next();
   }
 
-  // Only guard the routes in PROTECTED
   if (!isProtected(pathname)) return NextResponse.next();
 
-  // Create a response and Supabase client bound to this request
-  const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
+  // Require Supabase access token
+  const accessToken = extractAccessToken(req);
+  if (!accessToken) {
+    const to = new URL(SIGNIN_PATH, req.url);
+    to.searchParams.set("redirect", pathname + search);
+    return NextResponse.redirect(to);
+    }
 
-  // 1) Require an authenticated session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  // Verify token
+  const user = await getUserFromSupabase(accessToken);
+  if (!user) {
     const to = new URL(SIGNIN_PATH, req.url);
     to.searchParams.set("redirect", pathname + search);
     return NextResponse.redirect(to);
   }
 
-  // 2) Optionally require a profile row (public.profiles with id = auth uid)
+  // Optionally require profile row
   if (REQUIRE_PROFILE) {
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-    // If no row (or an error fetching), send them to onboarding
-    if (!profile || error) {
+    const ok = await hasProfileRow(accessToken, user.id);
+    if (!ok) {
       const to = new URL("/onboarding", req.url);
       to.searchParams.set("redirect", pathname + search);
       return NextResponse.redirect(to);
     }
   }
 
-  // All good — proceed
-  return res;
+  return NextResponse.next();
 }
 
-// Run on all pages except actual files (e.g., .css, .png, etc.)
 export const config = {
-  matcher: ["/((?!.*\\.[\\w]+$).*)"],
+  matcher: ["/((?!.*\\.[\\w]+$).*)"], // run on all pages except static files
 };
