@@ -1,35 +1,22 @@
-// app/(protected)/calendar/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
-// Auth gate (keeps route private)
-import { useRequireAuth } from "@/lib/useRequireAuth";
-
-// UI
 import CalendarHeader from "@/components/CalendarHeader";
 import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 
-// Helpers / types
 import { useMoon } from "@/hooks/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 export default function CalendarPage() {
-  /* ---------------- Auth (required) ---------------- */
-  const { user, loading: authLoading } = useRequireAuth();
-  const sessionUser = user?.id ?? null;
-  if (authLoading || !sessionUser) return null;
-
-  /* ---------------- Theme (persist) ---------------- */
   const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">("winter");
   useEffect(() => {
-    const saved =
-      (localStorage.getItem("mzt-theme") as "spring" | "summer" | "autumn" | "winter" | null) ||
-      null;
+    const saved = localStorage.getItem("mzt-theme") as
+      | "spring" | "summer" | "autumn" | "winter" | null;
     if (saved) setTheme(saved);
   }, []);
   useEffect(() => {
@@ -37,79 +24,84 @@ export default function CalendarPage() {
     localStorage.setItem("mzt-theme", theme);
   }, [theme]);
 
-  /* ---------------- Filters ---------------- */
+  const [sessionUser, setSessionUser] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
+  }, []);
+
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
   const [showMoon, setShowMoon] = useState(true);
   const [query, setQuery] = useState("");
 
-  /* ---------------- Calendar state ---------------- */
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
 
-  /* ---------------- Data ---------------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function load() {
     if (!sessionUser) return;
     setLoading(true);
+    setErrorMsg(null);
 
-    // Base list
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .order("start_time", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("start_time", { ascending: true });
 
-    let list: DBEvent[] = !error && data ? (data as DBEvent[]) : [];
+      let list: DBEvent[] = (!error && data ? (data as DBEvent[]) : []);
 
-    // ALSO add events I've RSVP'd to so "Mine" shows created_by + RSVP
-    let rsvpEvents: DBEvent[] = [];
-    const rsvpIdsRes = await supabase
-      .from("event_attendees")
-      .select("event_id")
-      .eq("user_id", sessionUser);
+      // Include events I RSVP’d to so “Mine” isn’t just creator
+      const rsvpIdsRes = await supabase
+        .from("event_attendees")
+        .select("event_id")
+        .eq("user_id", sessionUser);
 
-    if (!rsvpIdsRes.error && (rsvpIdsRes.data?.length || 0) > 0) {
-      const ids = rsvpIdsRes.data!.map((r: any) => r.event_id);
-      const byIds = await supabase.from("events").select("*").in("id", ids);
-      if (!byIds.error && byIds.data) rsvpEvents = byIds.data as DBEvent[];
+      if (!rsvpIdsRes.error && (rsvpIdsRes.data?.length || 0) > 0) {
+        const ids = rsvpIdsRes.data!.map((r: any) => r.event_id);
+        const byIds = await supabase.from("events").select("*").in("id", ids);
+        if (!byIds.error && byIds.data) {
+          const rsvpEvents = byIds.data as DBEvent[];
+          const byId = new Map<string, DBEvent>();
+          [...list, ...rsvpEvents].forEach((e) => byId.set((e as any).id, e));
+          list = Array.from(byId.values());
+        }
+      }
+
+      if (mode === "mine") {
+        list = list.filter(
+          (e) => e.created_by === sessionUser ||
+                 (e as any).attendees?.some?.((a: any) => a.user_id === sessionUser)
+        );
+      }
+      if (typeFilter !== "all") {
+        list = list.filter((e) => (e.source || "personal") === typeFilter);
+      }
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        list = list.filter(
+          (e) =>
+            e.title.toLowerCase().includes(q) ||
+            (e.description ?? "").toLowerCase().includes(q) ||
+            (e.location ?? "").toLowerCase().includes(q)
+        );
+      }
+
+      setEvents(list);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Calendar failed to load.");
+    } finally {
+      setLoading(false);
     }
-
-    // Merge RSVPs into the list (de-dup by id)
-    const byId = new Map<string, DBEvent>();
-    [...list, ...rsvpEvents].forEach((e) => byId.set((e as any).id, e));
-    list = Array.from(byId.values());
-
-    // Filters
-    if (mode === "mine") {
-      list = list.filter(
-        (e) => (e as any).created_by === sessionUser || rsvpEvents.some((r) => (r as any).id === (e as any).id)
-      );
-    }
-    if (typeFilter !== "all") {
-      list = list.filter((e) => ((e as any).source || "personal") === typeFilter);
-    }
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(
-        (e) =>
-          (e as any).title.toLowerCase().includes(q) ||
-          ((e as any).description ?? "").toLowerCase().includes(q) ||
-          ((e as any).location ?? "").toLowerCase().includes(q)
-      );
-    }
-
-    setEvents(list);
-    setLoading(false);
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (sessionUser) load();
   }, [sessionUser, mode, typeFilter, query]);
 
-  // Realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -120,7 +112,6 @@ export default function CalendarPage() {
     };
   }, [sessionUser, mode, typeFilter, query]);
 
-  /* ---------------- Create modal ---------------- */
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -173,22 +164,24 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------------- Moon overlay ---------------- */
   const moonUi = useMoon(date.getFullYear(), showMoon);
   const moonUiEvents: UiEvent[] = useMemo(
     () =>
-      moonUi.map((m) => ({
-        id: m.id,
-        title: m.title,
-        start: m.start,
-        end: m.end, // already next-day in the hook
-        allDay: true,
-        resource: { moonPhase: (m as any).resource.moonPhase },
-      })),
+      moonUi.map((m) => {
+        const start = m.start as Date;
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+        return {
+          id: m.id,
+          title: m.title,
+          start,
+          end,
+          allDay: true,
+          resource: { moonPhase: (m as any).resource.moonPhase },
+        };
+      }),
     [moonUi]
   );
 
-  /* ---------------- Click/drag handlers ---------------- */
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
@@ -210,7 +203,7 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   };
 
-  const canEdit = (e: DBEvent) => sessionUser && (e as any).created_by === sessionUser;
+  const canEdit = (e: DBEvent) => sessionUser && e.created_by === sessionUser;
 
   const onDrop = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
     const db: DBEvent = event.resource;
@@ -218,48 +211,51 @@ export default function CalendarPage() {
     const { error } = await supabase
       .from("events")
       .update({ start_time: start.toISOString(), end_time: end.toISOString() })
-      .eq("id", (db as any).id);
+      .eq("id", db.id);
     if (error) alert(error.message);
     else load();
   };
 
   const onResize = onDrop;
 
-  /* ---------------- Render ---------------- */
   return (
-    <div className="page">
-      <div className="container-app">
-        <CalendarHeader
-          mode={mode}
-          setMode={setMode}
-          typeFilter={typeFilter}
-          setTypeFilter={setTypeFilter}
-          showMoon={showMoon}
-          setShowMoon={setShowMoon}
-          theme={theme}
-          setTheme={setTheme}
-          query={query}
-          setQuery={setQuery}
-          onCreate={() => setOpenCreate(true)}
-        />
+    <div>
+      <CalendarHeader
+        mode={mode}
+        setMode={setMode}
+        typeFilter={typeFilter}
+        setTypeFilter={setTypeFilter}
+        showMoon={showMoon}
+        setShowMoon={setShowMoon}
+        theme={theme}
+        setTheme={setTheme}
+        query={query}
+        setQuery={setQuery}
+        onCreate={() => setOpenCreate(true)}
+      />
 
-        <CalendarGrid
-          dbEvents={events}
-          moonEvents={moonUiEvents}
-          showMoon={showMoon}
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDrop={onDrop}
-          onResize={onResize}
-        />
+      {errorMsg ? (
+        <p className="mt-3 text-sm text-rose-700">
+          {errorMsg}
+        </p>
+      ) : null}
 
-        {loading && <p className="muted mt-3">Loading…</p>}
-        <p className="muted mt-2 text-xs">🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter</p>
-      </div>
+      <CalendarGrid
+        dbEvents={events}
+        moonEvents={moonUiEvents}
+        showMoon={showMoon}
+        date={date}
+        setDate={setDate}
+        view={view}
+        setView={setView}
+        onSelectSlot={onSelectSlot}
+        onSelectEvent={onSelectEvent}
+        onDrop={onDrop}
+        onResize={onResize}
+      />
+
+      {loading && <p className="muted mt-3">Loading…</p>}
+      <p className="muted mt-2 text-xs">🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter</p>
 
       <CreateEventModal
         open={openCreate}
