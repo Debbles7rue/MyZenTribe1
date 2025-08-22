@@ -1,19 +1,17 @@
 "use client";
 
 import { Dialog } from "@headlessui/react";
-import { format } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import React from "react";
 
 type Visibility = "public" | "friends" | "private" | "community";
 type Status = "scheduled" | "cancelled";
 
 type DBEvent = {
   id: string;
-  title: string;
+  title: string | null;
   description: string | null;
-  start_time: string | null;
+  start_time: string | null;           // timestamptz in DB; allow null for safety
   end_time: string | null;
   visibility: Visibility;
   created_by: string;
@@ -36,10 +34,23 @@ function safeDate(d?: string | null): Date | null {
   const x = new Date(d);
   return isNaN(x.getTime()) ? null : x;
 }
+function safeWhen(startRaw?: string | null, endRaw?: string | null): string {
+  const s = safeDate(startRaw);
+  const e = safeDate(endRaw);
+  try {
+    if (s && e) {
+      return `${s.toLocaleString()} – ${e.toLocaleTimeString()}`;
+    }
+    if (s) return s.toLocaleString();
+    return "Time TBA";
+  } catch {
+    return "Time TBA";
+  }
+}
 
-/** ---------- Error Boundary so the modal never crashes the whole app ---------- */
+/** ---------------- ErrorBoundary that also reveals what failed ---------------- */
 class ErrorBoundary extends React.Component<
-  { children: React.ReactNode; onClose: () => void },
+  { children: React.ReactNode; onClose: () => void; event?: DBEvent | null },
   { hasError: boolean; err?: any }
 > {
   constructor(props: any) {
@@ -50,8 +61,7 @@ class ErrorBoundary extends React.Component<
     return { hasError: true, err };
   }
   componentDidCatch(err: any) {
-    // Optional: log to Supabase/console
-    console.error("EventDetails error:", err);
+    console.error("EventDetails crash:", err);
   }
   render() {
     if (!this.state.hasError) return this.props.children;
@@ -59,13 +69,28 @@ class ErrorBoundary extends React.Component<
       <Dialog open={true} onClose={this.props.onClose} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl">
-            <Dialog.Title className="text-lg font-semibold">We hit a snag</Dialog.Title>
+          <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-semibold">We hit a snag</h2>
             <p className="mt-2 text-sm text-neutral-700">
-              The event couldn’t be displayed due to a data issue. Try refreshing, or edit the event
-              details from your calendar if something (like time) is missing.
+              The event couldn’t be displayed due to a data issue. Below is a debug view with the error and
+              the event object so we can pinpoint it quickly.
             </p>
-            <div className="mt-4 flex justify-end">
+
+            <div className="mt-4 rounded-lg border bg-rose-50 p-3 text-rose-800">
+              <div className="font-medium">Error</div>
+              <pre className="mt-2 overflow-auto text-xs">
+                {(this.state.err && (this.state.err.message || String(this.state.err))) || "Unknown error"}
+              </pre>
+            </div>
+
+            <div className="mt-4 rounded-lg border bg-neutral-50 p-3">
+              <div className="font-medium text-sm">Event data</div>
+              <pre className="mt-2 max-h-64 overflow-auto text-xs">
+                {JSON.stringify(this.props.event ?? {}, null, 2)}
+              </pre>
+            </div>
+
+            <div className="mt-6 flex justify-end">
               <button className="btn" onClick={this.props.onClose}>Close</button>
             </div>
           </Dialog.Panel>
@@ -113,13 +138,15 @@ function EventDetailsInner({
       description: event.description ?? "",
       location: event.location ?? "",
     });
+
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("event_comments")
         .select("id, body, created_at, user_id")
         .eq("event_id", event.id)
         .order("created_at", { ascending: true });
-      setComments(data || []);
+
+      if (!error) setComments(data || []);
     })();
   }, [event?.id]);
 
@@ -127,19 +154,7 @@ function EventDetailsInner({
 
   const isOwner = !!me && evt.created_by === me;
   const isCancelled = (evt.status ?? "scheduled") === "cancelled";
-
-  const start = safeDate(evt.start_time);
-  const end = safeDate(evt.end_time);
-
-  const when = useMemo(() => {
-    try {
-      if (start && end) return `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`;
-      if (start) return format(start, "EEE, MMM d · p");
-      return "Time TBA";
-    } catch {
-      return "Time TBA";
-    }
-  }, [evt.start_time, evt.end_time]);
+  const when = useMemo(() => safeWhen(evt.start_time, evt.end_time), [evt.start_time, evt.end_time]);
 
   const mapUrl = evt.location
     ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
@@ -152,7 +167,10 @@ function EventDetailsInner({
       user_id: me,
       body: newBody.trim(),
     } as any);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setNewBody("");
     const { data } = await supabase
       .from("event_comments")
@@ -164,12 +182,15 @@ function EventDetailsInner({
 
   async function saveEdits() {
     const payload = {
-      title: form.title.trim() || "Untitled event",
-      description: form.description.trim() || null,
-      location: form.location.trim() || null,
+      title: (form.title || "").trim() || "Untitled event",
+      description: (form.description || "").trim() || null,
+      location: (form.location || "").trim() || null,
     };
     const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setEvt((prev) => (prev ? ({ ...prev, ...payload } as DBEvent) : prev));
     setEditing(false);
   }
@@ -181,7 +202,10 @@ function EventDetailsInner({
       .from("events")
       .update({ status: "cancelled", cancellation_reason: reason } as any)
       .eq("id", evt.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setEvt((prev) =>
       prev ? ({ ...prev, status: "cancelled", cancellation_reason: reason } as DBEvent) : prev
     );
@@ -193,7 +217,10 @@ function EventDetailsInner({
       .from("events")
       .update({ status: "scheduled", cancellation_reason: null } as any)
       .eq("id", evt.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setEvt((prev) =>
       prev ? ({ ...prev, status: "scheduled", cancellation_reason: null } as DBEvent) : prev
     );
@@ -337,7 +364,7 @@ function EventDetailsInner({
                       <li key={c.id} className="text-sm">
                         <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
                         <div className="text-xs text-neutral-500">
-                          {new Date(c.created_at).toLocaleString()}
+                          {(safeDate(c.created_at)?.toLocaleString()) || "—"}
                         </div>
                       </li>
                     ))}
@@ -364,7 +391,7 @@ function EventDetailsInner({
 
 export default function EventDetails(props: { event: DBEvent | null; onClose: () => void }) {
   return (
-    <ErrorBoundary onClose={props.onClose}>
+    <ErrorBoundary onClose={props.onClose} event={props.event}>
       <EventDetailsInner {...props} />
     </ErrorBoundary>
   );
