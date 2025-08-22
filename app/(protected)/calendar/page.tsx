@@ -1,31 +1,35 @@
+// app/(protected)/calendar/page.tsx
 "use client";
-
-import { useRequireAuth } from "@/lib/useRequireAuth";
-// ...your existing imports
-
-export default function CalendarPage() {
-  const { ready } = useRequireAuth();
-  if (!ready) return null; // or a spinner
-
-  // ...rest of your page exactly as-is
-}
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
+// Auth gate (keeps route private)
+import { useRequireAuth } from "@/lib/useRequireAuth";
+
+// UI
 import CalendarHeader from "@/components/CalendarHeader";
 import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 
+// Helpers / types
 import { useMoon } from "@/hooks/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 export default function CalendarPage() {
+  /* ---------------- Auth (required) ---------------- */
+  const { user, loading: authLoading } = useRequireAuth();
+  const sessionUser = user?.id ?? null;
+  if (authLoading || !sessionUser) return null;
+
+  /* ---------------- Theme (persist) ---------------- */
   const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">("winter");
   useEffect(() => {
-    const saved = localStorage.getItem("mzt-theme") as any;
+    const saved =
+      (localStorage.getItem("mzt-theme") as "spring" | "summer" | "autumn" | "winter" | null) ||
+      null;
     if (saved) setTheme(saved);
   }, []);
   useEffect(() => {
@@ -33,19 +37,17 @@ export default function CalendarPage() {
     localStorage.setItem("mzt-theme", theme);
   }, [theme]);
 
-  const [sessionUser, setSessionUser] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
-  }, []);
-
+  /* ---------------- Filters ---------------- */
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
   const [showMoon, setShowMoon] = useState(true);
   const [query, setQuery] = useState("");
 
+  /* ---------------- Calendar state ---------------- */
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
 
+  /* ---------------- Data ---------------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -53,15 +55,15 @@ export default function CalendarPage() {
     if (!sessionUser) return;
     setLoading(true);
 
-    // Fetch all events (you were already doing this)
+    // Base list
     const { data, error } = await supabase
       .from("events")
       .select("*")
       .order("start_time", { ascending: true });
 
-    let list = (!error && data ? (data as DBEvent[]) : []);
+    let list: DBEvent[] = !error && data ? (data as DBEvent[]) : [];
 
-    // ALSO fetch events I RSVP'd to (so "mine" shows them too)
+    // ALSO add events I've RSVP'd to so "Mine" shows created_by + RSVP
     let rsvpEvents: DBEvent[] = [];
     const rsvpIdsRes = await supabase
       .from("event_attendees")
@@ -74,14 +76,16 @@ export default function CalendarPage() {
       if (!byIds.error && byIds.data) rsvpEvents = byIds.data as DBEvent[];
     }
 
-    // Merge RSVPs into the list (de-dup)
+    // Merge RSVPs into the list (de-dup by id)
     const byId = new Map<string, DBEvent>();
     [...list, ...rsvpEvents].forEach((e) => byId.set((e as any).id, e));
     list = Array.from(byId.values());
 
-    // Filters (same as before)
+    // Filters
     if (mode === "mine") {
-      list = list.filter((e) => e.created_by === sessionUser || rsvpEvents.some((r) => (r as any).id === (e as any).id));
+      list = list.filter(
+        (e) => (e as any).created_by === sessionUser || rsvpEvents.some((r) => (r as any).id === (e as any).id)
+      );
     }
     if (typeFilter !== "all") {
       list = list.filter((e) => ((e as any).source || "personal") === typeFilter);
@@ -90,7 +94,7 @@ export default function CalendarPage() {
       const q = query.toLowerCase();
       list = list.filter(
         (e) =>
-          e.title.toLowerCase().includes(q) ||
+          (e as any).title.toLowerCase().includes(q) ||
           ((e as any).description ?? "").toLowerCase().includes(q) ||
           ((e as any).location ?? "").toLowerCase().includes(q)
       );
@@ -101,18 +105,22 @@ export default function CalendarPage() {
   }
 
   useEffect(() => {
-    if (sessionUser) load();
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser, mode, typeFilter, query]);
 
+  // Realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "event_attendees" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, [sessionUser, mode, typeFilter, query]);
 
+  /* ---------------- Create modal ---------------- */
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -165,23 +173,33 @@ export default function CalendarPage() {
     load();
   };
 
+  /* ---------------- Moon overlay ---------------- */
   const moonUi = useMoon(date.getFullYear(), showMoon);
   const moonUiEvents: UiEvent[] = useMemo(
     () =>
-      moonUi.map((m) => {
-        const start = m.start as Date;
-        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
-        return { id: m.id, title: m.title, start, end, allDay: true, resource: { moonPhase: (m as any).resource.moonPhase } };
-      }),
+      moonUi.map((m) => ({
+        id: m.id,
+        title: m.title,
+        start: m.start,
+        end: m.end, // already next-day in the hook
+        allDay: true,
+        resource: { moonPhase: (m as any).resource.moonPhase },
+      })),
     [moonUi]
   );
 
+  /* ---------------- Click/drag handlers ---------------- */
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<DBEvent | null>(null);
 
   const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    if (view === Views.MONTH) { setDate(start); setView(Views.DAY); return; }
-    const toLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    if (view === Views.MONTH) {
+      setDate(start);
+      setView(Views.DAY);
+      return;
+    }
+    const toLocal = (d: Date) =>
+      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
     setOpenCreate(true);
   };
@@ -201,11 +219,13 @@ export default function CalendarPage() {
       .from("events")
       .update({ start_time: start.toISOString(), end_time: end.toISOString() })
       .eq("id", (db as any).id);
-    if (error) alert(error.message); else load();
+    if (error) alert(error.message);
+    else load();
   };
 
   const onResize = onDrop;
 
+  /* ---------------- Render ---------------- */
   return (
     <div className="page">
       <div className="container-app">
