@@ -19,6 +19,10 @@ type DBEvent = {
   source?: "personal" | "business" | null;
   status?: Status | null;
   cancellation_reason?: string | null;
+
+  // Optional extras if present in your row:
+  invite_code?: string | null;    // for group meditation invites
+  external_url?: string | null;   // for offsite event pages (drum circle, etc.)
 };
 
 function safeDate(d?: string | null): Date | null {
@@ -38,6 +42,70 @@ function formatWhen(startRaw?: string | null, endRaw?: string | null) {
   }
 }
 
+// tiny inline styles so it always overlays
+const S: Record<string, React.CSSProperties> = {
+  overlay: { position: "fixed", inset: 0, zIndex: 9999 },
+  scrim: { position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" },
+  panel: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%,-50%)",
+    width: "min(720px, 92vw)",
+    maxHeight: "80vh",
+    overflowY: "auto",
+    background: "#fff",
+    borderRadius: 16,
+    border: "1px solid #e5e5e5",
+    boxShadow: "0 24px 60px rgba(0,0,0,.2)",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "start",
+    padding: "16px 16px 0 16px",
+  },
+  title: { fontSize: 22, fontWeight: 700, margin: 0 },
+  body: { padding: 16 },
+  card: {
+    border: "1px solid #f1e8d6",
+    background: "#fff7ee",
+    borderRadius: 12,
+    padding: 12,
+  },
+  row: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
+  btn: {
+    appearance: "none",
+    border: "1px solid #dfd6c4",
+    background: "linear-gradient(#fff,#f5efe6)",
+    borderRadius: 12,
+    padding: "8px 14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  btnBrand: {
+    appearance: "none",
+    border: "1px solid #d8c49b",
+    background: "linear-gradient(#ffe9be,#f7dca6)",
+    borderRadius: 12,
+    padding: "8px 14px",
+    fontWeight: 700,
+    color: "#221b0f",
+    cursor: "pointer",
+  },
+  btnDanger: {
+    appearance: "none",
+    border: "1px solid #f1b4b4",
+    background: "linear-gradient(#ffe5e5,#ffdada)",
+    borderRadius: 12,
+    padding: "8px 14px",
+    fontWeight: 700,
+    color: "#7a1b1b",
+    cursor: "pointer",
+  },
+};
+
 export default function EventDetails({
   event,
   onClose,
@@ -47,6 +115,7 @@ export default function EventDetails({
 }) {
   if (!event) return null;
 
+  // who am i?
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
@@ -56,6 +125,7 @@ export default function EventDetails({
     () => formatWhen(event.start_time, event.end_time),
     [event.start_time, event.end_time]
   );
+
   const isOwner = !!me && event.created_by === me;
   const isCancelled = (event.status ?? "scheduled") === "cancelled";
 
@@ -71,7 +141,7 @@ export default function EventDetails({
       .update({ status: "cancelled", cancellation_reason: reason } as any)
       .eq("id", event.id);
     if (error) return alert(error.message);
-    onClose(); // close, refresh will pick it up
+    onClose();
   }
 
   async function reinstateEvent() {
@@ -84,92 +154,139 @@ export default function EventDetails({
     onClose();
   }
 
+  // destination links
+  const inviteHref = event.invite_code
+    ? `/meditation/schedule/group?code=${encodeURIComponent(event.invite_code)}`
+    : null;
+  const meditationHref = "/meditation";
+  const externalHref = event.external_url || null;
+
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div
-        className="absolute left-1/2 top-1/2 w-[min(720px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="max-h-[80vh] overflow-auto">
-          <img
-            src={event.image_path || "/event-placeholder.jpg"}
-            alt={event.title || ""}
+    <div style={S.overlay} role="dialog" aria-modal="true">
+      <div style={S.scrim} onClick={onClose} />
+      <div style={S.panel}>
+        {/* Banner */}
+        <img
+          src={event.image_path || "/event-placeholder.jpg"}
+          alt={event.title || ""}
+          style={{
+            width: "100%",
+            height: 170,
+            objectFit: "cover",
+            display: "block",
+            borderBottom: "1px solid #eee",
+            filter: isCancelled ? "grayscale(0.6)" : undefined,
+            opacity: isCancelled ? 0.8 : 1,
+          }}
+          loading="lazy"
+        />
+
+        {/* Header */}
+        <div style={S.header}>
+          <h2
             style={{
-              width: "100%",
-              height: "170px",
-              objectFit: "cover",
-              display: "block",
-              borderBottom: "1px solid #eee",
-              filter: isCancelled ? "grayscale(0.6)" : undefined,
-              opacity: isCancelled ? 0.8 : 1,
+              ...S.title,
+              textDecoration: isCancelled ? "line-through" : undefined,
+              color: isCancelled ? "#6b7280" : "#111827",
             }}
-            loading="lazy"
-          />
+          >
+            {event.title || "Untitled event"}
+          </h2>
+          <button style={S.btn} onClick={onClose}>
+            Close
+          </button>
+        </div>
 
-          <div className="space-y-5 p-6">
-            <div className="flex items-start justify-between gap-3">
-              <h2
-                className={`text-xl font-semibold ${
-                  isCancelled ? "line-through text-neutral-500" : ""
-                }`}
-              >
-                {event.title || "Untitled event"}
-              </h2>
-              <button className="btn" onClick={onClose}>
-                Close
-              </button>
-            </div>
-
-            {isCancelled && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                <div className="font-medium">This event is cancelled.</div>
-                {event.cancellation_reason ? (
-                  <div className="mt-1">{event.cancellation_reason}</div>
-                ) : null}
-              </div>
-            )}
-
-            <div className="card p-3">
-              <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
-                {when}
-              </div>
-              {event.location ? (
-                <div className="mt-2 text-sm">
-                  <span className="font-medium">Location: </span>
-                  {mapUrl ? (
-                    <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
-                      {event.location}
-                    </a>
-                  ) : (
-                    event.location
-                  )}
-                </div>
+        <div style={S.body}>
+          {/* cancelled notice */}
+          {isCancelled && (
+            <div
+              style={{
+                ...S.card,
+                background: "#fff7e6",
+                borderColor: "#f5d6a2",
+                color: "#92400e",
+                marginBottom: 8,
+              }}
+            >
+              <div className="font-medium">This event is cancelled.</div>
+              {event.cancellation_reason ? (
+                <div className="mt-1">{event.cancellation_reason}</div>
               ) : null}
             </div>
+          )}
 
-            <div className="card p-3">
-              <div className="mb-1 text-sm font-medium">Details</div>
-              <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>
-                {event.description || "No description yet."}
-              </div>
+          {/* When/Where */}
+          <div style={{ ...S.card, marginBottom: 10 }}>
+            <div
+              style={{
+                color: isCancelled ? "#6b7280" : "#374151",
+                textDecoration: isCancelled ? "line-through" : undefined,
+              }}
+            >
+              {when}
             </div>
-
-            {isOwner && (
-              <div className="flex items-center justify-end gap-2">
-                {!isCancelled ? (
-                  <button className="btn btn-danger" onClick={cancelEvent}>
-                    Cancel event
-                  </button>
+            {event.location ? (
+              <div style={{ marginTop: 6 }}>
+                <span style={{ fontWeight: 600 }}>Location: </span>
+                {mapUrl ? (
+                  <a href={mapUrl} target="_blank" rel="noreferrer">
+                    {event.location}
+                  </a>
                 ) : (
-                  <button className="btn btn-brand" onClick={reinstateEvent}>
-                    Reinstate event
-                  </button>
+                  event.location
                 )}
               </div>
-            )}
+            ) : null}
           </div>
+
+          {/* Details */}
+          <div style={{ ...S.card, marginBottom: 10 }}>
+            <div style={{ marginBottom: 6, fontWeight: 600 }}>Details</div>
+            <div
+              style={{
+                whiteSpace: "pre-wrap",
+                color: isCancelled ? "#6b7280" : "#1f2937",
+              }}
+            >
+              {event.description || "No description yet."}
+            </div>
+          </div>
+
+          {/* Helpful Links */}
+          <div style={{ ...S.card, marginBottom: 10 }}>
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Links</div>
+            <div style={S.row}>
+              <a href={meditationHref} style={S.btnBrand}>
+                Open Meditation Room
+              </a>
+              {inviteHref && (
+                <a href={inviteHref} style={S.btn}>
+                  Open Invite Page
+                </a>
+              )}
+              {externalHref && (
+                <a href={externalHref} target="_blank" rel="noreferrer" style={S.btn}>
+                  Open Event Site
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Owner-only actions */}
+          {isOwner && (
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              {!isCancelled ? (
+                <button style={S.btnDanger} onClick={cancelEvent}>
+                  Cancel event
+                </button>
+              ) : (
+                <button style={S.btnBrand} onClick={reinstateEvent}>
+                  Reinstate event
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
