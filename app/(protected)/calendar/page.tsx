@@ -2,19 +2,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
-import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
 import CreateEventModal from "@/components/CreateEventModal";
-import EventDetailsModal from "@/components/EventDetailsModal"; // 👈 NEW modal
+import EventDetailsModal from "@/components/EventDetailsModal";
 import type { DBEvent, Visibility } from "@/lib/types";
-
-// Load the grid ONLY on the client to avoid SSR/hydration crashes
-const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
-  ssr: false,
-  loading: () => <div className="card p-3">Loading calendar…</div>,
-});
 
 export default function CalendarPage() {
   /* ---------- session ---------- */
@@ -22,10 +14,6 @@ export default function CalendarPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
-
-  /* ---------- calendar view ---------- */
-  const [view, setView] = useState<View>(Views.MONTH);
-  const [date, setDate] = useState<Date>(new Date());
 
   /* ---------- data ---------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
@@ -45,7 +33,6 @@ export default function CalendarPage() {
       setErr(error.message || "Failed to load events");
       setEvents([]);
     } else {
-      // guard against bad rows without start/end
       const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
       setEvents(safe);
     }
@@ -62,9 +49,7 @@ export default function CalendarPage() {
       .channel("events-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
       .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    return () => void supabase.removeChannel(ch);
   }, []);
 
   /* ---------- create modal ---------- */
@@ -85,13 +70,10 @@ export default function CalendarPage() {
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    if (view === Views.MONTH) {
-      setDate(start);
-      setView(Views.DAY);
-      return;
-    }
-    setForm((f) => ({ ...f, start: toLocalInput(start), end: toLocalInput(end) }));
+  const startNewEvent = () => {
+    const now = new Date();
+    const end = new Date(now.getTime() + 60 * 60 * 1000);
+    setForm((f) => ({ ...f, start: toLocalInput(now), end: toLocalInput(end) }));
     setOpenCreate(true);
   };
 
@@ -136,43 +118,64 @@ export default function CalendarPage() {
   /* ---------- details modal ---------- */
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const onSelectEvent = (evt: any) => {
-    setSelected(evt.resource as DBEvent);
+
+  const openDetails = (e: DBEvent) => {
+    setSelected(e);
     setDetailsOpen(true);
+  };
+
+  /* ---------- helpers ---------- */
+  const fmt = (iso: string | null | undefined) => {
+    if (!iso) return "TBD";
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "TBD" : d.toLocaleString();
   };
 
   return (
     <div className="page">
       <div className="container-app">
-        <h1 className="page-title">Calendar • v4</h1>
+        <h1 className="page-title">Calendar (debug list view)</h1>
 
         <div className="mb-3 flex items-center gap-2">
-          <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
+          <button className="btn btn-brand" onClick={startNewEvent}>
             + Create event
           </button>
           <button className="btn" onClick={load}>
             Refresh
           </button>
           {loading && <span className="muted">Loading…</span>}
-          {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
+          {err && (
+            <span className="text-rose-700 text-sm">
+              Error: {err}
+            </span>
+          )}
         </div>
 
-        {/* Client-only grid */}
-        <CalendarGrid
-          dbEvents={events}
-          moonEvents={[]}     // moon disabled for now
-          showMoon={false}    // moon disabled for now
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDrop={() => {}}
-          onResize={() => {}}
-        />
+        {/* Simple list in place of the big grid */}
+        <div className="card p-3">
+          {events.length === 0 ? (
+            <div className="muted">No events yet.</div>
+          ) : (
+            <ul className="space-y-3">
+              {events.map((e) => (
+                <li key={e.id} className="border-b pb-2">
+                  <div className="font-medium">{e.title || "Untitled event"}</div>
+                  <div className="text-sm text-neutral-600">
+                    {fmt(e.start_time)} – {fmt(e.end_time)}
+                  </div>
+                  <div className="mt-1">
+                    <button className="btn btn-neutral" onClick={() => openDetails(e)}>
+                      Details
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
+      {/* Modals */}
       <CreateEventModal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
