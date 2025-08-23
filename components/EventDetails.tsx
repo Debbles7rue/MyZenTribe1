@@ -1,6 +1,10 @@
+// components/EventDetails.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { Dialog } from "@headlessui/react";
+import Link from "next/link";
+import { format } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Visibility = "public" | "friends" | "private" | "community";
@@ -8,102 +12,28 @@ type Status = "scheduled" | "cancelled";
 
 type DBEvent = {
   id: string;
-  title: string | null;
+  title: string;
   description: string | null;
-  start_time: string | null;
-  end_time: string | null;
+  start_time: string;
+  end_time: string;
   visibility: Visibility;
   created_by: string;
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
+
+  // extra fields we sometimes use
+  event_type?: string | null;     // e.g. "meditation", "coffee", etc.
+  invite_code?: string | null;    // for group meditation invites
   status?: Status | null;
   cancellation_reason?: string | null;
-
-  // Optional extras if present in your row:
-  invite_code?: string | null;    // for group meditation invites
-  external_url?: string | null;   // for offsite event pages (drum circle, etc.)
 };
 
-function safeDate(d?: string | null): Date | null {
-  if (!d) return null;
-  const x = new Date(d);
-  return isNaN(x.getTime()) ? null : x;
-}
-function formatWhen(startRaw?: string | null, endRaw?: string | null) {
-  const s = safeDate(startRaw);
-  const e = safeDate(endRaw);
-  try {
-    if (s && e) return `${s.toLocaleString()} – ${e.toLocaleTimeString()}`;
-    if (s) return s.toLocaleString();
-    return "Time TBA";
-  } catch {
-    return "Time TBA";
-  }
-}
-
-// tiny inline styles so it always overlays
-const S: Record<string, React.CSSProperties> = {
-  overlay: { position: "fixed", inset: 0, zIndex: 9999 },
-  scrim: { position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" },
-  panel: {
-    position: "absolute",
-    left: "50%",
-    top: "50%",
-    transform: "translate(-50%,-50%)",
-    width: "min(720px, 92vw)",
-    maxHeight: "80vh",
-    overflowY: "auto",
-    background: "#fff",
-    borderRadius: 16,
-    border: "1px solid #e5e5e5",
-    boxShadow: "0 24px 60px rgba(0,0,0,.2)",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "start",
-    padding: "16px 16px 0 16px",
-  },
-  title: { fontSize: 22, fontWeight: 700, margin: 0 },
-  body: { padding: 16 },
-  card: {
-    border: "1px solid #f1e8d6",
-    background: "#fff7ee",
-    borderRadius: 12,
-    padding: 12,
-  },
-  row: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
-  btn: {
-    appearance: "none",
-    border: "1px solid #dfd6c4",
-    background: "linear-gradient(#fff,#f5efe6)",
-    borderRadius: 12,
-    padding: "8px 14px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  btnBrand: {
-    appearance: "none",
-    border: "1px solid #d8c49b",
-    background: "linear-gradient(#ffe9be,#f7dca6)",
-    borderRadius: 12,
-    padding: "8px 14px",
-    fontWeight: 700,
-    color: "#221b0f",
-    cursor: "pointer",
-  },
-  btnDanger: {
-    appearance: "none",
-    border: "1px solid #f1b4b4",
-    background: "linear-gradient(#ffe5e5,#ffdada)",
-    borderRadius: 12,
-    padding: "8px 14px",
-    fontWeight: 700,
-    color: "#7a1b1b",
-    cursor: "pointer",
-  },
+type Comment = {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
 };
 
 export default function EventDetails({
@@ -113,182 +43,349 @@ export default function EventDetails({
   event: DBEvent | null;
   onClose: () => void;
 }) {
-  if (!event) return null;
+  const open = !!event;
 
-  // who am i?
+  // current user id
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
+  // local copy of the event so UI updates immediately on save/cancel
+  const [evt, setEvt] = useState<DBEvent | null>(null);
+  useEffect(() => {
+    setEvt(event);
+  }, [event?.id]);
+
+  // comments
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newBody, setNewBody] = useState("");
+
+  // edit
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ title: "", description: "", location: "" });
+
+  // bootstrap form + comments when event changes
+  useEffect(() => {
+    if (!event) return;
+    setForm({
+      title: event.title ?? "",
+      description: event.description ?? "",
+      location: event.location ?? "",
+    });
+    (async () => {
+      const { data } = await supabase
+        .from("event_comments")
+        .select("id, body, created_at, user_id")
+        .eq("event_id", event.id)
+        .order("created_at", { ascending: true });
+      setComments(data || []);
+    })();
+  }, [event?.id]);
+
+  if (!open || !evt) return null;
+
+  const isOwner = me && evt.created_by === me;
+  const isCancelled = (evt.status ?? "scheduled") === "cancelled";
+
+  const start = new Date(evt.start_time);
+  const end = new Date(evt.end_time);
   const when = useMemo(
-    () => formatWhen(event.start_time, event.end_time),
-    [event.start_time, event.end_time]
+    () =>
+      `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`.replace(
+        "AM",
+        "AM"
+      ),
+    [evt.start_time, evt.end_time]
   );
 
-  const isOwner = !!me && event.created_by === me;
-  const isCancelled = (event.status ?? "scheduled") === "cancelled";
+  // helper: identify URL vs plain location
+  const looksLikeUrl = (s?: string | null) =>
+    !!s && /^(https?:)?\/\//i.test(s.trim());
 
-  const mapUrl = event.location
-    ? `https://www.google.com/maps/search/${encodeURIComponent(event.location)}`
+  const mapUrl =
+    evt.location && !looksLikeUrl(evt.location)
+      ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
+      : null;
+
+  const externalUrl = looksLikeUrl(evt.location) ? (evt.location as string) : null;
+
+  // meditation-aware links
+  const isMeditation =
+    (evt.event_type || "").toLowerCase().includes("meditation");
+  const isGroupMeditation = isMeditation && !!evt.invite_code;
+  const inviteUrl = isGroupMeditation
+    ? `/meditation/schedule/group?code=${evt.invite_code}`
     : null;
+
+  async function postComment() {
+    if (!me || !newBody.trim()) return;
+    const { error } = await supabase.from("event_comments").insert({
+      event_id: evt.id,
+      user_id: me,
+      body: newBody.trim(),
+    });
+    if (error) return alert(error.message);
+    setNewBody("");
+    const { data } = await supabase
+      .from("event_comments")
+      .select("id, body, created_at, user_id")
+      .eq("event_id", evt.id)
+      .order("created_at", { ascending: true });
+    setComments(data || []);
+  }
+
+  async function saveEdits() {
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      location: form.location.trim() || null,
+    };
+    const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
+    if (error) return alert(error.message);
+    setEvt((prev) => (prev ? { ...prev, ...payload } as DBEvent : prev));
+    setEditing(false);
+  }
 
   async function cancelEvent() {
     if (!isOwner) return;
-    const reason = window.prompt("Cancel this event? Optional reason:") || null;
+    const reason = window.prompt("Cancel this event? Optional: add a reason") || null;
     const { error } = await supabase
       .from("events")
-      .update({ status: "cancelled", cancellation_reason: reason } as any)
-      .eq("id", event.id);
+      .update({ status: "cancelled", cancellation_reason: reason })
+      .eq("id", evt.id);
     if (error) return alert(error.message);
-    onClose();
+    setEvt((prev) =>
+      prev ? ({ ...prev, status: "cancelled", cancellation_reason: reason } as DBEvent) : prev
+    );
   }
 
   async function reinstateEvent() {
     if (!isOwner) return;
     const { error } = await supabase
       .from("events")
-      .update({ status: "scheduled", cancellation_reason: null } as any)
-      .eq("id", event.id);
+      .update({ status: "scheduled", cancellation_reason: null })
+      .eq("id", evt.id);
     if (error) return alert(error.message);
-    onClose();
+    setEvt((prev) =>
+      prev ? ({ ...prev, status: "scheduled", cancellation_reason: null } as DBEvent) : prev
+    );
   }
 
-  // destination links
-  const inviteHref = event.invite_code
-    ? `/meditation/schedule/group?code=${encodeURIComponent(event.invite_code)}`
-    : null;
-  const meditationHref = "/meditation";
-  const externalHref = event.external_url || null;
-
   return (
-    <div style={S.overlay} role="dialog" aria-modal="true">
-      <div style={S.scrim} onClick={onClose} />
-      <div style={S.panel}>
-        {/* Banner */}
-        <img
-          src={event.image_path || "/event-placeholder.jpg"}
-          alt={event.title || ""}
-          style={{
-            width: "100%",
-            height: 170,
-            objectFit: "cover",
-            display: "block",
-            borderBottom: "1px solid #eee",
-            filter: isCancelled ? "grayscale(0.6)" : undefined,
-            opacity: isCancelled ? 0.8 : 1,
-          }}
-          loading="lazy"
-        />
-
-        {/* Header */}
-        <div style={S.header}>
-          <h2
-            style={{
-              ...S.title,
-              textDecoration: isCancelled ? "line-through" : undefined,
-              color: isCancelled ? "#6b7280" : "#111827",
-            }}
-          >
-            {event.title || "Untitled event"}
-          </h2>
-          <button style={S.btn} onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <div style={S.body}>
-          {/* cancelled notice */}
-          {isCancelled && (
-            <div
+    <Dialog open={open} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
+          {/* scrollable content */}
+          <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
+            {/* Banner image (capped height) */}
+            <img
+              src={evt.image_path || "/event-placeholder.jpg"}
+              alt={evt.title || ""}
               style={{
-                ...S.card,
-                background: "#fff7e6",
-                borderColor: "#f5d6a2",
-                color: "#92400e",
-                marginBottom: 8,
+                width: "100%",
+                height: "170px",
+                objectFit: "cover",
+                display: "block",
+                borderBottom: "1px solid #eee",
+                filter: isCancelled ? "grayscale(0.6)" : undefined,
+                opacity: isCancelled ? 0.8 : 1,
               }}
-            >
-              <div className="font-medium">This event is cancelled.</div>
-              {event.cancellation_reason ? (
-                <div className="mt-1">{event.cancellation_reason}</div>
-              ) : null}
-            </div>
-          )}
+              loading="lazy"
+            />
 
-          {/* When/Where */}
-          <div style={{ ...S.card, marginBottom: 10 }}>
-            <div
-              style={{
-                color: isCancelled ? "#6b7280" : "#374151",
-                textDecoration: isCancelled ? "line-through" : undefined,
-              }}
-            >
-              {when}
-            </div>
-            {event.location ? (
-              <div style={{ marginTop: 6 }}>
-                <span style={{ fontWeight: 600 }}>Location: </span>
-                {mapUrl ? (
-                  <a href={mapUrl} target="_blank" rel="noreferrer">
-                    {event.location}
-                  </a>
+            <div className="space-y-5 p-6">
+              <div className="flex items-start justify-between gap-3">
+                <Dialog.Title
+                  className={`text-xl font-semibold ${isCancelled ? "line-through text-neutral-500" : ""}`}
+                >
+                  {editing ? (
+                    <input
+                      className="input"
+                      value={form.title}
+                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    />
+                  ) : (
+                    evt.title || "Untitled event"
+                  )}
+                </Dialog.Title>
+
+                <div className="flex gap-2">
+                  {isOwner && (
+                    <button
+                      className="btn btn-neutral"
+                      onClick={() =>
+                        setEditing((v) => {
+                          if (!v) {
+                            setForm({
+                              title: evt.title ?? "",
+                              description: evt.description ?? "",
+                              location: evt.location ?? "",
+                            });
+                          }
+                          return !v;
+                        })
+                      }
+                    >
+                      {editing ? "Done" : "Edit"}
+                    </button>
+                  )}
+                  <button className="btn" onClick={onClose}>
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              {/* Cancelled notice */}
+              {isCancelled && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="font-medium">This event is cancelled.</div>
+                  {evt.cancellation_reason ? (
+                    <div className="mt-1">{evt.cancellation_reason}</div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* When & where */}
+              <div className="card p-3">
+                <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
+                  {when}
+                </div>
+
+                {/* Location section */}
+                {editing ? (
+                  <div className="mt-2">
+                    <label className="mb-1 block text-sm">Location</label>
+                    <input
+                      className="input"
+                      value={form.location}
+                      onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                      placeholder="Address, place, or URL"
+                    />
+                  </div>
+                ) : evt.location ? (
+                  <div className="mt-2 text-sm">
+                    <span className="font-medium">
+                      {externalUrl ? "Link:" : "Location:"}{" "}
+                    </span>
+                    {externalUrl ? (
+                      <a className="underline" href={externalUrl} target="_blank" rel="noreferrer">
+                        {externalUrl}
+                      </a>
+                    ) : mapUrl ? (
+                      <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
+                        {evt.location}
+                      </a>
+                    ) : (
+                      evt.location
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Description */}
+              <div className="card p-3">
+                <div className="mb-1 text-sm font-medium">Details</div>
+                {editing ? (
+                  <textarea
+                    className="input"
+                    rows={4}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    placeholder="Share details attendees should know…"
+                  />
                 ) : (
-                  event.location
+                  <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>
+                    {evt.description || "No description yet."}
+                  </div>
+                )}
+                {editing && (
+                  <div className="mt-3 flex justify-end">
+                    <button className="btn btn-brand" onClick={saveEdits}>
+                      Save changes
+                    </button>
+                  </div>
                 )}
               </div>
-            ) : null}
-          </div>
 
-          {/* Details */}
-          <div style={{ ...S.card, marginBottom: 10 }}>
-            <div style={{ marginBottom: 6, fontWeight: 600 }}>Details</div>
-            <div
-              style={{
-                whiteSpace: "pre-wrap",
-                color: isCancelled ? "#6b7280" : "#1f2937",
-              }}
-            >
-              {event.description || "No description yet."}
+              {/* Contextual links */}
+              {(externalUrl || isMeditation) && (
+                <div className="card p-3">
+                  <div className="mb-1 text-sm font-medium">Links</div>
+
+                  {/* External URL (e.g., Zoom) */}
+                  {externalUrl && (
+                    <a href={externalUrl} target="_blank" rel="noreferrer" className="btn btn-brand">
+                      Open link
+                    </a>
+                  )}
+
+                  {/* Group meditation invite page */}
+                  {inviteUrl && (
+                    <Link href={inviteUrl} className="btn btn-brand ml-2">
+                      Open invite page
+                    </Link>
+                  )}
+
+                  {/* Solo meditation direct room */}
+                  {isMeditation && !inviteUrl && (
+                    <Link href="/meditation" className="btn btn-brand ml-2">
+                      Open Meditation Room
+                    </Link>
+                  )}
+                </div>
+              )}
+
+              {/* Owner-only actions: Cancel / Reinstate */}
+              {isOwner && (
+                <div className="flex items-center justify-end gap-2">
+                  {!isCancelled ? (
+                    <button className="btn btn-danger" onClick={cancelEvent}>
+                      Cancel event
+                    </button>
+                  ) : (
+                    <button className="btn btn-brand" onClick={reinstateEvent}>
+                      Reinstate event
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Comments */}
+              <div className="card p-3">
+                <div className="mb-2 text-sm font-medium">Comments</div>
+                {comments.length === 0 ? (
+                  <div className="text-sm text-neutral-500">No comments yet.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {comments.map((c) => (
+                      <li key={c.id} className="text-sm">
+                        <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
+                        <div className="text-xs text-neutral-500">
+                          {new Date(c.created_at).toLocaleString()}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    className="input flex-1"
+                    value={newBody}
+                    onChange={(e) => setNewBody(e.target.value)}
+                    placeholder="Write a comment…"
+                  />
+                  <button className="btn btn-brand" onClick={postComment}>
+                    Post
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Helpful Links */}
-          <div style={{ ...S.card, marginBottom: 10 }}>
-            <div style={{ marginBottom: 8, fontWeight: 600 }}>Links</div>
-            <div style={S.row}>
-              <a href={meditationHref} style={S.btnBrand}>
-                Open Meditation Room
-              </a>
-              {inviteHref && (
-                <a href={inviteHref} style={S.btn}>
-                  Open Invite Page
-                </a>
-              )}
-              {externalHref && (
-                <a href={externalHref} target="_blank" rel="noreferrer" style={S.btn}>
-                  Open Event Site
-                </a>
-              )}
-            </div>
-          </div>
-
-          {/* Owner-only actions */}
-          {isOwner && (
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              {!isCancelled ? (
-                <button style={S.btnDanger} onClick={cancelEvent}>
-                  Cancel event
-                </button>
-              ) : (
-                <button style={S.btnBrand} onClick={reinstateEvent}>
-                  Reinstate event
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        </Dialog.Panel>
       </div>
-    </div>
+    </Dialog>
   );
 }
