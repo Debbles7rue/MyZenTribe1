@@ -1,3 +1,4 @@
+// components/EventDetails.tsx
 "use client";
 
 import { Dialog } from "@headlessui/react";
@@ -12,22 +13,17 @@ type DBEvent = {
   id: string;
   title: string;
   description: string | null;
-  start_time: string;
-  end_time: string;
+  start_time: string | null;
+  end_time: string | null;
   visibility: Visibility;
   created_by: string;
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
-
   status?: Status | null;
   cancellation_reason?: string | null;
-
-  // NEW: used to link the circle chat
-  invite_code?: string | null;
-
-  // if your schedule pages set this, we’ll use it to decide which links to show
   event_type?: string | null;
+  invite_code?: string | null;
 };
 
 type Comment = {
@@ -36,6 +32,26 @@ type Comment = {
   created_at: string;
   user_id: string;
 };
+
+function toDate(x?: string | null) {
+  if (!x) return null;
+  const d = new Date(x);
+  return isNaN(d.getTime()) ? null : d;
+}
+function safeFormat(d: Date | null, fmt: string) {
+  if (!d) return "TBD";
+  try {
+    return format(d, fmt);
+  } catch {
+    return "TBD";
+  }
+}
+function safeRange(start: Date | null, end: Date | null) {
+  if (!start && !end) return "Time: TBD";
+  if (start && !end) return `${safeFormat(start, "EEE, MMM d · p")} – TBD`;
+  if (!start && end) return `TBD – ${safeFormat(end, "p")}`;
+  return `${safeFormat(start, "EEE, MMM d · p")} – ${safeFormat(end, "p")}`;
+}
 
 export default function EventDetails({
   event,
@@ -46,22 +62,27 @@ export default function EventDetails({
 }) {
   const open = !!event;
 
+  // current user id
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
+  // local copy of the event so UI updates immediately
   const [evt, setEvt] = useState<DBEvent | null>(null);
   useEffect(() => {
     setEvt(event);
   }, [event?.id]);
 
+  // comments
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
 
+  // edit
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
+  // bootstrap form + comments
   useEffect(() => {
     if (!event) return;
     setForm({
@@ -81,25 +102,19 @@ export default function EventDetails({
 
   if (!open || !evt) return null;
 
-  const isOwner = me && evt.created_by === me;
+  const isOwner = !!me && evt.created_by === me;
   const isCancelled = (evt.status ?? "scheduled") === "cancelled";
 
-  const start = new Date(evt.start_time);
-  const end = new Date(evt.end_time);
-  const when = useMemo(
-    () => `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`,
-    [evt.start_time, evt.end_time]
-  );
+  const start = toDate(evt.start_time);
+  const end = toDate(evt.end_time);
+  const when = useMemo(() => safeRange(start, end), [evt.start_time, evt.end_time]);
 
-  const mapUrl = evt.location
-    ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
-    : null;
-
-  const isMeditation =
-    (evt.event_type || "").toLowerCase().includes("meditation") ||
-    (evt.title || "").toLowerCase().includes("meditation");
-
-  const hasCircle = !!evt.invite_code;
+  const mapUrl =
+    evt.location && /^https?:\/\//i.test(evt.location)
+      ? evt.location
+      : evt.location
+      ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
+      : null;
 
   async function postComment() {
     if (!me || !newBody.trim()) return;
@@ -120,13 +135,13 @@ export default function EventDetails({
 
   async function saveEdits() {
     const payload = {
-      title: form.title.trim(),
+      title: form.title.trim() || "Untitled event",
       description: form.description.trim() || null,
       location: form.location.trim() || null,
     };
     const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
     if (error) return alert(error.message);
-    setEvt((prev) => (prev ? ({ ...prev, ...payload } as DBEvent) : prev));
+    setEvt((prev) => (prev ? { ...prev, ...payload } : prev));
     setEditing(false);
   }
 
@@ -138,9 +153,7 @@ export default function EventDetails({
       .update({ status: "cancelled", cancellation_reason: reason })
       .eq("id", evt.id);
     if (error) return alert(error.message);
-    setEvt((prev) =>
-      prev ? ({ ...prev, status: "cancelled", cancellation_reason: reason } as DBEvent) : prev
-    );
+    setEvt((prev) => (prev ? { ...prev, status: "cancelled", cancellation_reason: reason } : prev));
   }
 
   async function reinstateEvent() {
@@ -150,10 +163,10 @@ export default function EventDetails({
       .update({ status: "scheduled", cancellation_reason: null })
       .eq("id", evt.id);
     if (error) return alert(error.message);
-    setEvt((prev) =>
-      prev ? ({ ...prev, status: "scheduled", cancellation_reason: null } as DBEvent) : prev
-    );
+    setEvt((prev) => (prev ? { ...prev, status: "scheduled", cancellation_reason: null } : prev));
   }
+
+  const isMeditation = (evt.event_type || "").toLowerCase() === "meditation";
 
   return (
     <Dialog open={open} onClose={onClose} className="relative z-50">
@@ -179,7 +192,9 @@ export default function EventDetails({
             <div className="space-y-5 p-6">
               <div className="flex items-start justify-between gap-3">
                 <Dialog.Title
-                  className={`text-xl font-semibold ${isCancelled ? "line-through text-neutral-500" : ""}`}
+                  className={`text-xl font-semibold ${
+                    isCancelled ? "line-through text-neutral-500" : ""
+                  }`}
                 >
                   {editing ? (
                     <input
@@ -196,7 +211,7 @@ export default function EventDetails({
                   {isOwner && (
                     <button
                       className="btn btn-neutral"
-                      onClick={() =>
+                      onClick={() => {
                         setEditing((v) => {
                           if (!v) {
                             setForm({
@@ -206,8 +221,8 @@ export default function EventDetails({
                             });
                           }
                           return !v;
-                        })
-                      }
+                        });
+                      }}
                     >
                       {editing ? "Done" : "Edit"}
                     </button>
@@ -221,7 +236,9 @@ export default function EventDetails({
               {isCancelled && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <div className="font-medium">This event is cancelled.</div>
-                  {evt.cancellation_reason ? <div className="mt-1">{evt.cancellation_reason}</div> : null}
+                  {evt.cancellation_reason ? (
+                    <div className="mt-1">{evt.cancellation_reason}</div>
+                  ) : null}
                 </div>
               )}
 
@@ -277,22 +294,13 @@ export default function EventDetails({
                 )}
               </div>
 
-              {/* Links (only when relevant) */}
-              {(isMeditation || hasCircle) && (
+              {/* Only for actual meditations */}
+              {isMeditation && (
                 <div className="card p-3">
                   <div className="mb-2 text-sm font-medium">Links</div>
-                  <div className="flex flex-wrap gap-2">
-                    {isMeditation && (
-                      <a className="btn btn-brand" href="/meditation">
-                        Open Meditation Room
-                      </a>
-                    )}
-                    {hasCircle && (
-                      <a className="btn btn-neutral" href={`/circles/${encodeURIComponent(evt.invite_code || "")}`}>
-                        Open Group Chat
-                      </a>
-                    )}
-                  </div>
+                  <a className="btn btn-brand" href="/meditation" target="_blank" rel="noreferrer">
+                    Open Meditation Room
+                  </a>
                 </div>
               )}
 
@@ -326,7 +334,6 @@ export default function EventDetails({
                     ))}
                   </ul>
                 )}
-
                 <div className="mt-3 flex gap-2">
                   <input
                     className="input flex-1"
