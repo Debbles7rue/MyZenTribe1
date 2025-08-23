@@ -1,15 +1,20 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
-import CalendarGrid from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
-
 import type { DBEvent, Visibility } from "@/lib/types";
+
+// ⚠️ Load the grid ONLY on the client to avoid SSR/hydration crashes
+const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
+  ssr: false,
+  loading: () => <div className="card p-3">Loading calendar…</div>,
+});
 
 export default function CalendarPage() {
   /* ---------- session ---------- */
@@ -30,6 +35,7 @@ export default function CalendarPage() {
   async function load() {
     setLoading(true);
     setErr(null);
+
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -39,7 +45,6 @@ export default function CalendarPage() {
       setErr(error.message || "Failed to load events");
       setEvents([]);
     } else {
-      // guard against bad rows without times
       const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
       setEvents(safe);
     }
@@ -130,13 +135,11 @@ export default function CalendarPage() {
   /* ---------- details modal ---------- */
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-
   const onSelectEvent = (evt: any) => {
     setSelected(evt.resource as DBEvent);
     setDetailsOpen(true);
   };
 
-  /* ---------- render ---------- */
   return (
     <div className="page">
       <div className="container-app">
@@ -153,18 +156,19 @@ export default function CalendarPage() {
           {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
         </div>
 
+        {/* Client-only grid */}
         <CalendarGrid
           dbEvents={events}
-          moonEvents={[]}     // intentionally disabled in this safe pass
-          showMoon={false}    // intentionally disabled in this safe pass
+          moonEvents={[]}     // off for now
+          showMoon={false}    // off for now
           date={date}
           setDate={setDate}
           view={view}
           setView={setView}
           onSelectSlot={onSelectSlot}
           onSelectEvent={onSelectEvent}
-          onDrop={() => {}}     // no-op in minimal grid
-          onResize={() => {}}   // no-op in minimal grid
+          onDrop={() => {}}
+          onResize={() => {}}
         />
       </div>
 
