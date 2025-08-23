@@ -22,8 +22,8 @@ type DBEvent = {
   source?: "personal" | "business" | null;
   status?: Status | null;
   cancellation_reason?: string | null;
-  event_type?: string | null;
-  invite_code?: string | null;
+  event_type?: string | null;    // ← used to decide if it’s a meditation
+  invite_code?: string | null;    // ← group invite code (if any)
 };
 
 type Comment = {
@@ -33,6 +33,7 @@ type Comment = {
   user_id: string;
 };
 
+/* ---------- small date helpers ---------- */
 function toDate(x?: string | null) {
   if (!x) return null;
   const d = new Date(x);
@@ -62,23 +63,23 @@ export default function EventDetails({
 }) {
   const open = !!event;
 
-  // current user id
+  /* ---------- session user ---------- */
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // local copy of the event so UI updates immediately
+  /* ---------- local event copy so UI updates immediately ---------- */
   const [evt, setEvt] = useState<DBEvent | null>(null);
   useEffect(() => {
-    setEvt(event);
+    setEvt(event ?? null);
   }, [event?.id]);
 
-  // comments
+  /* ---------- comments ---------- */
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
 
-  // edit
+  /* ---------- editing ---------- */
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
@@ -109,12 +110,17 @@ export default function EventDetails({
   const end = toDate(evt.end_time);
   const when = useMemo(() => safeRange(start, end), [evt.start_time, evt.end_time]);
 
+  // location: use it directly if it's already a full http(s) link, otherwise make a Google Maps search
   const mapUrl =
     evt.location && /^https?:\/\//i.test(evt.location)
       ? evt.location
       : evt.location
       ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
       : null;
+
+  /* ---------- conditional: meditation links ---------- */
+  // Treat any event_type containing "meditation" (e.g. "meditation", "group_meditation", "solo_meditation") as a meditation
+  const isMeditation = /meditation/i.test(evt.event_type || "");
 
   async function postComment() {
     if (!me || !newBody.trim()) return;
@@ -166,14 +172,14 @@ export default function EventDetails({
     setEvt((prev) => (prev ? { ...prev, status: "scheduled", cancellation_reason: null } : prev));
   }
 
-  const isMeditation = (evt.event_type || "").toLowerCase() === "meditation";
-
   return (
     <Dialog open={open} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
+          {/* scrollable content */}
           <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
+            {/* Banner image (capped height) */}
             <img
               src={evt.image_path || "/event-placeholder.jpg"}
               alt={evt.title || ""}
@@ -211,7 +217,7 @@ export default function EventDetails({
                   {isOwner && (
                     <button
                       className="btn btn-neutral"
-                      onClick={() => {
+                      onClick={() =>
                         setEditing((v) => {
                           if (!v) {
                             setForm({
@@ -221,8 +227,8 @@ export default function EventDetails({
                             });
                           }
                           return !v;
-                        });
-                      }}
+                        })
+                      }
                     >
                       {editing ? "Done" : "Edit"}
                     </button>
@@ -233,6 +239,7 @@ export default function EventDetails({
                 </div>
               </div>
 
+              {/* Cancelled notice */}
               {isCancelled && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <div className="font-medium">This event is cancelled.</div>
@@ -242,8 +249,13 @@ export default function EventDetails({
                 </div>
               )}
 
+              {/* When & where */}
               <div className="card p-3">
-                <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
+                <div
+                  className={`text-sm ${
+                    isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"
+                  }`}
+                >
                   {when}
                 </div>
                 {editing ? (
@@ -258,98 +270,4 @@ export default function EventDetails({
                   </div>
                 ) : evt.location ? (
                   <div className="mt-2 text-sm">
-                    <span className="font-medium">Location: </span>
-                    {mapUrl ? (
-                      <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
-                        {evt.location}
-                      </a>
-                    ) : (
-                      evt.location
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="card p-3">
-                <div className="mb-1 text-sm font-medium">Details</div>
-                {editing ? (
-                  <textarea
-                    className="input"
-                    rows={4}
-                    value={form.description}
-                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                    placeholder="Share details attendees should know…"
-                  />
-                ) : (
-                  <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>
-                    {evt.description || "No description yet."}
-                  </div>
-                )}
-                {editing && (
-                  <div className="mt-3 flex justify-end">
-                    <button className="btn btn-brand" onClick={saveEdits}>
-                      Save changes
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Only for actual meditations */}
-              {isMeditation && (
-                <div className="card p-3">
-                  <div className="mb-2 text-sm font-medium">Links</div>
-                  <a className="btn btn-brand" href="/meditation" target="_blank" rel="noreferrer">
-                    Open Meditation Room
-                  </a>
-                </div>
-              )}
-
-              {isOwner && (
-                <div className="flex items-center justify-end gap-2">
-                  {!isCancelled ? (
-                    <button className="btn btn-danger" onClick={cancelEvent}>
-                      Cancel event
-                    </button>
-                  ) : (
-                    <button className="btn btn-brand" onClick={reinstateEvent}>
-                      Reinstate event
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="card p-3">
-                <div className="mb-2 text-sm font-medium">Comments</div>
-                {comments.length === 0 ? (
-                  <div className="text-sm text-neutral-500">No comments yet.</div>
-                ) : (
-                  <ul className="space-y-2">
-                    {comments.map((c) => (
-                      <li key={c.id} className="text-sm">
-                        <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
-                        <div className="text-xs text-neutral-500">
-                          {new Date(c.created_at).toLocaleString()}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-3 flex gap-2">
-                  <input
-                    className="input flex-1"
-                    value={newBody}
-                    onChange={(e) => setNewBody(e.target.value)}
-                    placeholder="Write a comment…"
-                  />
-                  <button className="btn btn-brand" onClick={postComment}>
-                    Post
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Dialog.Panel>
-      </div>
-    </Dialog>
-  );
-}
+                    <span className="font-medium">Location
