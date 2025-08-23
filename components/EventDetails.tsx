@@ -1,9 +1,8 @@
-// components/EventDetails.tsx
 "use client";
 
 import { Dialog } from "@headlessui/react";
-import Link from "next/link";
 import { format } from "date-fns";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -21,12 +20,10 @@ type DBEvent = {
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
-
-  // extra fields we sometimes use
-  event_type?: string | null;     // e.g. "meditation", "coffee", etc.
-  invite_code?: string | null;    // for group meditation invites
   status?: Status | null;
   cancellation_reason?: string | null;
+  event_type?: string | null;
+  invite_code?: string | null;
 };
 
 type Comment = {
@@ -45,27 +42,19 @@ export default function EventDetails({
 }) {
   const open = !!event;
 
-  // current user id
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // local copy of the event so UI updates immediately on save/cancel
   const [evt, setEvt] = useState<DBEvent | null>(null);
-  useEffect(() => {
-    setEvt(event);
-  }, [event?.id]);
+  useEffect(() => { setEvt(event); }, [event?.id]);
 
-  // comments
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
-
-  // edit
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
-  // bootstrap form + comments when event changes
   useEffect(() => {
     if (!event) return;
     setForm({
@@ -91,31 +80,18 @@ export default function EventDetails({
   const start = new Date(evt.start_time);
   const end = new Date(evt.end_time);
   const when = useMemo(
-    () =>
-      `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`.replace(
-        "AM",
-        "AM"
-      ),
+    () => `${format(start, "EEE, MMM d · p")} – ${format(end, "p")}`,
     [evt.start_time, evt.end_time]
   );
 
-  // helper: identify URL vs plain location
-  const looksLikeUrl = (s?: string | null) =>
-    !!s && /^(https?:)?\/\//i.test(s.trim());
+  const isMeditation = (evt.event_type ?? "")
+    .toLowerCase()
+    .includes("meditat");
 
-  const mapUrl =
-    evt.location && !looksLikeUrl(evt.location)
-      ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
-      : null;
+  const hasInvite = !!evt.invite_code;
 
-  const externalUrl = looksLikeUrl(evt.location) ? (evt.location as string) : null;
-
-  // meditation-aware links
-  const isMeditation =
-    (evt.event_type || "").toLowerCase().includes("meditation");
-  const isGroupMeditation = isMeditation && !!evt.invite_code;
-  const inviteUrl = isGroupMeditation
-    ? `/meditation/schedule/group?code=${evt.invite_code}`
+  const mapUrl = evt.location
+    ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
     : null;
 
   async function postComment() {
@@ -177,19 +153,13 @@ export default function EventDetails({
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
-          {/* scrollable content */}
           <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
-            {/* Banner image (capped height) */}
             <img
               src={evt.image_path || "/event-placeholder.jpg"}
               alt={evt.title || ""}
               style={{
-                width: "100%",
-                height: "170px",
-                objectFit: "cover",
-                display: "block",
-                borderBottom: "1px solid #eee",
-                filter: isCancelled ? "grayscale(0.6)" : undefined,
+                width: "100%", height: "170px", objectFit: "cover", display: "block",
+                borderBottom: "1px solid #eee", filter: isCancelled ? "grayscale(0.6)" : undefined,
                 opacity: isCancelled ? 0.8 : 1,
               }}
               loading="lazy"
@@ -231,29 +201,21 @@ export default function EventDetails({
                       {editing ? "Done" : "Edit"}
                     </button>
                   )}
-                  <button className="btn" onClick={onClose}>
-                    Close
-                  </button>
+                  <button className="btn" onClick={onClose}>Close</button>
                 </div>
               </div>
 
-              {/* Cancelled notice */}
               {isCancelled && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <div className="font-medium">This event is cancelled.</div>
-                  {evt.cancellation_reason ? (
-                    <div className="mt-1">{evt.cancellation_reason}</div>
-                  ) : null}
+                  {evt.cancellation_reason ? <div className="mt-1">{evt.cancellation_reason}</div> : null}
                 </div>
               )}
 
-              {/* When & where */}
               <div className="card p-3">
                 <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
                   {when}
                 </div>
-
-                {/* Location section */}
                 {editing ? (
                   <div className="mt-2">
                     <label className="mb-1 block text-sm">Location</label>
@@ -261,19 +223,13 @@ export default function EventDetails({
                       className="input"
                       value={form.location}
                       onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                      placeholder="Address, place, or URL"
+                      placeholder="Address or place"
                     />
                   </div>
                 ) : evt.location ? (
                   <div className="mt-2 text-sm">
-                    <span className="font-medium">
-                      {externalUrl ? "Link:" : "Location:"}{" "}
-                    </span>
-                    {externalUrl ? (
-                      <a className="underline" href={externalUrl} target="_blank" rel="noreferrer">
-                        {externalUrl}
-                      </a>
-                    ) : mapUrl ? (
+                    <span className="font-medium">Location: </span>
+                    {mapUrl ? (
                       <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
                         {evt.location}
                       </a>
@@ -284,7 +240,6 @@ export default function EventDetails({
                 ) : null}
               </div>
 
-              {/* Description */}
               <div className="card p-3">
                 <div className="mb-1 text-sm font-medium">Details</div>
                 {editing ? (
@@ -302,57 +257,21 @@ export default function EventDetails({
                 )}
                 {editing && (
                   <div className="mt-3 flex justify-end">
-                    <button className="btn btn-brand" onClick={saveEdits}>
-                      Save changes
-                    </button>
+                    <button className="btn btn-brand" onClick={saveEdits}>Save changes</button>
                   </div>
                 )}
               </div>
 
-              {/* Contextual links */}
-              {(externalUrl || isMeditation) && (
-                <div className="card p-3">
-                  <div className="mb-1 text-sm font-medium">Links</div>
-
-                  {/* External URL (e.g., Zoom) */}
-                  {externalUrl && (
-                    <a href={externalUrl} target="_blank" rel="noreferrer" className="btn btn-brand">
-                      Open link
-                    </a>
-                  )}
-
-                  {/* Group meditation invite page */}
-                  {inviteUrl && (
-                    <Link href={inviteUrl} className="btn btn-brand ml-2">
-                      Open invite page
-                    </Link>
-                  )}
-
-                  {/* Solo meditation direct room */}
-                  {isMeditation && !inviteUrl && (
-                    <Link href="/meditation" className="btn btn-brand ml-2">
-                      Open Meditation Room
-                    </Link>
-                  )}
-                </div>
-              )}
-
-              {/* Owner-only actions: Cancel / Reinstate */}
               {isOwner && (
                 <div className="flex items-center justify-end gap-2">
                   {!isCancelled ? (
-                    <button className="btn btn-danger" onClick={cancelEvent}>
-                      Cancel event
-                    </button>
+                    <button className="btn btn-danger" onClick={cancelEvent}>Cancel event</button>
                   ) : (
-                    <button className="btn btn-brand" onClick={reinstateEvent}>
-                      Reinstate event
-                    </button>
+                    <button className="btn btn-brand" onClick={reinstateEvent}>Reinstate event</button>
                   )}
                 </div>
               )}
 
-              {/* Comments */}
               <div className="card p-3">
                 <div className="mb-2 text-sm font-medium">Comments</div>
                 {comments.length === 0 ? (
@@ -369,7 +288,6 @@ export default function EventDetails({
                     ))}
                   </ul>
                 )}
-
                 <div className="mt-3 flex gap-2">
                   <input
                     className="input flex-1"
@@ -377,11 +295,31 @@ export default function EventDetails({
                     onChange={(e) => setNewBody(e.target.value)}
                     placeholder="Write a comment…"
                   />
-                  <button className="btn btn-brand" onClick={postComment}>
-                    Post
-                  </button>
+                  <button className="btn btn-brand" onClick={postComment}>Post</button>
                 </div>
               </div>
+
+              {/* LINKS */}
+              {(isMeditation || hasInvite) && (
+                <div className="card p-3">
+                  <div className="mb-2 text-sm font-medium">Links</div>
+                  <div className="flex flex-wrap gap-2">
+                    {hasInvite && (
+                      <>
+                        <Link className="btn btn-brand" href={`/circle/${evt.invite_code!}`}>
+                          Open Private Circle
+                        </Link>
+                        <Link className="btn btn-neutral" href={`/meditation/schedule/group?code=${evt.invite_code!}`}>
+                          Open Invite Page
+                        </Link>
+                      </>
+                    )}
+                    {isMeditation && (
+                      <Link className="btn" href="/meditation">Open Meditation Room</Link>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Dialog.Panel>
