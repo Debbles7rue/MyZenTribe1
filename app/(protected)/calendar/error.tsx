@@ -9,9 +9,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  // Always log to the console for extra details
   useEffect(() => {
-    // eslint-disable-next-line no-console
     console.error("[/calendar] route error:", error);
   }, [error]);
 
@@ -28,13 +26,12 @@ export default function Error({
     >
       <h2 style={{ fontSize: 28, margin: 0 }}>We hit a snag</h2>
       <p style={{ marginTop: 10 }}>
-        The calendar page had a rendering error. You can try again, and if it
-        keeps happening, please copy the details below and share them with me.
+        The calendar page had a rendering error. Copy the details below and send them to me.
       </p>
 
-      <details style={{ marginTop: 12 }}>
+      <details open style={{ marginTop: 12 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>
-          Show error details
+          Error details
         </summary>
         <pre
           style={{
