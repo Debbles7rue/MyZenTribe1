@@ -245,3 +245,7 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .rbc-event { color: #111 !important; }
 .rbc-event-label { color: rgba(0,0,0,.7) !important; } /* (optional) time label */
 
+/* Calendar readability */
+.rbc-event { color: #111 !important; }
+.rbc-event-label { color: rgba(0,0,0,.7) !important; }
+
