@@ -2,7 +2,6 @@
 
 import { Dialog } from "@headlessui/react";
 import { format } from "date-fns";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -20,10 +19,15 @@ type DBEvent = {
   location: string | null;
   image_path: string | null;
   source?: "personal" | "business" | null;
+
   status?: Status | null;
   cancellation_reason?: string | null;
-  event_type?: string | null;
+
+  // NEW: used to link the circle chat
   invite_code?: string | null;
+
+  // if your schedule pages set this, we’ll use it to decide which links to show
+  event_type?: string | null;
 };
 
 type Comment = {
@@ -48,10 +52,13 @@ export default function EventDetails({
   }, []);
 
   const [evt, setEvt] = useState<DBEvent | null>(null);
-  useEffect(() => { setEvt(event); }, [event?.id]);
+  useEffect(() => {
+    setEvt(event);
+  }, [event?.id]);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
+
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
@@ -84,15 +91,15 @@ export default function EventDetails({
     [evt.start_time, evt.end_time]
   );
 
-  const isMeditation = (evt.event_type ?? "")
-    .toLowerCase()
-    .includes("meditat");
-
-  const hasInvite = !!evt.invite_code;
-
   const mapUrl = evt.location
     ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
     : null;
+
+  const isMeditation =
+    (evt.event_type || "").toLowerCase().includes("meditation") ||
+    (evt.title || "").toLowerCase().includes("meditation");
+
+  const hasCircle = !!evt.invite_code;
 
   async function postComment() {
     if (!me || !newBody.trim()) return;
@@ -119,7 +126,7 @@ export default function EventDetails({
     };
     const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
     if (error) return alert(error.message);
-    setEvt((prev) => (prev ? { ...prev, ...payload } as DBEvent : prev));
+    setEvt((prev) => (prev ? ({ ...prev, ...payload } as DBEvent) : prev));
     setEditing(false);
   }
 
@@ -158,8 +165,12 @@ export default function EventDetails({
               src={evt.image_path || "/event-placeholder.jpg"}
               alt={evt.title || ""}
               style={{
-                width: "100%", height: "170px", objectFit: "cover", display: "block",
-                borderBottom: "1px solid #eee", filter: isCancelled ? "grayscale(0.6)" : undefined,
+                width: "100%",
+                height: "170px",
+                objectFit: "cover",
+                display: "block",
+                borderBottom: "1px solid #eee",
+                filter: isCancelled ? "grayscale(0.6)" : undefined,
                 opacity: isCancelled ? 0.8 : 1,
               }}
               loading="lazy"
@@ -201,7 +212,9 @@ export default function EventDetails({
                       {editing ? "Done" : "Edit"}
                     </button>
                   )}
-                  <button className="btn" onClick={onClose}>Close</button>
+                  <button className="btn" onClick={onClose}>
+                    Close
+                  </button>
                 </div>
               </div>
 
@@ -257,17 +270,42 @@ export default function EventDetails({
                 )}
                 {editing && (
                   <div className="mt-3 flex justify-end">
-                    <button className="btn btn-brand" onClick={saveEdits}>Save changes</button>
+                    <button className="btn btn-brand" onClick={saveEdits}>
+                      Save changes
+                    </button>
                   </div>
                 )}
               </div>
 
+              {/* Links (only when relevant) */}
+              {(isMeditation || hasCircle) && (
+                <div className="card p-3">
+                  <div className="mb-2 text-sm font-medium">Links</div>
+                  <div className="flex flex-wrap gap-2">
+                    {isMeditation && (
+                      <a className="btn btn-brand" href="/meditation">
+                        Open Meditation Room
+                      </a>
+                    )}
+                    {hasCircle && (
+                      <a className="btn btn-neutral" href={`/circles/${encodeURIComponent(evt.invite_code || "")}`}>
+                        Open Group Chat
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {isOwner && (
                 <div className="flex items-center justify-end gap-2">
                   {!isCancelled ? (
-                    <button className="btn btn-danger" onClick={cancelEvent}>Cancel event</button>
+                    <button className="btn btn-danger" onClick={cancelEvent}>
+                      Cancel event
+                    </button>
                   ) : (
-                    <button className="btn btn-brand" onClick={reinstateEvent}>Reinstate event</button>
+                    <button className="btn btn-brand" onClick={reinstateEvent}>
+                      Reinstate event
+                    </button>
                   )}
                 </div>
               )}
@@ -288,6 +326,7 @@ export default function EventDetails({
                     ))}
                   </ul>
                 )}
+
                 <div className="mt-3 flex gap-2">
                   <input
                     className="input flex-1"
@@ -295,31 +334,11 @@ export default function EventDetails({
                     onChange={(e) => setNewBody(e.target.value)}
                     placeholder="Write a comment…"
                   />
-                  <button className="btn btn-brand" onClick={postComment}>Post</button>
+                  <button className="btn btn-brand" onClick={postComment}>
+                    Post
+                  </button>
                 </div>
               </div>
-
-              {/* LINKS */}
-              {(isMeditation || hasInvite) && (
-                <div className="card p-3">
-                  <div className="mb-2 text-sm font-medium">Links</div>
-                  <div className="flex flex-wrap gap-2">
-                    {hasInvite && (
-                      <>
-                        <Link className="btn btn-brand" href={`/circle/${evt.invite_code!}`}>
-                          Open Private Circle
-                        </Link>
-                        <Link className="btn btn-neutral" href={`/meditation/schedule/group?code=${evt.invite_code!}`}>
-                          Open Invite Page
-                        </Link>
-                      </>
-                    )}
-                    {isMeditation && (
-                      <Link className="btn" href="/meditation">Open Meditation Room</Link>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </Dialog.Panel>
