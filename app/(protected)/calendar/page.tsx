@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 import CreateEventModal from "@/components/CreateEventModal";
-import EventDetailsModal from "@/components/EventDetailsModal";
+import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 export default function CalendarPage() {
@@ -33,6 +33,7 @@ export default function CalendarPage() {
       setErr(error.message || "Failed to load events");
       setEvents([]);
     } else {
+      // guard against bad rows (null start/end etc.)
       const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
       setEvents(safe);
     }
@@ -129,6 +130,7 @@ export default function CalendarPage() {
     if (!iso) return "TBD";
     const d = new Date(iso);
     return isNaN(d.getTime()) ? "TBD" : d.toLocaleString();
+    // If you prefer date-fns formatting, you can swap this for format()
   };
 
   return (
@@ -144,14 +146,10 @@ export default function CalendarPage() {
             Refresh
           </button>
           {loading && <span className="muted">Loading…</span>}
-          {err && (
-            <span className="text-rose-700 text-sm">
-              Error: {err}
-            </span>
-          )}
+          {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
         </div>
 
-        {/* Simple list in place of the big grid */}
+        {/* Simple list in place of the big calendar grid */}
         <div className="card p-3">
           {events.length === 0 ? (
             <div className="muted">No events yet.</div>
@@ -185,7 +183,7 @@ export default function CalendarPage() {
         onSave={createEvent}
       />
 
-      <EventDetailsModal
+      <EventDetails
         event={detailsOpen ? selected : null}
         onClose={() => setDetailsOpen(false)}
       />
