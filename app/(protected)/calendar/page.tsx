@@ -1,19 +1,67 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
+
+import CalendarGrid from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
+
 import type { DBEvent, Visibility } from "@/lib/types";
 
 export default function CalendarPage() {
+  /* ---------- session ---------- */
   const [sessionUser, setSessionUser] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
+  }, []);
+
+  /* ---------- calendar view ---------- */
+  const [view, setView] = useState<View>(Views.MONTH);
+  const [date, setDate] = useState<Date>(new Date());
+
+  /* ---------- data ---------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Create modal state (kept so you can still add an event)
+  async function load() {
+    setLoading(true);
+    setErr(null);
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      setErr(error.message || "Failed to load events");
+      setEvents([]);
+    } else {
+      // guard against bad rows without times
+      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
+      setEvents(safe);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, [sessionUser]);
+
+  // realtime refresh
+  useEffect(() => {
+    const ch = supabase
+      .channel("events-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, []);
+
+  /* ---------- create modal ---------- */
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -28,35 +76,18 @@ export default function CalendarPage() {
     image_path: "",
   });
 
-  // Details modal (re-using your existing component)
-  const [selected, setSelected] = useState<DBEvent | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const toLocalInput = (d: Date) =>
+    new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
-  }, []);
-
-  async function load() {
-    setLoading(true);
-    setErr(null);
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .order("start_time", { ascending: true });
-
-    if (error) {
-      setErr(error.message || "Failed to load events");
-      setEvents([]);
-    } else {
-      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
-      setEvents(safe);
+  const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+    if (view === Views.MONTH) {
+      setDate(start);
+      setView(Views.DAY);
+      return;
     }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, [sessionUser]);
+    setForm((f) => ({ ...f, start: toLocalInput(start), end: toLocalInput(end) }));
+    setOpenCreate(true);
+  };
 
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
@@ -96,62 +127,45 @@ export default function CalendarPage() {
     load();
   };
 
+  /* ---------- details modal ---------- */
+  const [selected, setSelected] = useState<DBEvent | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const onSelectEvent = (evt: any) => {
+    setSelected(evt.resource as DBEvent);
+    setDetailsOpen(true);
+  };
+
+  /* ---------- render ---------- */
   return (
     <div className="page">
       <div className="container-app">
         <h1 className="page-title">Calendar</h1>
-        <p className="muted mb-3">
-          (Temporary view for debugging: a simple list instead of the big calendar.)
-        </p>
 
-        <div className="mb-3">
+        <div className="mb-3 flex items-center gap-2">
           <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
             + Create event
           </button>
-          <button className="btn ml-2" onClick={load}>
+          <button className="btn" onClick={load}>
             Refresh
           </button>
+          {loading && <span className="muted">Loading…</span>}
+          {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
         </div>
 
-        {loading && <div className="card p-3">Loading events…</div>}
-        {err && (
-          <div className="card p-3">
-            <div className="text-rose-700 text-sm">Error: {err}</div>
-          </div>
-        )}
-
-        {!loading && !err && events.length === 0 && (
-          <div className="card p-3">No events yet.</div>
-        )}
-
-        {!loading && !err && events.length > 0 && (
-          <div className="card p-3">
-            <ul className="space-y-2">
-              {events.map((e) => (
-                <li key={(e as any).id} className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold">{(e as any).title || "Untitled event"}</div>
-                    <div className="text-sm text-neutral-600">
-                      {new Date((e as any).start_time).toLocaleString()} –{" "}
-                      {new Date((e as any).end_time).toLocaleTimeString()}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="btn btn-neutral"
-                      onClick={() => {
-                        setSelected(e);
-                        setDetailsOpen(true);
-                      }}
-                    >
-                      Details
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <CalendarGrid
+          dbEvents={events}
+          moonEvents={[]}     // intentionally disabled in this safe pass
+          showMoon={false}    // intentionally disabled in this safe pass
+          date={date}
+          setDate={setDate}
+          view={view}
+          setView={setView}
+          onSelectSlot={onSelectSlot}
+          onSelectEvent={onSelectEvent}
+          onDrop={() => {}}     // no-op in minimal grid
+          onResize={() => {}}   // no-op in minimal grid
+        />
       </div>
 
       <CreateEventModal
