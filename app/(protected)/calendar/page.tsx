@@ -1,146 +1,19 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
-import { Views, View } from "react-big-calendar";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-
-// UI pieces
-import CalendarHeader from "@/components/CalendarHeader";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
-
-// Types
 import type { DBEvent, Visibility } from "@/lib/types";
-import type { UiEvent } from "@/components/CalendarGrid";
-
-// IMPORTANT: load the calendar grid on the client only
-const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
-  ssr: false,
-  loading: () => (
-    <div className="card p-3">
-      <p className="muted">Loading calendar…</p>
-    </div>
-  ),
-});
 
 export default function CalendarPage() {
-  /* ---------------- Theme (persist) ---------------- */
-  const [theme, setTheme] = useState<"spring" | "summer" | "autumn" | "winter">("winter");
-  useEffect(() => {
-    const saved =
-      (typeof window !== "undefined" &&
-        (localStorage.getItem("mzt-theme") as "spring" | "summer" | "autumn" | "winter" | null)) ||
-      null;
-    if (saved) setTheme(saved);
-  }, []);
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", theme);
-      localStorage.setItem("mzt-theme", theme);
-    }
-  }, [theme]);
-
-  /* ---------------- Session ---------------- */
   const [sessionUser, setSessionUser] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
-  }, []);
-
-  /* ---------------- Filters ---------------- */
-  const [mode, setMode] = useState<"whats" | "mine">("whats");
-  const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
-  const [showMoon, setShowMoon] = useState(false); // keep toggle but we pass false below
-  const [query, setQuery] = useState("");
-
-  /* ---------------- Calendar state ---------------- */
-  const [view, setView] = useState<View>(Views.MONTH);
-  const [date, setDate] = useState<Date>(new Date());
-
-  /* ---------------- Data ---------------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function load() {
-    if (!sessionUser) return;
-    setLoading(true);
-    setLoadErr(null);
-
-    // Fetch all events
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .order("start_time", { ascending: true });
-
-    let list: DBEvent[] = (!error && data ? (data as DBEvent[]) : []).filter(
-      // guard against bad rows that can crash the grid
-      (e) => !!e?.start_time && !!e?.end_time
-    );
-
-    // ALSO include events I RSVP'd to (so "mine" shows my RSVPs too)
-    let rsvpEvents: DBEvent[] = [];
-    const rsvpIdsRes = await supabase
-      .from("event_attendees")
-      .select("event_id")
-      .eq("user_id", sessionUser);
-
-    if (!rsvpIdsRes.error && (rsvpIdsRes.data?.length || 0) > 0) {
-      const ids = rsvpIdsRes.data!.map((r: any) => r.event_id);
-      const byIds = await supabase.from("events").select("*").in("id", ids);
-      if (!byIds.error && byIds.data) rsvpEvents = (byIds.data as DBEvent[]).filter(
-        (e) => !!e?.start_time && !!e?.end_time
-      );
-    }
-
-    // Merge RSVPs into the list (de-dup by id)
-    const byId = new Map<string, DBEvent>();
-    [...list, ...rsvpEvents].forEach((e: any) => byId.set(e.id, e));
-    list = Array.from(byId.values());
-
-    // Filters
-    if (mode === "mine") {
-      list = list.filter(
-        (e: any) =>
-          e.created_by === sessionUser ||
-          rsvpEvents.some((r: any) => r.id === e.id)
-      );
-    }
-    if (typeFilter !== "all") {
-      list = list.filter((e: any) => (e.source || "personal") === typeFilter);
-    }
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(
-        (e: any) =>
-          (e.title || "").toLowerCase().includes(q) ||
-          (e.description || "").toLowerCase().includes(q) ||
-          (e.location || "").toLowerCase().includes(q)
-      );
-    }
-
-    if (error) setLoadErr(error.message || "Failed to load events");
-    setEvents(list);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    if (sessionUser) load();
-  }, [sessionUser, mode, typeFilter, query]);
-
-  // Realtime refresh
-  useEffect(() => {
-    const ch = supabase
-      .channel("events-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [sessionUser, mode, typeFilter, query]);
-
-  /* ---------------- Create modal ---------------- */
+  // Create modal state (kept so you can still add an event)
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -154,6 +27,36 @@ export default function CalendarPage() {
     source: "personal" as "personal" | "business",
     image_path: "",
   });
+
+  // Details modal (re-using your existing component)
+  const [selected, setSelected] = useState<DBEvent | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
+  }, []);
+
+  async function load() {
+    setLoading(true);
+    setErr(null);
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      setErr(error.message || "Failed to load events");
+      setEvents([]);
+    } else {
+      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
+      setEvents(safe);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, [sessionUser]);
 
   const createEvent = async () => {
     if (!sessionUser) return alert("Please log in.");
@@ -193,86 +96,62 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------------- Moon overlay (disabled while we stabilize) ---------------- */
-  const moonUiEvents: UiEvent[] = useMemo(() => [], []);
-
-  /* ---------------- Click/drag handlers ---------------- */
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selected, setSelected] = useState<DBEvent | null>(null);
-
-  const onSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    if (view === Views.MONTH) {
-      setDate(start);
-      setView(Views.DAY);
-      return;
-    }
-    const toLocal = (d: Date) =>
-      new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    setForm((f) => ({ ...f, start: toLocal(start), end: toLocal(end) }));
-    setOpenCreate(true);
-  };
-
-  const onSelectEvent = (evt: UiEvent) => {
-    if ((evt as any)?.resource?.moonPhase) return;
-    setSelected(evt.resource as DBEvent);
-    setDetailsOpen(true);
-  };
-
-  const canEdit = (e: DBEvent) => sessionUser && (e as any).created_by === sessionUser;
-
-  const onDrop = async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
-    const db: DBEvent = event.resource;
-    if (!canEdit(db)) return alert("You can only move events you created.");
-    const { error } = await supabase
-      .from("events")
-      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
-      .eq("id", (db as any).id);
-    if (error) alert(error.message);
-    else load();
-  };
-
-  const onResize = onDrop;
-
-  /* ---------------- Render ---------------- */
   return (
     <div className="page">
       <div className="container-app">
-        <CalendarHeader
-          mode={mode}
-          setMode={setMode}
-          typeFilter={typeFilter}
-          setTypeFilter={setTypeFilter}
-          showMoon={showMoon}
-          setShowMoon={setShowMoon}
-          theme={theme}
-          setTheme={setTheme}
-          query={query}
-          setQuery={setQuery}
-          onCreate={() => setOpenCreate(true)}
-        />
+        <h1 className="page-title">Calendar</h1>
+        <p className="muted mb-3">
+          (Temporary view for debugging: a simple list instead of the big calendar.)
+        </p>
 
-        {loadErr && (
-          <div className="card p-3 mb-2">
-            <div className="text-rose-700 text-sm">Error: {loadErr}</div>
+        <div className="mb-3">
+          <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
+            + Create event
+          </button>
+          <button className="btn ml-2" onClick={load}>
+            Refresh
+          </button>
+        </div>
+
+        {loading && <div className="card p-3">Loading events…</div>}
+        {err && (
+          <div className="card p-3">
+            <div className="text-rose-700 text-sm">Error: {err}</div>
           </div>
         )}
 
-        <CalendarGrid
-          dbEvents={events}
-          moonEvents={moonUiEvents}
-          showMoon={false /* keep off for now */}
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDrop={onDrop}
-          onResize={onResize}
-        />
+        {!loading && !err && events.length === 0 && (
+          <div className="card p-3">No events yet.</div>
+        )}
 
-        {loading && <p className="muted mt-3">Loading…</p>}
-        <p className="muted mt-2 text-xs">🌑 New • 🌓 First Quarter • 🌕 Full • 🌗 Last Quarter</p>
+        {!loading && !err && events.length > 0 && (
+          <div className="card p-3">
+            <ul className="space-y-2">
+              {events.map((e) => (
+                <li key={(e as any).id} className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">{(e as any).title || "Untitled event"}</div>
+                    <div className="text-sm text-neutral-600">
+                      {new Date((e as any).start_time).toLocaleString()} –{" "}
+                      {new Date((e as any).end_time).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn btn-neutral"
+                      onClick={() => {
+                        setSelected(e);
+                        setDetailsOpen(true);
+                      }}
+                    >
+                      Details
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <CreateEventModal
