@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-/** Types (kept broad to match your table) */
+/** Types */
 type Visibility = "public" | "friends" | "private" | "community";
 type Status = "scheduled" | "cancelled";
 
@@ -23,8 +23,8 @@ type DBEvent = {
   source?: "personal" | "business" | null;
   status?: Status | null;
   cancellation_reason?: string | null;
-  event_type?: string | null;   // e.g. "meditation", "group_meditation", etc.
-  invite_code?: string | null;  // optional, for private/group invite links
+  event_type?: string | null;   // e.g. "meditation"
+  invite_code?: string | null;
 };
 
 type Comment = {
@@ -34,7 +34,7 @@ type Comment = {
   user_id: string;
 };
 
-/** Helpers: robust date handling so bad/null values don't crash UI */
+/* ---------- helpers (robust to bad/null dates) ---------- */
 function toDate(x?: string | null) {
   if (!x) return null;
   const d = new Date(x);
@@ -42,11 +42,7 @@ function toDate(x?: string | null) {
 }
 function safeFormat(d: Date | null, fmt: string) {
   if (!d) return "TBD";
-  try {
-    return format(d, fmt);
-  } catch {
-    return "TBD";
-  }
+  try { return format(d, fmt); } catch { return "TBD"; }
 }
 function safeRange(start: Date | null, end: Date | null) {
   if (!start && !end) return "Time: TBD";
@@ -55,7 +51,7 @@ function safeRange(start: Date | null, end: Date | null) {
   return `${safeFormat(start, "EEE, MMM d · p")} – ${safeFormat(end, "p")}`;
 }
 
-/** Only these event types should show the Meditation link */
+/** Only these event types show the Meditation link */
 const MEDITATION_TYPES = new Set(["meditation", "group_meditation", "solo_meditation"]);
 
 export default function EventDetails({
@@ -65,6 +61,7 @@ export default function EventDetails({
   event: DBEvent | null;
   onClose: () => void;
 }) {
+  const [version] = useState("EventDetails v3"); // 👈 visual “version tag”
   const open = !!event;
 
   // current user id
@@ -73,7 +70,7 @@ export default function EventDetails({
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // local copy of the event so UI can update immediately after edits
+  // local event copy (so edits reflect immediately)
   const [evt, setEvt] = useState<DBEvent | null>(null);
   useEffect(() => {
     setEvt(event || null);
@@ -87,7 +84,7 @@ export default function EventDetails({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
-  // bootstrap form + comments whenever a new event is opened
+  // bootstrap form + comments when event changes
   useEffect(() => {
     if (!event) return;
     setForm({
@@ -114,7 +111,7 @@ export default function EventDetails({
   const end = toDate(evt.end_time);
   const when = useMemo(() => safeRange(start, end), [evt.start_time, evt.end_time]);
 
-  // Turn a plain-text location into a Google Maps search link (if it's not already a URL)
+  // If location isn’t already a URL, wrap it with a Google Maps search
   const mapUrl =
     evt.location && /^https?:\/\//i.test(evt.location)
       ? evt.location
@@ -172,7 +169,6 @@ export default function EventDetails({
     setEvt((prev) => (prev ? { ...prev, status: "scheduled", cancellation_reason: null } : prev));
   }
 
-  // Only show meditation link if event_type is one of the allowed values
   const typeKey = (evt.event_type || "").trim().toLowerCase();
   const showMeditationLink = MEDITATION_TYPES.has(typeKey);
 
@@ -183,7 +179,7 @@ export default function EventDetails({
         <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
           {/* scrollable content */}
           <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
-            {/* Banner image (capped height) */}
+            {/* Banner image */}
             <img
               src={evt.image_path || "/event-placeholder.jpg"}
               alt={evt.title || ""}
@@ -200,6 +196,9 @@ export default function EventDetails({
             />
 
             <div className="space-y-5 p-6">
+              {/* tiny version tag so we KNOW this file is live */}
+              <div className="text-xs text-neutral-500">{version}</div>
+
               <div className="flex items-start justify-between gap-3">
                 <Dialog.Title
                   className={`text-xl font-semibold ${
@@ -238,7 +237,7 @@ export default function EventDetails({
                     </button>
                   )}
                   <button className="btn" onClick={onClose}>
-                    Close
+                    Close ✨
                   </button>
                 </div>
               </div>
@@ -315,7 +314,7 @@ export default function EventDetails({
                 )}
               </div>
 
-              {/* Links (only for meditation types) */}
+              {/* Meditation links ONLY for meditation event types */}
               {showMeditationLink && (
                 <div className="card p-3">
                   <div className="mb-2 text-sm font-medium">Links</div>
@@ -342,7 +341,7 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* Owner-only actions: Cancel / Reinstate */}
+              {/* Owner-only actions */}
               {isOwner && (
                 <div className="flex items-center justify-end gap-2">
                   {!isCancelled ? (
