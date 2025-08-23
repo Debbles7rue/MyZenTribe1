@@ -7,27 +7,27 @@ import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
 import CreateEventModal from "@/components/CreateEventModal";
-import EventDetailsModal from "@/components/EventDetailsModal"; // 👈 NEW
+import EventDetailsModal from "@/components/EventDetailsModal"; // 👈 NEW modal
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// Client-only grid to avoid SSR/hydration issues
+// Load the grid ONLY on the client to avoid SSR/hydration crashes
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
   ssr: false,
   loading: () => <div className="card p-3">Loading calendar…</div>,
 });
 
 export default function CalendarPage() {
-  /* session */
+  /* ---------- session ---------- */
   const [sessionUser, setSessionUser] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
 
-  /* calendar view */
+  /* ---------- calendar view ---------- */
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
 
-  /* data */
+  /* ---------- data ---------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -45,6 +45,7 @@ export default function CalendarPage() {
       setErr(error.message || "Failed to load events");
       setEvents([]);
     } else {
+      // guard against bad rows without start/end
       const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
       setEvents(safe);
     }
@@ -55,6 +56,7 @@ export default function CalendarPage() {
     load();
   }, [sessionUser]);
 
+  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -65,7 +67,7 @@ export default function CalendarPage() {
     };
   }, []);
 
-  /* create modal */
+  /* ---------- create modal ---------- */
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -131,7 +133,7 @@ export default function CalendarPage() {
     load();
   };
 
-  /* details modal */
+  /* ---------- details modal ---------- */
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const onSelectEvent = (evt: any) => {
@@ -152,4 +154,38 @@ export default function CalendarPage() {
             Refresh
           </button>
           {loading && <span className="muted">Loading…</span>}
-          {err && <span className="text-rose-700 text-sm
+          {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
+        </div>
+
+        {/* Client-only grid */}
+        <CalendarGrid
+          dbEvents={events}
+          moonEvents={[]}     // moon disabled for now
+          showMoon={false}    // moon disabled for now
+          date={date}
+          setDate={setDate}
+          view={view}
+          setView={setView}
+          onSelectSlot={onSelectSlot}
+          onSelectEvent={onSelectEvent}
+          onDrop={() => {}}
+          onResize={() => {}}
+        />
+      </div>
+
+      <CreateEventModal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        sessionUser={sessionUser}
+        value={form}
+        onChange={(v) => setForm((prev) => ({ ...prev, ...v }))}
+        onSave={createEvent}
+      />
+
+      <EventDetailsModal
+        event={detailsOpen ? selected : null}
+        onClose={() => setDetailsOpen(false)}
+      />
+    </div>
+  );
+}
