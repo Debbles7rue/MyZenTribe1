@@ -2,17 +2,28 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
 // UI pieces
 import CalendarHeader from "@/components/CalendarHeader";
-import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 
 // Types
 import type { DBEvent, Visibility } from "@/lib/types";
+import type { UiEvent } from "@/components/CalendarGrid";
+
+// IMPORTANT: load the calendar grid on the client only
+const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
+  ssr: false,
+  loading: () => (
+    <div className="card p-3">
+      <p className="muted">Loading calendar…</p>
+    </div>
+  ),
+});
 
 export default function CalendarPage() {
   /* ---------------- Theme (persist) ---------------- */
@@ -40,10 +51,7 @@ export default function CalendarPage() {
   /* ---------------- Filters ---------------- */
   const [mode, setMode] = useState<"whats" | "mine">("whats");
   const [typeFilter, setTypeFilter] = useState<"all" | "personal" | "business">("all");
-
-  // We keep the UI toggle, but the grid below is hard-forced to `false` for now.
-  const [showMoon, setShowMoon] = useState(false);
-
+  const [showMoon, setShowMoon] = useState(false); // keep toggle but we pass false below
   const [query, setQuery] = useState("");
 
   /* ---------------- Calendar state ---------------- */
@@ -53,10 +61,12 @@ export default function CalendarPage() {
   /* ---------------- Data ---------------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
   async function load() {
     if (!sessionUser) return;
     setLoading(true);
+    setLoadErr(null);
 
     // Fetch all events
     const { data, error } = await supabase
@@ -65,16 +75,23 @@ export default function CalendarPage() {
       .order("start_time", { ascending: true });
 
     let list: DBEvent[] = (!error && data ? (data as DBEvent[]) : []).filter(
-      (e) => e.start_time && e.end_time
+      // guard against bad rows that can crash the grid
+      (e) => !!e?.start_time && !!e?.end_time
     );
 
     // ALSO include events I RSVP'd to (so "mine" shows my RSVPs too)
     let rsvpEvents: DBEvent[] = [];
-    const rsvpIdsRes = await supabase.from("event_attendees").select("event_id").eq("user_id", sessionUser);
+    const rsvpIdsRes = await supabase
+      .from("event_attendees")
+      .select("event_id")
+      .eq("user_id", sessionUser);
+
     if (!rsvpIdsRes.error && (rsvpIdsRes.data?.length || 0) > 0) {
       const ids = rsvpIdsRes.data!.map((r: any) => r.event_id);
       const byIds = await supabase.from("events").select("*").in("id", ids);
-      if (!byIds.error && byIds.data) rsvpEvents = byIds.data as DBEvent[];
+      if (!byIds.error && byIds.data) rsvpEvents = (byIds.data as DBEvent[]).filter(
+        (e) => !!e?.start_time && !!e?.end_time
+      );
     }
 
     // Merge RSVPs into the list (de-dup by id)
@@ -103,6 +120,7 @@ export default function CalendarPage() {
       );
     }
 
+    if (error) setLoadErr(error.message || "Failed to load events");
     setEvents(list);
     setLoading(false);
   }
@@ -175,7 +193,7 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------------- Moon overlay (disabled for now) ---------------- */
+  /* ---------------- Moon overlay (disabled while we stabilize) ---------------- */
   const moonUiEvents: UiEvent[] = useMemo(() => [], []);
 
   /* ---------------- Click/drag handlers ---------------- */
@@ -233,10 +251,16 @@ export default function CalendarPage() {
           onCreate={() => setOpenCreate(true)}
         />
 
+        {loadErr && (
+          <div className="card p-3 mb-2">
+            <div className="text-rose-700 text-sm">Error: {loadErr}</div>
+          </div>
+        )}
+
         <CalendarGrid
           dbEvents={events}
           moonEvents={moonUiEvents}
-          showMoon={false /* ← hard-disabled while we debug */}
+          showMoon={false /* keep off for now */}
           date={date}
           setDate={setDate}
           view={view}
