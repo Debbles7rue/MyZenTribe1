@@ -270,4 +270,118 @@ export default function EventDetails({
                   </div>
                 ) : evt.location ? (
                   <div className="mt-2 text-sm">
-                    <span className="font-medium">Location
+                    <span className="font-medium">Location: </span>
+                    {mapUrl ? (
+                      <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
+                        {evt.location}
+                      </a>
+                    ) : (
+                      evt.location
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Description */}
+              <div className="card p-3">
+                <div className="mb-1 text-sm font-medium">Details</div>
+                {editing ? (
+                  <textarea
+                    className="input"
+                    rows={4}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    placeholder="Share details attendees should know…"
+                  />
+                ) : (
+                  <div
+                    className={`whitespace-pre-wrap text-sm ${
+                      isCancelled ? "text-neutral-500" : "text-neutral-800"
+                    }`}
+                  >
+                    {evt.description || "No description yet."}
+                  </div>
+                )}
+                {editing && (
+                  <div className="mt-3 flex justify-end">
+                    <button className="btn btn-brand" onClick={saveEdits}>
+                      Save changes
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Links: ONLY for meditation events */}
+              {isMeditation && (
+                <div className="card p-3">
+                  <div className="mb-2 text-sm font-medium">Links</div>
+                  <div className="flex flex-wrap gap-2">
+                    <a className="btn btn-brand" href="/meditation" target="_blank" rel="noreferrer">
+                      Open Meditation Room
+                    </a>
+                    {evt.invite_code ? (
+                      <a
+                        className="btn"
+                        href={`/meditation/schedule/group?code=${evt.invite_code}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open invite page
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+
+              {/* Owner-only actions: Cancel / Reinstate */}
+              {isOwner && (
+                <div className="flex items-center justify-end gap-2">
+                  {!isCancelled ? (
+                    <button className="btn btn-danger" onClick={cancelEvent}>
+                      Cancel event
+                    </button>
+                  ) : (
+                    <button className="btn btn-brand" onClick={reinstateEvent}>
+                      Reinstate event
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Comments */}
+              <div className="card p-3">
+                <div className="mb-2 text-sm font-medium">Comments</div>
+                {comments.length === 0 ? (
+                  <div className="text-sm text-neutral-500">No comments yet.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {comments.map((c) => (
+                      <li key={c.id} className="text-sm">
+                        <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
+                        <div className="text-xs text-neutral-500">
+                          {new Date(c.created_at).toLocaleString()}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    className="input flex-1"
+                    value={newBody}
+                    onChange={(e) => setNewBody(e.target.value)}
+                    placeholder="Write a comment…"
+                  />
+                  <button className="btn btn-brand" onClick={postComment}>
+                    Post
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+}
