@@ -3,9 +3,11 @@
 
 import React, { useMemo } from "react";
 import { Calendar, Views, View, Event as RBCEvent } from "react-big-calendar";
+import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { localizer } from "@/lib/localizer";
 import type { DBEvent } from "@/lib/types";
 
+const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 export type UiEvent = RBCEvent & { resource: any };
 
 type Props = {
@@ -17,35 +19,28 @@ type Props = {
   setDate: (d: Date) => void;
   view: View;
   setView: (v: View) => void;
+
   onSelectSlot: ({ start, end }: { start: Date; end: Date }) => void;
   onSelectEvent: (evt: UiEvent) => void;
-  onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;   // (unused in basic grid)
-  onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void; // (unused in basic grid)
+  onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
+  onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
 };
 
 export default function CalendarGrid({
-  dbEvents,
-  moonEvents,
-  showMoon,
-  date,
-  setDate,
-  view,
-  setView,
-  onSelectSlot,
-  onSelectEvent,
+  dbEvents, moonEvents, showMoon,
+  date, setDate, view, setView,
+  onSelectSlot, onSelectEvent, onDrop, onResize,
 }: Props) {
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
-      dbEvents
-        .filter((e) => e?.start_time && e?.end_time)
-        .map((e) => ({
-          id: e.id,
-          title: e.title,
-          start: new Date(e.start_time),
-          end: new Date(e.end_time),
-          allDay: false,
-          resource: e,
-        })),
+      dbEvents.map((e) => ({
+        id: (e as any).id,
+        title: e.title,
+        start: new Date(e.start_time),
+        end: new Date(e.end_time),
+        allDay: false,
+        resource: e,
+      })),
     [dbEvents]
   );
 
@@ -54,9 +49,11 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
+  // Inline styles so the blocks are readable regardless of global CSS/theme
   const eventPropGetter = (event: UiEvent) => {
-    const r: any = event.resource;
+    const r: any = event.resource || {};
 
+    // Moon markers (all-day labels)
     if (r?.moonPhase) {
       return {
         style: {
@@ -69,6 +66,7 @@ export default function CalendarGrid({
       };
     }
 
+    // Cancelled events: grey + line-through
     if (r?.status === "cancelled") {
       return {
         style: {
@@ -82,12 +80,14 @@ export default function CalendarGrid({
       };
     }
 
-    const color = r?.source === "business" ? "#c4b5fd" : "#60a5fa";
+    // Normal events: personal vs business
+    const bg = r?.source === "business" ? "#ede9fe" /* lilac */ : "#dbeafe" /* blue */;
     return {
       style: {
-        backgroundColor: color,
+        backgroundColor: bg,
         border: "1px solid #e5e7eb",
         borderRadius: 10,
+        color: "#111", // force dark text for readability
       },
       className: "text-[11px] leading-tight",
     };
@@ -95,12 +95,13 @@ export default function CalendarGrid({
 
   return (
     <div className="card p-3">
-      <Calendar
+      <DnDCalendar
         localizer={localizer}
         events={mergedEvents}
         startAccessor="start"
         endAccessor="end"
         selectable
+        resizable
         popup
         style={{ height: 680 }}
         view={view}
@@ -109,6 +110,8 @@ export default function CalendarGrid({
         onNavigate={setDate}
         onSelectSlot={onSelectSlot}
         onSelectEvent={onSelectEvent}
+        onEventDrop={onDrop}
+        onEventResize={onResize}
         step={30}
         timeslots={2}
         scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
@@ -117,18 +120,10 @@ export default function CalendarGrid({
             const r = (event as UiEvent).resource || {};
             if (r?.moonPhase) {
               const icon =
-                r.moonPhase === "moon-full"
-                  ? "🌕"
-                  : r.moonPhase === "moon-new"
-                  ? "🌑"
-                  : r.moonPhase === "moon-first"
-                  ? "🌓"
-                  : "🌗";
-              return (
-                <div className="text-[11px] leading-tight">
-                  {icon} {(event as any).title}
-                </div>
-              );
+                r.moonPhase === "moon-full" ? "🌕" :
+                r.moonPhase === "moon-new" ? "🌑" :
+                r.moonPhase === "moon-first" ? "🌓" : "🌗";
+              return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
             }
             return (
               <div className="text-[11px] leading-tight">
