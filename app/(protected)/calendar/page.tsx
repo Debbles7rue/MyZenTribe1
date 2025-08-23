@@ -7,7 +7,7 @@ import { Views, View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 
 import CreateEventModal from "@/components/CreateEventModal";
-import EventDetails from "@/components/EventDetails";
+import EventDetailsModal from "@/components/EventDetailsModal"; // 👈 NEW
 import type { DBEvent, Visibility } from "@/lib/types";
 
 // Client-only grid to avoid SSR/hydration issues
@@ -142,7 +142,7 @@ export default function CalendarPage() {
   return (
     <div className="page">
       <div className="container-app">
-        <h1 className="page-title">Calendar • v3</h1>
+        <h1 className="page-title">Calendar • v4</h1>
 
         <div className="mb-3 flex items-center gap-2">
           <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
@@ -152,34 +152,4 @@ export default function CalendarPage() {
             Refresh
           </button>
           {loading && <span className="muted">Loading…</span>}
-          {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
-        </div>
-
-        <CalendarGrid
-          dbEvents={events}
-          moonEvents={[]}
-          showMoon={false}
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDrop={() => {}}
-          onResize={() => {}}
-        />
-      </div>
-
-      <CreateEventModal
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        sessionUser={sessionUser}
-        value={form}
-        onChange={(v) => setForm((prev) => ({ ...prev, ...v }))}
-        onSave={createEvent}
-      />
-
-      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
-    </div>
-  );
-}
+          {err && <span className="text-rose-700 text-sm
