@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
+/** Types (kept broad to match your table) */
 type Visibility = "public" | "friends" | "private" | "community";
 type Status = "scheduled" | "cancelled";
 
@@ -22,8 +23,8 @@ type DBEvent = {
   source?: "personal" | "business" | null;
   status?: Status | null;
   cancellation_reason?: string | null;
-  event_type?: string | null;    // ← used to decide if it’s a meditation
-  invite_code?: string | null;    // ← group invite code (if any)
+  event_type?: string | null;   // e.g. "meditation", "group_meditation", etc.
+  invite_code?: string | null;  // optional, for private/group invite links
 };
 
 type Comment = {
@@ -33,7 +34,7 @@ type Comment = {
   user_id: string;
 };
 
-/* ---------- small date helpers ---------- */
+/** Helpers: robust date handling so bad/null values don't crash UI */
 function toDate(x?: string | null) {
   if (!x) return null;
   const d = new Date(x);
@@ -54,6 +55,9 @@ function safeRange(start: Date | null, end: Date | null) {
   return `${safeFormat(start, "EEE, MMM d · p")} – ${safeFormat(end, "p")}`;
 }
 
+/** Only these event types should show the Meditation link */
+const MEDITATION_TYPES = new Set(["meditation", "group_meditation", "solo_meditation"]);
+
 export default function EventDetails({
   event,
   onClose,
@@ -63,27 +67,27 @@ export default function EventDetails({
 }) {
   const open = !!event;
 
-  /* ---------- session user ---------- */
+  // current user id
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  /* ---------- local event copy so UI updates immediately ---------- */
+  // local copy of the event so UI can update immediately after edits
   const [evt, setEvt] = useState<DBEvent | null>(null);
   useEffect(() => {
-    setEvt(event ?? null);
+    setEvt(event || null);
   }, [event?.id]);
 
-  /* ---------- comments ---------- */
+  // comments
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
 
-  /* ---------- editing ---------- */
+  // editing state
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
-  // bootstrap form + comments
+  // bootstrap form + comments whenever a new event is opened
   useEffect(() => {
     if (!event) return;
     setForm({
@@ -110,17 +114,13 @@ export default function EventDetails({
   const end = toDate(evt.end_time);
   const when = useMemo(() => safeRange(start, end), [evt.start_time, evt.end_time]);
 
-  // location: use it directly if it's already a full http(s) link, otherwise make a Google Maps search
+  // Turn a plain-text location into a Google Maps search link (if it's not already a URL)
   const mapUrl =
     evt.location && /^https?:\/\//i.test(evt.location)
       ? evt.location
       : evt.location
       ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
       : null;
-
-  /* ---------- conditional: meditation links ---------- */
-  // Treat any event_type containing "meditation" (e.g. "meditation", "group_meditation", "solo_meditation") as a meditation
-  const isMeditation = /meditation/i.test(evt.event_type || "");
 
   async function postComment() {
     if (!me || !newBody.trim()) return;
@@ -171,6 +171,10 @@ export default function EventDetails({
     if (error) return alert(error.message);
     setEvt((prev) => (prev ? { ...prev, status: "scheduled", cancellation_reason: null } : prev));
   }
+
+  // Only show meditation link if event_type is one of the allowed values
+  const typeKey = (evt.event_type || "").trim().toLowerCase();
+  const showMeditationLink = MEDITATION_TYPES.has(typeKey);
 
   return (
     <Dialog open={open} onClose={onClose} className="relative z-50">
@@ -311,12 +315,17 @@ export default function EventDetails({
                 )}
               </div>
 
-              {/* Links: ONLY for meditation events */}
-              {isMeditation && (
+              {/* Links (only for meditation types) */}
+              {showMeditationLink && (
                 <div className="card p-3">
                   <div className="mb-2 text-sm font-medium">Links</div>
                   <div className="flex flex-wrap gap-2">
-                    <a className="btn btn-brand" href="/meditation" target="_blank" rel="noreferrer">
+                    <a
+                      className="btn btn-brand"
+                      href="/meditation"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       Open Meditation Room
                     </a>
                     {evt.invite_code ? (
