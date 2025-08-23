@@ -28,13 +28,12 @@ export default function CircleRoomPage() {
 
   const [me, setMe] = useState<{ id: string; name: string } | null>(null);
   const [evt, setEvt] = useState<DBEvent | null>(null);
-  const [allowed, setAllowed] = useState<boolean>(false);
-  const [here, setHere] = useState<number>(0);
+  const [allowed, setAllowed] = useState(false);
+  const [here, setHere] = useState(0);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [text, setText] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
 
-  // load user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const u = data.user;
@@ -48,10 +47,8 @@ export default function CircleRoomPage() {
     });
   }, []);
 
-  // load event by invite_code & check membership
   useEffect(() => {
     if (!code || !me?.id) return;
-
     (async () => {
       const { data: ev, error } = await supabase
         .from("events")
@@ -67,13 +64,8 @@ export default function CircleRoomPage() {
 
       setEvt(ev as DBEvent);
 
-      // am I the host?
-      if (ev.created_by === me.id) {
-        setAllowed(true);
-        return;
-      }
+      if (ev.created_by === me.id) { setAllowed(true); return; }
 
-      // am I an attendee?
       const att = await supabase
         .from("event_attendees")
         .select("user_id")
@@ -85,7 +77,6 @@ export default function CircleRoomPage() {
     })();
   }, [code, me?.id, router]);
 
-  // load messages + realtime + presence
   useEffect(() => {
     if (!evt || !allowed || !me) return;
 
@@ -98,7 +89,6 @@ export default function CircleRoomPage() {
         .eq("event_id", evt.id)
         .order("created_at", { ascending: true })
         .limit(200);
-
       if (mounted) {
         setMsgs(data || []);
         setTimeout(() => scroller.current?.scrollTo({ top: 999999 }), 0);
@@ -134,10 +124,7 @@ export default function CircleRoomPage() {
       }
     });
 
-    return () => {
-      mounted = false;
-      supabase.removeChannel(ch);
-    };
+    return () => { mounted = false; supabase.removeChannel(ch); };
   }, [evt?.id, evt?.invite_code, allowed, me]);
 
   const send = async () => {
@@ -151,18 +138,13 @@ export default function CircleRoomPage() {
     if (error) alert(error.message);
   };
 
-  // Locked view
   if (evt && !allowed) {
     return (
       <div className="page">
         <div className="container-app">
           <h1 className="page-title">Private Circle</h1>
-          <p className="muted">
-            This private circle is only for the host and invitees.
-          </p>
-          <Link className="btn btn-brand" href={`/meditation/schedule/group?code=${code}`}>
-            RSVP to join
-          </Link>
+          <p className="muted">This private circle is only for the host and invitees.</p>
+          <Link className="btn btn-brand" href={`/meditation/schedule/group?code=${code}`}>RSVP to join</Link>
         </div>
       </div>
     );
@@ -179,19 +161,14 @@ export default function CircleRoomPage() {
         </div>
 
         <div className="card p-3">
-          <div
-            ref={scroller}
-            style={{ height: "50vh", overflow: "auto", background: "#fffdf8", padding: 12, borderRadius: 12 }}
-          >
+          <div ref={scroller} style={{ height: "50vh", overflow: "auto", background: "#fffdf8", padding: 12, borderRadius: 12 }}>
             {msgs.length === 0 ? (
               <div className="text-sm opacity-60 text-center py-10">No messages yet.</div>
             ) : (
               msgs.map((m) => (
                 <div key={m.id} className="mb-3">
                   <div className="text-sm">{m.body}</div>
-                  <div className="text-xs opacity-60">
-                    {new Date(m.created_at).toLocaleString()}
-                  </div>
+                  <div className="text-xs opacity-60">{new Date(m.created_at).toLocaleString()}</div>
                 </div>
               ))
             )}
@@ -203,9 +180,7 @@ export default function CircleRoomPage() {
               placeholder="Say hello…"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               maxLength={500}
             />
             <button className="btn btn-brand" onClick={send}>Send</button>
@@ -213,12 +188,8 @@ export default function CircleRoomPage() {
         </div>
 
         <div className="mt-4 flex gap-2">
-          <Link className="btn" href={`/meditation`}>
-            Enter Meditation Room
-          </Link>
-          <Link className="btn btn-neutral" href={`/meditation/schedule/group?code=${code}`}>
-            Open Invite Page
-          </Link>
+          <Link className="btn" href={`/meditation`}>Enter Meditation Room</Link>
+          <Link className="btn btn-neutral" href={`/meditation/schedule/group?code=${evt.invite_code}`}>Open Invite Page</Link>
         </div>
       </div>
     </div>
