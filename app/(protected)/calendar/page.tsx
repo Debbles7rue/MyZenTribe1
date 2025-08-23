@@ -10,24 +10,24 @@ import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// ⚠️ Load the grid ONLY on the client to avoid SSR/hydration crashes
+// Client-only grid to avoid SSR/hydration issues
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
   ssr: false,
   loading: () => <div className="card p-3">Loading calendar…</div>,
 });
 
 export default function CalendarPage() {
-  /* ---------- session ---------- */
+  /* session */
   const [sessionUser, setSessionUser] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
 
-  /* ---------- calendar view ---------- */
+  /* calendar view */
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState<Date>(new Date());
 
-  /* ---------- data ---------- */
+  /* data */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -55,7 +55,6 @@ export default function CalendarPage() {
     load();
   }, [sessionUser]);
 
-  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -66,7 +65,7 @@ export default function CalendarPage() {
     };
   }, []);
 
-  /* ---------- create modal ---------- */
+  /* create modal */
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -132,7 +131,7 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------- details modal ---------- */
+  /* details modal */
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const onSelectEvent = (evt: any) => {
@@ -143,7 +142,7 @@ export default function CalendarPage() {
   return (
     <div className="page">
       <div className="container-app">
-        <h1 className="page-title">Calendar</h1>
+        <h1 className="page-title">Calendar • v3</h1>
 
         <div className="mb-3 flex items-center gap-2">
           <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
@@ -156,11 +155,10 @@ export default function CalendarPage() {
           {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
         </div>
 
-        {/* Client-only grid */}
         <CalendarGrid
           dbEvents={events}
-          moonEvents={[]}     // off for now
-          showMoon={false}    // off for now
+          moonEvents={[]}
+          showMoon={false}
           date={date}
           setDate={setDate}
           view={view}
