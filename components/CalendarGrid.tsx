@@ -1,7 +1,7 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { DndProvider } from "react-dnd";
@@ -31,6 +31,7 @@ type Props = {
   onDropFromOutside?: ({ start, end }: { start: Date; end: Date }) => void;
   dragFromOutsideItem?: () => any | null;
 
+  /** return true if this event may be dragged (e.g., creator-only) */
   draggableAccessor?: (evt: UiEvent) => boolean;
 };
 
@@ -79,22 +80,47 @@ export default function CalendarGrid({
     };
   };
 
+  /** Tap-smart event cell: quick tap/click opens; real drag still drags */
   const EventCell = ({ event }: { event: UiEvent }) => {
     const r = event.resource || {};
+    const down = useRef<{ t: number; x: number; y: number } | null>(null);
+
+    const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
+      down.current = { t: Date.now(), x: e.clientX, y: e.clientY };
+    };
+    const onPointerUp: React.PointerEventHandler<HTMLDivElement> = (e) => {
+      const d = down.current;
+      down.current = null;
+      if (!d) return;
+      const dt = Date.now() - d.t;
+      const dx = Math.abs(e.clientX - d.x);
+      const dy = Math.abs(e.clientY - d.y);
+      const moved = Math.sqrt(dx * dx + dy * dy) > 6; // drag threshold
+      const quick = dt < 250;
+      if (quick && !moved) {
+        e.stopPropagation();
+        onSelectEvent(event);
+      }
+    };
+
     if (r?.moonPhase) {
       const icon = r.moonPhase === "moon-full" ? "🌕" : r.moonPhase === "moon-new" ? "🌑" : r.moonPhase === "moon-first" ? "🌓" : "🌗";
-      return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
+      return (
+        <div className="text-[11px] leading-tight select-none" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+          {icon} {(event as any).title}
+        </div>
+      );
     }
     if (r?.planner) {
       const prefix = r.planner.type === "reminder" ? "⏰" : "✅";
       return (
-        <div className="text-[11px] leading-tight">
+        <div className="text-[11px] leading-tight select-none" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
           <span className="font-medium">{prefix} {(event as any).title}</span>
         </div>
       );
     }
     return (
-      <div className="text-[11px] leading-tight">
+      <div className="text-[11px] leading-tight select-none" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
         <div className="font-medium">{(event as any).title}</div>
       </div>
     );
@@ -117,8 +143,8 @@ export default function CalendarGrid({
           date={date}
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDoubleClickEvent={onSelectEvent}
+          onSelectEvent={onSelectEvent}          // desktop click (fallback)
+          onDoubleClickEvent={onSelectEvent}     // double-click fallback
           onEventDrop={(args: any) => {
             if (args?.event?.resource?.planner && onPlannerMove) return onPlannerMove(args);
             return onDrop(args);
