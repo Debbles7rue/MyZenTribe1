@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import { localizer } from "@/lib/localizer";
@@ -11,10 +12,40 @@ import type { DBEvent } from "@/lib/types";
 import TaskTray, { PlannerItem } from "@/components/TaskTray";
 import WeatherBadge from "@/components/WeatherBadge";
 import WhatsHappeningDeck from "@/components/WhatsHappeningDeck";
-import CalendarGrid from "@/components/CalendarGrid";
-import EventDetails from "@/components/EventDetails";
+import CalendarGrid, { UiEvent } from "@/components/CalendarGrid";
+// lazy + client-only modal (avoids hydration/hook-order issues)
+const EventDetails = dynamic(() => import("@/components/EventDetails"), { ssr: false });
 import PlannerItemModal from "@/components/PlannerItemModal";
 import EventQuickCreate from "@/components/EventQuickCreate";
+
+/** Super-light error boundary to protect the page from modal hiccups */
+class ModalBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch() {
+    // no-op; could log to Supabase or Sentry
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="card p-3">
+          <div className="text-sm text-rose-700">
+            Sorry—there was a problem opening that event. Try again or refresh.
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type Tab = "my" | "happening";
 
@@ -192,24 +223,54 @@ export default function CalendarPage() {
     return () => subs.forEach((s) => supabase.removeChannel(s));
   }, [tab, loadMy, loadHappening, loadPlanner]);
 
-  // open event/planner details
   const openFromCalendar = (sel: any) => {
-    const res = sel?.resource || sel;
-    if (res?.planner) {
-      setSelectedPlanner(res.planner as PlannerItem);
+    const r = sel?.resource || sel;
+    if (r?.planner) {
+      setSelectedPlanner(r.planner as PlannerItem);
       setPlannerOpen(true);
       return;
     }
-    if (!res || !res.id) return;
-    setSelected(res as DBEvent);
+    if (!r || !r.id) return;
+    setSelected(r as DBEvent);
     setDetailsOpen(true);
   };
 
-  // move/resize db events
+  /** ---- DnD: optimistic + persisted ---- */
+  const updateEventLocal = (id: string, start: Date, end: Date) => {
+    const s = start.toISOString();
+    const e = end.toISOString();
+    setEvents((prev) => prev.map((x) => (x.id === id ? { ...x, start_time: s, end_time: e } : x)));
+    setFeedEvents((prev) => prev.map((x) => (x.id === id ? { ...x, start_time: s, end_time: e } : x)));
+  };
+
   const onMoveOrResizeEvent = async ({ event, start, end }: any) => {
-    const e = event.resource as DBEvent;
+    const r = event.resource;
+    // moving a scheduled planner item inside the grid
+    if (r?.planner) {
+      const pid = r.planner.id as string;
+      // optimistic
+      setPlanner((prev) =>
+        prev.map((p) =>
+          p.id === pid ? { ...p, scheduled_start: start.toISOString(), scheduled_end: end.toISOString() } : p
+        )
+      );
+      const { error } = await supabase
+        .from("planner_items")
+        .update({ scheduled_start: start, scheduled_end: end })
+        .eq("id", pid);
+      if (error) alert(error.message);
+      return;
+    }
+
+    // moving a DB event — only creator can move
+    const e = r as DBEvent;
     if (!sessionUser || !e?.id) return;
     if (e.created_by !== sessionUser) return alert("Only the creator can move this event.");
+
+    // optimistic
+    updateEventLocal(e.id, start, end);
+
+    // persist
     const { error } = await supabase
       .from("events")
       .update({ start_time: start, end_time: end })
@@ -217,26 +278,43 @@ export default function CalendarPage() {
     if (error) alert(error.message);
   };
 
-  // external drop (planner → calendar)
   const onDropFromOutside = async ({ start, end }: { start: Date; end: Date }) => {
     if (!dragItem) return;
-    await supabase
+    // optimistic
+    setPlanner((prev) =>
+      prev.map((p) =>
+        p.id === dragItem.id
+          ? { ...p, scheduled_start: start.toISOString(), scheduled_end: end.toISOString() }
+          : p
+      )
+    );
+    // persist
+    const { error } = await supabase
       .from("planner_items")
       .update({ scheduled_start: start, scheduled_end: end })
       .eq("id", dragItem.id);
+    if (error) alert(error.message);
     setDragItem(null);
   };
 
   const onMovePlanner = async ({ event, start, end }: any) => {
     const p = event.resource?.planner as PlannerItem | undefined;
     if (!p) return;
-    await supabase
+    // optimistic
+    setPlanner((prev) =>
+      prev.map((it) =>
+        it.id === p.id ? { ...it, scheduled_start: start.toISOString(), scheduled_end: end.toISOString() } : it
+      )
+    );
+    // persist
+    const { error } = await supabase
       .from("planner_items")
       .update({ scheduled_start: start, scheduled_end: end })
       .eq("id", p.id);
+    if (error) alert(error.message);
   };
 
-  const dbUiEvents = useMemo(
+  const dbUi: UiEvent[] = useMemo(
     () =>
       (tab === "my" ? events : feedEvents).map((e) => ({
         id: (e as any).id,
@@ -249,7 +327,7 @@ export default function CalendarPage() {
     [tab, events, feedEvents]
   );
 
-  const plannerUiEvents = useMemo(
+  const plannerUi: UiEvent[] = useMemo(
     () =>
       (planner || [])
         .filter((p) => p.scheduled_start && p.scheduled_end)
@@ -265,8 +343,19 @@ export default function CalendarPage() {
   );
 
   const mergedEvents = useMemo(
-    () => [...dbUiEvents, ...plannerUiEvents, ...(showMoon ? (moonEvents as any) : [])],
-    [dbUiEvents, plannerUiEvents, moonEvents, showMoon]
+    () => [...dbUi, ...plannerUi, ...(showMoon ? (moonEvents as any) : [])],
+    [dbUi, plannerUi, moonEvents, showMoon]
+  );
+
+  // who can drag?
+  const canDrag = useCallback(
+    (evt: UiEvent) => {
+      const r = (evt as any).resource || {};
+      if (r?.planner) return true;
+      if (!sessionUser) return false;
+      return r?.created_by === sessionUser;
+    },
+    [sessionUser]
   );
 
   return (
@@ -277,30 +366,16 @@ export default function CalendarPage() {
 
           <div className="controls">
             <div className="segmented" role="tablist" aria-label="Calendar filter">
-              <button
-                role="tab"
-                aria-selected={tab === "my"}
-                className={`seg-btn ${tab === "my" ? "active" : ""}`}
-                onClick={() => setTab("my")}
-              >
+              <button role="tab" aria-selected={tab === "my"} className={`seg-btn ${tab === "my" ? "active" : ""}`} onClick={() => setTab("my")}>
                 My calendar
               </button>
-              <button
-                role="tab"
-                aria-selected={tab === "happening"}
-                className={`seg-btn ${tab === "happening" ? "active" : ""}`}
-                onClick={() => setTab("happening")}
-              >
+              <button role="tab" aria-selected={tab === "happening"} className={`seg-btn ${tab === "happening" ? "active" : ""}`} onClick={() => setTab("happening")}>
                 What’s happening
               </button>
             </div>
 
             <label className="check">
-              <input
-                type="checkbox"
-                checked={showMoon}
-                onChange={(e) => setShowMoon(e.target.checked)}
-              />
+              <input type="checkbox" checked={showMoon} onChange={(e) => setShowMoon(e.target.checked)} />
               Show moon
             </label>
 
@@ -321,9 +396,7 @@ export default function CalendarPage() {
           <WeatherBadge />
           <div className="flex items-center gap-6 text-sm">
             <button className="btn" onClick={() => setDate(localizer.add(date, -1, view))}>◀</button>
-            <div className="muted">
-              {localizer.format(date, view === "month" ? "MMMM yyyy" : "PP")}
-            </div>
+            <div className="muted">{localizer.format(date, view === "month" ? "MMMM yyyy" : "PP")}</div>
             <button className="btn" onClick={() => setDate(localizer.add(date, +1, view))}>▶</button>
             <button className="btn" onClick={() => setDate(new Date())}>Today</button>
           </div>
@@ -375,6 +448,7 @@ export default function CalendarPage() {
             onPlannerMove={onMovePlanner}
             onDropFromOutside={onDropFromOutside}
             dragFromOutsideItem={() => (dragItem ? { ...dragItem, isPlanner: true } : null)}
+            draggableAccessor={canDrag}
           />
         </div>
 
@@ -382,8 +456,15 @@ export default function CalendarPage() {
         {err && <div className="text-rose-700 text-sm mt-2">Error: {err}</div>}
       </div>
 
-      {/* Modals */}
-      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
+      {/* Modals (protected by boundary; force remount per event) */}
+      <ModalBoundary>
+        <EventDetails
+          key={selected?.id || "empty"}
+          event={detailsOpen ? selected : null}
+          onClose={() => setDetailsOpen(false)}
+        />
+      </ModalBoundary>
+
       <PlannerItemModal
         open={plannerOpen}
         item={selectedPlanner}
