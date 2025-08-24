@@ -176,7 +176,7 @@ export default function CalendarGrid({
 
   const Backend = isTouch() ? TouchBackend : HTML5Backend;
   const backendOptions = isTouch()
-    ? { enableMouseEvents: true, delayTouchStart: 120 } // smoother long-press start on phones
+    ? { enableMouseEvents: true, delayTouchStart: 120 }
     : undefined;
 
   return (
@@ -187,7 +187,7 @@ export default function CalendarGrid({
           events={events}
           startAccessor="start"
           endAccessor="end"
-          selectable={"ignoreEvents" as any}     // easier to select empty slots on mobile
+          selectable={"ignoreEvents" as any}   // easier to select empty slots on mobile
           resizable
           popup
           style={{ height: 680, touchAction: "manipulation" }}
@@ -195,11 +195,24 @@ export default function CalendarGrid({
           onView={setView}
           date={date}
           onNavigate={setDate}
-          /* Make slot selection easier on touch (press-and-hold) */
-          longPressThreshold={250}
-          /* Create from free slot */
-          onSelectSlot={onSelectSlot}
-          /* Fallbacks for desktop */
+          longPressThreshold={250}             // nice for touch slot selection
+          /* IMPORTANT: Month view tap on a day should drill into Day view */
+          onSelectSlot={(info: any) => {
+            if (view === "month") {
+              // open that day instead of creating an event
+              setDate(info.start);
+              setView("day");
+              return;
+            }
+            // in day/week time-grid: create-event flow
+            onSelectSlot({ start: info.start, end: info.end });
+          }}
+          /* Also drill from month header/date clicks */
+          onDrillDown={(d) => {
+            setDate(d);
+            setView("day");
+          }}
+          /* Opening existing events still works via quick tap */
           onSelectEvent={onSelectEvent}
           onDoubleClickEvent={onSelectEvent}
           /* Drag/Resize */
@@ -208,20 +221,17 @@ export default function CalendarGrid({
             return onDrop(args);
           }}
           onEventResize={onResize}
-          /* Scroll/time grid behavior */
+          /* Time grid behavior */
           step={30}
           timeslots={2}
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
-          /* Month header click → Day view (helps mobile) */
-          onDrillDown={(d) => {
-            setDate(d);
-            setView("day");
-          }}
           components={{ event: EventCell }}
           eventPropGetter={eventPropGetter}
           dragFromOutsideItem={dragFromOutsideItem}
           onDropFromOutside={onDropFromOutside}
           draggableAccessor={draggableAccessor}
+          /* Force drilldown to day (not agenda) for clarity on mobile */
+          drilldownView="day"
         />
       </DndProvider>
     </div>
