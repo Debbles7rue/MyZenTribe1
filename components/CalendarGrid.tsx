@@ -53,6 +53,7 @@ export default function CalendarGrid({
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
 
+    // Moon markers (all-day labels)
     if (r?.moonPhase) {
       return {
         style: { background: "transparent", border: 0, color: "#0f172a", fontWeight: 600 },
@@ -60,68 +61,123 @@ export default function CalendarGrid({
       };
     }
 
+    // To-do / Reminder chips (private)
     if (r?.planner) {
       const t = r.planner.type;
       if (t === "reminder") {
         return {
-          style: { backgroundColor: "#fee2e2", border: "1px solid #fecaca", borderRadius: 10, color: "#991b1b" },
+          style: {
+            backgroundColor: "#fee2e2",
+            border: "1px solid #fecaca",
+            borderRadius: 10,
+            color: "#991b1b",
+          },
           className: "text-[11px] leading-tight",
         };
       }
       return {
-        style: { backgroundColor: "#dcfce7", border: "1px solid #bbf7d0", borderRadius: 10, color: "#14532d" },
+        style: {
+          backgroundColor: "#dcfce7",
+          border: "1px solid #bbf7d0",
+          borderRadius: 10,
+          color: "#14532d",
+        },
         className: "text-[11px] leading-tight",
       };
     }
 
+    // Default event chip
     return {
-      style: { backgroundColor: "#eef2ff", border: "1px solid #e5e7eb", borderRadius: 10, color: "#111" },
+      style: {
+        backgroundColor: "#eef2ff",
+        border: "1px solid #e5e7eb",
+        borderRadius: 10,
+        color: "#111",
+      },
       className: "text-[11px] leading-tight",
     };
   };
 
-  /** Tap-smart event cell: quick tap/click opens; real drag still drags */
+  /** Tap-smart event chip:
+   *  - mouse/touch quick tap = open details
+   *  - real movement = drag
+   */
+  const TAP_MS = 300;
+  const TAP_PX = 8;
+
   const EventCell = ({ event }: { event: UiEvent }) => {
     const r = event.resource || {};
     const down = useRef<{ t: number; x: number; y: number } | null>(null);
 
-    const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    // MOUSE
+    const onMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
       down.current = { t: Date.now(), x: e.clientX, y: e.clientY };
     };
-    const onPointerUp: React.PointerEventHandler<HTMLDivElement> = (e) => {
-      const d = down.current;
+    const onMouseUp: React.MouseEventHandler<HTMLDivElement> = (e) => {
+      const s = down.current;
       down.current = null;
-      if (!d) return;
-      const dt = Date.now() - d.t;
-      const dx = Math.abs(e.clientX - d.x);
-      const dy = Math.abs(e.clientY - d.y);
-      const moved = Math.sqrt(dx * dx + dy * dy) > 6; // drag threshold
-      const quick = dt < 250;
-      if (quick && !moved) {
+      if (!s) return;
+      const dt = Date.now() - s.t;
+      const dx = Math.abs(e.clientX - s.x);
+      const dy = Math.abs(e.clientY - s.y);
+      if (dt <= TAP_MS && Math.hypot(dx, dy) <= TAP_PX) {
+        e.preventDefault();
         e.stopPropagation();
         onSelectEvent(event);
       }
     };
 
+    // TOUCH
+    const touchStart: React.TouchEventHandler<HTMLDivElement> = (e) => {
+      const t = e.touches[0];
+      down.current = { t: Date.now(), x: t.clientX, y: t.clientY };
+    };
+    const touchEnd: React.TouchEventHandler<HTMLDivElement> = (e) => {
+      const s = down.current;
+      down.current = null;
+      if (!s) return;
+      const t = e.changedTouches[0];
+      const dt = Date.now() - s.t;
+      const dx = Math.abs(t.clientX - s.x);
+      const dy = Math.abs(t.clientY - s.y);
+      if (dt <= TAP_MS && Math.hypot(dx, dy) <= TAP_PX) {
+        e.preventDefault();
+        e.stopPropagation();
+        onSelectEvent(event);
+      }
+    };
+
+    // Render content
     if (r?.moonPhase) {
-      const icon = r.moonPhase === "moon-full" ? "🌕" : r.moonPhase === "moon-new" ? "🌑" : r.moonPhase === "moon-first" ? "🌓" : "🌗";
+      const icon =
+        r.moonPhase === "moon-full" ? "🌕" :
+        r.moonPhase === "moon-new" ? "🌑" :
+        r.moonPhase === "moon-first" ? "🌓" : "🌗";
       return (
-        <div className="text-[11px] leading-tight select-none" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+        <div
+          className="text-[11px] leading-tight select-none"
+          onMouseDown={onMouseDown}
+          onMouseUp={onMouseUp}
+          onTouchStart={touchStart}
+          onTouchEnd={touchEnd}
+          style={{ touchAction: "manipulation" }}
+        >
           {icon} {(event as any).title}
         </div>
       );
     }
-    if (r?.planner) {
-      const prefix = r.planner.type === "reminder" ? "⏰" : "✅";
-      return (
-        <div className="text-[11px] leading-tight select-none" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-          <span className="font-medium">{prefix} {(event as any).title}</span>
-        </div>
-      );
-    }
+
+    const prefix = r?.planner ? (r.planner.type === "reminder" ? "⏰ " : "✅ ") : "";
     return (
-      <div className="text-[11px] leading-tight select-none" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-        <div className="font-medium">{(event as any).title}</div>
+      <div
+        className="text-[11px] leading-tight select-none"
+        onMouseDown={onMouseDown}
+        onMouseUp={onMouseUp}
+        onTouchStart={touchStart}
+        onTouchEnd={touchEnd}
+        style={{ touchAction: "manipulation" }}
+      >
+        <div className="font-medium">{prefix}{(event as any).title}</div>
       </div>
     );
   };
@@ -142,17 +198,28 @@ export default function CalendarGrid({
           onView={setView}
           date={date}
           onNavigate={setDate}
+          /* Make slot selection easier on touch (long-press ~80ms) */
+          longPressThreshold={80}
+          /* Create event from free slot */
           onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}          // desktop click (fallback)
-          onDoubleClickEvent={onSelectEvent}     // double-click fallback
+          /* Fallbacks for desktop */
+          onSelectEvent={onSelectEvent}
+          onDoubleClickEvent={onSelectEvent}
+          /* Drag/Resize */
           onEventDrop={(args: any) => {
             if (args?.event?.resource?.planner && onPlannerMove) return onPlannerMove(args);
             return onDrop(args);
           }}
           onEventResize={onResize}
+          /* Scrolling/time grid behavior */
           step={30}
           timeslots={2}
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
+          /* Month header click → Day view (helps mobile) */
+          onDrillDown={(date) => {
+            setDate(date);
+            setView("day");
+          }}
           components={{ event: EventCell }}
           eventPropGetter={eventPropGetter}
           dragFromOutsideItem={dragFromOutsideItem}
