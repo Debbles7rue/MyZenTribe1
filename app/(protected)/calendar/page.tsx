@@ -1,18 +1,18 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import type { DBEvent } from "@/lib/types";
-import { useMoon as useMoonHook } from "@/lib/useMoon"; // your hook
+import { useMoon as useMoonHook } from "@/lib/useMoon"; // keep your hook
 
-// Client-only grid to avoid SSR/hydration issues
+// Client-only grid avoids hydration errors
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
-// Mirror the UiEvent used in CalendarGrid
 type UiEvent = {
   id: string;
   title: string;
@@ -22,6 +22,20 @@ type UiEvent = {
   resource: any;
 };
 
+/** ALWAYS return an array, even if the moon hook throws or changes shape */
+function useSafeMoon(date: Date, view: View): UiEvent[] {
+  try {
+    // Call the hook unconditionally (keeps hook order stable)
+    const raw: any = useMoonHook ? useMoonHook(date, view) : null;
+    if (Array.isArray(raw)) return raw as UiEvent[];
+    if (raw && Array.isArray(raw.events)) return raw.events as UiEvent[];
+    return [];
+  } catch (err) {
+    console.warn("[useSafeMoon] moon hook failed, disabling markers this render:", err);
+    return [];
+  }
+}
+
 export default function CalendarPage() {
   // auth
   const [me, setMe] = useState<string | null>(null);
@@ -29,11 +43,11 @@ export default function CalendarPage() {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // calendar state
+  // calendar view state
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
 
-  // events
+  // data
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -70,20 +84,10 @@ export default function CalendarPage() {
     return () => void supabase.removeChannel(ch);
   }, [load]);
 
-  // ---- Moon events (be tolerant to hook shape) ----
-  // Your hook might return UiEvent[] OR { events: UiEvent[], ... }
-  const moonRaw: any = useMoonHook ? useMoonHook(date, view) : null;
+  // Moon markers (never crash)
+  const moonEvents = useSafeMoon(date, view);
 
-  const moonEvents: UiEvent[] = useMemo(() => {
-    // If it's already an array
-    if (Array.isArray(moonRaw)) return moonRaw as UiEvent[];
-    // If it's an object with .events array
-    if (moonRaw && Array.isArray(moonRaw.events)) return moonRaw.events as UiEvent[];
-    // Otherwise none
-    return [];
-  }, [moonRaw]);
-
-  // map DB rows → Ui events
+  // Map DB rows → Ui events (keep original row in resource)
   const uiEvents: UiEvent[] = useMemo(
     () =>
       events.map((e) => ({
@@ -92,17 +96,19 @@ export default function CalendarPage() {
         start: new Date(e.start_time!),
         end: new Date(e.end_time!),
         allDay: false,
-        resource: e, // keep original row here for details/editing
+        resource: e,
       })),
     [events]
   );
 
-  const mergedEvents: UiEvent[] = useMemo(
-    () => [...uiEvents, ...moonEvents],
-    [uiEvents, moonEvents]
-  );
+  const mergedEvents: UiEvent[] = useMemo(() => {
+    // Extra guard: if anything weird slips in, coerce to arrays
+    const a = Array.isArray(uiEvents) ? uiEvents : [];
+    const b = Array.isArray(moonEvents) ? moonEvents : [];
+    return [...a, ...b];
+  }, [uiEvents, moonEvents]);
 
-  // Details modal (unwrap ui.resource!)
+  // Details modal — unwrap ui.resource
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -113,13 +119,13 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   }, []);
 
-  // Create from free slot (handled in Day/Week; Month tap drills to Day in CalendarGrid)
+  // Create from free slot (Day/Week only — Month taps drill to day inside CalendarGrid)
   const handleSelectSlot = useCallback(({ start, end }: { start: Date; end: Date }) => {
-    // Hook up to your CreateEventModal here if desired.
-    // console.log("Create event at", start, "→", end);
+    // Hook to your CreateEventModal here if desired.
+    // console.log("create from slot", start, end);
   }, []);
 
-  // Drag/Resize — creator-only
+  // Drag/Resize — creator only
   const canDrag = useCallback(
     (ui: any) => {
       const row: DBEvent | null = ui?.resource ?? null;
@@ -154,18 +160,20 @@ export default function CalendarPage() {
           <div className="muted">{loading ? "Loading…" : err ? `Error: ${err}` : null}</div>
         </div>
 
-        <CalendarGrid
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
-          events={mergedEvents}
-          onSelectSlot={handleSelectSlot}
-          onSelectEvent={handleSelectEvent}
-          onDrop={handleDropOrResize}
-          onResize={handleDropOrResize}
-          draggableAccessor={canDrag}
-        />
+        <ErrorBoundary>
+          <CalendarGrid
+            date={date}
+            setDate={setDate}
+            view={view}
+            setView={setView}
+            events={mergedEvents}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
+            onDrop={handleDropOrResize}
+            onResize={handleDropOrResize}
+            draggableAccessor={canDrag}
+          />
+        </ErrorBoundary>
       </div>
 
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
