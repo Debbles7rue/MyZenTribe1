@@ -9,11 +9,25 @@ import { supabase } from "@/lib/supabaseClient";
 export default function SiteHeader() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null | "loading">("loading");
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id ?? null;
+      setUserId(uid);
+      if (uid) {
+        // Best-effort check; if profiles table/policy is missing, we allow nav.
+        const { data: prof, error } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", uid)
+          .maybeSingle();
+        setHasProfile(error ? true : !!prof);
+      } else {
+        setHasProfile(false);
+      }
+    })();
   }, []);
 
   const signOut = async () => {
@@ -35,6 +49,8 @@ export default function SiteHeader() {
     );
   };
 
+  const showAuthedNav = userId && hasProfile !== false;
+
   return (
     <header className="site-header">
       <div className="header-inner container-app">
@@ -44,10 +60,9 @@ export default function SiteHeader() {
           </div>
         </Link>
 
-        {/* While we check auth, keep layout stable */}
         {userId === "loading" ? (
           <div style={{ height: 38 }} />
-        ) : userId ? (
+        ) : showAuthedNav ? (
           <>
             <nav className="main-nav">
               <Nav href="/calendar">Calendar</Nav>
@@ -71,7 +86,6 @@ export default function SiteHeader() {
             </div>
           </>
         ) : (
-          // Not logged in: keep it simple
           <div className="auth-area">
             <Link href="/login" className="btn btn-brand">
               Log in
