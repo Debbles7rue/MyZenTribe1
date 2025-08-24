@@ -12,23 +12,28 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
 const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
+
 export type UiEvent = RBCEvent & { resource: any };
 
 type Props = {
+  /** calendar state */
   date: Date;
   setDate: (d: Date) => void;
   view: View;
   setView: (v: View) => void;
 
+  /** merged events (db + planner + moon) */
   events: UiEvent[];
 
+  /** interactions */
   onSelectSlot: ({ start, end }: { start: Date; end: Date }) => void;
   onSelectEvent: (evt: UiEvent) => void;
   onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
   onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
 
+  /** planner support (external DnD + moving scheduled planner items) */
   onPlannerMove?: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
-  onDropFromOutside?: ({ start, end, allDay }: { start: Date; end: Date; allDay?: boolean }) => void;
+  onDropFromOutside?: ({ start, end }: { start: Date; end: Date }) => void;
   dragFromOutsideItem?: () => any | null;
 };
 
@@ -46,45 +51,96 @@ export default function CalendarGrid({
   onDropFromOutside,
   dragFromOutsideItem,
 }: Props) {
+  /** Readable, consistent styles */
   const eventPropGetter = (event: UiEvent) => {
-    const r: any = event.resource || {};
+    const r = event.resource || {};
+
+    // Moon markers (all-day row)
     if (r?.moonPhase) {
       return {
-        style: { backgroundColor: "transparent", border: 0, fontWeight: 600, color: "#0f172a" },
-        className: "text-[11px] leading-tight",
-      };
-    }
-    if (r?.planner) {
-      const k = r.planner.kind;
-      const bg = k === "reminder" ? "#fecaca" : "#bbf7d0"; // red-200 / green-200
-      return {
-        style: { backgroundColor: bg, border: "1px solid #e5e7eb", borderRadius: 10, color: "#111" },
-        className: "text-[11px] leading-tight",
-      };
-    }
-    const status = r?.status ?? "scheduled";
-    const source = r?.source ?? "personal";
-    if (status === "cancelled") {
-      return {
         style: {
-          backgroundColor: "rgba(107,114,128,0.15)",
-          border: "1px solid #e5e7eb",
-          borderRadius: 10,
-          color: "#6b7280",
-          textDecoration: "line-through",
+          background: "transparent",
+          border: 0,
+          color: "#0f172a",
+          fontWeight: 600,
         },
         className: "text-[11px] leading-tight",
       };
     }
-    const bg = source === "business" ? "#e5e7eb" : "#dbeafe";
+
+    // Planner items
+    if (r?.planner) {
+      const t = r.planner.type; // 'reminder' | 'todo'
+      if (t === "reminder") {
+        return {
+          style: {
+            backgroundColor: "#fee2e2",
+            border: "1px solid #fecaca",
+            borderRadius: 10,
+            color: "#991b1b",
+          },
+          className: "text-[11px] leading-tight",
+        };
+      }
+      // to-do (default)
+      return {
+        style: {
+          backgroundColor: "#dcfce7",
+          border: "1px solid #bbf7d0",
+          borderRadius: 10,
+          color: "#14532d",
+        },
+        className: "text-[11px] leading-tight",
+      };
+    }
+
+    // Normal events
     return {
-      style: { backgroundColor: bg, border: "1px solid #e5e7eb", borderRadius: 10, color: "#111" },
+      style: {
+        backgroundColor: "#eef2ff", // soft indigo/neutral
+        border: "1px solid #e5e7eb",
+        borderRadius: 10,
+        color: "#111",
+      },
       className: "text-[11px] leading-tight",
     };
   };
 
+  /** Custom event renderer for small icons/titles */
+  const EventCell = ({ event }: { event: UiEvent }) => {
+    const r = event.resource || {};
+    if (r?.moonPhase) {
+      const icon =
+        r.moonPhase === "moon-full"
+          ? "🌕"
+          : r.moonPhase === "moon-new"
+          ? "🌑"
+          : r.moonPhase === "moon-first"
+          ? "🌓"
+          : "🌗";
+      return (
+        <div className="text-[11px] leading-tight">
+          {icon} {(event as any).title}
+        </div>
+      );
+    }
+    if (r?.planner) {
+      const prefix = r.planner.type === "reminder" ? "⏰" : "✅";
+      return (
+        <div className="text-[11px] leading-tight">
+          <span className="font-medium">{prefix} {(event as any).title}</span>
+        </div>
+      );
+    }
+    return (
+      <div className="text-[11px] leading-tight">
+        <div className="font-medium">{(event as any).title}</div>
+      </div>
+    );
+  };
+
   return (
-    <div className="mzt-big-calendar card p-3 overflow-hidden">
+    <div className="card p-3 mzt-big-calendar">
       <DndProvider backend={HTML5Backend}>
         <DnDCalendar
           localizer={localizer}
@@ -101,56 +157,20 @@ export default function CalendarGrid({
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
           onSelectEvent={onSelectEvent}
-          onEventDrop={(args) => {
-            const r = (args.event as any).resource;
-            if (r?.planner) onPlannerMove?.(args);
-            else onDrop(args);
+          onEventDrop={(args: any) => {
+            // if a planner item is scheduled already and moved within the grid
+            if (args?.event?.resource?.planner && onPlannerMove) return onPlannerMove(args);
+            return onDrop(args);
           }}
-          onEventResize={(args) => {
-            const r = (args.event as any).resource;
-            if (r?.planner) onPlannerMove?.(args);
-            else onResize(args);
-          }}
-          // mobile: long press to select; click a date label drills down to Day
-          longPressThreshold={250}
-          onDrillDown={(d) => {
-            setDate(d);
-            setView("day");
-          }}
-          components={{
-            event: ({ event }) => {
-              const r = (event as UiEvent).resource || {};
-              if (r?.moonPhase) {
-                const icon =
-                  r.moonPhase === "moon-full" ? "🌕" :
-                  r.moonPhase === "moon-new" ? "🌑" :
-                  r.moonPhase === "moon-first" ? "🌓" : "🌗";
-                return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
-              }
-              if (r?.planner) {
-                return (
-                  <div className="text-[11px] leading-tight">
-                    <div className="font-medium">{(event as any).title}</div>
-                  </div>
-                );
-              }
-              const title = (event as any).title;
-              const isBusiness = r?.source === "business";
-              const isConfirmed = r?.confirmed || r?.attending;
-              const titleStyle = isConfirmed
-                ? { color: "#7c3aed", fontWeight: 600 }
-                : isBusiness
-                ? { color: "#111", fontWeight: 600 }
-                : { color: "#1d4ed8", fontWeight: 600 };
-              return (
-                <div className="text-[11px] leading-tight">
-                  <div style={titleStyle}>{title}</div>
-                </div>
-              );
-            },
-          }}
-          onDropFromOutside={onDropFromOutside}
+          onEventResize={onResize}
+          step={30}
+          timeslots={2}
+          scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
+          components={{ event: EventCell }}
+          eventPropGetter={eventPropGetter}
+          /** external DnD from planner tray */
           dragFromOutsideItem={dragFromOutsideItem}
+          onDropFromOutside={onDropFromOutside}
         />
       </DndProvider>
     </div>
