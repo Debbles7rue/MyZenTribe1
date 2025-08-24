@@ -1,4 +1,3 @@
-// app/(protected)/calendar/page.tsx
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -6,11 +5,10 @@ import dynamic from "next/dynamic";
 import { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
-import ErrorBoundary from "@/components/ErrorBoundary";
 import type { DBEvent } from "@/lib/types";
-import { useMoon as useMoonHook } from "@/lib/useMoon"; // keep your hook
+import { useMoon as useMoonHook } from "@/lib/useMoon";
 
-// Client-only grid avoids hydration errors
+// IMPORTANT: client-only grid to avoid SSR/hydration issues
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 type UiEvent = {
@@ -22,30 +20,24 @@ type UiEvent = {
   resource: any;
 };
 
-/** ALWAYS return an array, even if the moon hook throws or changes shape */
+// Make the moon hook safe: always return an array (even if the hook shape changes)
 function useSafeMoon(date: Date, view: View): UiEvent[] {
-  try {
-    // Call the hook unconditionally (keeps hook order stable)
-    const raw: any = useMoonHook ? useMoonHook(date, view) : null;
-    if (Array.isArray(raw)) return raw as UiEvent[];
-    if (raw && Array.isArray(raw.events)) return raw.events as UiEvent[];
-    return [];
-  } catch (err) {
-    console.warn("[useSafeMoon] moon hook failed, disabling markers this render:", err);
-    return [];
-  }
+  // Call the hook unconditionally to preserve hook order.
+  const raw: any = useMoonHook ? useMoonHook(date, view) : null;
+  return Array.isArray(raw) ? raw : Array.isArray(raw?.events) ? raw.events : [];
 }
 
 export default function CalendarPage() {
-  // auth
+  // current user
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // calendar view state
+  // calendar state
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
+  const [showMoon, setShowMoon] = useState(true);
 
   // data
   const [events, setEvents] = useState<DBEvent[]>([]);
@@ -76,6 +68,7 @@ export default function CalendarPage() {
     load();
   }, [load]);
 
+  // realtime
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -84,11 +77,11 @@ export default function CalendarPage() {
     return () => void supabase.removeChannel(ch);
   }, [load]);
 
-  // Moon markers (never crash)
-  const moonEvents = useSafeMoon(date, view);
+  // moon markers (safe)
+  const moonEvents: UiEvent[] = useSafeMoon(date, view);
 
-  // Map DB rows → Ui events (keep original row in resource)
-  const uiEvents: UiEvent[] = useMemo(
+  // db → Ui events (the grid will merge these with moonEvents)
+  const dbUiEvents: UiEvent[] = useMemo(
     () =>
       events.map((e) => ({
         id: (e as any).id,
@@ -96,19 +89,12 @@ export default function CalendarPage() {
         start: new Date(e.start_time!),
         end: new Date(e.end_time!),
         allDay: false,
-        resource: e,
+        resource: e, // grid expects resource to style and identify
       })),
     [events]
   );
 
-  const mergedEvents: UiEvent[] = useMemo(() => {
-    // Extra guard: if anything weird slips in, coerce to arrays
-    const a = Array.isArray(uiEvents) ? uiEvents : [];
-    const b = Array.isArray(moonEvents) ? moonEvents : [];
-    return [...a, ...b];
-  }, [uiEvents, moonEvents]);
-
-  // Details modal — unwrap ui.resource
+  // details modal (unwrap ui.resource!)
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -119,61 +105,64 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   }, []);
 
-  // Create from free slot (Day/Week only — Month taps drill to day inside CalendarGrid)
-  const handleSelectSlot = useCallback(({ start, end }: { start: Date; end: Date }) => {
-    // Hook to your CreateEventModal here if desired.
-    // console.log("create from slot", start, end);
+  // create from free slot (day/week); month taps drill into day inside the grid
+  const handleSelectSlot = useCallback((_slot: { start: Date; end: Date }) => {
+    // Wire to your CreateEventModal if desired.
   }, []);
 
-  // Drag/Resize — creator only
-  const canDrag = useCallback(
-    (ui: any) => {
-      const row: DBEvent | null = ui?.resource ?? null;
-      return !!me && !!row && row.created_by === me;
-    },
-    [me]
-  );
-
-  const handleDropOrResize = useCallback(
+  // drag/resize — only update if creator; otherwise reload to revert
+  const handleDrop = useCallback(
     async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
       const row: DBEvent | null = event?.resource ?? null;
-      if (!row || !me || row.created_by !== me) return;
-
+      if (!row || !me || row.created_by !== me) {
+        // not allowed → reload to revert visual move
+        load();
+        return;
+      }
       const { error } = await supabase
         .from("events")
         .update({ start_time: start.toISOString(), end_time: end.toISOString() })
         .eq("id", row.id);
-
       if (error) {
-        console.error(error.message);
-        alert("Could not update event time: " + error.message);
+        alert("Could not move event: " + error.message);
+        load();
       }
     },
-    [me]
+    [me, load]
   );
+
+  const handleResize = handleDrop;
 
   return (
     <div className="page">
       <div className="container-app">
-        <div className="header-bar">
+        <div className="header-bar" style={{ alignItems: "center", gap: 12 }}>
           <h1 className="page-title">Calendar</h1>
           <div className="muted">{loading ? "Loading…" : err ? `Error: ${err}` : null}</div>
+          <label className="check" style={{ marginLeft: "auto" }}>
+            <input
+              type="checkbox"
+              checked={showMoon}
+              onChange={(e) => setShowMoon(e.target.checked)}
+            />
+            <span>Show moon</span>
+          </label>
         </div>
 
-        <ErrorBoundary>
-          <CalendarGrid
-            date={date}
-            setDate={setDate}
-            view={view}
-            setView={setView}
-            events={mergedEvents}
-            onSelectSlot={handleSelectSlot}
-            onSelectEvent={handleSelectEvent}
-            onDrop={handleDropOrResize}
-            onResize={handleDropOrResize}
-            draggableAccessor={canDrag}
-          />
-        </ErrorBoundary>
+        <CalendarGrid
+          // NOTE: these match your current CalendarGrid.tsx props
+          dbEvents={dbUiEvents}
+          moonEvents={moonEvents}
+          showMoon={showMoon}
+          date={date}
+          setDate={setDate}
+          view={view}
+          setView={setView}
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
+          onDrop={handleDrop}
+          onResize={handleResize}
+        />
       </div>
 
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
