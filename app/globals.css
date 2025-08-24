@@ -308,3 +308,7 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 
 /* Keep the rest from previous response (grid layout, tray, deck, weather, etc.) */
 
+/* subtle hover for deck cards */
+.deck-card .rounded-xl { will-change: transform; }
+
+
