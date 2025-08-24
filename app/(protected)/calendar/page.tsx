@@ -1,4 +1,4 @@
-// app/(protected)/calendar/page.tsx
+// app/(protected)/calendar-list/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -8,14 +8,12 @@ import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-export default function CalendarPage() {
-  /* ---------- session ---------- */
+export default function CalendarListPage() {
   const [sessionUser, setSessionUser] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setSessionUser(data.user?.id ?? null));
   }, []);
 
-  /* ---------- data ---------- */
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -33,7 +31,6 @@ export default function CalendarPage() {
       setErr(error.message || "Failed to load events");
       setEvents([]);
     } else {
-      // guard against bad rows (null start/end etc.)
       const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
       setEvents(safe);
     }
@@ -44,7 +41,6 @@ export default function CalendarPage() {
     load();
   }, [sessionUser]);
 
-  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -53,7 +49,7 @@ export default function CalendarPage() {
     return () => void supabase.removeChannel(ch);
   }, []);
 
-  /* ---------- create modal ---------- */
+  // Create modal
   const [openCreate, setOpenCreate] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -116,7 +112,7 @@ export default function CalendarPage() {
     load();
   };
 
-  /* ---------- details modal ---------- */
+  // Details modal
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -125,31 +121,24 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   };
 
-  /* ---------- helpers ---------- */
   const fmt = (iso: string | null | undefined) => {
     if (!iso) return "TBD";
     const d = new Date(iso);
     return isNaN(d.getTime()) ? "TBD" : d.toLocaleString();
-    // If you prefer date-fns formatting, you can swap this for format()
   };
 
   return (
     <div className="page">
       <div className="container-app">
-        <h1 className="page-title">Calendar (debug list view)</h1>
+        <h1 className="page-title">Calendar</h1>
 
         <div className="mb-3 flex items-center gap-2">
-          <button className="btn btn-brand" onClick={startNewEvent}>
-            + Create event
-          </button>
-          <button className="btn" onClick={load}>
-            Refresh
-          </button>
+          <button className="btn btn-brand" onClick={startNewEvent}>+ Create event</button>
+          <button className="btn" onClick={load}>Refresh</button>
           {loading && <span className="muted">Loading…</span>}
           {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
         </div>
 
-        {/* Simple list in place of the big calendar grid */}
         <div className="card p-3">
           {events.length === 0 ? (
             <div className="muted">No events yet.</div>
@@ -162,9 +151,7 @@ export default function CalendarPage() {
                     {fmt(e.start_time)} – {fmt(e.end_time)}
                   </div>
                   <div className="mt-1">
-                    <button className="btn btn-neutral" onClick={() => openDetails(e)}>
-                      Details
-                    </button>
+                    <button className="btn btn-neutral" onClick={() => openDetails(e)}>Details</button>
                   </div>
                 </li>
               ))}
@@ -173,7 +160,6 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Modals */}
       <CreateEventModal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
@@ -183,10 +169,7 @@ export default function CalendarPage() {
         onSave={createEvent}
       />
 
-      <EventDetails
-        event={detailsOpen ? selected : null}
-        onClose={() => setDetailsOpen(false)}
-      />
+      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
 }
