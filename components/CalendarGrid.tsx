@@ -8,11 +8,13 @@ import { localizer } from "@/lib/localizer";
 import type { DBEvent } from "@/lib/types";
 
 const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
+
 export type UiEvent = RBCEvent & { resource: any };
 
 type Props = {
-  dbEvents: DBEvent[];
-  moonEvents: UiEvent[];
+  dbEvents: DBEvent[];            // events to show (my or feed)
+  plannerEvents: UiEvent[];       // scheduled planner items (reminders/todos)
+  moonEvents: UiEvent[];          // all-day moon labels
   showMoon: boolean;
 
   date: Date;
@@ -24,20 +26,39 @@ type Props = {
   onSelectEvent: (evt: UiEvent) => void;
   onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
   onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
+
+  // external drag (from TaskTray)
+  onDropFromOutside?: ({ start, end, allDay }: { start: Date; end: Date; allDay?: boolean }) => void;
+  dragFromOutsideItem?: () => any | null;
+
+  // planner move inside grid
+  onPlannerMove?: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
 };
 
 export default function CalendarGrid({
-  dbEvents, moonEvents, showMoon,
-  date, setDate, view, setView,
-  onSelectSlot, onSelectEvent, onDrop, onResize,
+  dbEvents,
+  plannerEvents,
+  moonEvents,
+  showMoon,
+  date,
+  setDate,
+  view,
+  setView,
+  onSelectSlot,
+  onSelectEvent,
+  onDrop,
+  onResize,
+  onDropFromOutside,
+  dragFromOutsideItem,
+  onPlannerMove,
 }: Props) {
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
       dbEvents.map((e) => ({
         id: (e as any).id,
         title: e.title,
-        start: new Date(e.start_time),
-        end: new Date(e.end_time),
+        start: new Date(e.start_time as any),
+        end: new Date(e.end_time as any),
         allDay: false,
         resource: e,
       })),
@@ -45,15 +66,14 @@ export default function CalendarGrid({
   );
 
   const mergedEvents = useMemo(
-    () => [...dbUiEvents, ...(showMoon ? moonEvents : [])],
-    [dbUiEvents, moonEvents, showMoon]
+    () => [...dbUiEvents, ...plannerEvents, ...(showMoon ? moonEvents : [])],
+    [dbUiEvents, plannerEvents, moonEvents, showMoon]
   );
 
-  // Inline styles so the blocks are readable regardless of theme
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
 
-    // Moon markers (all-day labels)
+    // Moon
     if (r?.moonPhase) {
       return {
         style: {
@@ -66,8 +86,38 @@ export default function CalendarGrid({
       };
     }
 
-    // Cancelled events: grey + line-through
-    if (r?.status === "cancelled") {
+    // Planner items
+    if (r?.planner) {
+      const k = r.planner.kind;
+      const bg = k === "reminder" ? "#fecaca" : "#bbf7d0"; // red-200 / green-200
+      return {
+        style: {
+          backgroundColor: bg,
+          border: "1px solid #e5e7eb",
+          borderRadius: 10,
+          color: "#111",
+        },
+        className: "text-[11px] leading-tight",
+      };
+    }
+
+    // DB events
+    const status = r?.status ?? "scheduled";
+    const source = r?.source ?? "personal";
+    const confirmed = r?.__confirmed; // optional flag not used now
+
+    // coloring rule:
+    // - friends = blue
+    // - business = black
+    // - confirmed/RSVP'd heading purple (we render title purple)
+    // we keep a light bg for legibility
+    let bg = "#dbeafe"; // blue-100 default
+    let color = "#111";
+    if (source === "business") {
+      bg = "#e5e7eb"; // gray-200 (black heading in renderer)
+    }
+
+    if (status === "cancelled") {
       return {
         style: {
           backgroundColor: "rgba(107,114,128,0.15)",
@@ -80,21 +130,19 @@ export default function CalendarGrid({
       };
     }
 
-    // Normal events: personal vs business
-    const bg = r?.source === "business" ? "#ede9fe" /* lilac */ : "#dbeafe" /* blue */;
     return {
       style: {
         backgroundColor: bg,
         border: "1px solid #e5e7eb",
         borderRadius: 10,
-        color: "#111", // force dark text for readability
+        color,
       },
       className: "text-[11px] leading-tight",
     };
   };
 
   return (
-    <div className="card p-3">
+    <div className="card p-3 overflow-hidden">
       <DnDCalendar
         localizer={localizer}
         events={mergedEvents}
@@ -110,29 +158,68 @@ export default function CalendarGrid({
         onNavigate={setDate}
         onSelectSlot={onSelectSlot}
         onSelectEvent={onSelectEvent}
-        onEventDrop={onDrop}
-        onEventResize={onResize}
+        onEventDrop={(args) => {
+          const r = (args.event as any).resource;
+          if (r?.planner) {
+            onPlannerMove?.(args);
+          } else {
+            onDrop(args);
+          }
+        }}
+        onEventResize={(args) => {
+          const r = (args.event as any).resource;
+          if (r?.planner) {
+            onPlannerMove?.(args);
+          } else {
+            onResize(args);
+          }
+        }}
         step={30}
         timeslots={2}
         scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
         components={{
           event: ({ event }) => {
             const r = (event as UiEvent).resource || {};
+            // Moon
             if (r?.moonPhase) {
               const icon =
-                r.moonPhase === "moon-full" ? "🌕" :
-                r.moonPhase === "moon-new" ? "🌑" :
-                r.moonPhase === "moon-first" ? "🌓" : "🌗";
+                r.moonPhase === "moon-full"
+                  ? "🌕"
+                  : r.moonPhase === "moon-new"
+                  ? "🌑"
+                  : r.moonPhase === "moon-first"
+                  ? "🌓"
+                  : "🌗";
               return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
             }
+            // Planner
+            if (r?.planner) {
+              return (
+                <div className="text-[11px] leading-tight">
+                  <div className="font-medium">{(event as any).title}</div>
+                </div>
+              );
+            }
+            // DB event heading only, colored per spec
+            const title = (event as any).title;
+            const isBusiness = r?.source === "business";
+            const isConfirmed = r?.confirmed || r?.attending; // optional flags if added later
+            const titleStyle = isConfirmed
+              ? { color: "#7c3aed", fontWeight: 600 }
+              : isBusiness
+              ? { color: "#111", fontWeight: 600 }
+              : { color: "#1d4ed8", fontWeight: 600 };
             return (
               <div className="text-[11px] leading-tight">
-                <div className="font-medium">{(event as any).title}</div>
+                <div style={titleStyle}>{title}</div>
               </div>
             );
           },
         }}
         eventPropGetter={eventPropGetter}
+        // external drag from TaskTray
+        onDropFromOutside={onDropFromOutside}
+        dragFromOutsideItem={dragFromOutsideItem}
       />
     </div>
   );
