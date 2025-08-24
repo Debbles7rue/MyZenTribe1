@@ -6,13 +6,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View } from "react-big-calendar";
 import type { DBEvent } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
-import EventDetails from "@/components/EventDetails";
 import TaskTray, { PlannerItem } from "@/components/TaskTray";
 import WhatsHappeningDeck from "@/components/WhatsHappeningDeck";
 import WeatherBadge from "@/components/WeatherBadge";
-import { useMoon } from "@/lib/useMoon"; // your existing hook
+import { useMoon } from "@/lib/useMoon";
 import { localizer } from "@/lib/localizer";
+import EventQuickCreate from "@/components/EventQuickCreate";
 
+// Important: EventDetails is client-only to avoid prod “React #310” crashes in SSR bundles.
+const EventDetails = dynamic(() => import("@/components/EventDetails"), { ssr: false });
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 type UiMoon = {
@@ -34,7 +36,7 @@ export default function CalendarPage() {
 
   /** ---- Calendar state ---- */
   const [date, setDate] = useState<Date>(new Date());
-  const [view, setView] = useState<View>("week");
+  const [view, setView] = useState<View>("month");
   const [tab, setTab] = useState<Tab>("my");
   const [showMoon, setShowMoon] = useState(true);
 
@@ -53,10 +55,16 @@ export default function CalendarPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const openDetails = (e: any) => {
-    if (e?.resource?.planner) return; // planner items don't use EventDetails
-    setSelected(e?.resource || e); // UiEvent.resource is DBEvent
+    // Safe: CalendarGrid passes UiEvent; WhatsHappeningDeck passes DBEvent directly
+    const candidate = e?.resource || e;
+    if (!candidate || !candidate.id) return;
+    setSelected(candidate as DBEvent);
     setDetailsOpen(true);
   };
+
+  /** ---- Quick Create modal ---- */
+  const [qcOpen, setQcOpen] = useState(false);
+  const [qcDefaults, setQcDefaults] = useState<{ start?: Date; end?: Date }>({});
 
   /** ---- Moon phases ---- */
   const moon = useMoon(date, view);
@@ -75,11 +83,6 @@ export default function CalendarPage() {
 
   /** ---- Loaders ---- */
 
-  // Fetch MY CALENDAR:
-  // - events I created
-  // - events I RSVP'd to
-  // - events I'm interested in
-  // (and we keep visibility rules on the server via RLS)
   const loadMyCalendar = useCallback(async () => {
     if (!sessionUser) return;
 
@@ -121,7 +124,6 @@ export default function CalendarPage() {
         others = (other.data ?? []) as DBEvent[];
       }
 
-      // filter out invalid times
       const all = [...((created.data ?? []) as DBEvent[]), ...others].filter(
         (e) => !!e.start_time && !!e.end_time
       );
@@ -135,13 +137,11 @@ export default function CalendarPage() {
     }
   }, [sessionUser]);
 
-  // Fetch WHAT'S HAPPENING (public events by friends/acquaintances you follow & businesses you follow)
   const loadHappening = useCallback(async () => {
     if (!sessionUser) return;
 
     setErr(null);
     try {
-      // friends_view defined earlier (owner-centric)
       const friends = await supabase.from("friends_view").select("friend_id");
       const follows = await supabase
         .from("follows")
@@ -179,15 +179,14 @@ export default function CalendarPage() {
     }
   }, [sessionUser]);
 
-  // Planner items (private)
   const loadPlanner = useCallback(async () => {
     if (!sessionUser) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("planner_items")
       .select("*")
       .eq("user_id", sessionUser)
       .order("created_at", { ascending: true });
-    if (!error) setPlanner((data ?? []) as PlannerItem[]);
+    setPlanner((data ?? []) as PlannerItem[]);
   }, [sessionUser]);
 
   useEffect(() => {
@@ -197,47 +196,39 @@ export default function CalendarPage() {
     loadPlanner();
   }, [sessionUser, tab, loadMyCalendar, loadHappening, loadPlanner]);
 
-  // Realtime listeners
+  // Realtime refresh
   useEffect(() => {
-    const ch1 = supabase
-      .channel("events-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
-        tab === "my" ? loadMyCalendar() : loadHappening();
-      })
-      .subscribe();
-
-    const ch2 = supabase
-      .channel("attend-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "event_attendees" }, () =>
-        loadMyCalendar()
-      )
-      .subscribe();
-
-    const ch3 = supabase
-      .channel("interest-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "event_interests" }, () =>
-        loadMyCalendar()
-      )
-      .subscribe();
-
-    const ch4 = supabase
-      .channel("planner-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "planner_items" }, () =>
-        loadPlanner()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ch1);
-      supabase.removeChannel(ch2);
-      supabase.removeChannel(ch3);
-      supabase.removeChannel(ch4);
-    };
+    const chs = [
+      supabase
+        .channel("events-rt")
+        .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
+          tab === "my" ? loadMyCalendar() : loadHappening();
+        })
+        .subscribe(),
+      supabase
+        .channel("attend-rt")
+        .on("postgres_changes", { event: "*", schema: "public", table: "event_attendees" }, () =>
+          loadMyCalendar()
+        )
+        .subscribe(),
+      supabase
+        .channel("interest-rt")
+        .on("postgres_changes", { event: "*", schema: "public", table: "event_interests" }, () =>
+          loadMyCalendar()
+        )
+        .subscribe(),
+      supabase
+        .channel("planner-rt")
+        .on("postgres_changes", { event: "*", schema: "public", table: "planner_items" }, () =>
+          loadPlanner()
+        )
+        .subscribe(),
+    ];
+    return () => chs.forEach((c) => supabase.removeChannel(c));
   }, [tab, loadMyCalendar, loadHappening, loadPlanner]);
 
   /** ---- DnD handlers ---- */
 
-  // Move/resize DB events (creator only)
   const onMoveOrResizeEvent = async ({
     event,
     start,
@@ -258,7 +249,6 @@ export default function CalendarPage() {
     if (error) alert(error.message);
   };
 
-  // External drop from planner tray → schedule the item
   const onDropFromOutside = async ({ start, end }: { start: Date; end: Date }) => {
     if (!dragItem) return;
     await supabase
@@ -268,7 +258,6 @@ export default function CalendarPage() {
     setDragItem(null);
   };
 
-  // Moving a scheduled planner item inside the grid
   const onMovePlanner = async ({
     event,
     start,
@@ -322,13 +311,15 @@ export default function CalendarPage() {
     loadMyCalendar();
   };
   const dismissFeed = async (_id: string) => {
-    // no-op server; we just hide client-side
     setFeedEvents((prev) => prev.filter((e) => e.id !== _id));
   };
 
   /** ---- Render ---- */
+  const toLocalInput = (d: Date) =>
+    new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
   return (
-    <div className="page">
+    <div className="page calendar-sand">
       <div className="container-app">
         <div className="header-bar">
           <h1 className="page-title">Calendar</h1>
@@ -361,6 +352,20 @@ export default function CalendarPage() {
               />
               Show moon
             </label>
+
+            <button
+              className="btn btn-brand"
+              onClick={() => {
+                const now = new Date();
+                setQcDefaults({
+                  start: now,
+                  end: new Date(now.getTime() + 60 * 60 * 1000),
+                });
+                setQcOpen(true);
+              }}
+            >
+              + Create event
+            </button>
           </div>
         </div>
 
@@ -377,11 +382,12 @@ export default function CalendarPage() {
             <button className="btn" onClick={() => setDate(localizer.add(date, +1, view))}>
               ▶
             </button>
-            <button className="btn" onClick={() => setDate(new Date())}>Today</button>
+            <button className="btn" onClick={() => setDate(new Date())}>
+              Today
+            </button>
           </div>
         </div>
 
-        {/* Mobile: deck first when in "What’s happening" */}
         {tab === "happening" && (
           <div className="mb-3">
             <WhatsHappeningDeck
@@ -394,7 +400,6 @@ export default function CalendarPage() {
         )}
 
         <div className="grid-cols-calendar">
-          {/* Task tray collapses under grid on small screens via CSS */}
           <TaskTray
             items={planner}
             onCreate={async (payload) => {
@@ -424,28 +429,11 @@ export default function CalendarPage() {
             setView={setView}
             onSelectEvent={openDetails}
             onSelectSlot={({ start, end }) => {
-              // Quick-create a new personal event for me
-              if (!sessionUser) return;
-              const title = window.prompt("Event title?") || "Untitled event";
-              supabase
-                .from("events")
-                .insert({
-                  title,
-                  start_time: start,
-                  end_time: end,
-                  visibility: "private",
-                  created_by: sessionUser,
-                  source: "personal",
-                })
-                .then(({ error }) => error && alert(error.message));
+              setQcDefaults({ start, end });
+              setQcOpen(true);
             }}
-            onDrop={(args) => {
-              // DB event move/resize
-              onMoveOrResizeEvent(args);
-            }}
-            onResize={(args) => {
-              onMoveOrResizeEvent(args);
-            }}
+            onDrop={onMoveOrResizeEvent}
+            onResize={onMoveOrResizeEvent}
             onDropFromOutside={onDropFromOutside}
             dragFromOutsideItem={() => (dragItem ? { ...dragItem, isPlanner: true } : null)}
             onPlannerMove={onMovePlanner}
@@ -457,6 +445,18 @@ export default function CalendarPage() {
       </div>
 
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
+
+      {/* Quick create modal */}
+      <EventQuickCreate
+        open={qcOpen}
+        onClose={() => setQcOpen(false)}
+        defaults={qcDefaults}
+        sessionUser={sessionUser}
+        onCreated={() => {
+          setQcOpen(false);
+          tab === "my" ? loadMyCalendar() : loadHappening();
+        }}
+      />
     </div>
   );
 }
