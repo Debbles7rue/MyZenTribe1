@@ -31,7 +31,6 @@ type Props = {
   onDropFromOutside?: ({ start, end }: { start: Date; end: Date }) => void;
   dragFromOutsideItem?: () => any | null;
 
-  /** who can drag? */
   draggableAccessor?: (evt: UiEvent) => boolean;
 };
 
@@ -53,52 +52,29 @@ export default function CalendarGrid({
   const eventPropGetter = (event: UiEvent) => {
     const r = event.resource || {};
 
-    // Moon markers (all-day row)
     if (r?.moonPhase) {
       return {
-        style: {
-          background: "transparent",
-          border: 0,
-          color: "#0f172a",
-          fontWeight: 600,
-        },
+        style: { background: "transparent", border: 0, color: "#0f172a", fontWeight: 600 },
         className: "text-[11px] leading-tight",
       };
     }
 
-    // Planner items
     if (r?.planner) {
-      const t = r.planner.type; // 'reminder' | 'todo'
+      const t = r.planner.type;
       if (t === "reminder") {
         return {
-          style: {
-            backgroundColor: "#fee2e2",
-            border: "1px solid #fecaca",
-            borderRadius: 10,
-            color: "#991b1b",
-          },
+          style: { backgroundColor: "#fee2e2", border: "1px solid #fecaca", borderRadius: 10, color: "#991b1b" },
           className: "text-[11px] leading-tight",
         };
       }
       return {
-        style: {
-          backgroundColor: "#dcfce7",
-          border: "1px solid #bbf7d0",
-          borderRadius: 10,
-          color: "#14532d",
-        },
+        style: { backgroundColor: "#dcfce7", border: "1px solid #bbf7d0", borderRadius: 10, color: "#14532d" },
         className: "text-[11px] leading-tight",
       };
     }
 
-    // Normal events (neutral readable)
     return {
-      style: {
-        backgroundColor: "#eef2ff",
-        border: "1px solid #e5e7eb",
-        borderRadius: 10,
-        color: "#111",
-      },
+      style: { backgroundColor: "#eef2ff", border: "1px solid #e5e7eb", borderRadius: 10, color: "#111" },
       className: "text-[11px] leading-tight",
     };
   };
@@ -106,19 +82,8 @@ export default function CalendarGrid({
   const EventCell = ({ event }: { event: UiEvent }) => {
     const r = event.resource || {};
     if (r?.moonPhase) {
-      const icon =
-        r.moonPhase === "moon-full"
-          ? "🌕"
-          : r.moonPhase === "moon-new"
-          ? "🌑"
-          : r.moonPhase === "moon-first"
-          ? "🌓"
-          : "🌗";
-      return (
-        <div className="text-[11px] leading-tight">
-          {icon} {(event as any).title}
-        </div>
-      );
+      const icon = r.moonPhase === "moon-full" ? "🌕" : r.moonPhase === "moon-new" ? "🌑" : r.moonPhase === "moon-first" ? "🌓" : "🌗";
+      return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
     }
     if (r?.planner) {
       const prefix = r.planner.type === "reminder" ? "⏰" : "✅";
@@ -153,6 +118,7 @@ export default function CalendarGrid({
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
           onSelectEvent={onSelectEvent}
+          onDoubleClickEvent={onSelectEvent}
           onEventDrop={(args: any) => {
             if (args?.event?.resource?.planner && onPlannerMove) return onPlannerMove(args);
             return onDrop(args);
