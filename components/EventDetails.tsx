@@ -24,7 +24,7 @@ type DBEvent = {
   cancellation_reason?: string | null;
   event_type?: string | null;
   invite_code?: string | null;
-  location_visibility?: "public" | "attendees" | null; // NEW
+  location_visibility?: "public" | "attendees" | null;
 };
 
 type Comment = { id: string; body: string; created_at: string; user_id: string };
@@ -46,7 +46,6 @@ function safeRange(start: Date | null, end: Date | null) {
 }
 const MEDITATION_TYPES = new Set(["meditation", "group_meditation", "solo_meditation"]);
 
-/* ---------- Minimal Group Circle Chat ---------- */
 function CircleChat({ eventId, open, onClose }: { eventId: string; open: boolean; onClose: () => void; }) {
   const [messages, setMessages] = useState<{ id: string; user_id: string; content: string; created_at: string }[]>([]);
   const [text, setText] = useState("");
@@ -110,10 +109,8 @@ function CircleChat({ eventId, open, onClose }: { eventId: string; open: boolean
   );
 }
 
-/* ---------- Invite Drawer ---------- */
-type Selectable = { id: string; name: string };
 function InviteDrawer({ eventId, open, onClose }: { eventId: string; open: boolean; onClose: () => void; }) {
-  const [friends, setFriends] = useState<Selectable[]>([]);
+  const [friends, setFriends] = useState<{ id: string; name: string }[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [working, setWorking] = useState(false);
 
@@ -124,13 +121,18 @@ function InviteDrawer({ eventId, open, onClose }: { eventId: string; open: boole
     });
   }, [open]);
 
-  const toggle = (id: string) => setSelectedFriends((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
-  const submitInvites = async () => {
+  const toggle = (id: string) =>
+    setSelectedFriends((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+
+  const submit = async () => {
     setWorking(true);
     try {
       const rows = selectedFriends.map((uid) => ({ event_id: eventId, invitee_user_id: uid }));
       if (rows.length) await supabase.from("event_invites").insert(rows);
-    } finally { setWorking(false); onClose(); }
+    } finally {
+      setWorking(false);
+      onClose();
+    }
   };
 
   return (
@@ -150,7 +152,9 @@ function InviteDrawer({ eventId, open, onClose }: { eventId: string; open: boole
           </div>
           <div className="mt-3 flex justify-end gap-2">
             <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn btn-brand" onClick={submitInvites} disabled={working}>{working ? "Sending…" : "Send"}</button>
+            <button className="btn btn-brand" onClick={submit} disabled={working}>
+              {working ? "Sending…" : "Send"}
+            </button>
           </div>
         </Dialog.Panel>
       </div>
@@ -158,11 +162,7 @@ function InviteDrawer({ eventId, open, onClose }: { eventId: string; open: boole
   );
 }
 
-/* ---------- Main ---------- */
 export default function EventDetails({ event, onClose }: { event: DBEvent | null; onClose: () => void; }) {
-  const [version] = useState("EventDetails v8");
-  const open = !!event;
-
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null)); }, []);
 
@@ -180,17 +180,20 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
-
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", location: "" });
 
+  const [shareMenu, setShareMenu] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [shareMenu, setShareMenu] = useState(false);
 
   useEffect(() => {
     if (!event) return;
-    setForm({ title: event.title ?? "", description: event.description ?? "", location: event.location ?? "" });
+    setForm({
+      title: event.title ?? "",
+      description: event.description ?? "",
+      location: event.location ?? "",
+    });
     (async () => {
       const { data } = await supabase
         .from("event_comments")
@@ -201,15 +204,13 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
     })();
   }, [event?.id]);
 
-  if (!open || !evt) return null;
+  if (!evt) return null;
 
   const isOwner = !!me && evt.created_by === me;
   const isCancelled = (evt.status ?? "scheduled") === "cancelled";
   const start = toDate(evt.start_time);
   const end = toDate(evt.end_time);
   const when = useMemo(() => safeRange(start, end), [evt.start_time, evt.end_time]);
-  const typeKey = (evt.event_type || "").trim().toLowerCase();
-  const showMeditationLink = MEDITATION_TYPES.has(typeKey);
   const locationPrivacy = (evt.location_visibility ?? "public") as "public" | "attendees";
   const canSeeLocation = locationPrivacy === "public" || isOwner || amAttendee;
 
@@ -238,8 +239,8 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
       description: form.description.trim() || null,
       location: form.location.trim() || null,
     };
-    const { error } = await supabase.from("events").update(payload).eq("id", evt.id);
-    if (!error) setEvt((prev) => (prev ? { ...prev, ...payload } : prev));
+    await supabase.from("events").update(payload).eq("id", evt.id);
+    setEvt((prev) => (prev ? { ...prev, ...payload } : prev));
     setEditing(false);
   }
 
@@ -254,8 +255,14 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
     await supabase.from("events").update({ status: "scheduled", cancellation_reason: null }).eq("id", evt.id);
     setEvt((prev) => (prev ? { ...prev, status: "scheduled", cancellation_reason: null } : prev));
   }
+  async function deleteEvent() {
+    if (!isOwner) return;
+    if (!confirm("Delete this event permanently?")) return;
+    await supabase.from("events").delete().eq("id", evt.id);
+    onClose();
+  }
 
-  // Public actions
+  // public actions
   const markInterested = async () => {
     if (!me) return;
     await supabase.from("event_interests").upsert({ event_id: evt.id, user_id: me });
@@ -268,13 +275,15 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
   };
   const shareEveryone = async () => {
     await supabase.from("events").update({ visibility: "public" }).eq("id", evt.id);
-    alert("Shared with everyone (friends/acquaintances can see it).");
+    alert("Shared with everyone.");
     setShareMenu(false);
   };
 
+  const showMeditationLink = MEDITATION_TYPES.has((evt.event_type || "").toLowerCase());
+
   return (
     <>
-      <Dialog open={open} onClose={onClose} className="relative z-50">
+      <Dialog open={!!event} onClose={onClose} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
@@ -282,50 +291,24 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
               <img
                 src={evt.image_path || "/event-placeholder.jpg"}
                 alt={evt.title || ""}
-                style={{
-                  width: "100%",
-                  height: "170px",
-                  objectFit: "cover",
-                  display: "block",
-                  borderBottom: "1px solid #eee",
-                  filter: isCancelled ? "grayscale(0.6)" : undefined,
-                  opacity: isCancelled ? 0.8 : 1,
-                }}
+                style={{ width: "100%", height: 170, objectFit: "cover", display: "block", borderBottom: "1px solid #eee",
+                  filter: isCancelled ? "grayscale(0.6)" : undefined, opacity: isCancelled ? 0.8 : 1 }}
                 loading="lazy"
               />
-
               <div className="space-y-5 p-6">
-                <div className="text-xs text-neutral-500">{version}</div>
-
                 <div className="flex items-start justify-between gap-3">
-                  <Dialog.Title
-                    className={`text-xl font-semibold ${isCancelled ? "line-through text-neutral-500" : ""}`}
-                  >
+                  <Dialog.Title className={`text-xl font-semibold ${isCancelled ? "line-through text-neutral-500" : ""}`}>
                     {editing ? (
                       <input className="input" value={form.title}
                         onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
-                    ) : (
-                      evt.title || "Untitled event"
-                    )}
+                    ) : (evt.title || "Untitled event")}
                   </Dialog.Title>
-
                   <div className="flex gap-2">
                     {isOwner && (
-                      <button
-                        className="btn btn-neutral"
-                        onClick={() =>
-                          setEditing((v) => {
-                            if (!v) setForm({
-                              title: evt.title ?? "",
-                              description: evt.description ?? "",
-                              location: evt.location ?? "",
-                            });
-                            return !v;
-                          })
-                        }
-                      >
-                        {editing ? "Done" : "Edit"}
-                      </button>
+                      <>
+                        <button className="btn" onClick={() => setEditing((v) => !v)}>{editing ? "Done" : "Edit"}</button>
+                        <button className="btn" onClick={deleteEvent}>Delete</button>
+                      </>
                     )}
                     <button className="btn" onClick={onClose}>Close ✨</button>
                   </div>
@@ -339,22 +322,16 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
                 )}
 
                 <div className="card p-3">
-                  <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>{when}</div>
-
-                  {/* Location visibility handling */}
+                  <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>{safeRange(start, end)}</div>
                   <div className="mt-2 text-sm">
                     <span className="font-medium">Location: </span>
-                    {canSeeLocation ? (
-                      mapUrl ? (
-                        <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
-                          {evt.location}
-                        </a>
-                      ) : (
-                        evt.location || "TBD"
-                      )
-                    ) : (
-                      <span className="text-neutral-500">Visible to attendees after RSVP</span>
-                    )}
+                    {(() => {
+                      if (!canSeeLocation) return <span className="text-neutral-500">Visible to attendees after RSVP</span>;
+                      if (!evt.location) return "TBD";
+                      if (mapUrl)
+                        return <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">{evt.location}</a>;
+                      return evt.location;
+                    })()}
                   </div>
                 </div>
 
@@ -363,19 +340,19 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
                   {editing ? (
                     <>
                       <textarea className="input" rows={4} value={form.description}
-                        onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Share details…" />
+                        onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Details…" />
                       <div className="mt-3 flex justify-end">
                         <button className="btn btn-brand" onClick={saveEdits}>Save changes</button>
                       </div>
                     </>
                   ) : (
-                    <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>
+                    <div className="whitespace-pre-wrap text-sm text-neutral-800">
                       {evt.description || "No description yet."}
                     </div>
                   )}
                 </div>
 
-                {/* Public actions */}
+                {/* public actions visible to everyone on public events */}
                 {evt.visibility === "public" && (
                   <div className="card p-3 relative">
                     <div className="mb-2 text-sm font-medium">Public actions</div>
@@ -395,6 +372,7 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
                   </div>
                 )}
 
+                {/* share options for private/community (owner) */}
                 {evt.visibility !== "public" && isOwner && (
                   <div className="card p-3">
                     <div className="mb-2 text-sm font-medium">Share</div>
@@ -405,23 +383,16 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
                   </div>
                 )}
 
-                {/* Meditation links & circle */}
                 {showMeditationLink && (
                   <div className="card p-3">
                     <div className="mb-2 text-sm font-medium">Links</div>
                     <div className="flex flex-wrap gap-2">
                       <a className="btn btn-brand" href="/meditation" target="_blank" rel="noreferrer">Open Meditation Room</a>
                       <button className="btn btn-neutral" onClick={() => setChatOpen(true)}>Open Group Circle</button>
-                      {evt.invite_code ? (
-                        <a className="btn" href={`/meditation/schedule/group?code=${evt.invite_code}`} target="_blank" rel="noreferrer">
-                          Open invite page
-                        </a>
-                      ) : null}
                     </div>
                   </div>
                 )}
 
-                {/* Owner-only controls */}
                 {isOwner && (
                   <div className="flex items-center justify-end gap-2">
                     {!isCancelled ? (
@@ -432,7 +403,6 @@ export default function EventDetails({ event, onClose }: { event: DBEvent | null
                   </div>
                 )}
 
-                {/* Comments (shown; especially useful for public) */}
                 <div className="card p-3">
                   <div className="mb-2 text-sm font-medium">Comments</div>
                   {comments.length === 0 ? (
