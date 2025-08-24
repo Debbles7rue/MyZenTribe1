@@ -311,4 +311,44 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 /* subtle hover for deck cards */
 .deck-card .rounded-xl { will-change: transform; }
 
+/* ---- Tutorial styles ---- */
+.tutorial-hero {
+  background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
+  border-bottom: 1px solid #f5e6c6;
+}
+.tutorial-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.tutorial-list .bullet {
+  font-size: 18px;
+  width: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tutorial-list li {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+}
+.tutorial-list .item-title {
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 2px;
+}
+.tutorial-list .item-desc {
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* small screens */
+@media (max-width: 520px) {
+  .tutorial-list .item-desc { font-size: 13px; }
+}
 
