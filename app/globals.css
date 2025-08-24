@@ -245,7 +245,10 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .rbc-event { color: #111 !important; }
 .rbc-event-label { color: rgba(0,0,0,.7) !important; } /* (optional) time label */
 
-/* Calendar readability */
+/* Calendar readability (duplicate kept intentionally to be safe across builds) */
 .rbc-event { color: #111 !important; }
 .rbc-event-label { color: rgba(0,0,0,.7) !important; }
 
+/* --- Big calendar extra polish --- */
+.mzt-big-calendar .rbc-day-bg + .rbc-day-bg { border-left-color: rgba(0,0,0,0.04); }
+.mzt-big-calendar .rbc-today { background: rgba(255, 225, 0, 0.08); }
