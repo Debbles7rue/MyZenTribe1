@@ -6,6 +6,7 @@ import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
 import { localizer } from "@/lib/localizer";
 
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -34,6 +35,10 @@ type Props = {
   /** return true if this event may be dragged (e.g., creator-only) */
   draggableAccessor?: (evt: UiEvent) => boolean;
 };
+
+const isTouch = () =>
+  typeof window !== "undefined" &&
+  (("ontouchstart" in window) || (navigator.maxTouchPoints ?? 0) > 0);
 
 export default function CalendarGrid({
   date,
@@ -98,10 +103,7 @@ export default function CalendarGrid({
     };
   };
 
-  /** Tap-smart event chip:
-   *  - mouse/touch quick tap = open details
-   *  - real movement = drag
-   */
+  /** Tap-smart chip: quick tap opens; real move drags (works on touch & mouse) */
   const TAP_MS = 300;
   const TAP_PX = 8;
 
@@ -109,7 +111,7 @@ export default function CalendarGrid({
     const r = event.resource || {};
     const down = useRef<{ t: number; x: number; y: number } | null>(null);
 
-    // MOUSE
+    // Mouse
     const onMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
       down.current = { t: Date.now(), x: e.clientX, y: e.clientY };
     };
@@ -127,12 +129,12 @@ export default function CalendarGrid({
       }
     };
 
-    // TOUCH
-    const touchStart: React.TouchEventHandler<HTMLDivElement> = (e) => {
+    // Touch
+    const onTouchStart: React.TouchEventHandler<HTMLDivElement> = (e) => {
       const t = e.touches[0];
       down.current = { t: Date.now(), x: t.clientX, y: t.clientY };
     };
-    const touchEnd: React.TouchEventHandler<HTMLDivElement> = (e) => {
+    const onTouchEnd: React.TouchEventHandler<HTMLDivElement> = (e) => {
       const s = down.current;
       down.current = null;
       if (!s) return;
@@ -147,60 +149,55 @@ export default function CalendarGrid({
       }
     };
 
-    // Render content
+    const commonProps = {
+      onMouseDown,
+      onMouseUp,
+      onTouchStart,
+      onTouchEnd,
+      style: { touchAction: "manipulation" as const },
+      className: "text-[11px] leading-tight select-none",
+    };
+
     if (r?.moonPhase) {
       const icon =
         r.moonPhase === "moon-full" ? "🌕" :
         r.moonPhase === "moon-new" ? "🌑" :
         r.moonPhase === "moon-first" ? "🌓" : "🌗";
-      return (
-        <div
-          className="text-[11px] leading-tight select-none"
-          onMouseDown={onMouseDown}
-          onMouseUp={onMouseUp}
-          onTouchStart={touchStart}
-          onTouchEnd={touchEnd}
-          style={{ touchAction: "manipulation" }}
-        >
-          {icon} {(event as any).title}
-        </div>
-      );
+      return <div {...commonProps}>{icon} {(event as any).title}</div>;
     }
 
     const prefix = r?.planner ? (r.planner.type === "reminder" ? "⏰ " : "✅ ") : "";
     return (
-      <div
-        className="text-[11px] leading-tight select-none"
-        onMouseDown={onMouseDown}
-        onMouseUp={onMouseUp}
-        onTouchStart={touchStart}
-        onTouchEnd={touchEnd}
-        style={{ touchAction: "manipulation" }}
-      >
+      <div {...commonProps}>
         <div className="font-medium">{prefix}{(event as any).title}</div>
       </div>
     );
   };
 
+  const Backend = isTouch() ? TouchBackend : HTML5Backend;
+  const backendOptions = isTouch()
+    ? { enableMouseEvents: true, delayTouchStart: 120 } // smoother long-press start on phones
+    : undefined;
+
   return (
     <div className="card p-3 mzt-big-calendar">
-      <DndProvider backend={HTML5Backend}>
+      <DndProvider backend={Backend as any} options={backendOptions as any}>
         <DnDCalendar
           localizer={localizer}
           events={events}
           startAccessor="start"
           endAccessor="end"
-          selectable
+          selectable={"ignoreEvents" as any}     // easier to select empty slots on mobile
           resizable
           popup
-          style={{ height: 680 }}
+          style={{ height: 680, touchAction: "manipulation" }}
           view={view}
           onView={setView}
           date={date}
           onNavigate={setDate}
-          /* Make slot selection easier on touch (long-press ~80ms) */
-          longPressThreshold={80}
-          /* Create event from free slot */
+          /* Make slot selection easier on touch (press-and-hold) */
+          longPressThreshold={250}
+          /* Create from free slot */
           onSelectSlot={onSelectSlot}
           /* Fallbacks for desktop */
           onSelectEvent={onSelectEvent}
@@ -211,13 +208,13 @@ export default function CalendarGrid({
             return onDrop(args);
           }}
           onEventResize={onResize}
-          /* Scrolling/time grid behavior */
+          /* Scroll/time grid behavior */
           step={30}
           timeslots={2}
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
           /* Month header click → Day view (helps mobile) */
-          onDrillDown={(date) => {
-            setDate(date);
+          onDrillDown={(d) => {
+            setDate(d);
             setView("day");
           }}
           components={{ event: EventCell }}
