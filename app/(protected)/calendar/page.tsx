@@ -322,4 +322,85 @@ export default function CalendarPage() {
           <div className="flex items-center gap-6 text-sm">
             <button className="btn" onClick={() => setDate(localizer.add(date, -1, view))}>◀</button>
             <div className="muted">
-              {localizer.format(date, view ==
+              {localizer.format(date, view === "month" ? "MMMM yyyy" : "PP")}
+            </div>
+            <button className="btn" onClick={() => setDate(localizer.add(date, +1, view))}>▶</button>
+            <button className="btn" onClick={() => setDate(new Date())}>Today</button>
+          </div>
+        </div>
+
+        {tab === "happening" && (
+          <div className="mb-3">
+            <WhatsHappeningDeck
+              items={feedEvents}
+              onDismiss={(e) => setFeedEvents((prev) => prev.filter((x) => x.id !== e.id))}
+              onAdd={async (e) => {
+                if (!sessionUser) return;
+                await supabase.from("event_interests").upsert({ event_id: e.id, user_id: sessionUser });
+                loadMy();
+              }}
+              onOpen={(e) => openFromCalendar({ resource: e })}
+            />
+          </div>
+        )}
+
+        <div className="grid-cols-calendar">
+          <TaskTray
+            items={planner}
+            onCreate={async (payload) => {
+              const { data } = await supabase.from("planner_items").insert(payload).select("*").single();
+              if (data) setPlanner((prev) => [...prev, data as PlannerItem]);
+            }}
+            onDelete={async (id) => {
+              await supabase.from("planner_items").delete().eq("id", id);
+              setPlanner((prev) => prev.filter((p) => p.id !== id));
+            }}
+            onBeginDrag={(it) => setDragItem(it)}
+            onEndDrag={() => setDragItem(null)}
+          />
+
+          <CalendarGrid
+            date={date}
+            setDate={setDate}
+            view={view}
+            setView={setView}
+            events={mergedEvents}
+            onSelectEvent={openFromCalendar}
+            onSelectSlot={({ start, end }) => {
+              setQcDefaults({ start, end });
+              setQcOpen(true);
+            }}
+            onDrop={onMoveOrResizeEvent}
+            onResize={onMoveOrResizeEvent}
+            onPlannerMove={onMovePlanner}
+            onDropFromOutside={onDropFromOutside}
+            dragFromOutsideItem={() => (dragItem ? { ...dragItem, isPlanner: true } : null)}
+          />
+        </div>
+
+        {loading && <div className="muted mt-2">Loading…</div>}
+        {err && <div className="text-rose-700 text-sm mt-2">Error: {err}</div>}
+      </div>
+
+      {/* Modals */}
+      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
+      <PlannerItemModal
+        open={plannerOpen}
+        item={selectedPlanner}
+        onClose={() => setPlannerOpen(false)}
+        onSaved={() => setPlannerOpen(false)}
+        onDeleted={() => setPlannerOpen(false)}
+      />
+      <EventQuickCreate
+        open={qcOpen}
+        onClose={() => setQcOpen(false)}
+        defaults={qcDefaults}
+        sessionUser={sessionUser}
+        onCreated={() => {
+          setQcOpen(false);
+          tab === "my" ? loadMy() : loadHappening();
+        }}
+      />
+    </div>
+  );
+}
