@@ -7,18 +7,19 @@ import { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent } from "@/lib/types";
-import { useMoon } from "@/lib/useMoon"; // assumes you added this helper
+import { useMoon as useMoonHook } from "@/lib/useMoon"; // your hook
 
-// IMPORTANT: client-only calendar grid to avoid SSR/hydration issues
+// Client-only grid to avoid SSR/hydration issues
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
+// Mirror the UiEvent used in CalendarGrid
 type UiEvent = {
   id: string;
   title: string;
   start: Date;
   end: Date;
   allDay?: boolean;
-  resource: DBEvent | any; // original row lives here
+  resource: any;
 };
 
 export default function CalendarPage() {
@@ -28,7 +29,7 @@ export default function CalendarPage() {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // calendar view state
+  // calendar state
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState<Date>(new Date());
 
@@ -41,6 +42,7 @@ export default function CalendarPage() {
     if (!me) return;
     setLoading(true);
     setErr(null);
+
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -68,8 +70,18 @@ export default function CalendarPage() {
     return () => void supabase.removeChannel(ch);
   }, [load]);
 
-  // moon markers (all-day)
-  const moon = useMoon(date, view); // returns UiEvent[] with resource.moonPhase
+  // ---- Moon events (be tolerant to hook shape) ----
+  // Your hook might return UiEvent[] OR { events: UiEvent[], ... }
+  const moonRaw: any = useMoonHook ? useMoonHook(date, view) : null;
+
+  const moonEvents: UiEvent[] = useMemo(() => {
+    // If it's already an array
+    if (Array.isArray(moonRaw)) return moonRaw as UiEvent[];
+    // If it's an object with .events array
+    if (moonRaw && Array.isArray(moonRaw.events)) return moonRaw.events as UiEvent[];
+    // Otherwise none
+    return [];
+  }, [moonRaw]);
 
   // map DB rows → Ui events
   const uiEvents: UiEvent[] = useMemo(
@@ -80,38 +92,34 @@ export default function CalendarPage() {
         start: new Date(e.start_time!),
         end: new Date(e.end_time!),
         allDay: false,
-        resource: e, // <— keep original row here
+        resource: e, // keep original row here for details/editing
       })),
     [events]
   );
 
   const mergedEvents: UiEvent[] = useMemo(
-    () => [...uiEvents, ...moon],
-    [uiEvents, moon]
+    () => [...uiEvents, ...moonEvents],
+    [uiEvents, moonEvents]
   );
 
-  // selection → open details (UNWRAP ui.resource!)
+  // Details modal (unwrap ui.resource!)
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const handleSelectEvent = useCallback((ui: any) => {
     const row: DBEvent | null = ui?.resource ?? null;
-    if (!row) {
-      console.warn("No DBEvent resource on UiEvent:", ui);
-      return;
-    }
+    if (!row) return;
     setSelected(row);
     setDetailsOpen(true);
   }, []);
 
-  // create from free slot (day/week only; month taps drill into day in CalendarGrid)
+  // Create from free slot (handled in Day/Week; Month tap drills to Day in CalendarGrid)
   const handleSelectSlot = useCallback(({ start, end }: { start: Date; end: Date }) => {
-    // Your existing create flow (quick-create or open a modal) can be triggered here.
-    // For now just log; hook up to your CreateEventModal if you like.
-    console.log("Create new event at", start, "→", end);
+    // Hook up to your CreateEventModal here if desired.
+    // console.log("Create event at", start, "→", end);
   }, []);
 
-  // drag/resize — only allow for creator’s own events
+  // Drag/Resize — creator-only
   const canDrag = useCallback(
     (ui: any) => {
       const row: DBEvent | null = ui?.resource ?? null;
@@ -120,7 +128,7 @@ export default function CalendarPage() {
     [me]
   );
 
-  const handleDrop = useCallback(
+  const handleDropOrResize = useCallback(
     async ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => {
       const row: DBEvent | null = event?.resource ?? null;
       if (!row || !me || row.created_by !== me) return;
@@ -132,13 +140,11 @@ export default function CalendarPage() {
 
       if (error) {
         console.error(error.message);
-        alert("Could not move event: " + error.message);
+        alert("Could not update event time: " + error.message);
       }
     },
     [me]
   );
-
-  const handleResize = handleDrop; // same update
 
   return (
     <div className="page">
@@ -155,15 +161,13 @@ export default function CalendarPage() {
           setView={setView}
           events={mergedEvents}
           onSelectSlot={handleSelectSlot}
-          onSelectEvent={handleSelectEvent}   // <<< OPEN DETAILS
-          onDrop={handleDrop}
-          onResize={handleResize}
+          onSelectEvent={handleSelectEvent}
+          onDrop={handleDropOrResize}
+          onResize={handleDropOrResize}
           draggableAccessor={canDrag}
-          // (If you have tray drag-in, keep your dragFromOutsideItem/onDropFromOutside here)
         />
       </div>
 
-      {/* Details modal */}
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
