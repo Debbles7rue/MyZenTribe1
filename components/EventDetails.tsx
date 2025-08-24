@@ -70,15 +70,20 @@ function CircleChat({
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<
-    { id: string; sender_id: string; content: string; created_at: string }[]
+    { id: string; user_id: string; content: string; created_at: string }[]
   >([]);
   const [text, setText] = useState("");
+  const [me, setMe] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from("circle_messages")
-      .select("id,sender_id,content,created_at")
+      .select("id,user_id,content,created_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: true })
       .limit(300);
@@ -95,7 +100,7 @@ function CircleChat({
         { event: "INSERT", schema: "public", table: "circle_messages", filter: `event_id=eq.${eventId}` },
         (payload) => {
           // @ts-ignore
-          const row = payload.new as { id: string; sender_id: string; content: string; created_at: string };
+          const row = payload.new as { id: string; user_id: string; content: string; created_at: string };
           setMessages((m) => [...m, row]);
         }
       )
@@ -110,10 +115,11 @@ function CircleChat({
   }, [messages, open]);
 
   const send = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || !me) return;
     const { error } = await supabase.from("circle_messages").insert({
       event_id: eventId,
       content: text.trim(),
+      user_id: me, // align with your schema
     });
     if (!error) setText("");
   };
@@ -215,8 +221,8 @@ function InviteDrawer({
     try {
       const friendIds = inviteAllFriends ? friends.map((f) => f.id) : selectedFriends;
       const rows: any[] = [
-        ...selectedCommunities.map((cid) => ({ event_id: eventId, invited_community_id: cid })),
-        ...friendIds.map((uid) => ({ event_id: eventId, invited_user_id: uid })),
+        ...selectedCommunities.map((cid) => ({ event_id: eventId, invitee_community_id: cid })), // <- invitee_*
+        ...friendIds.map((uid) => ({ event_id: eventId, invitee_user_id: uid })),               // <- invitee_*
       ];
       if (rows.length === 0) return;
 
@@ -316,7 +322,7 @@ function InviteDrawer({
 
 /* ------------------ Main EventDetails ------------------ */
 export default function EventDetails({ event, onClose }: Props) {
-  const [version] = useState("EventDetails v5");
+  const [version] = useState("EventDetails v6");
   const open = !!event;
 
   // current user id
