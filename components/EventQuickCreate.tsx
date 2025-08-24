@@ -27,10 +27,13 @@ export default function EventQuickCreate({
     visibility: "private" as "private" | "public",
     start: "",
     end: "",
+    allDay: false,
   });
 
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+  const toLocalDate = (d: Date) => d.toISOString().slice(0, 10);
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +48,7 @@ export default function EventQuickCreate({
       location: "",
       location_visibility: "public",
       visibility: "private",
+      allDay: false,
       start: toLocalInput(start),
       end: toLocalInput(end),
     }));
@@ -52,14 +56,24 @@ export default function EventQuickCreate({
 
   const create = async () => {
     if (!sessionUser) return alert("Please log in.");
-    if (!form.title || !form.start || !form.end) return alert("Title, start, end are required.");
+    if (!form.title) return alert("Title is required.");
+
+    let start: Date, end: Date;
+    if (form.allDay) {
+      const sd = new Date(form.start + "T00:00");
+      const ed = new Date(form.end + "T23:59");
+      start = sd; end = ed;
+    } else {
+      start = new Date(form.start);
+      end = new Date(form.end);
+    }
 
     const { error } = await supabase.from("events").insert({
       title: form.title,
       description: form.description || null,
       image_path: form.image_path || null,
-      start_time: new Date(form.start),
-      end_time: new Date(form.end),
+      start_time: start,
+      end_time: end,
       location: form.location || null,
       location_visibility: form.location_visibility,
       visibility: form.visibility,
@@ -81,43 +95,55 @@ export default function EventQuickCreate({
           <div className="modal-body mt-3">
             <div className="field">
               <label className="label">Title</label>
-              <input
-                className="input"
-                value={form.title}
+              <input className="input" value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g., Dinner at Grandma’s"
-              />
+                placeholder="e.g., Dinner at Grandma’s" />
             </div>
 
-            <div className="form-grid mt-3">
-              <div className="field">
-                <label className="label">Start</label>
+            <div className="mt-3">
+              <label className="check">
                 <input
-                  className="input"
-                  type="datetime-local"
-                  value={form.start}
-                  onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
-                />
-              </div>
-              <div className="field">
-                <label className="label">End</label>
-                <input
-                  className="input"
-                  type="datetime-local"
-                  value={form.end}
-                  onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
-                />
-              </div>
+                  type="checkbox"
+                  checked={form.allDay}
+                  onChange={(e) => setForm((f) => ({ ...f, allDay: e.target.checked }))}
+                />{" "}
+                All-day / multi-day
+              </label>
             </div>
+
+            {!form.allDay ? (
+              <div className="form-grid mt-3">
+                <div className="field">
+                  <label className="label">Start</label>
+                  <input className="input" type="datetime-local" value={form.start}
+                    onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} />
+                </div>
+                <div className="field">
+                  <label className="label">End</label>
+                  <input className="input" type="datetime-local" value={form.end}
+                    onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))} />
+                </div>
+              </div>
+            ) : (
+              <div className="form-grid mt-3">
+                <div className="field">
+                  <label className="label">Start date</label>
+                  <input className="input" type="date" value={form.start.slice(0,10) || toLocalDate(new Date())}
+                    onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} />
+                </div>
+                <div className="field">
+                  <label className="label">End date</label>
+                  <input className="input" type="date" value={form.end.slice(0,10) || toLocalDate(new Date())}
+                    onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))} />
+                </div>
+              </div>
+            )}
 
             <div className="form-grid mt-3">
               <div className="field">
                 <label className="label">Visibility</label>
-                <select
-                  className="select"
-                  value={form.visibility}
-                  onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value as any }))}
-                >
+                <select className="select" value={form.visibility}
+                  onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value as any }))}>
                   <option value="private">Private</option>
                   <option value="public">Public</option>
                 </select>
@@ -125,54 +151,31 @@ export default function EventQuickCreate({
 
               <div className="field">
                 <label className="label">Image URL (optional)</label>
-                <input
-                  className="input"
-                  value={form.image_path}
-                  onChange={(e) => setForm((f) => ({ ...f, image_path: e.target.value }))}
-                  placeholder="https://…"
-                />
+                <input className="input" value={form.image_path}
+                  onChange={(e) => setForm((f) => ({ ...f, image_path: e.target.value }))} placeholder="https://…" />
               </div>
             </div>
 
             <div className="field mt-3">
               <label className="label">Location</label>
-              <input
-                className="input"
-                value={form.location}
-                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                placeholder="Address or place"
-              />
+              <input className="input" value={form.location}
+                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Address or place" />
               <div className="mt-2 text-sm">
                 <label className="mr-3">
-                  <input
-                    type="radio"
-                    name="locvis"
-                    checked={form.location_visibility === "public"}
-                    onChange={() => setForm((f) => ({ ...f, location_visibility: "public" }))}
-                  />{" "}
-                  Public location
+                  <input type="radio" name="locvis" checked={form.location_visibility === "public"}
+                    onChange={() => setForm((f) => ({ ...f, location_visibility: "public" }))} /> Public location
                 </label>
                 <label>
-                  <input
-                    type="radio"
-                    name="locvis"
-                    checked={form.location_visibility === "attendees"}
-                    onChange={() => setForm((f) => ({ ...f, location_visibility: "attendees" }))}
-                  />{" "}
-                  Show to RSVP’d attendees only
+                  <input type="radio" name="locvis" checked={form.location_visibility === "attendees"}
+                    onChange={() => setForm((f) => ({ ...f, location_visibility: "attendees" }))} /> Show to RSVP’d attendees only
                 </label>
               </div>
             </div>
 
             <div className="field mt-3">
               <label className="label">Details</label>
-              <textarea
-                className="input"
-                rows={4}
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Anything attendees should know…"
-              />
+              <textarea className="input" rows={4} value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Anything attendees should know…" />
             </div>
           </div>
 
