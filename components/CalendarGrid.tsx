@@ -49,7 +49,7 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Inline styles so the blocks are readable regardless of global CSS/theme
+  // Inline styles so the blocks are readable regardless of theme
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
 
