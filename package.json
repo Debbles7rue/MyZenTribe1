@@ -23,8 +23,9 @@
     "react-big-calendar": "1.11.3",
     "react-dom": "18.3.1",
     "react-leaflet": "4.2.1",
-    "react-dnd": "^16.0.1",
-    "react-dnd-html5-backend": "^16.0.1"
+    "react-dnd": "16.0.1",
+    "react-dnd-html5-backend": "16.0.1",
+    "react-dnd-touch-backend": "16.0.1"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.0.0",
