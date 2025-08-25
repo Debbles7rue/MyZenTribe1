@@ -3,13 +3,12 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import type { DBEvent } from "@/lib/types";
 import EventDetails from "@/components/EventDetails";
 import WeatherBadge from "@/components/WeatherBadge";
 
-// IMPORTANT: client-only grid to avoid SSR/hydration issues
+// IMPORTANT: client-only grid (prevents hydration errors)
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 export default function CalendarPage() {
@@ -19,12 +18,12 @@ export default function CalendarPage() {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // calendar view state
-  const [view, setView] = useState<View>("month");
-  const [date, setDate] = useState<Date>(new Date());
+  // view state
+  const [fcView, setFcView] = useState<"dayGridMonth" | "timeGridWeek" | "timeGridDay">("dayGridMonth");
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [showMoon, setShowMoon] = useState(true);
 
-  // events
+  // data
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -33,7 +32,6 @@ export default function CalendarPage() {
     if (!me) return;
     setLoading(true);
     setErr(null);
-
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -49,11 +47,9 @@ export default function CalendarPage() {
     setLoading(false);
   }, [me]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  // realtime refresh
+  // realtime
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -62,36 +58,35 @@ export default function CalendarPage() {
     return () => void supabase.removeChannel(ch);
   }, [load]);
 
-  // Details modal
+  // details modal
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const handleSelectEvent = useCallback((ui: any) => {
-    const row: DBEvent | null = ui?.resource ?? null;
+  const handleSelectEvent = useCallback((ui: { resource?: DBEvent }) => {
+    const row = ui?.resource;
     if (!row) return;
     setSelected(row);
     setDetailsOpen(true);
   }, []);
 
-  const handleSelectSlot = useCallback((_slot: { start: Date; end: Date }) => {
-    // hook into your CreateEventModal if desired
+  const handleSelectSlot = useCallback((_slot: { start: Date; end: Date; allDay: boolean }) => {
+    // hook into your CreateEventModal if you want quick-create; leaving as no-op for now
   }, []);
 
   const handleDropOrResize = useCallback(
-    async ({ event, start, end }: { event: any; start: Date; end: Date }) => {
-      const row: DBEvent | null = event?.resource ?? null;
-      if (!row || !me || row.created_by !== me) {
-        // Not allowed → reload to revert
-        load();
+    async ({ resource, start, end }: { resource: DBEvent; start: Date; end: Date }) => {
+      if (!resource || !me || resource.created_by !== me) {
+        // revert is handled inside the grid by refetching
+        await load();
         return;
       }
       const { error } = await supabase
         .from("events")
         .update({ start_time: start.toISOString(), end_time: end.toISOString() })
-        .eq("id", row.id);
+        .eq("id", resource.id);
       if (error) {
         alert("Could not update event: " + error.message);
-        load();
+        await load();
       }
     },
     [me, load]
@@ -115,17 +110,16 @@ export default function CalendarPage() {
         </div>
 
         <CalendarGrid
-          // pass raw DB rows; grid handles mapping + moon markers internally
           dbEvents={events}
           showMoon={showMoon}
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
+          view={fcView}
+          setView={setFcView}
+          date={currentDate}
+          setDate={setCurrentDate}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
-          onDrop={handleDropOrResize}
-          onResize={handleDropOrResize}
+          onDropOrResize={handleDropOrResize}
+          onNeedsRefresh={load}
         />
       </div>
 
