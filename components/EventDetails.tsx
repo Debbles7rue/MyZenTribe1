@@ -6,7 +6,6 @@ import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-/** Types kept local (safe even if your app types evolve) */
 type Visibility = "public" | "friends" | "private" | "community";
 type Status = "scheduled" | "cancelled";
 
@@ -23,14 +22,13 @@ export type DBEvent = {
   source?: "personal" | "business" | null;
   status?: Status | null;
   cancellation_reason?: string | null;
-  event_type?: string | null;   // "meditation" etc.
-  invite_code?: string | null;  // used by your group invite page
+  event_type?: string | null;
+  invite_code?: string | null;
 };
 
 type Comment = { id: string; body: string; created_at: string; user_id: string };
 type Friend = { friend_id: string; name: string };
 
-/* ---------------- helpers ---------------- */
 function d(iso?: string | null) {
   if (!iso) return null;
   const x = new Date(iso);
@@ -38,11 +36,7 @@ function d(iso?: string | null) {
 }
 function fmt(date: Date | null, f: string) {
   if (!date) return "TBD";
-  try {
-    return format(date, f);
-  } catch {
-    return "TBD";
-  }
+  try { return format(date, f); } catch { return "TBD"; }
 }
 function range(start: Date | null, end: Date | null) {
   if (!start && !end) return "Time: TBD";
@@ -50,10 +44,8 @@ function range(start: Date | null, end: Date | null) {
   if (!start && end) return `TBD – ${fmt(end, "p")}`;
   return `${fmt(start, "EEE, MMM d · p")} – ${fmt(end, "p")}`;
 }
-const isMeditationType = (t?: string | null) =>
-  Boolean((t || "").toLowerCase().includes("meditation"));
+const isMeditationType = (t?: string | null) => Boolean((t || "").toLowerCase().includes("meditation"));
 
-/* ---------------- component ---------------- */
 export default function EventDetails({
   event,
   onClose,
@@ -64,17 +56,19 @@ export default function EventDetails({
   const open = !!event;
 
   const [me, setMe] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
-  }, []);
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null)); }, []);
 
   const [evt, setEvt] = useState<DBEvent | null>(null);
-  useEffect(() => {
-    setEvt(event || null);
-  }, [event?.id]);
+  useEffect(() => { setEvt(event || null); }, [event?.id]);
 
   const [isGoing, setIsGoing] = useState(false);
   const [isInterested, setIsInterested] = useState(false);
+
+  // Carpool state
+  const [carpoolOptIn, setCarpoolOptIn] = useState(false);
+  const [carpoolEligible, setCarpoolEligible] = useState<number>(0); // friends attending (you flagged)
+  const [carpoolAnyOpted, setCarpoolAnyOpted] = useState<boolean>(false); // any of those friends opted in
+  const [carpoolExists, setCarpoolExists] = useState<boolean>(false);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newBody, setNewBody] = useState("");
@@ -89,28 +83,18 @@ export default function EventDetails({
   const [friendQuery, setFriendQuery] = useState("");
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
 
-  /* bootstrap on open */
   useEffect(() => {
     let ignore = false;
     (async () => {
       if (!event || !me) return;
 
       const [att, int] = await Promise.all([
-        supabase
-          .from("event_attendees")
-          .select("event_id")
-          .eq("event_id", event.id)
-          .eq("user_id", me)
-          .maybeSingle(),
-        supabase
-          .from("event_interests")
-          .select("event_id")
-          .eq("event_id", event.id)
-          .eq("user_id", me)
-          .maybeSingle(),
+        supabase.from("event_attendees").select("event_id, carpool_opt_in").eq("event_id", event.id).eq("user_id", me).maybeSingle(),
+        supabase.from("event_interests").select("event_id").eq("event_id", event.id).eq("user_id", me).maybeSingle(),
       ]);
       if (!ignore) {
         setIsGoing(Boolean(att.data));
+        setCarpoolOptIn(Boolean(att.data?.carpool_opt_in));
         setIsInterested(Boolean(int.data));
       }
 
@@ -121,20 +105,51 @@ export default function EventDetails({
         .order("created_at", { ascending: true });
       if (!ignore) setComments(cs.data || []);
 
-      // Share → friends list (via your friends_view)
-      const fr = await supabase.from("friends_view").select("friend_id, friend_name");
+      // Share → friends list (via your friends_view, best-effort)
+      const fr = await supabase.from("friends_view").select("friend_id, friend_name").limit(200);
       if (!ignore) {
         const items: Friend[] =
-          (fr.data || []).map((r: any) => ({
-            friend_id: r.friend_id,
-            name: r.friend_name ?? "Friend",
-          })) ?? [];
+          (fr.data || []).map((r: any) => ({ friend_id: r.friend_id, name: r.friend_name ?? "Friend" })) ?? [];
         setFriends(items);
       }
+
+      // ----- Carpool signals -----
+      // 1) my “save to carpool” friends
+      const { data: flags } = await supabase
+        .from("friend_carpool_flags")
+        .select("friend_id")
+        .eq("user_id", me);
+      const friendIds = (flags || []).map((r: any) => r.friend_id);
+
+      // 2) which of those friends are attending this event, and are they opted-in?
+      if (friendIds.length) {
+        const { data: elig } = await supabase
+          .from("event_attendees")
+          .select("user_id, carpool_opt_in")
+          .eq("event_id", event.id)
+          .in("user_id", friendIds);
+        const eligible = (elig || []).filter((a: any) => a.user_id !== me);
+        const opted = eligible.filter((a: any) => a.carpool_opt_in);
+        if (!ignore) {
+          setCarpoolEligible(eligible.length);
+          setCarpoolAnyOpted(opted.length > 0);
+        }
+      } else {
+        if (!ignore) {
+          setCarpoolEligible(0);
+          setCarpoolAnyOpted(false);
+        }
+      }
+
+      // 3) is there already a carpool thread?
+      const { count } = await supabase
+        .from("circle_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", event.id)
+        .eq("kind", "carpool");
+      if (!ignore) setCarpoolExists((count ?? 0) > 0);
     })();
-    return () => {
-      ignore = true;
-    };
+    return () => { ignore = true; };
   }, [event?.id, me]);
 
   if (!open || !evt) return null;
@@ -155,13 +170,10 @@ export default function EventDetails({
       ? `https://www.google.com/maps/search/${encodeURIComponent(evt.location)}`
       : null;
 
-  /* -------- actions -------- */
   async function postComment() {
     if (!me || !evt || !newBody.trim()) return;
     const { error } = await supabase.from("event_comments").insert({
-      event_id: evt.id,
-      user_id: me,
-      body: newBody.trim(),
+      event_id: evt.id, user_id: me, body: newBody.trim(),
     });
     if (error) return alert(error.message);
     setNewBody("");
@@ -245,6 +257,31 @@ export default function EventDetails({
     onClose();
   }
 
+  // ----- Carpool actions -----
+  async function toggleCarpoolOptIn() {
+    if (!evt || !me) return;
+    const next = !carpoolOptIn;
+    const { error } = await supabase
+      .from("event_attendees")
+      .update({ carpool_opt_in: next })
+      .eq("event_id", evt.id)
+      .eq("user_id", me);
+    if (error) return alert(error.message);
+    setCarpoolOptIn(next);
+  }
+
+  async function coordinateCarpool() {
+    if (!evt || !me) return;
+    // Seed a carpool thread (best-effort; duplicates are harmless)
+    await supabase.from("circle_messages").insert({
+      event_id: evt.id,
+      user_id: me,
+      body: "[system] Carpool chat created",
+      kind: "carpool",
+    } as any);
+    window.open(`/circle/${evt.id}?kind=carpool`, "_blank");
+  }
+
   async function shareSubmit() {
     if (!evt) return;
     try {
@@ -265,7 +302,6 @@ export default function EventDetails({
         }));
         const { error } = await supabase.from("event_invites").insert(rows as any);
         if (error) {
-          // Fallback path if invites table isn't present
           await Promise.all(
             selectedFriends.map((uid) =>
               supabase.from("event_interests").upsert({ event_id: evt.id, user_id: uid })
@@ -280,23 +316,17 @@ export default function EventDetails({
     }
   }
 
-  /* -------- view -------- */
   return (
     <Dialog open={open} onClose={onClose} className="relative z-[999]">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <Dialog.Panel className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
-          {/* hero */}
           <img
             src={evt.image_path || "/event-placeholder.jpg"}
             alt={evt.title || ""}
             style={{
-              width: "100%",
-              height: 180,
-              objectFit: "cover",
-              display: "block",
-              borderBottom: "1px solid #eee",
-              filter: isCancelled ? "grayscale(0.6)" : undefined,
+              width: "100%", height: 180, objectFit: "cover", display: "block",
+              borderBottom: "1px solid #eee", filter: isCancelled ? "grayscale(0.6)" : undefined,
               opacity: isCancelled ? 0.85 : 1,
             }}
             loading="lazy"
@@ -309,19 +339,14 @@ export default function EventDetails({
                 <div className="min-w-0">
                   <h2 className={`text-2xl font-semibold leading-tight ${isCancelled ? "line-through text-neutral-500" : ""}`}>
                     {editing ? (
-                      <input
-                        className="input"
-                        value={form.title}
-                        onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                      />
-                    ) : (
-                      evt.title || "Untitled event"
-                    )}
+                      <input className="input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+                    ) : (evt.title || "Untitled event")}
                   </h2>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                     <span className="badge-wx">{evt.visibility === "public" ? "Public" : "Private"}</span>
                     {evt.source ? <span className="badge-wx capitalize">{evt.source}</span> : null}
                     {evt.event_type ? <span className="badge-wx capitalize">{evt.event_type}</span> : null}
+                    {carpoolExists ? <span className="badge-wx" title="Carpool chat">🚗 Carpool</span> : null}
                   </div>
                 </div>
 
@@ -332,13 +357,7 @@ export default function EventDetails({
                         className="btn btn-neutral"
                         onClick={() =>
                           setEditing((v) => {
-                            if (!v) {
-                              setForm({
-                                title: evt.title ?? "",
-                                description: evt.description ?? "",
-                                location: evt.location ?? "",
-                              });
-                            }
+                            if (!v) setForm({ title: evt.title ?? "", description: evt.description ?? "", location: evt.location ?? "" });
                             return !v;
                           })
                         }
@@ -347,39 +366,20 @@ export default function EventDetails({
                       </button>
 
                       <div className="relative">
-                        <button className="btn" onClick={() => setShareOpen((s) => !s)}>
-                          Share
-                        </button>
+                        <button className="btn" onClick={() => setShareOpen((s) => !s)}>Share</button>
                         {shareOpen && (
                           <div className="absolute right-0 z-[1000] mt-2 w-80 rounded-xl border border-neutral-200 bg-white p-3 shadow-lg">
                             <div className="mb-2 text-sm font-medium">Share this event</div>
                             <div className="mb-2 flex gap-2">
-                              <button
-                                className={`btn ${shareMode === "everyone" ? "btn-brand" : ""}`}
-                                onClick={() => setShareMode("everyone")}
-                              >
-                                Everyone
-                              </button>
-                              <button
-                                className={`btn ${shareMode === "friends" ? "btn-brand" : ""}`}
-                                onClick={() => setShareMode("friends")}
-                              >
-                                Selected friends
-                              </button>
+                              <button className={`btn ${shareMode === "everyone" ? "btn-brand" : ""}`} onClick={() => setShareMode("everyone")}>Everyone</button>
+                              <button className={`btn ${shareMode === "friends" ? "btn-brand" : ""}`} onClick={() => setShareMode("friends")}>Selected friends</button>
                             </div>
                             {shareMode === "friends" && (
                               <>
-                                <input
-                                  className="input mb-2"
-                                  placeholder="Search friends…"
-                                  value={friendQuery}
-                                  onChange={(e) => setFriendQuery(e.target.value)}
-                                />
+                                <input className="input mb-2" placeholder="Search friends…" value={friendQuery} onChange={(e) => setFriendQuery(e.target.value)} />
                                 <div className="max-h-48 overflow-auto space-y-1">
                                   {friends
-                                    .filter((f) =>
-                                      f.name.toLowerCase().includes(friendQuery.toLowerCase())
-                                    )
+                                    .filter((f) => f.name.toLowerCase().includes(friendQuery.toLowerCase()))
                                     .map((f) => (
                                       <label key={f.friend_id} className="flex items-center gap-2 text-sm">
                                         <input
@@ -396,64 +396,39 @@ export default function EventDetails({
                                         <span className="truncate">{f.name}</span>
                                       </label>
                                     ))}
-                                  {friends.length === 0 && (
-                                    <div className="text-xs text-neutral-500">No friends found.</div>
-                                  )}
+                                  {friends.length === 0 && (<div className="text-xs text-neutral-500">No friends found.</div>)}
                                 </div>
                               </>
                             )}
                             <div className="mt-3 flex justify-end gap-2">
-                              <button className="btn" onClick={() => setShareOpen(false)}>
-                                Cancel
-                              </button>
-                              <button className="btn btn-brand" onClick={shareSubmit}>
-                                Send
-                              </button>
+                              <button className="btn" onClick={() => setShareOpen(false)}>Cancel</button>
+                              <button className="btn btn-brand" onClick={shareSubmit}>Send</button>
                             </div>
                           </div>
                         )}
                       </div>
 
-                      <button className="btn btn-danger" onClick={deleteEvent}>
-                        Delete
-                      </button>
+                      <button className="btn btn-danger" onClick={deleteEvent}>Delete</button>
                     </>
                   ) : (
-                    <button className="btn" onClick={removeFromMyCalendar}>
-                      Remove
-                    </button>
+                    <button className="btn" onClick={removeFromMyCalendar}>Remove</button>
                   )}
-                  <button className="btn" onClick={onClose}>
-                    Close ✨
-                  </button>
+                  <button className="btn" onClick={onClose}>Close ✨</button>
                 </div>
               </div>
 
               {/* When & Where */}
               <div className="card p-3">
-                <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>
-                  {when}
-                </div>
+                <div className={`text-sm ${isCancelled ? "text-neutral-500 line-through" : "text-neutral-700"}`}>{when}</div>
                 {editing ? (
                   <div className="mt-2">
                     <label className="mb-1 block text-sm">Location</label>
-                    <input
-                      className="input"
-                      value={form.location}
-                      onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                      placeholder="Address or place"
-                    />
+                    <input className="input" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Address or place" />
                   </div>
                 ) : evt.location ? (
                   <div className="mt-2 text-sm">
                     <span className="font-medium">Location: </span>
-                    {mapUrl ? (
-                      <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">
-                        {evt.location}
-                      </a>
-                    ) : (
-                      evt.location
-                    )}
+                    {mapUrl ? <a className="underline" href={mapUrl} target="_blank" rel="noreferrer">{evt.location}</a> : evt.location}
                   </div>
                 ) : null}
               </div>
@@ -462,84 +437,77 @@ export default function EventDetails({
               <div className="card p-3">
                 <div className="mb-1 text-sm font-medium">Details</div>
                 {editing ? (
-                  <textarea
-                    className="input"
-                    rows={4}
-                    value={form.description}
-                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                    placeholder="Share details attendees should know…"
-                  />
+                  <textarea className="input" rows={4} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Share details attendees should know…" />
                 ) : (
-                  <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>
-                    {evt.description || "No description yet."}
-                  </div>
+                  <div className={`whitespace-pre-wrap text-sm ${isCancelled ? "text-neutral-500" : "text-neutral-800"}`}>{evt.description || "No description yet."}</div>
                 )}
                 {editing && (
                   <div className="mt-3 flex justify-end">
-                    <button className="btn btn-brand" onClick={saveEdits}>
-                      Save changes
-                    </button>
+                    <button className="btn btn-brand" onClick={saveEdits}>Save changes</button>
                   </div>
                 )}
               </div>
 
-              {/* Interactions (always shown for public; owners can still RSVP/Interested) */}
+              {/* Interact (public) */}
               {isPublic && (
                 <div className="card p-3">
                   <div className="mb-2 text-sm font-medium">Interact</div>
                   <div className="flex flex-wrap gap-2">
                     {!isGoing ? (
-                      <button className="btn btn-brand" onClick={rsvp}>
-                        RSVP
-                      </button>
+                      <button className="btn btn-brand" onClick={rsvp}>RSVP</button>
                     ) : (
-                      <button className="btn" onClick={unRsvp}>
-                        I can’t go
-                      </button>
+                      <button className="btn" onClick={unRsvp}>I can’t go</button>
                     )}
                     {!isInterested && !isGoing ? (
-                      <button className="btn" onClick={markInterested}>
-                        Interested
-                      </button>
+                      <button className="btn" onClick={markInterested}>Interested</button>
                     ) : isInterested && !isGoing ? (
-                      <button className="btn" onClick={clearInterested}>
-                        Not interested
-                      </button>
+                      <button className="btn" onClick={clearInterested}>Not interested</button>
                     ) : null}
 
                     {meditation && (
                       <>
-                        <a className="btn" href="/meditation" target="_blank" rel="noreferrer">
-                          Open Meditation Room
-                        </a>
-                        <a className="btn" href={`/circle/${evt.id}`} target="_blank" rel="noreferrer">
-                          Open Group Circle
-                        </a>
+                        <a className="btn" href="/meditation" target="_blank" rel="noreferrer">Open Meditation Room</a>
+                        <a className="btn" href={`/circle/${evt.id}`} target="_blank" rel="noreferrer">Open Group Circle</a>
                         {evt.invite_code ? (
-                          <a
-                            className="btn"
-                            href={`/meditation/schedule/group?code=${evt.invite_code}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Invite page
-                          </a>
+                          <a className="btn" href={`/meditation/schedule/group?code=${evt.invite_code}`} target="_blank" rel="noreferrer">Invite page</a>
                         ) : null}
                       </>
                     )}
 
                     {isOwner ? (
                       !isCancelled ? (
-                        <button className="btn btn-danger" onClick={cancelEvent}>
-                          Cancel event
-                        </button>
+                        <button className="btn btn-danger" onClick={cancelEvent}>Cancel event</button>
                       ) : (
-                        <button className="btn btn-brand" onClick={reinstateEvent}>
-                          Reinstate event
-                        </button>
+                        <button className="btn btn-brand" onClick={reinstateEvent}>Reinstate event</button>
                       )
                     ) : null}
                   </div>
+                </div>
+              )}
+
+              {/* Carpool (attendees only) */}
+              {isGoing && (
+                <div className="card p-3">
+                  <div className="mb-2 text-sm font-medium">Carpool</div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={carpoolOptIn} onChange={toggleCarpoolOptIn} />
+                    I’m open to carpooling for this event.
+                  </label>
+
+                  <div className="mt-2 text-xs text-neutral-600">
+                    {carpoolEligible > 0
+                      ? `${carpoolEligible} carpool-flag friend${carpoolEligible > 1 ? "s" : ""} attending`
+                      : "No carpool-flag friends attending yet"}
+                    {carpoolAnyOpted ? " · at least one has opted in" : ""}
+                  </div>
+
+                  {(carpoolExists || (carpoolEligible > 0 && (carpoolAnyOpted || carpoolOptIn))) && (
+                    <div className="mt-2">
+                      <button className="btn" onClick={coordinateCarpool}>
+                        {carpoolExists ? "Open Carpool Chat" : "Coordinate Carpool"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -554,23 +522,14 @@ export default function EventDetails({
                       {comments.map((c) => (
                         <li key={c.id} className="text-sm">
                           <div className="whitespace-pre-wrap text-neutral-800">{c.body}</div>
-                          <div className="text-xs text-neutral-500">
-                            {new Date(c.created_at).toLocaleString()}
-                          </div>
+                          <div className="text-xs text-neutral-500">{new Date(c.created_at).toLocaleString()}</div>
                         </li>
                       ))}
                     </ul>
                   )}
                   <div className="mt-3 flex gap-2">
-                    <input
-                      className="input flex-1"
-                      value={newBody}
-                      onChange={(e) => setNewBody(e.target.value)}
-                      placeholder="Write a comment…"
-                    />
-                    <button className="btn btn-brand" onClick={postComment}>
-                      Post
-                    </button>
+                    <input className="input flex-1" value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="Write a comment…" />
+                    <button className="btn btn-brand" onClick={postComment}>Post</button>
                   </div>
                 </div>
               )}
