@@ -220,4 +220,84 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .community-page .controls .btn { padding: 10px 14px; }
 
 /* ===== react-big-calendar readability (for your list page) ===== */
-.rbc-event { color: #111 !important
+.rbc-event { color: #111 !important; }
+.rbc-event-label { color: rgba(0,0,0,.7) !important; } /* optional time label */
+
+/* --- Big calendar extra polish (rbc) --- */
+.mzt-big-calendar .rbc-day-bg + .rbc-day-bg { border-left-color: rgba(0,0,0,0.04); }
+.mzt-big-calendar .rbc-today { background: rgba(255, 225, 0, 0.08); }
+
+/* ---- Responsive layout for calendar page ---- */
+.grid-cols-calendar {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .grid-cols-calendar { grid-template-columns: 1fr; }
+  .task-tray { order: 2; }
+}
+
+/* ---- Task tray ---- */
+.task-tray .tray-chip {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: 8px 10px; cursor: grab;
+}
+.task-tray .tray-chip:active { cursor: grabbing; }
+
+/* ---- Deck card ---- */
+.deck-card { border-radius: 16px; }
+.deck-card .btn { min-width: 80px; }
+
+/* ---- Weather badge ---- */
+.badge-wx {
+  background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 9999px;
+  padding: 6px 10px; font-size: 12px; color: #374151;
+}
+
+/* accessibility tweaks */
+.seg-btn:focus, .btn:focus { outline: 2px solid #7c3aed; outline-offset: 2px; }
+
+/* ---- Sandy look for the calendar page ---- */
+.calendar-sand {
+  /* Soft sand background + warmer card tint via your existing CSS vars */
+  --brand-bg: #fff7ed; /* sand/tan */
+  background:
+    radial-gradient(1200px 220px at 50% 0%, #fff7ed 0%, #ffffff 65%),
+    #ffffff;
+}
+
+/* ---- Tutorial styles ---- */
+.tutorial-hero {
+  background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
+  border-bottom: 1px solid #f5e6c6;
+}
+.tutorial-list {
+  display: grid; grid-template-columns: 1fr; gap: 14px;
+  list-style: none; padding: 0; margin: 0;
+}
+.tutorial-list .bullet {
+  font-size: 18px; width: 26px; display: inline-flex; align-items: center; justify-content: center;
+}
+.tutorial-list li {
+  display: grid; grid-template-columns: 26px 1fr; gap: 10px;
+}
+.tutorial-list .item-title { font-weight: 700; color: #111827; margin-bottom: 2px; }
+.tutorial-list .item-desc { color: #374151; font-size: 14px; line-height: 1.45; }
+@media (max-width: 520px) { .tutorial-list .item-desc { font-size: 13px; } }
+
+/* --- Mobile touch improvements for react-big-calendar --- */
+.rbc-month-view,
+.rbc-month-row,
+.rbc-time-view,
+.rbc-time-content,
+.rbc-day-bg,
+.rbc-timeslot-group { touch-action: manipulation; }
+.rbc-event, .rbc-day-bg { -webkit-tap-highlight-color: transparent; }
+
+/* --- FullCalendar readability/polish --- */
+.fc .fc-event { color: #111; border: 1px solid #e5e7eb; border-radius: 10px; }
+.fc .fc-daygrid-event { padding: 2px 4px; }
+.fc .fc-timegrid-event { padding: 2px 4px; }
+.fc-theme-standard .fc-scrollgrid { border-color: #e5e7eb; }
+.fc .fc-today-button { border-radius: 10px; }
