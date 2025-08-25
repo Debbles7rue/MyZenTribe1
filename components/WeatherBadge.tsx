@@ -1,42 +1,71 @@
 // components/WeatherBadge.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
+type Unit = "fahrenheit" | "celsius";
 
 export default function WeatherBadge() {
-  const [text, setText] = useState<string>("Weather: locating…");
+  const [unit, setUnit] = useState<Unit>(() => {
+    if (typeof window === "undefined") return "fahrenheit";
+    return (localStorage.getItem("mzt-wx-unit") as Unit) || "fahrenheit";
+  });
+  const [text, setText] = useState<string>("Weather: …");
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    localStorage.setItem("mzt-wx-unit", unit);
+  }, [unit]);
 
-    const fetchWx = async (lat: number, lon: number) => {
-      try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code`;
-        const res = await fetch(url);
-        const json = await res.json();
-        const t = Math.round(json?.current?.temperature_2m ?? 0);
-        const code = json?.current?.weather_code;
-        const label =
-          code === 0 ? "Clear" : code < 4 ? "Partly cloudy" : code < 60 ? "Cloudy" : "Precip";
-        if (!cancelled) setText(`Weather: ${t}° • ${label}`);
-      } catch {
-        if (!cancelled) setText("Weather unavailable");
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setErr("Weather: unavailable");
+      return;
+    }
+    const id = navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        setErr(null);
+        try {
+          const { latitude, longitude } = pos.coords;
+          const resp = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=${unit}`
+          );
+          const data = await resp.json();
+          const t = data?.current?.temperature_2m;
+          const unitLabel = unit === "fahrenheit" ? "°F" : "°C";
+          if (typeof t === "number") setText(`Weather: ${Math.round(t)}${unitLabel}`);
+          else setErr("Weather: unavailable");
+        } catch {
+          setErr("Weather: unavailable");
+        }
+      },
+      () => setErr("Weather: location blocked"),
+      { enableHighAccuracy: false, timeout: 6000 }
+    );
+    return () => {
+      if (typeof id === "number") {
+        // noop – old geolocation API has no clear method for single getCurrentPosition
       }
     };
+  }, [unit]);
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => fetchWx(pos.coords.latitude, pos.coords.longitude),
-        () => setText("Weather: location blocked")
-      );
-    } else {
-      setText("Weather: N/A");
-    }
+  const badge = useMemo(
+    () => (err ? err : text),
+    [err, text]
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return <div className="badge-wx">{text}</div>;
+  return (
+    <div className="badge-wx" title="Local weather">
+      {badge}
+      <select
+        aria-label="Temperature units"
+        value={unit}
+        onChange={(e) => setUnit(e.target.value as Unit)}
+        style={{ marginLeft: 8, border: "1px solid #e5e7eb", borderRadius: 8, padding: "2px 6px" }}
+      >
+        <option value="fahrenheit">°F</option>
+        <option value="celsius">°C</option>
+      </select>
+    </div>
+  );
 }
