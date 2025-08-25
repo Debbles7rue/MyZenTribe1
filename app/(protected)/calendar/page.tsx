@@ -1,42 +1,45 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
-import type { DBEvent, Visibility } from "@/lib/types";
-import EventDetails from "@/components/EventDetails";
 import CreateEventModal from "@/components/CreateEventModal";
-import WeatherBadge from "@/components/WeatherBadge";
+import EventDetails from "@/components/EventDetails";
+import type { View } from "react-big-calendar";
+import type { DBEvent, Visibility } from "@/lib/types";
 
-// Client-only grid to avoid hydration errors
+// If you have the moon hook, keep this import.
+// If you removed it temporarily, comment this line out and pass [] for moonEvents below.
+import { useMoon } from "@/lib/useMoon";
+
+// Client-only grid (no SSR)
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 export default function CalendarPage() {
-  /** Auth */
   const [me, setMe] = useState<string | null>(null);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  /** View state */
-  const [fcView, setFcView] = useState<"dayGridMonth" | "timeGridWeek" | "timeGridDay">("dayGridMonth");
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [showMoon, setShowMoon] = useState(true);
+  // date/view state
+  const [date, setDate] = useState<Date>(new Date());
+  const [view, setView] = useState<View>("month");
 
-  /** Data */
+  // events
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!me) return;
+  async function load() {
     setLoading(true);
     setErr(null);
     const { data, error } = await supabase
       .from("events")
       .select("*")
       .order("start_time", { ascending: true });
+
     if (error) {
       setErr(error.message || "Failed to load events");
       setEvents([]);
@@ -45,32 +48,24 @@ export default function CalendarPage() {
       setEvents(safe);
     }
     setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
   }, [me]);
 
-  useEffect(() => { load(); }, [load]);
-
-  /** Realtime refresh */
+  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
       .subscribe();
     return () => void supabase.removeChannel(ch);
-  }, [load]);
-
-  /** Event details modal */
-  const [selected, setSelected] = useState<DBEvent | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const openDetails = useCallback((ui: { resource?: DBEvent }) => {
-    const row = ui?.resource;
-    if (!row) return;
-    setSelected(row);
-    setDetailsOpen(true);
   }, []);
 
-  /** Quick create via slot selection */
+  // Create modal state
   const [openCreate, setOpenCreate] = useState(false);
-  const [form, setForm] = useState({
+  const [createForm, setCreateForm] = useState({
     title: "",
     description: "",
     location: "",
@@ -83,41 +78,47 @@ export default function CalendarPage() {
     image_path: "",
   });
 
-  // helpers to format local <input type=datetime-local>
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  const onSelectSlot = useCallback(({ start, end }: { start: Date; end: Date; allDay: boolean }) => {
-    // Pre-fill modal with the selected range
-    setForm((f) => ({
+  // Open Create modal prefilled (from slot)
+  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+    setCreateForm((f) => ({
       ...f,
+      title: "",
       start: toLocalInput(start),
-      end: toLocalInput(end || new Date(start.getTime() + 60 * 60 * 1000)),
+      end: toLocalInput(end),
     }));
     setOpenCreate(true);
-  }, []);
+  };
 
-  const saveEvent = useCallback(async () => {
+  // Create event
+  const createEvent = async () => {
     if (!me) return alert("Please log in.");
-    if (!form.title || !form.start || !form.end) return alert("Missing title or time range.");
+
+    const f = createForm;
+    if (!f.title || !f.start || !f.end) return alert("Missing fields.");
+
     const payload: any = {
-      title: form.title,
-      description: form.description || null,
-      location: form.location || null,
-      start_time: new Date(form.start),
-      end_time: new Date(form.end),
-      visibility: form.visibility,
+      title: f.title,
+      description: f.description || null,
+      location: f.location || null,
+      start_time: new Date(f.start),
+      end_time: new Date(f.end),
+      visibility: f.visibility,
       created_by: me,
-      event_type: form.event_type || null,
+      event_type: f.event_type || null,
       rsvp_public: true,
-      community_id: form.community_id || null,
-      image_path: form.image_path || null,
-      source: form.source,
+      community_id: f.community_id || null,
+      image_path: f.image_path || null,
+      source: f.source,
     };
+
     const { error } = await supabase.from("events").insert(payload);
     if (error) return alert(error.message);
+
     setOpenCreate(false);
-    setForm({
+    setCreateForm({
       title: "",
       description: "",
       location: "",
@@ -129,71 +130,107 @@ export default function CalendarPage() {
       source: "personal",
       image_path: "",
     });
-    await load();
-  }, [form, me, load]);
+    load();
+  };
 
-  /** Drag/resize save (creator-only) */
-  const onDropOrResize = useCallback(
-    async ({ resource, start, end }: { resource: DBEvent; start: Date; end: Date }) => {
-      if (!resource || !me || resource.created_by !== me) {
-        await load(); // revert
-        return;
-      }
-      const { error } = await supabase
-        .from("events")
-        .update({ start_time: start.toISOString(), end_time: end.toISOString() })
-        .eq("id", resource.id);
-      if (error) {
-        alert("Could not update event: " + error.message);
-        await load();
-      }
-    },
-    [me, load]
-  );
+  // Details modal
+  const [selected, setSelected] = useState<DBEvent | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const openDetails = (e: any) => {
+    const r = e?.resource as DBEvent | undefined;
+    if (r) {
+      setSelected(r);
+      setDetailsOpen(true);
+    }
+  };
+
+  // Only allow drag/resize on own events
+  const canEdit = (evt: any) => {
+    const r = evt?.resource as DBEvent | undefined;
+    if (!r || !me) return false;
+    return r.created_by === me;
+  };
+
+  const onDrop = async ({ event, start, end }: any) => {
+    if (!canEdit(event)) return;
+    const r = event.resource as DBEvent;
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start, end_time: end })
+      .eq("id", r.id);
+    if (error) alert(error.message);
+  };
+
+  const onResize = async ({ event, start, end }: any) => {
+    if (!canEdit(event)) return;
+    const r = event.resource as DBEvent;
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start, end_time: end })
+      .eq("id", r.id);
+    if (error) alert(error.message);
+  };
+
+  // Moon markers (if you have the hook)
+  const monthStart = useMemo(() => {
+    const d = new Date(date);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  }, [date]);
+  const monthEnd = useMemo(() => {
+    const d = new Date(date);
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+  }, [date]);
+
+  const moonEvents = (() => {
+    try {
+      // @ts-ignore allow projects without the hook temporarily
+      return useMoon ? useMoon(monthStart, monthEnd) : [];
+    } catch {
+      return [];
+    }
+  })();
 
   return (
-    <div className="page">
+    <div className="page calendar-sand">
       <div className="container-app">
-        <div className="header-bar" style={{ alignItems: "center", gap: 12 }}>
+        <div className="header-bar">
           <h1 className="page-title">Calendar</h1>
-          <WeatherBadge />
-          <label className="check" style={{ marginLeft: "auto" }}>
-            <input
-              type="checkbox"
-              checked={showMoon}
-              onChange={(e) => setShowMoon(e.target.checked)}
-            />
-            <span>Show moon</span>
-          </label>
-          {loading && <span className="muted">Loading…</span>}
-          {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
+          <div className="flex items-center gap-2">
+            <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
+              + Create event
+            </button>
+            <button className="btn" onClick={load}>Refresh</button>
+            {loading && <span className="muted">Loading…</span>}
+            {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
+          </div>
         </div>
 
+        {/* Big calendar */}
         <CalendarGrid
           dbEvents={events}
-          showMoon={showMoon}
-          view={fcView}
-          setView={setFcView}
-          date={currentDate}
-          setDate={setCurrentDate}
-          onSelectSlot={onSelectSlot}
+          moonEvents={moonEvents || []}
+          showMoon={true}
+          date={date}
+          setDate={setDate}
+          view={view}
+          setView={setView}
+          onSelectSlot={handleSelectSlot}
           onSelectEvent={openDetails}
-          onDropOrResize={onDropOrResize}
-          onNeedsRefresh={load}
+          onDrop={onDrop}
+          onResize={onResize}
         />
       </div>
 
-      {/* Create modal */}
+      {/* Modals */}
       <CreateEventModal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         sessionUser={me}
-        value={form}
-        onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-        onSave={saveEvent}
+        value={createForm}
+        onChange={(v) => setCreateForm((prev) => ({ ...prev, ...v }))}
+        onSave={createEvent}
       />
 
-      {/* Details modal */}
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
