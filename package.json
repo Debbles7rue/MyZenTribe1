@@ -50,3 +50,11 @@
     "@next/swc-win32-arm64-msvc": "14.2.5"
   }
 }
+{
+  "dependencies": {
+    "@fullcalendar/react": "6.1.14",
+    "@fullcalendar/daygrid": "6.1.14",
+    "@fullcalendar/timegrid": "6.1.14",
+    "@fullcalendar/interaction": "6.1.14"
+  }
+}
