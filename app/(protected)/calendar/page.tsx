@@ -8,12 +8,8 @@ import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
-
-// If you have the moon hook file, keep this import.
-// If you don't, the try/catch below will fallback gracefully.
 import { useMoon } from "@/lib/useMoon";
 
-// Client-only big calendar grid
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 export default function CalendarPage() {
@@ -32,6 +28,7 @@ export default function CalendarPage() {
   async function load() {
     setLoading(true);
     setErr(null);
+
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -40,27 +37,58 @@ export default function CalendarPage() {
     if (error) {
       setErr(error.message || "Failed to load events");
       setEvents([]);
-    } else {
-      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as DBEvent[];
-      setEvents(safe);
+      setLoading(false);
+      return;
     }
+
+    const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as any[];
+
+    // RSVP flags
+    let rsvpIds = new Set<string>();
+    if (me) {
+      const { data: myAtt } = await supabase
+        .from("event_attendees")
+        .select("event_id")
+        .eq("user_id", me);
+      rsvpIds = new Set((myAtt || []).map((r: any) => r.event_id));
+    }
+
+    // Carpool thread existence (🚗 badge)
+    let carpoolSet = new Set<string>();
+    if (safe.length) {
+      const ids = safe.map((e) => e.id);
+      const { data: cm } = await supabase
+        .from("circle_messages")
+        .select("event_id")
+        .in("event_id", ids)
+        .eq("kind", "carpool");
+      carpoolSet = new Set((cm || []).map((r: any) => r.event_id));
+    }
+
+    const withFlags = safe.map((e) => ({
+      ...e,
+      rsvp_me: rsvpIds.has(e.id),
+      carpool_exists: carpoolSet.has(e.id),
+    }));
+
+    setEvents(withFlags as any);
     setLoading(false);
   }
 
   useEffect(() => {
-    load();
+    if (me !== null) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
 
-  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
       .subscribe();
     return () => void supabase.removeChannel(ch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Create modal ----------
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -78,9 +106,6 @@ export default function CalendarPage() {
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  // SLOT CLICK BEHAVIOR:
-  // - In MONTH view: go to Day view (don’t open create yet).
-  // - In WEEK/DAY views: open Create prefilled with the clicked time.
   const handleSelectSlot = (info: { start: Date; end: Date; action?: string; slots?: Date[] }) => {
     if (view === "month") {
       setView("day");
@@ -114,6 +139,7 @@ export default function CalendarPage() {
       community_id: f.community_id || null,
       image_path: f.image_path || null,
       source: f.source,
+      status: "scheduled",
     };
 
     const { error } = await supabase.from("events").insert(payload);
@@ -135,14 +161,11 @@ export default function CalendarPage() {
     load();
   };
 
-  // ---------- Details modal ----------
-  const [selected, setSelected] = useState<DBEvent | null>(null);
+  const [selected, setSelected] = useState<any | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Be robust: sometimes 3rd-party UI can drop the "resource" field.
-  // We fall back to finding by id.
   const openDetails = (e: any) => {
-    const r = e?.resource as DBEvent | undefined;
+    const r = e?.resource;
     if (r) {
       setSelected(r);
       setDetailsOpen(true);
@@ -150,16 +173,15 @@ export default function CalendarPage() {
     }
     const id = e?.id;
     if (id) {
-      const found = events.find((it: any) => it?.id === id);
+      const found = (events as any[]).find((it: any) => it?.id === id);
       if (found) {
         setSelected(found);
         setDetailsOpen(true);
         return;
       }
     }
-    // Last resort: build a DBEvent-ish shape if possible
     if (e?.title && e?.start && e?.end) {
-      const faux: DBEvent = {
+      const faux = {
         id: id || "",
         title: e.title,
         description: null,
@@ -180,15 +202,14 @@ export default function CalendarPage() {
     }
   };
 
-  // drag/resize allowed only on own events
   const canEdit = (evt: any) => {
-    const r = evt?.resource as DBEvent | undefined;
+    const r = evt?.resource as any;
     return !!(r && me && r.created_by === me);
   };
 
   const onDrop = async ({ event, start, end }: any) => {
     if (!canEdit(event)) return;
-    const r = event.resource as DBEvent;
+    const r = event.resource as any;
     const { error } = await supabase
       .from("events")
       .update({ start_time: start, end_time: end })
@@ -198,7 +219,7 @@ export default function CalendarPage() {
 
   const onResize = async ({ event, start, end }: any) => {
     if (!canEdit(event)) return;
-    const r = event.resource as DBEvent;
+    const r = event.resource as any;
     const { error } = await supabase
       .from("events")
       .update({ start_time: start, end_time: end })
@@ -206,7 +227,6 @@ export default function CalendarPage() {
     if (error) alert(error.message);
   };
 
-  // Moon markers (safe fallback if hook missing)
   const monthStart = useMemo(() => {
     const d = new Date(date);
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -218,7 +238,8 @@ export default function CalendarPage() {
 
   const moonEvents = (() => {
     try {
-      // @ts-ignore allow builds that temporarily lack the hook file
+      // useMoon supports (start,end)
+      // @ts-ignore
       return useMoon ? useMoon(monthStart, monthEnd) : [];
     } catch {
       return [];
@@ -241,7 +262,7 @@ export default function CalendarPage() {
         </div>
 
         <CalendarGrid
-          dbEvents={events}
+          dbEvents={events as any}
           moonEvents={moonEvents || []}
           showMoon={true}
           date={date}
