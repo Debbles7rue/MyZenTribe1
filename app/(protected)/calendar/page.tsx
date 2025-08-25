@@ -3,31 +3,28 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
-import type { View } from "react-big-calendar";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// If you have the moon hook, keep this import.
-// If you removed it temporarily, comment this line out and pass [] for moonEvents below.
+// If you have the moon hook file, keep this import.
+// If you don't, the try/catch below will fallback gracefully.
 import { useMoon } from "@/lib/useMoon";
 
-// Client-only grid (no SSR)
+// Client-only big calendar grid
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 export default function CalendarPage() {
   const [me, setMe] = useState<string | null>(null);
-
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // date/view state
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
 
-  // events
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,7 +60,7 @@ export default function CalendarPage() {
     return () => void supabase.removeChannel(ch);
   }, []);
 
-  // Create modal state
+  // ---------- Create modal ----------
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -81,21 +78,26 @@ export default function CalendarPage() {
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  // Open Create modal prefilled (from slot)
-  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+  // SLOT CLICK BEHAVIOR:
+  // - In MONTH view: go to Day view (don’t open create yet).
+  // - In WEEK/DAY views: open Create prefilled with the clicked time.
+  const handleSelectSlot = (info: { start: Date; end: Date; action?: string; slots?: Date[] }) => {
+    if (view === "month") {
+      setView("day");
+      setDate(info.start);
+      return;
+    }
     setCreateForm((f) => ({
       ...f,
       title: "",
-      start: toLocalInput(start),
-      end: toLocalInput(end),
+      start: toLocalInput(info.start),
+      end: toLocalInput(info.end),
     }));
     setOpenCreate(true);
   };
 
-  // Create event
   const createEvent = async () => {
     if (!me) return alert("Please log in.");
-
     const f = createForm;
     if (!f.title || !f.start || !f.end) return alert("Missing fields.");
 
@@ -133,22 +135,55 @@ export default function CalendarPage() {
     load();
   };
 
-  // Details modal
+  // ---------- Details modal ----------
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Be robust: sometimes 3rd-party UI can drop the "resource" field.
+  // We fall back to finding by id.
   const openDetails = (e: any) => {
     const r = e?.resource as DBEvent | undefined;
     if (r) {
       setSelected(r);
       setDetailsOpen(true);
+      return;
+    }
+    const id = e?.id;
+    if (id) {
+      const found = events.find((it: any) => it?.id === id);
+      if (found) {
+        setSelected(found);
+        setDetailsOpen(true);
+        return;
+      }
+    }
+    // Last resort: build a DBEvent-ish shape if possible
+    if (e?.title && e?.start && e?.end) {
+      const faux: DBEvent = {
+        id: id || "",
+        title: e.title,
+        description: null,
+        start_time: new Date(e.start).toISOString(),
+        end_time: new Date(e.end).toISOString(),
+        visibility: "public",
+        created_by: me || "",
+        location: null,
+        image_path: null,
+        source: "personal",
+        status: "scheduled",
+        cancellation_reason: null,
+        event_type: null,
+        invite_code: null,
+      };
+      setSelected(faux);
+      setDetailsOpen(true);
     }
   };
 
-  // Only allow drag/resize on own events
+  // drag/resize allowed only on own events
   const canEdit = (evt: any) => {
     const r = evt?.resource as DBEvent | undefined;
-    if (!r || !me) return false;
-    return r.created_by === me;
+    return !!(r && me && r.created_by === me);
   };
 
   const onDrop = async ({ event, start, end }: any) => {
@@ -171,7 +206,7 @@ export default function CalendarPage() {
     if (error) alert(error.message);
   };
 
-  // Moon markers (if you have the hook)
+  // Moon markers (safe fallback if hook missing)
   const monthStart = useMemo(() => {
     const d = new Date(date);
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -183,7 +218,7 @@ export default function CalendarPage() {
 
   const moonEvents = (() => {
     try {
-      // @ts-ignore allow projects without the hook temporarily
+      // @ts-ignore allow builds that temporarily lack the hook file
       return useMoon ? useMoon(monthStart, monthEnd) : [];
     } catch {
       return [];
@@ -205,7 +240,6 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Big calendar */}
         <CalendarGrid
           dbEvents={events}
           moonEvents={moonEvents || []}
@@ -221,7 +255,6 @@ export default function CalendarPage() {
         />
       </div>
 
-      {/* Modals */}
       <CreateEventModal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
