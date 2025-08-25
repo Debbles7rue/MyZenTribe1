@@ -1,8 +1,4 @@
-/* =========================
-   FullCalendar styles (must be first, no duplicates)
-   ========================= */
-@import "@fullcalendar/daygrid/main.css";
-@import "@fullcalendar/timegrid/main.css";
+/* ===== NO FullCalendar imports here. Do NOT add @import for @fullcalendar/* ===== */
 
 /* ===== Layout helpers ===== */
 .page-wrap { padding-bottom: 40px; }
@@ -43,13 +39,7 @@
 .check { display:inline-flex; align-items:center; gap:8px; font-size:14px; }
 .select { padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
 
-.search-input {
-  width:100%;
-  padding:10px 12px;
-  border:1px solid #e5e7eb;
-  border-radius:12px;
-  font-size:14px;
-}
+.search-input { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; font-size:14px; }
 
 .muted { color:#6b7280; }
 
@@ -134,7 +124,7 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 /* ===== Home / Welcome / Commitment ===== */
 .home-wrap { max-width: 920px; margin: 24px auto; padding: 0 16px; }
 
-/* Brand lockup like your screenshot */
+/* Brand lockup */
 .brand-lockup {
   margin: 6px 0 18px;
   font-family: "Playfair Display", ui-serif, Georgia, serif;
@@ -168,44 +158,26 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .why-card h4 { margin:0 0 6px; font-size:16px; font-weight:700; color:#111827; }
 .why-card p { margin:0; color:#374151; font-size:14px; }
 
-/* ===== Modal (centered) — consolidated ===== */
+/* ===== Modal (centered) ===== */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; }
 .modal-center { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .modal-panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 18px;
-  width: min(760px, calc(100% - 32px));
-  box-shadow: 0 10px 30px rgba(17,24,39,.15);
-  max-height: calc(100dvh - 48px);
-  display: flex;
-  flex-direction: column;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 18px;
+  width: min(760px, calc(100% - 32px)); box-shadow: 0 10px 30px rgba(17,24,39,.15);
+  max-height: calc(100dvh - 48px); display: flex; flex-direction: column;
 }
 .modal-body { overflow: auto; padding-right: 6px; margin-right: -6px; }
 .modal-footer {
-  position: sticky;
-  bottom: 0;
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 10px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 8px;
+  position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e5e7eb; padding-top: 10px;
+  display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;
 }
 .modal-body img { max-width:100%; height:auto; border-radius:12px; }
 
 /* ===== AddPinModal (sheet above map) ===== */
-.modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px; z-index: 1000; /* ensure above Leaflet map/UI */
-}
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding: 16px; z-index: 1000; }
 .modal-sheet {
-  width: 100%; max-width: 720px; max-height: calc(100vh - 48px);
-  overflow: auto; background: #fff; border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0,0,0,.25); padding: 16px;
+  width: 100%; max-width: 720px; max-height: calc(100vh - 48px); overflow: auto; background: #fff;
+  border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,.25); padding: 16px;
 }
 
 /* ===== Community page breathing room ===== */
@@ -219,20 +191,14 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .community-page .tabbar .btn { padding: 9px 14px; }
 .community-page .controls .btn { padding: 10px 14px; }
 
-/* ===== react-big-calendar readability (for your list page) ===== */
+/* ===== Big calendar readability + polish (react-big-calendar) ===== */
 .rbc-event { color: #111 !important; }
-.rbc-event-label { color: rgba(0,0,0,.7) !important; } /* optional time label */
-
-/* --- Big calendar extra polish (rbc) --- */
+.rbc-event-label { color: rgba(0,0,0,.7) !important; }
 .mzt-big-calendar .rbc-day-bg + .rbc-day-bg { border-left-color: rgba(0,0,0,0.04); }
 .mzt-big-calendar .rbc-today { background: rgba(255, 225, 0, 0.08); }
 
 /* ---- Responsive layout for calendar page ---- */
-.grid-cols-calendar {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 12px;
-}
+.grid-cols-calendar { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
 @media (max-width: 900px) {
   .grid-cols-calendar { grid-template-columns: 1fr; }
   .task-tray { order: 2; }
@@ -240,8 +206,7 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 
 /* ---- Task tray ---- */
 .task-tray .tray-chip {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
-  padding: 8px 10px; cursor: grab;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; cursor: grab;
 }
 .task-tray .tray-chip:active { cursor: grabbing; }
 
@@ -260,28 +225,17 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 
 /* ---- Sandy look for the calendar page ---- */
 .calendar-sand {
-  /* Soft sand background + warmer card tint via your existing CSS vars */
-  --brand-bg: #fff7ed; /* sand/tan */
+  --brand-bg: #fff7ed; /* sand */
   background:
     radial-gradient(1200px 220px at 50% 0%, #fff7ed 0%, #ffffff 65%),
     #ffffff;
 }
 
 /* ---- Tutorial styles ---- */
-.tutorial-hero {
-  background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
-  border-bottom: 1px solid #f5e6c6;
-}
-.tutorial-list {
-  display: grid; grid-template-columns: 1fr; gap: 14px;
-  list-style: none; padding: 0; margin: 0;
-}
-.tutorial-list .bullet {
-  font-size: 18px; width: 26px; display: inline-flex; align-items: center; justify-content: center;
-}
-.tutorial-list li {
-  display: grid; grid-template-columns: 26px 1fr; gap: 10px;
-}
+.tutorial-hero { background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%); border-bottom: 1px solid #f5e6c6; }
+.tutorial-list { display: grid; grid-template-columns: 1fr; gap: 14px; list-style: none; padding: 0; margin: 0; }
+.tutorial-list .bullet { font-size: 18px; width: 26px; display: inline-flex; align-items: center; justify-content: center; }
+.tutorial-list li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; }
 .tutorial-list .item-title { font-weight: 700; color: #111827; margin-bottom: 2px; }
 .tutorial-list .item-desc { color: #374151; font-size: 14px; line-height: 1.45; }
 @media (max-width: 520px) { .tutorial-list .item-desc { font-size: 13px; } }
@@ -294,10 +248,3 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .rbc-day-bg,
 .rbc-timeslot-group { touch-action: manipulation; }
 .rbc-event, .rbc-day-bg { -webkit-tap-highlight-color: transparent; }
-
-/* --- FullCalendar readability/polish --- */
-.fc .fc-event { color: #111; border: 1px solid #e5e7eb; border-radius: 10px; }
-.fc .fc-daygrid-event { padding: 2px 4px; }
-.fc .fc-timegrid-event { padding: 2px 4px; }
-.fc-theme-standard .fc-scrollgrid { border-color: #e5e7eb; }
-.fc .fc-today-button { border-radius: 10px; }
