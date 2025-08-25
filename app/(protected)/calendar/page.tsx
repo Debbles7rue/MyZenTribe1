@@ -8,15 +8,26 @@ import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
-import { useMoon } from "@/lib/useMoon";
+import { useMoon } from "@/lib/useMoon"; // call as a hook (top-level, not conditionally)
 
+// Client-only big calendar grid
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
+
+// Types for the What's Happening feed (best-effort)
+type FeedEvent = DBEvent & {
+  // lightweight flags for the feed UI
+  _dismissed?: boolean;
+};
+
+type Mode = "my" | "whats";
 
 export default function CalendarPage() {
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
+
+  const [mode, setMode] = useState<Mode>("my");
 
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
@@ -25,7 +36,11 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function load() {
+  const [feed, setFeed] = useState<FeedEvent[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+
+  // ---------- Load My Calendar ----------
+  async function loadCalendar() {
     setLoading(true);
     setErr(null);
 
@@ -43,7 +58,7 @@ export default function CalendarPage() {
 
     const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as any[];
 
-    // RSVP flags
+    // RSVP flags (purple)
     let rsvpIds = new Set<string>();
     if (me) {
       const { data: myAtt } = await supabase
@@ -76,19 +91,70 @@ export default function CalendarPage() {
   }
 
   useEffect(() => {
-    if (me !== null) load();
+    if (me !== null) loadCalendar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
 
+  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, loadCalendar)
       .subscribe();
     return () => void supabase.removeChannel(ch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---------- Load What's Happening feed ----------
+  async function loadFeed() {
+    if (!me) return;
+    setFeedLoading(true);
+
+    try {
+      // 1) get my "friends" (best-effort via friends_view)
+      const { data: f } = await supabase
+        .from("friends_view")
+        .select("friend_id")
+        .limit(500);
+
+      const friendIds = (f || []).map((r: any) => r.friend_id);
+
+      // 2) public events from friends and businesses (exclude mine)
+      //    Also ensure upcoming (or very recent) only.
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+
+      let query = supabase
+        .from("events")
+        .select("*")
+        .gte("start_time", from.toISOString())
+        .order("start_time", { ascending: true })
+        .neq("created_by", me)
+        .eq("visibility", "public");
+
+      if (friendIds.length) {
+        query = query.in("created_by", friendIds).or(`source.eq.business`);
+      } else {
+        // Fallback: at least show public business events
+        query = query.eq("source", "business");
+      }
+
+      const { data } = await query;
+      setFeed((data || []) as FeedEvent[]);
+    } catch {
+      // Non-fatal: if the view is missing, just show nothing
+      setFeed([]);
+    } finally {
+      setFeedLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (mode === "whats" && me) loadFeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, me]);
+
+  // ---------- Create modal ----------
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -106,6 +172,9 @@ export default function CalendarPage() {
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
+  // SLOT CLICK BEHAVIOR:
+  // - In MONTH view: go to Day view (don’t open create yet).
+  // - In WEEK/DAY views: open Create prefilled with the clicked time.
   const handleSelectSlot = (info: { start: Date; end: Date; action?: string; slots?: Date[] }) => {
     if (view === "month") {
       setView("day");
@@ -158,9 +227,10 @@ export default function CalendarPage() {
       source: "personal",
       image_path: "",
     });
-    load();
+    loadCalendar();
   };
 
+  // ---------- Details modal ----------
   const [selected, setSelected] = useState<any | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -227,6 +297,7 @@ export default function CalendarPage() {
     if (error) alert(error.message);
   };
 
+  // ---------- Moon markers (call hook correctly) ----------
   const monthStart = useMemo(() => {
     const d = new Date(date);
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -236,44 +307,112 @@ export default function CalendarPage() {
     return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
   }, [date]);
 
-  const moonEvents = (() => {
-    try {
-      // useMoon supports (start,end)
-      // @ts-ignore
-      return useMoon ? useMoon(monthStart, monthEnd) : [];
-    } catch {
-      return [];
+  // Our lib/useMoon.ts returns UiEvent[] with resource.moonPhase
+  const moonEvents = useMoon(monthStart, monthEnd) || [];
+
+  // ---------- Feed actions ----------
+  function dismissFromFeed(id: string) {
+    setFeed((prev) => prev.map((e) => (e.id === id ? { ...e, _dismissed: true } : e)));
+    // Optional: persist to a dismissal table if you want later
+    // await supabase.from("event_dismissals").upsert({ event_id: id, user_id: me })
+  }
+
+  async function addToCalendarFromFeed(ev: FeedEvent, mode: "interested" | "rsvp" = "interested") {
+    if (!me) return;
+    if (mode === "rsvp") {
+      await supabase.from("event_attendees").upsert({ event_id: ev.id, user_id: me });
+    } else {
+      await supabase.from("event_interests").upsert({ event_id: ev.id, user_id: me });
     }
-  })();
+    // Keep it obvious in UI: grey it out
+    setFeed((prev) => prev.map((e) => (e.id === ev.id ? { ...e, _dismissed: true } : e)));
+    // Refresh calendar list so it shows up when they switch back
+    loadCalendar();
+  }
 
   return (
     <div className="page calendar-sand">
       <div className="container-app">
         <div className="header-bar">
           <h1 className="page-title">Calendar</h1>
+
           <div className="flex items-center gap-2">
+            {/* Toggle: What's Happening ↔ My Calendar */}
+            <div className="segmented" role="tablist" aria-label="Calendar mode">
+              <button
+                role="tab"
+                aria-selected={mode === "whats"}
+                className={`seg-btn ${mode === "whats" ? "active" : ""}`}
+                onClick={() => setMode("whats")}
+              >
+                What’s Happening
+              </button>
+              <button
+                role="tab"
+                aria-selected={mode === "my"}
+                className={`seg-btn ${mode === "my" ? "active" : ""}`}
+                onClick={() => setMode("my")}
+              >
+                My Calendar
+              </button>
+            </div>
+
             <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>
               + Create event
             </button>
-            <button className="btn" onClick={load}>Refresh</button>
-            {loading && <span className="muted">Loading…</span>}
+            <button className="btn" onClick={loadCalendar}>Refresh</button>
+            {loading && mode === "my" && <span className="muted">Loading…</span>}
             {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
           </div>
         </div>
 
-        <CalendarGrid
-          dbEvents={events as any}
-          moonEvents={moonEvents || []}
-          showMoon={true}
-          date={date}
-          setDate={setDate}
-          view={view}
-          setView={setView}
-          onSelectSlot={handleSelectSlot}
-          onSelectEvent={openDetails}
-          onDrop={onDrop}
-          onResize={onResize}
-        />
+        {/* MODE: What's Happening */}
+        {mode === "whats" ? (
+          <div className="card p-3">
+            {feedLoading ? (
+              <div className="muted">Loading feed…</div>
+            ) : feed.filter((e) => !e._dismissed).length === 0 ? (
+              <div className="muted">Nothing new right now. Check back later.</div>
+            ) : (
+              <ul className="space-y-2">
+                {feed
+                  .filter((e) => !e._dismissed)
+                  .map((e) => (
+                    <li key={e.id} className="border border-neutral-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{e.title || "Untitled event"}</div>
+                        <div className="text-xs text-neutral-600">
+                          {new Date(e.start_time!).toLocaleString()} — {e.location || "TBD"}
+                          {e.source ? ` · ${e.source}` : ""}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="btn" onClick={() => dismissFromFeed(e.id)}>Dismiss</button>
+                        <button className="btn btn-brand" onClick={() => addToCalendarFromFeed(e, "interested")}>
+                          Add to Calendar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          // MODE: My Calendar
+          <CalendarGrid
+            dbEvents={events as any}
+            moonEvents={moonEvents || []}
+            showMoon={true}
+            date={date}
+            setDate={setDate}
+            view={view}
+            setView={setView}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={openDetails}
+            onDrop={onDrop}
+            onResize={onResize}
+          />
+        )}
       </div>
 
       <CreateEventModal
