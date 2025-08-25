@@ -22,13 +22,13 @@ export default function WeatherBadge() {
       setErr("Weather: unavailable");
       return;
     }
-    const id = navigator.geolocation.getCurrentPosition(
+    navigator.geolocation.getCurrentPosition(
       async (pos) => {
         setErr(null);
         try {
           const { latitude, longitude } = pos.coords;
           const resp = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&temperature_unit=${unit}`
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m&temperature_unit=${unit}`
           );
           const data = await resp.json();
           const t = data?.current?.temperature_2m;
@@ -40,22 +40,14 @@ export default function WeatherBadge() {
         }
       },
       () => setErr("Weather: location blocked"),
-      { enableHighAccuracy: false, timeout: 6000 }
+      { timeout: 6000 }
     );
-    return () => {
-      if (typeof id === "number") {
-        // noop – old geolocation API has no clear method for single getCurrentPosition
-      }
-    };
   }, [unit]);
 
-  const badge = useMemo(
-    () => (err ? err : text),
-    [err, text]
-  );
+  const badge = useMemo(() => (err ? err : text), [err, text]);
 
   return (
-    <div className="badge-wx" title="Local weather">
+    <div className="badge-wx">
       {badge}
       <select
         aria-label="Temperature units"
