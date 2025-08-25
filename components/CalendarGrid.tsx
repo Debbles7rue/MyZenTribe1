@@ -23,7 +23,7 @@ type Props = {
   view: View;
   setView: (v: View) => void;
 
-  onSelectSlot: ({ start, end }: { start: Date; end: Date }) => void;
+  onSelectSlot: (arg: { start: Date; end: Date; action?: string; slots?: Date[] }) => void;
   onSelectEvent: (evt: UiEvent) => void;
   onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
   onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
@@ -57,10 +57,10 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
+  // readable colors
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
 
-    // Moon markers (all-day labels)
     if (r?.moonPhase) {
       return {
         style: {
@@ -73,7 +73,6 @@ export default function CalendarGrid({
       };
     }
 
-    // Cancelled
     if (r?.status === "cancelled") {
       return {
         style: {
@@ -87,15 +86,13 @@ export default function CalendarGrid({
       };
     }
 
-    // Coloring by source/type
-    const baseBg =
-      r?.source === "business" ? "#f1f5f9" /* slate-100 */ : "#dbeafe" /* blue-100 */;
+    const baseBg = r?.source === "business" ? "#f1f5f9" : "#dbeafe";
     return {
       style: {
         backgroundColor: baseBg,
         border: "1px solid #e5e7eb",
         borderRadius: 10,
-        color: "#111", // keep readable
+        color: "#111",
       },
       className: "text-[11px] leading-tight",
     };
@@ -121,10 +118,12 @@ export default function CalendarGrid({
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
           onSelectEvent={onSelectEvent}
+          onDoubleClickEvent={onSelectEvent}   // extra affordance
           onEventDrop={onDrop}
           onEventResize={onResize}
           step={30}
           timeslots={2}
+          longPressThreshold={80}              // easier touch selection
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
           components={{
             event: ({ event }) => {
