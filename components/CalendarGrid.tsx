@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo, useCallback } from "react";
-import { Calendar, Views, View, Event as RBCEvent } from "react-big-calendar";
+import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -58,12 +58,9 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Ensure the event click always reaches your handler
-  const handleSelectEvent = useCallback(
-    (evt: any) => {
-      // Some DnD backends fire microtasks; a tiny defer avoids conflicts
-      Promise.resolve().then(() => onSelectEvent(evt as UiEvent));
-    },
+  // Our own guaranteed event opener (bypasses RBC selection conflicts)
+  const handleOpenEvent = useCallback(
+    (evt: UiEvent) => Promise.resolve().then(() => onSelectEvent(evt)),
     [onSelectEvent]
   );
 
@@ -111,6 +108,44 @@ export default function CalendarGrid({
     };
   };
 
+  // Tiny component that stops slot selection and opens details reliably
+  function EventCell({ event }: { event: UiEvent }) {
+    const r = event.resource || {};
+    const onClick = (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();              // <- stops slot selection from hijacking
+      handleOpenEvent(event);
+    };
+    const stop = (e: React.SyntheticEvent) => e.stopPropagation(); // prevent drag→select
+    if (r?.moonPhase) {
+      const icon =
+        r.moonPhase === "moon-full" ? "🌕" :
+        r.moonPhase === "moon-new" ? "🌑" :
+        r.moonPhase === "moon-first" ? "🌓" : "🌗";
+      return (
+        <div className="text-[11px] leading-tight" onMouseDown={stop} onTouchStart={stop}>
+          {icon} {(event as any).title}
+        </div>
+      );
+    }
+    return (
+      <div
+        className="text-[11px] leading-tight"
+        role="button"
+        tabIndex={0}
+        onMouseDown={stop}
+        onTouchStart={stop}
+        onClick={onClick}
+        onDoubleClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOpenEvent(event); }
+        }}
+      >
+        <div className="font-medium">{(event as any).title}</div>
+      </div>
+    );
+  }
+
   const Backend = isTouchDevice() ? TouchBackend : HTML5Backend;
 
   return (
@@ -121,9 +156,8 @@ export default function CalendarGrid({
           events={mergedEvents}
           startAccessor="start"
           endAccessor="end"
-          // Important: allow slot selection without hijacking event clicks
-          // (RBC supports 'ignoreEvents' to not treat event clicks as slot selection)
-          selectable={"ignoreEvents" as any}
+          // Use plain boolean; v1.11.3 doesn't support "ignoreEvents"
+          selectable
           resizable
           popup
           style={{ height: 680 }}
@@ -132,30 +166,17 @@ export default function CalendarGrid({
           date={date}
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
-          onSelectEvent={handleSelectEvent}
-          onDoubleClickEvent={handleSelectEvent}
+          // Keep these for non-custom-render paths
+          onSelectEvent={(e: any) => handleOpenEvent(e as UiEvent)}
+          onDoubleClickEvent={(e: any) => handleOpenEvent(e as UiEvent)}
           onEventDrop={onDrop}
           onEventResize={onResize}
           step={30}
           timeslots={2}
-          longPressThreshold={80}              // easier touch selection
+          longPressThreshold={120}              // a bit higher for touch accuracy
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
           components={{
-            event: ({ event }) => {
-              const r = (event as UiEvent).resource || {};
-              if (r?.moonPhase) {
-                const icon =
-                  r.moonPhase === "moon-full" ? "🌕" :
-                  r.moonPhase === "moon-new" ? "🌑" :
-                  r.moonPhase === "moon-first" ? "🌓" : "🌗";
-                return <div className="text-[11px] leading-tight">{icon} {(event as any).title}</div>;
-              }
-              return (
-                <div className="text-[11px] leading-tight">
-                  <div className="font-medium">{(event as any).title}</div>
-                </div>
-              );
-            },
+            event: ({ event }) => <EventCell event={event as UiEvent} />,
           }}
           eventPropGetter={eventPropGetter}
         />
