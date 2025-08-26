@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import CalendarTutorial from "@/components/CalendarTutorial";
 
 export default function SiteHeader() {
   const pathname = usePathname();
@@ -32,54 +31,47 @@ export default function SiteHeader() {
   };
 
   return (
-    <>
-      <header className="site-header">
-        <div className="header-inner container-app">
-          <Link href="/" className="brand" aria-label="MyZenTribe Home">
-            <div className="brand-name">
-              <span className="brand-zen">My</span>ZenTribe
-            </div>
-          </Link>
+    <header className="site-header">
+      <div className="header-inner container-app">
+        <Link href="/" className="brand" aria-label="MyZenTribe Home">
+          <div className="brand-name">
+            <span className="brand-zen">My</span>ZenTribe
+          </div>
+        </Link>
 
-          {/* While we check auth, keep layout stable */}
-          {userId === "loading" ? (
-            <div style={{ height: 38 }} />
-          ) : userId ? (
-            <>
-              <nav className="main-nav">
-                <Nav href="/calendar">Calendar</Nav>
-                <Nav href="/communities">Communities</Nav>
-                <Nav href="/meditation">Meditation room</Nav>
-                <Nav href="/profile">Profile</Nav>
-                <Nav href="/business">Business</Nav>
-                <Nav href="/karma">Karma Corner</Nav>
-              </nav>
+        {userId === "loading" ? (
+          <div style={{ height: 38 }} />
+        ) : userId ? (
+          <>
+            <nav className="main-nav">
+              <Nav href="/calendar">Calendar</Nav>
+              <Nav href="/communities">Communities</Nav>
+              <Nav href="/meditation">Meditation room</Nav>
+              <Nav href="/profile">Profile</Nav>
+              <Nav href="/business">Business</Nav>
+              <Nav href="/karma">Karma Corner</Nav>
+            </nav>
 
-              <div className="auth-area">
-                <Link
-                  href="/messages"
-                  className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}
-                >
-                  Messages
-                </Link>
-                <button className="btn" onClick={signOut} aria-label="Sign out">
-                  Sign out
-                </button>
-              </div>
-            </>
-          ) : (
-            // Not logged in: keep it simple
             <div className="auth-area">
-              <Link href="/login" className="btn btn-brand">
-                Log in
+              <Link
+                href="/messages"
+                className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}
+              >
+                Messages
               </Link>
+              <button className="btn" onClick={signOut} aria-label="Sign out">
+                Sign out
+              </button>
             </div>
-          )}
-        </div>
-      </header>
-
-      {/* Mounts globally, shows only on /calendar and only once per user */}
-      <CalendarTutorial />
-    </>
+          </>
+        ) : (
+          <div className="auth-area">
+            <Link href="/login" className="btn btn-brand">
+              Log in
+            </Link>
+          </div>
+        )}
+      </div>
+    </header>
   );
 }
