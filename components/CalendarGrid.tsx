@@ -1,9 +1,8 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useMemo } from "react";
-import "react-big-calendar/lib/css/react-big-calendar.css";
-import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
+import React, { useMemo, useCallback } from "react";
+import { Calendar, Views, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -40,13 +39,14 @@ export default function CalendarGrid({
   date, setDate, view, setView,
   onSelectSlot, onSelectEvent, onDrop, onResize,
 }: Props) {
+  // Normalize DB rows to RBC events (resource carries the full row)
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
-      dbEvents.map((e: any) => ({
-        id: e.id,
+      dbEvents.map((e) => ({
+        id: (e as any).id,
         title: e.title,
-        start: new Date(e.start_time),
-        end: new Date(e.end_time),
+        start: new Date(e.start_time as any),
+        end: new Date(e.end_time as any),
         allDay: false,
         resource: e,
       })),
@@ -54,16 +54,32 @@ export default function CalendarGrid({
   );
 
   const mergedEvents = useMemo(
-    () => [...dbUiEvents, ...(showMoon ? (moonEvents || []) : [])],
+    () => [...dbUiEvents, ...(showMoon ? moonEvents : [])],
     [dbUiEvents, moonEvents, showMoon]
   );
 
+  // Ensure the event click always reaches your handler
+  const handleSelectEvent = useCallback(
+    (evt: any) => {
+      // Some DnD backends fire microtasks; a tiny defer avoids conflicts
+      Promise.resolve().then(() => onSelectEvent(evt as UiEvent));
+    },
+    [onSelectEvent]
+  );
+
+  // readable colors
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
 
     if (r?.moonPhase) {
       return {
-        style: { backgroundColor: "transparent", border: 0, color: "#0f172a", fontWeight: 600 },
+        style: {
+          backgroundColor: "transparent",
+          border: 0,
+          fontWeight: 600,
+          color: "#0f172a",
+          cursor: "default",
+        },
         className: "text-[11px] leading-tight",
       };
     }
@@ -71,47 +87,25 @@ export default function CalendarGrid({
     if (r?.status === "cancelled") {
       return {
         style: {
-          backgroundColor: "rgba(107,114,128,0.12)",
+          backgroundColor: "rgba(107,114,128,0.15)",
           border: "1px solid #e5e7eb",
           borderRadius: 10,
           color: "#6b7280",
           textDecoration: "line-through",
+          cursor: "pointer",
         },
         className: "text-[11px] leading-tight",
       };
     }
 
-    if (r?.rsvp_me) {
-      return {
-        style: {
-          backgroundColor: "#ede9fe",
-          border: "1px solid #ddd6fe",
-          borderRadius: 10,
-          color: "#111",
-          fontWeight: 600,
-        },
-        className: "text-[11px] leading-tight",
-      };
-    }
-
-    if (r?.source === "business") {
-      return {
-        style: {
-          backgroundColor: "#f8fafc",
-          border: "1px solid #e5e7eb",
-          borderRadius: 10,
-          color: "#111",
-        },
-        className: "text-[11px] leading-tight",
-      };
-    }
-
+    const baseBg = r?.source === "business" ? "#f1f5f9" : "#dbeafe";
     return {
       style: {
-        backgroundColor: "#dbeafe",
+        backgroundColor: baseBg,
         border: "1px solid #e5e7eb",
         borderRadius: 10,
         color: "#111",
+        cursor: "pointer",
       },
       className: "text-[11px] leading-tight",
     };
@@ -127,7 +121,9 @@ export default function CalendarGrid({
           events={mergedEvents}
           startAccessor="start"
           endAccessor="end"
-          selectable
+          // Important: allow slot selection without hijacking event clicks
+          // (RBC supports 'ignoreEvents' to not treat event clicks as slot selection)
+          selectable={"ignoreEvents" as any}
           resizable
           popup
           style={{ height: 680 }}
@@ -136,13 +132,13 @@ export default function CalendarGrid({
           date={date}
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDoubleClickEvent={onSelectEvent}
+          onSelectEvent={handleSelectEvent}
+          onDoubleClickEvent={handleSelectEvent}
           onEventDrop={onDrop}
           onEventResize={onResize}
           step={30}
           timeslots={2}
-          longPressThreshold={80}
+          longPressThreshold={80}              // easier touch selection
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
           components={{
             event: ({ event }) => {
@@ -156,10 +152,7 @@ export default function CalendarGrid({
               }
               return (
                 <div className="text-[11px] leading-tight">
-                  <div className="font-medium">
-                    {r?.carpool_exists ? "🚗 " : ""}
-                    {(event as any).title}
-                  </div>
+                  <div className="font-medium">{(event as any).title}</div>
                 </div>
               );
             },
