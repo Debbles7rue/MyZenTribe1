@@ -1,7 +1,7 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
@@ -9,7 +9,6 @@ import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// Client-only big calendar grid
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
 type FeedEvent = DBEvent & { _dismissed?: boolean };
@@ -32,11 +31,9 @@ export default function CalendarPage() {
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
 
-  // ------- Load My Calendar -------
   async function loadCalendar() {
     setLoading(true);
     setErr(null);
-
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -51,14 +48,12 @@ export default function CalendarPage() {
 
     const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as any[];
 
-    // RSVP flags for me
     let rsvpIds = new Set<string>();
     if (me) {
       const { data: myAtt } = await supabase.from("event_attendees").select("event_id").eq("user_id", me);
       rsvpIds = new Set((myAtt || []).map((r: any) => r.event_id));
     }
 
-    // Carpool thread existence (🚗 badge)
     let carpoolSet = new Set<string>();
     if (safe.length) {
       const ids = safe.map((e) => e.id);
@@ -82,8 +77,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (me !== null) loadCalendar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me]);
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const ch = supabase
@@ -91,10 +85,9 @@ export default function CalendarPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, loadCalendar)
       .subscribe();
     return () => void supabase.removeChannel(ch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ------- Load What's Happening -------
+  // ---------- What's Happening ----------
   async function loadFeed() {
     if (!me) return;
     setFeedLoading(true);
@@ -114,7 +107,6 @@ export default function CalendarPage() {
         .eq("visibility", "public");
 
       if (friendIds.length) {
-        // include friends OR business events
         query = query.or(`created_by.in.(${friendIds.join(",")}),source.eq.business`);
       } else {
         query = query.eq("source", "business");
@@ -130,10 +122,9 @@ export default function CalendarPage() {
   }
   useEffect(() => {
     if (mode === "whats" && me) loadFeed();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, me]);
+  }, [mode, me]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ------- Create modal -------
+  // ---------- Create modal ----------
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -151,8 +142,6 @@ export default function CalendarPage() {
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  // In MONTH view: tap a day → switch to Day view.
-  // In DAY/WEEK views: tap slot → open Create prefilled.
   const handleSelectSlot = (info: { start: Date; end: Date; action?: string; slots?: Date[] }) => {
     if (view === "month") {
       setView("day");
@@ -195,7 +184,7 @@ export default function CalendarPage() {
     loadCalendar();
   };
 
-  // ------- Details modal -------
+  // ---------- Details modal ----------
   const [selected, setSelected] = useState<any | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -235,22 +224,7 @@ export default function CalendarPage() {
     if (error) alert(error.message);
   };
 
-  // ------- Moon markers (disabled for stability; optional feature) -------
-  const monthStart = useMemo(() => new Date(date.getFullYear(), date.getMonth(), 1), [date]);
-  const monthEnd   = useMemo(() => new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59), [date]);
-  const moonEvents: any[] = []; // Intentionally empty so Moon never blocks deploys.
-
-  // ------- Feed actions -------
-  function dismissFromFeed(id: string) {
-    setFeed((prev) => prev.map((e) => (e.id === id ? { ...e, _dismissed: true } : e)));
-  }
-  async function addToCalendarFromFeed(ev: FeedEvent, mode: "interested" | "rsvp" = "interested") {
-    if (!me) return;
-    if (mode === "rsvp") await supabase.from("event_attendees").upsert({ event_id: ev.id, user_id: me });
-    else await supabase.from("event_interests").upsert({ event_id: ev.id, user_id: me });
-    setFeed((prev) => prev.map((e) => (e.id === ev.id ? { ...e, _dismissed: true } : e)));
-    loadCalendar();
-  }
+  // No moon / weather — optional features intentionally disabled.
 
   return (
     <div className="page calendar-sand">
@@ -259,22 +233,11 @@ export default function CalendarPage() {
           <h1 className="page-title">Calendar</h1>
 
           <div className="flex items-center gap-2">
-            {/* Toggle: What's Happening ↔ My Calendar */}
             <div className="segmented" role="tablist" aria-label="Calendar mode">
-              <button
-                role="tab"
-                aria-selected={mode === "whats"}
-                className={`seg-btn ${mode === "whats" ? "active" : ""}`}
-                onClick={() => setMode("whats")}
-              >
+              <button role="tab" aria-selected={mode === "whats"} className={`seg-btn ${mode === "whats" ? "active" : ""}`} onClick={() => setMode("whats")}>
                 What’s Happening
               </button>
-              <button
-                role="tab"
-                aria-selected={mode === "my"}
-                className={`seg-btn ${mode === "my" ? "active" : ""}`}
-                onClick={() => setMode("my")}
-              >
+              <button role="tab" aria-selected={mode === "my"} className={`seg-btn ${mode === "my" ? "active" : ""}`} onClick={() => setMode("my")}>
                 My Calendar
               </button>
             </div>
@@ -286,7 +249,6 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* MODE: What's Happening */}
         {mode === "whats" ? (
           <div className="card p-3">
             {feedLoading ? (
@@ -305,8 +267,15 @@ export default function CalendarPage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button className="btn" onClick={() => dismissFromFeed(e.id)}>Dismiss</button>
-                      <button className="btn btn-brand" onClick={() => addToCalendarFromFeed(e, "interested")}>Add to Calendar</button>
+                      <button className="btn" onClick={() => setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x))}>Dismiss</button>
+                      <button className="btn btn-brand" onClick={async () => {
+                        if (!me) return;
+                        await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
+                        setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
+                        loadCalendar();
+                      }}>
+                        Add to Calendar
+                      </button>
                     </div>
                   </li>
                 ))}
@@ -314,10 +283,9 @@ export default function CalendarPage() {
             )}
           </div>
         ) : (
-          // MODE: My Calendar
           <CalendarGrid
             dbEvents={events as any}
-            moonEvents={moonEvents}
+            moonEvents={[]}
             showMoon={false}
             date={date}
             setDate={setDate}
