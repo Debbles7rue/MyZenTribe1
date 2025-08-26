@@ -3,7 +3,6 @@
 
 import React from "react";
 import { Dialog } from "@headlessui/react";
-import AvatarUpload from "@/components/AvatarUpload";
 
 // Keep it local so we don't depend on other type files
 type Visibility = "public" | "friends" | "private" | "community";
@@ -18,13 +17,13 @@ type FormValue = {
   event_type: string;
   community_id: string;
   source: "personal" | "business";
-  image_path: string; // public URL or storage path
+  image_path: string; // public URL
 };
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  sessionUser: string | null;
+  sessionUser: string | null; // kept for API parity, not used here
   value: FormValue;
   onChange: (patch: Partial<FormValue>) => void;
   onSave: () => void;
@@ -67,19 +66,16 @@ export default function CreateEventModal({
               />
             </label>
 
-            {/* Event photo (full width) */}
-            <div className="span-2">
-              <span className="label">Event photo</span>
-              <div style={{ marginTop: 6 }}>
-                <AvatarUpload
-                  userId={sessionUser}
-                  value={value.image_path}
-                  onChange={(url) => onChange({ image_path: url || "" })}
-                  bucket="event-photos"
-                  label="Upload event photo"
-                />
-              </div>
-            </div>
+            {/* Image URL (simple + safe) */}
+            <label className="field span-2">
+              <span className="label">Image URL (optional)</span>
+              <input
+                className="input"
+                value={value.image_path}
+                onChange={(e) => onChange({ image_path: e.target.value })}
+                placeholder="https://example.com/photo.jpg"
+              />
+            </label>
 
             {/* Source / Type */}
             <label className="field">
