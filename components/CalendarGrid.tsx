@@ -39,7 +39,6 @@ export default function CalendarGrid({
   date, setDate, view, setView,
   onSelectSlot, onSelectEvent, onDrop, onResize,
 }: Props) {
-  // Normalize DB rows to RBC events (resource carries the full row)
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
       dbEvents.map((e) => ({
@@ -58,7 +57,7 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Our own guaranteed event opener (bypasses RBC selection conflicts)
+  // Guaranteed event opener
   const handleOpenEvent = useCallback(
     (evt: UiEvent) => Promise.resolve().then(() => onSelectEvent(evt)),
     [onSelectEvent]
@@ -67,20 +66,6 @@ export default function CalendarGrid({
   // readable colors
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
-
-    if (r?.moonPhase) {
-      return {
-        style: {
-          backgroundColor: "transparent",
-          border: 0,
-          fontWeight: 600,
-          color: "#0f172a",
-          cursor: "default",
-        },
-        className: "text-[11px] leading-tight",
-      };
-    }
-
     if (r?.status === "cancelled") {
       return {
         style: {
@@ -94,7 +79,6 @@ export default function CalendarGrid({
         className: "text-[11px] leading-tight",
       };
     }
-
     const baseBg = r?.source === "business" ? "#f1f5f9" : "#dbeafe";
     return {
       style: {
@@ -108,26 +92,14 @@ export default function CalendarGrid({
     };
   };
 
-  // Tiny component that stops slot selection and opens details reliably
+  // Custom event cell: call opener and stop slot selection from hijacking
   function EventCell({ event }: { event: UiEvent }) {
-    const r = event.resource || {};
-    const onClick = (e: React.MouseEvent | React.TouchEvent) => {
+    const onClick = (e: React.SyntheticEvent) => {
       e.preventDefault();
-      e.stopPropagation();              // <- stops slot selection from hijacking
+      e.stopPropagation();
       handleOpenEvent(event);
     };
-    const stop = (e: React.SyntheticEvent) => e.stopPropagation(); // prevent drag→select
-    if (r?.moonPhase) {
-      const icon =
-        r.moonPhase === "moon-full" ? "🌕" :
-        r.moonPhase === "moon-new" ? "🌑" :
-        r.moonPhase === "moon-first" ? "🌓" : "🌗";
-      return (
-        <div className="text-[11px] leading-tight" onMouseDown={stop} onTouchStart={stop}>
-          {icon} {(event as any).title}
-        </div>
-      );
-    }
+    const stop = (e: React.SyntheticEvent) => e.stopPropagation();
     return (
       <div
         className="text-[11px] leading-tight"
@@ -156,7 +128,6 @@ export default function CalendarGrid({
           events={mergedEvents}
           startAccessor="start"
           endAccessor="end"
-          // Use plain boolean; v1.11.3 doesn't support "ignoreEvents"
           selectable
           resizable
           popup
@@ -166,18 +137,15 @@ export default function CalendarGrid({
           date={date}
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
-          // Keep these for non-custom-render paths
           onSelectEvent={(e: any) => handleOpenEvent(e as UiEvent)}
           onDoubleClickEvent={(e: any) => handleOpenEvent(e as UiEvent)}
           onEventDrop={onDrop}
           onEventResize={onResize}
           step={30}
           timeslots={2}
-          longPressThreshold={120}              // a bit higher for touch accuracy
+          longPressThreshold={100}
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
-          components={{
-            event: ({ event }) => <EventCell event={event as UiEvent} />,
-          }}
+          components={{ event: ({ event }) => <EventCell event={event as UiEvent} /> }}
           eventPropGetter={eventPropGetter}
         />
       </DndProvider>
