@@ -4,109 +4,14 @@
 import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
-import { Calendar as RBCalendar } from "react-big-calendar";
-import { localizer } from "@/lib/localizer";
 import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// Client-only DnD grid (our usual one)
+// Client-only big calendar grid
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
 
-/** ---------- Minimal error boundary that shows the component stack ---------- */
-class ErrorBoundary extends React.Component<
-  { label: string; children: React.ReactNode },
-  { error: Error | null; info: React.ErrorInfo | null }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { error: null, info: null };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    this.setState({ error, info });
-    // Also log to console so we get the full stack
-    // (helps if minified frame names appear in the UI)
-    // eslint-disable-next-line no-console
-    console.error(`[${this.props.label}]`, error, info?.componentStack);
-  }
-  render() {
-    if (!this.state.error) return this.props.children;
-    return (
-      <div className="card p-3" style={{ borderColor: "#fda4af" }}>
-        <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 6 }}>
-          {this.props.label} crashed — showing fallback.
-        </div>
-        <div style={{ whiteSpace: "pre-wrap", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: 12, lineHeight: 1.4 }}>
-          <div><strong>Error:</strong> {this.state.error?.message}</div>
-          {this.state.info?.componentStack ? (
-            <>
-              <div style={{ marginTop: 6 }}><strong>Component stack:</strong></div>
-              <div>{this.state.info.componentStack.trim()}</div>
-            </>
-          ) : null}
-        </div>
-        {/* The parent will render a safe fallback calendar right below this box. */}
-      </div>
-    );
-  }
-}
-
-/** ---------- Safe fallback calendar (no DnD, no addons) ---------- */
-function FallbackCalendar({
-  events,
-  date,
-  view,
-  setDate,
-  setView,
-  onSelectSlot,
-  onSelectEvent,
-}: {
-  events: DBEvent[];
-  date: Date;
-  view: View;
-  setDate: (d: Date) => void;
-  setView: (v: View) => void;
-  onSelectSlot: (info: { start: Date; end: Date }) => void;
-  onSelectEvent: (evt: any) => void;
-}) {
-  const uiEvents = events.map((e: any) => ({
-    id: e.id,
-    title: e.title,
-    start: new Date(e.start_time),
-    end: new Date(e.end_time),
-    allDay: false,
-    resource: e,
-  }));
-  return (
-    <div className="card p-3 mzt-big-calendar" style={{ marginTop: 10 }}>
-      <RBCalendar
-        localizer={localizer}
-        events={uiEvents}
-        startAccessor="start"
-        endAccessor="end"
-        selectable
-        popup
-        style={{ height: 640 }}
-        view={view}
-        onView={setView}
-        date={date}
-        onNavigate={setDate}
-        onSelectSlot={onSelectSlot}
-        onSelectEvent={onSelectEvent}
-        onDoubleClickEvent={onSelectEvent}
-        step={30}
-        timeslots={2}
-        longPressThreshold={120}
-      />
-    </div>
-  );
-}
-
-/** ---------- Page ---------- */
 type FeedEvent = DBEvent & { _dismissed?: boolean };
 type Mode = "my" | "whats";
 
@@ -127,9 +32,11 @@ export default function CalendarPage() {
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
 
+  // ------- Load My Calendar -------
   async function loadCalendar() {
     setLoading(true);
     setErr(null);
+
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -141,31 +48,20 @@ export default function CalendarPage() {
       setLoading(false);
       return;
     }
+
     const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as any[];
 
+    // RSVP flag for me
     let rsvpIds = new Set<string>();
     if (me) {
-      const { data: myAtt } = await supabase.from("event_attendees").select("event_id").eq("user_id", me);
+      const { data: myAtt } = await supabase
+        .from("event_attendees")
+        .select("event_id")
+        .eq("user_id", me);
       rsvpIds = new Set((myAtt || []).map((r: any) => r.event_id));
     }
 
-    let carpoolSet = new Set<string>();
-    if (safe.length) {
-      const ids = safe.map((e) => e.id);
-      const { data: cm } = await supabase
-        .from("circle_messages")
-        .select("event_id")
-        .in("event_id", ids)
-        .eq("kind", "carpool");
-      carpoolSet = new Set((cm || []).map((r: any) => r.event_id));
-    }
-
-    const withFlags = safe.map((e) => ({
-      ...e,
-      rsvp_me: rsvpIds.has(e.id),
-      carpool_exists: carpoolSet.has(e.id),
-    }));
-
+    const withFlags = safe.map((e) => ({ ...e, rsvp_me: rsvpIds.has(e.id) }));
     setEvents(withFlags as any);
     setLoading(false);
   }
@@ -175,6 +71,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
 
+  // realtime refresh
   useEffect(() => {
     const ch = supabase
       .channel("events-rt")
@@ -184,7 +81,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- What's Happening ----------
+  // ------- Load What's Happening -------
   async function loadFeed() {
     if (!me) return;
     setFeedLoading(true);
@@ -222,7 +119,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, me]);
 
-  // ---------- Create modal ----------
+  // ------- Create modal -------
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -236,10 +133,13 @@ export default function CalendarPage() {
     source: "personal" as "personal" | "business",
     image_path: "",
   });
+
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-  const handleSelectSlot = (info: { start: Date; end: Date }) => {
+  // In MONTH view: tap a day → switch to Day view.
+  // In DAY/WEEK views: tap slot → open Create prefilled.
+  const handleSelectSlot = (info: { start: Date; end: Date; action?: string; slots?: Date[] }) => {
     if (view === "month") {
       setView("day");
       setDate(info.start);
@@ -275,42 +175,26 @@ export default function CalendarPage() {
 
     setOpenCreate(false);
     setCreateForm({
-      title: "",
-      description: "",
-      location: "",
-      start: "",
-      end: "",
-      visibility: "public",
-      event_type: "",
-      community_id: "",
-      source: "personal",
-      image_path: "",
+      title: "", description: "", location: "", start: "", end: "",
+      visibility: "public", event_type: "", community_id: "", source: "personal", image_path: "",
     });
     loadCalendar();
   };
 
-  // ---------- Details modal ----------
-  const [selected, setSelected] = useState<any | null>(null);
+  // ------- Details modal -------
+  const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const openDetails = (e: any) => {
-    const r = e?.resource;
-    if (r) {
-      setSelected(r);
-      setDetailsOpen(true);
-      return;
-    }
+    const r = e?.resource as DBEvent | undefined;
+    if (r) { setSelected(r); setDetailsOpen(true); return; }
     const id = e?.id;
     if (id) {
       const found = (events as any[]).find((it: any) => it?.id === id);
-      if (found) {
-        setSelected(found);
-        setDetailsOpen(true);
-        return;
-      }
+      if (found) { setSelected(found); setDetailsOpen(true); return; }
     }
     if (e?.title && e?.start && e?.end) {
-      const faux = {
+      const faux: DBEvent = {
         id: id || "",
         title: e.title,
         description: null,
@@ -326,28 +210,28 @@ export default function CalendarPage() {
         event_type: null,
         invite_code: null,
       };
-      setSelected(faux);
-      setDetailsOpen(true);
+      setSelected(faux); setDetailsOpen(true);
     }
   };
 
   const canEdit = (evt: any) => {
-    const r = evt?.resource as any;
+    const r = evt?.resource as DBEvent | undefined;
     return !!(r && me && r.created_by === me);
   };
   const onDrop = async ({ event, start, end }: any) => {
     if (!canEdit(event)) return;
-    const r = event.resource as any;
+    const r = event.resource as DBEvent;
     const { error } = await supabase.from("events").update({ start_time: start, end_time: end }).eq("id", r.id);
     if (error) alert(error.message);
   };
   const onResize = async ({ event, start, end }: any) => {
     if (!canEdit(event)) return;
-    const r = event.resource as any;
+    const r = event.resource as DBEvent;
     const { error } = await supabase.from("events").update({ start_time: start, end_time: end }).eq("id", r.id);
     if (error) alert(error.message);
   };
 
+  // ------- Render -------
   return (
     <div className="page calendar-sand">
       <div className="container-app">
@@ -355,6 +239,7 @@ export default function CalendarPage() {
           <h1 className="page-title">Calendar</h1>
 
           <div className="flex items-center gap-2">
+            {/* Toggle */}
             <div className="segmented" role="tablist" aria-label="Calendar mode">
               <button role="tab" aria-selected={mode === "whats"} className={`seg-btn ${mode === "whats" ? "active" : ""}`} onClick={() => setMode("whats")}>
                 What’s Happening
@@ -405,53 +290,32 @@ export default function CalendarPage() {
             )}
           </div>
         ) : (
-          <>
-            {/* If anything inside this boundary throws (like #310), you’ll see a red box AND a usable fallback grid below */}
-            <ErrorBoundary label="CalendarGrid">
-              <CalendarGrid
-                dbEvents={events as any}
-                moonEvents={[]}
-                showMoon={false}
-                date={date}
-                setDate={setDate}
-                view={view}
-                setView={setView}
-                onSelectSlot={handleSelectSlot}
-                onSelectEvent={openDetails}
-                onDrop={onDrop}
-                onResize={onResize}
-              />
-            </ErrorBoundary>
-
-            {/* Always render the safe fallback so you can keep working even if the DnD grid crashes */}
-            <FallbackCalendar
-              events={events}
-              date={date}
-              view={view}
-              setDate={setDate}
-              setView={setView}
-              onSelectSlot={handleSelectSlot}
-              onSelectEvent={openDetails}
-            />
-          </>
+          <CalendarGrid
+            dbEvents={events as any}
+            moonEvents={[]}
+            showMoon={false}
+            date={date}
+            setDate={setDate}
+            view={view}
+            setView={setView}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={openDetails}
+            onDrop={onDrop}
+            onResize={onResize}
+          />
         )}
       </div>
 
-      {/* Render modals only when open, to avoid mounting anything optional by default */}
-      {openCreate ? (
-        <CreateEventModal
-          open={openCreate}
-          onClose={() => setOpenCreate(false)}
-          sessionUser={me}
-          value={createForm}
-          onChange={(v) => setCreateForm((prev) => ({ ...prev, ...v }))}
-          onSave={createEvent}
-        />
-      ) : null}
+      <CreateEventModal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        sessionUser={me}
+        value={createForm}
+        onChange={(v) => setCreateForm((prev) => ({ ...prev, ...v }))}
+        onSave={createEvent}
+      />
 
-      {detailsOpen ? (
-        <EventDetails event={selected} onClose={() => setDetailsOpen(false)} />
-      ) : null}
+      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
 }
