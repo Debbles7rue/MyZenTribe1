@@ -27,6 +27,13 @@ type Props = {
   onSelectEvent: (evt: UiEvent) => void;
   onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
   onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
+
+  // External drag from the task tray (desktop)
+  externalDragType?: "none" | "reminder" | "todo";
+  onExternalDrop?: (
+    info: { start: Date; end: Date; allDay?: boolean },
+    kind: Exclude<NonNullable<Props["externalDragType"]>, "none">
+  ) => void;
 };
 
 function isTouchDevice() {
@@ -38,6 +45,8 @@ export default function CalendarGrid({
   dbEvents, moonEvents, showMoon,
   date, setDate, view, setView,
   onSelectSlot, onSelectEvent, onDrop, onResize,
+  externalDragType = "none",
+  onExternalDrop,
 }: Props) {
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
@@ -57,32 +66,58 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Guaranteed event opener
+  // Guaranteed opener
   const handleOpenEvent = useCallback(
     (evt: UiEvent) => Promise.resolve().then(() => onSelectEvent(evt)),
     [onSelectEvent]
   );
 
-  // readable colors
+  // Styling rules
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
-    if (r?.status === "cancelled") {
+    // Reminders / To-dos (private)
+    if (r?.event_type === "reminder") {
       return {
         style: {
-          backgroundColor: "rgba(107,114,128,0.15)",
-          border: "1px solid #e5e7eb",
+          background: "#fee2e2",
+          border: "1px solid #fecaca",
           borderRadius: 10,
-          color: "#6b7280",
-          textDecoration: "line-through",
+          color: "#111",
           cursor: "pointer",
         },
         className: "text-[11px] leading-tight",
       };
     }
-    const baseBg = r?.source === "business" ? "#f1f5f9" : "#dbeafe";
+    if (r?.event_type === "todo") {
+      return {
+        style: {
+          background: "#dcfce7",
+          border: "1px solid #bbf7d0",
+          borderRadius: 10,
+          color: "#111",
+          cursor: "pointer",
+        },
+        className: "text-[11px] leading-tight",
+      };
+    }
+    // Business: black title only
+    if (r?.source === "business") {
+      return {
+        style: {
+          background: "transparent",
+          border: 0,
+          color: "#111",
+          cursor: "pointer",
+          padding: 0,
+        },
+        className: "text-[11px] leading-tight",
+      };
+    }
+    // Friends’ public: blue, Mine: soft blue
+    const bg = r?.by_friend ? "#bfdbfe" : "#dbeafe";
     return {
       style: {
-        backgroundColor: baseBg,
+        background: bg,
         border: "1px solid #e5e7eb",
         borderRadius: 10,
         color: "#111",
@@ -92,17 +127,20 @@ export default function CalendarGrid({
     };
   };
 
-  // Custom event cell: call opener and stop slot selection from hijacking
   function EventCell({ event }: { event: UiEvent }) {
+    const r = (event.resource || {}) as any;
     const onClick = (e: React.SyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
       handleOpenEvent(event);
     };
     const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+    const titleClass =
+      r?.rsvp_me ? "text-[11px] leading-tight font-semibold" : "text-[11px] leading-tight";
+    const titleStyle = r?.rsvp_me ? { color: "#7c3aed" } : undefined; // purple heading if RSVP’d
+
     return (
       <div
-        className="text-[11px] leading-tight"
         role="button"
         tabIndex={0}
         onMouseDown={stop}
@@ -113,7 +151,9 @@ export default function CalendarGrid({
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOpenEvent(event); }
         }}
       >
-        <div className="font-medium">{(event as any).title}</div>
+        <div className={titleClass} style={titleStyle}>
+          {(event as any).title}
+        </div>
       </div>
     );
   }
@@ -147,6 +187,22 @@ export default function CalendarGrid({
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
           components={{ event: ({ event }) => <EventCell event={event as UiEvent} /> }}
           eventPropGetter={eventPropGetter}
+          // External drag from Quick tray (desktop)
+          dragFromOutsideItem={
+            externalDragType !== "none"
+              ? () => ({ title: externalDragType === "reminder" ? "Reminder" : "To-do" })
+              : undefined
+          }
+          onDropFromOutside={
+            externalDragType !== "none" && onExternalDrop
+              ? ({ start, end, allDay }) =>
+                  onExternalDrop(
+                    { start, end, allDay },
+                    externalDragType as Exclude<NonNullable<Props["externalDragType"]>, "none">
+                  )
+              : undefined
+          }
+          onDragOver={(e: any) => { e.preventDefault(); }}
         />
       </DndProvider>
     </div>
