@@ -13,7 +13,13 @@ import type { DBEvent, Visibility } from "@/lib/types";
 // Client-only calendar grid (react-big-calendar + DnD backends)
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
   ssr: false,
-  loading: () => <div className="card p-3"><div>Loading calendar...</div></div>
+  loading: () => (
+    <div className="card p-3">
+      <div style={{ height: "680px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div>Loading calendar...</div>
+      </div>
+    </div>
+  )
 });
 
 type FeedEvent = DBEvent & { _dismissed?: boolean };
