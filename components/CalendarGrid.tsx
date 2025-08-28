@@ -1,19 +1,20 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useMemo } from "react";
-import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
-import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import { TouchBackend } from "react-dnd-touch-backend";
-import { localizer } from "@/lib/localizer";
+import React, { useMemo, useState } from "react";
 import type { DBEvent } from "@/lib/types";
 
-const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
-export type UiEvent = RBCEvent & { resource: any };
+export type UiEvent = {
+  id?: string;
+  title: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  resource: any;
+};
 
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
+type View = "month" | "week" | "day" | "agenda";
 
 type Props = {
   dbEvents: DBEvent[];
@@ -28,7 +29,7 @@ type Props = {
   view: View;
   setView: (v: View) => void;
 
-  onSelectSlot: (arg: { start: Date; end: Date; action?: string; slots?: Date[] }) => void;
+  onSelectSlot: (arg: { start: Date; end: Date }) => void;
   onSelectEvent: (evt: UiEvent) => void;
   onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
   onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
@@ -40,70 +41,85 @@ type Props = {
   ) => void;
 };
 
-function isTouchDevice() {
-  if (typeof window === "undefined") return false;
-  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
-}
-
-// Theme backgrounds and styling
-const getThemeStyles = (theme: CalendarTheme = "default") => {
+// Theme configurations
+const getTheme = (theme: CalendarTheme = "default") => {
   const themes = {
     default: {
-      background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
-      headerBg: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
-      todayBg: "rgba(124,58,237,0.1)",
-      accent: "#7c3aed"
+      bg: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+      headerBg: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
+      todayBg: "#ede9fe",
+      accent: "#7c3aed",
+      textColor: "#374151",
+      borderColor: "#e5e7eb"
     },
     spring: {
-      background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%)",
+      bg: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #bbf7d0 100%)",
       headerBg: "linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)",
-      todayBg: "rgba(34,197,94,0.15)",
-      accent: "#22c55e"
+      todayBg: "#d1fae5",
+      accent: "#22c55e",
+      textColor: "#14532d",
+      borderColor: "#86efac"
     },
     summer: {
-      background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fef3c7 100%)",
-      headerBg: "linear-gradient(135deg, #fed7aa 0%, #fde68a 100%)",
-      todayBg: "rgba(245,158,11,0.15)",
-      accent: "#f59e0b"
+      bg: "linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fbbf24 100%)",
+      headerBg: "linear-gradient(135deg, #fed7aa 0%, #fbbf24 100%)",
+      todayBg: "#fef3c7",
+      accent: "#f59e0b",
+      textColor: "#92400e",
+      borderColor: "#fcd34d"
     },
     autumn: {
-      background: "linear-gradient(135deg, #fff1f2 0%, #ffedd5 50%, #fef3c7 100%)",
-      headerBg: "linear-gradient(135deg, #fecaca 0%, #fdba74 100%)",
-      todayBg: "rgba(239,68,68,0.15)",
-      accent: "#ef4444"
+      bg: "linear-gradient(135deg, #fff1f2 0%, #fecaca 50%, #fed7aa 100%)",
+      headerBg: "linear-gradient(135deg, #fecaca 0%, #fed7aa 100%)",
+      todayBg: "#fee2e2",
+      accent: "#ef4444",
+      textColor: "#7f1d1d",
+      borderColor: "#f87171"
     },
     winter: {
-      background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #e0e7ff 100%)",
-      headerBg: "linear-gradient(135deg, #ddd6fe 0%, #c7d2fe 100%)",
-      todayBg: "rgba(99,102,241,0.15)",
-      accent: "#6366f1"
+      bg: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #ddd6fe 100%)",
+      headerBg: "linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)",
+      todayBg: "#e0e7ff",
+      accent: "#6366f1",
+      textColor: "#3730a3",
+      borderColor: "#a5b4fc"
     },
     nature: {
-      background: "linear-gradient(135deg, #f7fee7 0%, #ecfdf5 50%, #f0fdfa 100%)",
-      headerBg: "linear-gradient(135deg, #d9f99d 0%, #a7f3d0 100%)",
-      todayBg: "rgba(132,204,22,0.15)",
-      accent: "#84cc16"
+      bg: "linear-gradient(135deg, #f7fee7 0%, #ecfdf5 50%, #d1fae5 100%)",
+      headerBg: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+      todayBg: "#dcfce7",
+      accent: "#16a34a",
+      textColor: "#14532d",
+      borderColor: "#86efac"
     },
     ocean: {
-      background: "linear-gradient(135deg, #f0f9ff 0%, #ecfeff 50%, #f0fdfa 100%)",
-      headerBg: "linear-gradient(135deg, #bae6fd 0%, #99f6e4 100%)",
-      todayBg: "rgba(14,165,233,0.15)",
-      accent: "#0ea5e9"
+      bg: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #bae6fd 100%)",
+      headerBg: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)",
+      todayBg: "#dbeafe",
+      accent: "#0284c7",
+      textColor: "#0c4a6e",
+      borderColor: "#7dd3fc"
     }
   };
   return themes[theme];
 };
 
-export default function CalendarGrid({
-  dbEvents, moonEvents, showMoon,
-  showWeather = false,
-  temperatureUnit = "celsius",
-  theme = "default",
-  date, setDate, view, setView,
-  onSelectSlot, onSelectEvent, onDrop, onResize,
-  externalDragType = "none",
-  onExternalDrop,
-}: Props) {
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export default function CalendarGrid(props: Props) {
+  const {
+    dbEvents, moonEvents, showMoon,
+    showWeather = false,
+    temperatureUnit = "celsius",
+    theme = "default",
+    date, setDate, view, setView,
+    onSelectSlot, onSelectEvent
+  } = props;
+
+  const [draggedEvent, setDraggedEvent] = useState<UiEvent | null>(null);
+  const themeConfig = getTheme(theme);
+
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
       dbEvents.map((e) => ({
@@ -122,249 +138,374 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  const themeStyles = getThemeStyles(theme);
+  // Get calendar days for current month
+  const calendarDays = useMemo(() => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
 
-  // Event styling - keep simple to avoid conflicts
-  const eventPropGetter = (event: UiEvent) => {
-    const r: any = event.resource || {};
-    
-    if (r?.event_type === "reminder") {
-      return {
-        style: {
-          background: "#fbbf24",
-          border: "1px solid #f59e0b",
-          borderRadius: "6px",
-          color: "#92400e",
-          cursor: "pointer",
-          fontWeight: "600",
-          fontSize: "11px",
-        },
-      };
+    const days = [];
+    for (let i = 0; i < 42; i++) {
+      const day = new Date(startDate);
+      day.setDate(startDate.getDate() + i);
+      days.push(day);
     }
-    
-    if (r?.event_type === "todo") {
-      return {
-        style: {
-          background: "#34d399",
-          border: "1px solid #059669",
-          borderRadius: "6px",
-          color: "#064e3b",
-          cursor: "pointer",
-          fontWeight: "600",
-          fontSize: "11px",
-        },
-      };
-    }
-    
-    if (r?.source === "business") {
-      return {
-        style: {
-          background: "#e2e8f0",
-          border: "2px solid #7c3aed",
-          borderRadius: "6px",
-          color: "#1e293b",
-          cursor: "pointer",
-          fontWeight: "700",
-          fontSize: "11px",
-        },
-      };
-    }
-    
-    if (r?.by_friend) {
-      return {
-        style: {
-          background: "#c7d2fe",
-          border: "1px solid #8b5cf6",
-          borderRadius: "6px",
-          color: "#5b21b6",
-          cursor: "pointer",
-          fontWeight: r?.rsvp_me ? "700" : "500",
-          fontSize: "11px",
-        },
-      };
-    }
-    
-    // Personal events
-    return {
-      style: {
-        background: "#93c5fd",
-        border: "1px solid #3b82f6",
-        borderRadius: "6px",
-        color: "#1d4ed8",
-        cursor: "pointer",
-        fontWeight: r?.rsvp_me ? "700" : "500",
-        fontSize: "11px",
-      },
-    };
+    return days;
+  }, [date]);
+
+  const getEventsForDay = (day: Date) => {
+    return mergedEvents.filter(event => 
+      event.start.toDateString() === day.toDateString()
+    );
   };
 
-  const Backend = isTouchDevice() ? TouchBackend : HTML5Backend;
+  const getEventStyle = (event: UiEvent) => {
+    const r = event.resource || {};
+    
+    if (r?.event_type === "reminder") {
+      return "bg-yellow-200 border-yellow-400 text-yellow-800";
+    }
+    if (r?.event_type === "todo") {
+      return "bg-green-200 border-green-400 text-green-800";
+    }
+    if (r?.source === "business") {
+      return "bg-gray-200 border-purple-500 text-gray-800 border-2";
+    }
+    if (r?.by_friend) {
+      return "bg-purple-200 border-purple-400 text-purple-800";
+    }
+    return "bg-blue-200 border-blue-400 text-blue-800";
+  };
+
+  const handleDayClick = (day: Date, events: UiEvent[]) => {
+    if (view === "month") {
+      if (events.length === 1) {
+        onSelectEvent(events[0]);
+      } else if (events.length > 1) {
+        setView("day");
+        setDate(day);
+      } else {
+        const start = new Date(day);
+        start.setHours(9, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(10, 0, 0, 0);
+        onSelectSlot({ start, end });
+      }
+    }
+  };
+
+  const navigateMonth = (direction: "prev" | "next") => {
+    const newDate = new Date(date);
+    newDate.setMonth(date.getMonth() + (direction === "next" ? 1 : -1));
+    setDate(newDate);
+  };
+
+  const isToday = (day: Date) => {
+    const today = new Date();
+    return day.toDateString() === today.toDateString();
+  };
+
+  const isCurrentMonth = (day: Date) => {
+    return day.getMonth() === date.getMonth();
+  };
 
   return (
     <div 
-      className="themed-calendar-container"
+      className="custom-calendar"
       style={{
-        background: themeStyles.background,
+        background: themeConfig.bg,
         borderRadius: "16px",
-        padding: "16px",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-        border: "1px solid rgba(255,255,255,0.2)",
+        overflow: "hidden",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+        border: `1px solid ${themeConfig.borderColor}`,
+        position: "relative"
       }}
     >
       {/* Weather overlay */}
-      {showWeather && view === "month" && (
+      {showWeather && (
         <div style={{
           position: "absolute",
-          top: "24px",
-          right: "24px",
-          background: "rgba(255,255,255,0.95)",
+          top: "16px",
+          right: "16px",
+          background: "rgba(255,255,255,0.9)",
           backdropFilter: "blur(8px)",
           borderRadius: "12px",
-          padding: "8px 12px",
+          padding: "6px 12px",
           fontSize: "12px",
           fontWeight: "600",
-          color: "#374151",
-          border: "1px solid rgba(255,255,255,0.5)",
-          zIndex: 10,
+          color: themeConfig.textColor,
+          border: `1px solid ${themeConfig.borderColor}`,
+          zIndex: 20,
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
         }}>
           ☀️ 22°{temperatureUnit === "celsius" ? "C" : "F"}
         </div>
       )}
-      
-      {/* Moon phase overlay */}
-      {showMoon && view === "month" && (
-        <div style={{
-          position: "absolute",
-          top: "24px",
-          left: "24px",
-          background: "rgba(255,255,255,0.95)",
-          backdropFilter: "blur(8px)",
-          borderRadius: "12px",
-          padding: "8px 12px",
-          fontSize: "14px",
-          border: "1px solid rgba(255,255,255,0.5)",
-          zIndex: 10,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
-        }}>
-          🌕
-        </div>
-      )}
 
-      <DndProvider backend={Backend as any} options={isTouchDevice() ? { enableMouseEvents: true } : undefined}>
-        <DnDCalendar
-          localizer={localizer}
-          events={mergedEvents}
-          startAccessor="start"
-          endAccessor="end"
-          selectable
-          resizable
-          popup
-          style={{ 
-            height: 650,
+      {/* Calendar Header */}
+      <div 
+        style={{
+          background: themeConfig.headerBg,
+          padding: "16px 20px",
+          borderBottom: `1px solid ${themeConfig.borderColor}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
+        <button
+          onClick={() => navigateMonth("prev")}
+          style={{
             background: "rgba(255,255,255,0.8)",
-            borderRadius: "12px",
-            padding: "12px",
+            border: `1px solid ${themeConfig.borderColor}`,
+            borderRadius: "8px",
+            padding: "8px 12px",
+            cursor: "pointer",
+            fontWeight: "500",
+            color: themeConfig.textColor
           }}
-          view={view}
-          onView={setView}
-          date={date}
-          onNavigate={setDate}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDoubleClickEvent={onSelectEvent}
-          onEventDrop={onDrop}
-          onEventResize={onResize}
-          step={30}
-          timeslots={2}
-          longPressThreshold={100}
-          scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
-          eventPropGetter={eventPropGetter}
-          dragFromOutsideItem={
-            externalDragType !== "none"
-              ? () => ({ title: externalDragType === "reminder" ? "Reminder" : "To-do" })
-              : undefined
-          }
-          onDropFromOutside={
-            externalDragType !== "none" && onExternalDrop
-              ? ({ start, end, allDay }) =>
-                  onExternalDrop(
-                    { start, end, allDay },
-                    externalDragType as Exclude<NonNullable<Props["externalDragType"]>, "none">
-                  )
-              : undefined
-          }
-          onDragOver={(e: any) => { e.preventDefault(); }}
-        />
-      </DndProvider>
+        >
+          ← Prev
+        </button>
+        
+        <h2 style={{ 
+          margin: 0,
+          fontSize: "18px",
+          fontWeight: "700",
+          color: themeConfig.textColor
+        }}>
+          {date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </h2>
+        
+        <button
+          onClick={() => navigateMonth("next")}
+          style={{
+            background: "rgba(255,255,255,0.8)",
+            border: `1px solid ${themeConfig.borderColor}`,
+            borderRadius: "8px",
+            padding: "8px 12px",
+            cursor: "pointer",
+            fontWeight: "500",
+            color: themeConfig.textColor
+          }}
+        >
+          Next →
+        </button>
+      </div>
 
-      <style jsx global>{`
-        .themed-calendar-container .rbc-header {
-          background: ${themeStyles.headerBg} !important;
-          border-bottom: 1px solid rgba(0,0,0,0.1) !important;
-          padding: 12px 8px !important;
-          font-weight: 600 !important;
-          color: #374151 !important;
-          font-size: 13px !important;
-        }
+      {/* Days of week header */}
+      <div 
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          background: `linear-gradient(135deg, ${themeConfig.headerBg}, rgba(255,255,255,0.3))`,
+          borderBottom: `1px solid ${themeConfig.borderColor}`
+        }}
+      >
+        {SHORT_DAYS.map(day => (
+          <div 
+            key={day}
+            style={{
+              padding: "12px 8px",
+              textAlign: "center",
+              fontSize: "12px",
+              fontWeight: "600",
+              color: themeConfig.textColor,
+              borderRight: `1px solid ${themeConfig.borderColor}`,
+            }}
+          >
+            {day}
+          </div>
+        ))}
+      </div>
 
-        .themed-calendar-container .rbc-today {
-          background: ${themeStyles.todayBg} !important;
-          border-radius: 8px !important;
-        }
-
-        .themed-calendar-container .rbc-toolbar button {
-          border: 1px solid rgba(0,0,0,0.1) !important;
-          background: rgba(255,255,255,0.9) !important;
-          color: #374151 !important;
-          border-radius: 8px !important;
-          padding: 8px 12px !important;
-          font-weight: 500 !important;
-          transition: all 0.2s ease !important;
-          margin: 0 2px !important;
-          backdrop-filter: blur(4px) !important;
-        }
-
-        .themed-calendar-container .rbc-toolbar button:hover {
-          background: rgba(255,255,255,1) !important;
-          transform: translateY(-1px) !important;
-          box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-        }
-
-        .themed-calendar-container .rbc-toolbar button.rbc-active {
-          background: ${themeStyles.accent} !important;
-          color: white !important;
-          border-color: ${themeStyles.accent} !important;
-        }
-
-        .themed-calendar-container .rbc-day-bg:hover {
-          background: rgba(255,255,255,0.5) !important;
-          transition: background 0.2s ease !important;
-        }
-
-        .themed-calendar-container .rbc-slot-selection {
-          background: ${themeStyles.accent}40 !important;
-          border: 2px dashed ${themeStyles.accent} !important;
-          border-radius: 4px !important;
-        }
-
-        .themed-calendar-container .rbc-off-range-bg {
-          background: rgba(0,0,0,0.02) !important;
-        }
-
-        @media (max-width: 768px) {
-          .themed-calendar-container .rbc-toolbar {
-            flex-direction: column !important;
-            gap: 8px !important;
-          }
+      {/* Calendar Grid */}
+      <div 
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          minHeight: "600px"
+        }}
+      >
+        {calendarDays.map((day, index) => {
+          const dayEvents = getEventsForDay(day);
+          const isCurrentMonthDay = isCurrentMonth(day);
+          const isTodayDay = isToday(day);
           
-          .themed-calendar-container .rbc-toolbar .rbc-btn-group {
-            display: flex !important;
-            justify-content: center !important;
-            gap: 4px !important;
-          }
-        }
-      `}</style>
+          return (
+            <div
+              key={index}
+              onClick={() => handleDayClick(day, dayEvents)}
+              style={{
+                minHeight: "85px",
+                padding: "8px",
+                borderRight: `1px solid ${themeConfig.borderColor}`,
+                borderBottom: `1px solid ${themeConfig.borderColor}`,
+                background: isTodayDay 
+                  ? themeConfig.todayBg
+                  : isCurrentMonthDay 
+                  ? "rgba(255,255,255,0.7)" 
+                  : "rgba(0,0,0,0.02)",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                position: "relative"
+              }}
+              onMouseEnter={(e) => {
+                if (!isTodayDay) {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.9)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = isTodayDay 
+                  ? themeConfig.todayBg
+                  : isCurrentMonthDay 
+                  ? "rgba(255,255,255,0.7)" 
+                  : "rgba(0,0,0,0.02)";
+              }}
+            >
+              <div 
+                style={{
+                  fontSize: "14px",
+                  fontWeight: isTodayDay ? "700" : "500",
+                  color: isCurrentMonthDay ? themeConfig.textColor : "#9ca3af",
+                  marginBottom: "4px"
+                }}
+              >
+                {day.getDate()}
+              </div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                {dayEvents.slice(0, 3).map((event, eventIndex) => (
+                  <div
+                    key={eventIndex}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectEvent(event);
+                    }}
+                    style={{
+                      fontSize: "10px",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                      transition: "transform 0.1s ease",
+                      border: "1px solid",
+                      ...getEventColors(event, theme)
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  >
+                    {event.title}
+                  </div>
+                ))}
+                {dayEvents.length > 3 && (
+                  <div 
+                    style={{
+                      fontSize: "9px",
+                      color: themeConfig.accent,
+                      fontWeight: "600",
+                      textAlign: "center",
+                      cursor: "pointer"
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setView("day");
+                      setDate(day);
+                    }}
+                  >
+                    +{dayEvents.length - 3} more
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* View Controls */}
+      <div 
+        style={{
+          background: themeConfig.headerBg,
+          padding: "12px 20px",
+          borderTop: `1px solid ${themeConfig.borderColor}`,
+          display: "flex",
+          justifyContent: "center",
+          gap: "8px"
+        }}
+      >
+        {["month", "week", "day"].map(viewType => (
+          <button
+            key={viewType}
+            onClick={() => setView(viewType as View)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "6px",
+              border: `1px solid ${themeConfig.borderColor}`,
+              background: view === viewType ? themeConfig.accent : "rgba(255,255,255,0.8)",
+              color: view === viewType ? "white" : themeConfig.textColor,
+              fontWeight: "500",
+              fontSize: "12px",
+              cursor: "pointer",
+              textTransform: "capitalize"
+            }}
+          >
+            {viewType}
+          </button>
+        ))}
+      </div>
     </div>
   );
+}
+
+function getEventColors(event: UiEvent, theme: CalendarTheme = "default") {
+  const r = event.resource || {};
+  
+  // Base color schemes that work with all themes
+  if (r?.event_type === "reminder") {
+    return {
+      backgroundColor: "#fbbf24",
+      borderColor: "#f59e0b",
+      color: "#92400e"
+    };
+  }
+  
+  if (r?.event_type === "todo") {
+    return {
+      backgroundColor: "#34d399",
+      borderColor: "#10b981",
+      color: "#064e3b"
+    };
+  }
+  
+  if (r?.source === "business") {
+    return {
+      backgroundColor: "#e5e7eb",
+      borderColor: "#7c3aed",
+      color: "#374151"
+    };
+  }
+  
+  if (r?.by_friend) {
+    return {
+      backgroundColor: "#c7d2fe",
+      borderColor: "#8b5cf6",
+      color: "#5b21b6"
+    };
+  }
+  
+  // Personal events
+  return {
+    backgroundColor: "#93c5fd",
+    borderColor: "#3b82f6",
+    color: "#1e40af"
+  };
 }
