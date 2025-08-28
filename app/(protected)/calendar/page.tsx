@@ -39,6 +39,18 @@ export default function CalendarPage() {
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
 
+  // Quick create modal for reminders/todos
+  const [quickModal, setQuickModal] = useState<{ open: boolean; type: "reminder" | "todo" | null }>({
+    open: false,
+    type: null
+  });
+  const [quickForm, setQuickForm] = useState({
+    title: "",
+    description: "",
+    start: "",
+    end: "",
+  });
+
   // ---------- My Calendar ----------
   async function loadCalendar() {
     setLoading(true);
@@ -249,6 +261,42 @@ export default function CalendarPage() {
     }
   };
 
+  // Quick create for reminders/todos with custom details
+  const createQuickEvent = async () => {
+    if (!me || !quickModal.type) return;
+    
+    const f = quickForm;
+    if (!f.title || !f.start) return alert("Title and start time are required.");
+
+    try {
+      const payload: any = {
+        title: f.title,
+        description: f.description || null,
+        location: null,
+        start_time: new Date(f.start).toISOString(),
+        end_time: f.end ? new Date(f.end).toISOString() : new Date(new Date(f.start).getTime() + 60*60*1000).toISOString(),
+        visibility: "private",
+        created_by: me,
+        event_type: quickModal.type,
+        rsvp_public: false,
+        community_id: null,
+        image_path: null,
+        source: "personal",
+        status: "scheduled",
+      };
+
+      const { error } = await supabase.from("events").insert(payload);
+      if (error) return alert(error.message);
+
+      setQuickModal({ open: false, type: null });
+      setQuickForm({ title: "", description: "", start: "", end: "" });
+      loadCalendar();
+    } catch (error) {
+      console.error('Create quick event error:', error);
+      alert("Failed to create quick event");
+    }
+  };
+
   // ---------- Details modal ----------
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -346,24 +394,24 @@ export default function CalendarPage() {
     }
   };
 
-  // External drag (desktop) → we set the "kind" while dragging chips
+  // External drag (desktop)
   const [dragType, setDragType] = useState<QuickType>("none");
   const startDrag = (t: Exclude<QuickType, "none">) => () => setDragType(t);
   const endDrag = () => setDragType("none");
 
-  // Add button handlers for mobile
-  const addReminder = () => {
+  // Add button handlers - open quick modal
+  const openQuickModal = (type: "reminder" | "todo") => {
     const now = new Date();
-    const start = new Date(now.getTime() + 60*60*1000); // 1 hour from now
-    const end = new Date(start.getTime() + 60*60*1000); // 1 hour duration
-    createQuick(start, end, "reminder");
-  };
-
-  const addTodo = () => {
-    const now = new Date();
-    const start = new Date(now.getTime() + 60*60*1000); // 1 hour from now
-    const end = new Date(start.getTime() + 60*60*1000); // 1 hour duration
-    createQuick(start, end, "todo");
+    const start = new Date(now.getTime() + 60*60*1000);
+    const end = new Date(start.getTime() + 60*60*1000);
+    
+    setQuickForm({
+      title: type === "reminder" ? "Reminder" : "To-do",
+      description: "",
+      start: toLocalInput(start),
+      end: toLocalInput(end),
+    });
+    setQuickModal({ open: true, type });
   };
 
   const layoutClass = useMemo(() => (mode === "my" ? "grid-cols-calendar" : ""), [mode]);
@@ -390,11 +438,19 @@ export default function CalendarPage() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      addReminder();
+                      openQuickModal("reminder");
                     }}
-                    className="ml-auto text-xs bg-amber-500 text-white px-2 py-1 rounded hover:bg-amber-600"
-                    title="Add reminder now"
-                    style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}
+                    style={{ 
+                      marginLeft: "8px", 
+                      fontSize: "10px", 
+                      padding: "4px 8px", 
+                      borderRadius: "4px",
+                      background: "#f59e0b",
+                      color: "white",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                    title="Create custom reminder"
                   >
                     + Add
                   </button>
@@ -412,11 +468,19 @@ export default function CalendarPage() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      addTodo();
+                      openQuickModal("todo");
                     }}
-                    className="ml-auto text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
-                    title="Add to-do now"
-                    style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}
+                    style={{ 
+                      marginLeft: "8px", 
+                      fontSize: "10px", 
+                      padding: "4px 8px", 
+                      borderRadius: "4px",
+                      background: "#059669",
+                      color: "white",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                    title="Create custom to-do"
                   >
                     + Add
                   </button>
@@ -447,7 +511,10 @@ export default function CalendarPage() {
             <div className="flex items-center gap-2">
               <CalendarThemeSelector 
                 currentTheme={calendarTheme}
-                onThemeChange={setCalendarTheme}
+                onThemeChange={(newTheme) => {
+                  console.log('Theme changed to:', newTheme);
+                  setCalendarTheme(newTheme);
+                }}
               />
               
               <div className="segmented" role="tablist" aria-label="Calendar mode">
@@ -485,12 +552,10 @@ export default function CalendarPage() {
                         const sx = (ev.currentTarget as any)._sx ?? 0;
                         const dx = ev.changedTouches[0].clientX - sx;
                         if (dx > 60) {
-                          // swipe right → interested
                           if (me) await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
                           setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
                           loadCalendar();
                         } else if (dx < -60) {
-                          // swipe left → dismiss
                           setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
                         }
                       }}
@@ -524,6 +589,8 @@ export default function CalendarPage() {
               moonEvents={[]}
               showMoon={false}
               theme={calendarTheme}
+              showWeather={false}
+              temperatureUnit="celsius"
               date={date}
               setDate={setDate}
               view={view}
@@ -532,7 +599,6 @@ export default function CalendarPage() {
               onSelectEvent={openDetails}
               onDrop={onDrop}
               onResize={onResize}
-              // external drag (desktop)
               externalDragType={dragType}
               onExternalDrop={async ({ start, end }, kind) => {
                 await createQuick(start, end, kind);
@@ -552,6 +618,81 @@ export default function CalendarPage() {
         onChange={(v) => setCreateForm((prev) => ({ ...prev, ...v }))}
         onSave={createEvent}
       />
+
+      {/* Quick Create Modal for Reminders/Todos */}
+      {quickModal.open && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold">
+                Create {quickModal.type === "reminder" ? "Reminder" : "To-do"}
+              </h3>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <input
+                  type="text"
+                  value={quickForm.title}
+                  onChange={(e) => setQuickForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder={`What do you need to ${quickModal.type === "reminder" ? "remember" : "do"}?`}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+                <textarea
+                  value={quickForm.description}
+                  onChange={(e) => setQuickForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Add any additional details..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start</label>
+                  <input
+                    type="datetime-local"
+                    value={quickForm.start}
+                    onChange={(e) => setQuickForm(f => ({ ...f, start: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={quickForm.end}
+                    onChange={(e) => setQuickForm(f => ({ ...f, end: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t flex justify-end gap-2">
+              <button
+                onClick={() => setQuickModal({ open: false, type: null })}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createQuickEvent}
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+              >
+                Create {quickModal.type === "reminder" ? "Reminder" : "To-do"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
