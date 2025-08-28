@@ -2,14 +2,11 @@
 "use client";
 
 import React, { useMemo, useEffect, useState } from "react";
-import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
-import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import { TouchBackend } from "react-dnd-touch-backend";
 import type { DBEvent } from "@/lib/types";
 
-const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
+// Import types only
+import type { View, Event as RBCEvent } from "react-big-calendar";
+
 export type UiEvent = RBCEvent & { resource: any };
 
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
@@ -32,7 +29,6 @@ type Props = {
   onDrop: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
   onResize: ({ event, start, end }: { event: UiEvent; start: Date; end: Date }) => void;
 
-  // External drag from the task tray (desktop)
   externalDragType?: "none" | "reminder" | "todo";
   onExternalDrop?: (
     info: { start: Date; end: Date; allDay?: boolean },
@@ -40,84 +36,63 @@ type Props = {
   ) => void;
 };
 
-// Client-side only localizer to avoid hydration issues
-const createLocalizer = () => {
-  if (typeof window === "undefined") return null;
-  
-  const { dateFnsLocalizer } = require("react-big-calendar");
-  const { format, parse, startOfWeek, getDay } = require("date-fns");
-  const { enUS } = require("date-fns/locale");
-  
-  return dateFnsLocalizer({
-    format,
-    parse,
-    startOfWeek: (date: Date) => startOfWeek(date, { weekStartsOn: 0 }),
-    getDay,
-    locales: { "en-US": enUS },
-  });
-};
-
-function isTouchDevice() {
-  if (typeof window === "undefined") return false;
-  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
-}
-
 // Theme color palettes
 const getThemeColors = (theme: CalendarTheme = "default") => {
   const themes = {
     default: {
-      reminder: { bg: "linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%)", border: "#f59e0b", color: "#92400e" },
-      todo: { bg: "linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%)", border: "#059669", color: "#064e3b" },
-      business: { bg: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)", border: "#7c3aed", color: "#1e293b" },
-      friend: { bg: "linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)", border: "#8b5cf6", color: "#5b21b6" },
-      personal: { bg: "linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%)", border: "#3b82f6", color: "#1d4ed8" },
+      reminder: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e" },
+      todo: { bg: "#d1fae5", border: "#059669", color: "#064e3b" },
+      business: { bg: "#f8fafc", border: "#7c3aed", color: "#1e293b" },
+      friend: { bg: "#e0e7ff", border: "#8b5cf6", color: "#5b21b6" },
+      personal: { bg: "#dbeafe", border: "#3b82f6", color: "#1d4ed8" },
     },
     spring: {
-      reminder: { bg: "linear-gradient(135deg, #fef7cd 0%, #fde047 100%)", border: "#eab308", color: "#713f12" },
-      todo: { bg: "linear-gradient(135deg, #dcfce7 0%, #86efac 100%)", border: "#22c55e", color: "#15803d" },
-      business: { bg: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)", border: "#16a34a", color: "#14532d" },
-      friend: { bg: "linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)", border: "#0ea5e9", color: "#0c4a6e" },
-      personal: { bg: "linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%)", border: "#10b981", color: "#065f46" },
+      reminder: { bg: "#fef7cd", border: "#eab308", color: "#713f12" },
+      todo: { bg: "#dcfce7", border: "#22c55e", color: "#15803d" },
+      business: { bg: "#f0fdf4", border: "#16a34a", color: "#14532d" },
+      friend: { bg: "#f0f9ff", border: "#0ea5e9", color: "#0c4a6e" },
+      personal: { bg: "#ecfdf5", border: "#10b981", color: "#065f46" },
     },
     summer: {
-      reminder: { bg: "linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)", border: "#ea580c", color: "#9a3412" },
-      todo: { bg: "linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%)", border: "#f59e0b", color: "#92400e" },
-      business: { bg: "linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)", border: "#c2410c", color: "#7c2d12" },
-      friend: { bg: "linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)", border: "#ef4444", color: "#991b1b" },
-      personal: { bg: "linear-gradient(135deg, #ffedd5 0%, #fdba74 100%)", border: "#f97316", color: "#c2410c" },
+      reminder: { bg: "#fed7aa", border: "#ea580c", color: "#9a3412" },
+      todo: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e" },
+      business: { bg: "#fff7ed", border: "#c2410c", color: "#7c2d12" },
+      friend: { bg: "#fef2f2", border: "#ef4444", color: "#991b1b" },
+      personal: { bg: "#ffedd5", border: "#f97316", color: "#c2410c" },
     },
     autumn: {
-      reminder: { bg: "linear-gradient(135deg, #fed7d7 0%, #fca5a5 100%)", border: "#dc2626", color: "#7f1d1d" },
-      todo: { bg: "linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)", border: "#ea580c", color: "#9a3412" },
-      business: { bg: "linear-gradient(135deg, #fff1f2 0%, #fecaca 100%)", border: "#b91c1c", color: "#7f1d1d" },
-      friend: { bg: "linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%)", border: "#d97706", color: "#92400e" },
-      personal: { bg: "linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)", border: "#c2410c", color: "#9a3412" },
+      reminder: { bg: "#fed7d7", border: "#dc2626", color: "#7f1d1d" },
+      todo: { bg: "#fed7aa", border: "#ea580c", color: "#9a3412" },
+      business: { bg: "#fff1f2", border: "#b91c1c", color: "#7f1d1d" },
+      friend: { bg: "#fef3c7", border: "#d97706", color: "#92400e" },
+      personal: { bg: "#ffedd5", border: "#c2410c", color: "#9a3412" },
     },
     winter: {
-      reminder: { bg: "linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)", border: "#6366f1", color: "#3730a3" },
-      todo: { bg: "linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)", border: "#0284c7", color: "#0c4a6e" },
-      business: { bg: "linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)", border: "#7c3aed", color: "#581c87" },
-      friend: { bg: "linear-gradient(135deg, #ede9fe 0%, #c4b5fd 100%)", border: "#8b5cf6", color: "#6b21a8" },
-      personal: { bg: "linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%)", border: "#2563eb", color: "#1e40af" },
+      reminder: { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3" },
+      todo: { bg: "#f0f9ff", border: "#0284c7", color: "#0c4a6e" },
+      business: { bg: "#f5f3ff", border: "#7c3aed", color: "#581c87" },
+      friend: { bg: "#ede9fe", border: "#8b5cf6", color: "#6b21a8" },
+      personal: { bg: "#dbeafe", border: "#2563eb", color: "#1e40af" },
     },
     nature: {
-      reminder: { bg: "linear-gradient(135deg, #ecfccb 0%, #bef264 100%)", border: "#65a30d", color: "#365314" },
-      todo: { bg: "linear-gradient(135deg, #f0fdf4 0%, #86efac 100%)", border: "#16a34a", color: "#14532d" },
-      business: { bg: "linear-gradient(135deg, #f7fee7 0%, #d9f99d 100%)", border: "#84cc16", color: "#3f6212" },
-      friend: { bg: "linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%)", border: "#10b981", color: "#064e3b" },
-      personal: { bg: "linear-gradient(135deg, #f0fdfa 0%, #5eead4 100%)", border: "#14b8a6", color: "#134e4a" },
+      reminder: { bg: "#ecfccb", border: "#65a30d", color: "#365314" },
+      todo: { bg: "#f0fdf4", border: "#16a34a", color: "#14532d" },
+      business: { bg: "#f7fee7", border: "#84cc16", color: "#3f6212" },
+      friend: { bg: "#ecfdf5", border: "#10b981", color: "#064e3b" },
+      personal: { bg: "#f0fdfa", border: "#14b8a6", color: "#134e4a" },
     },
     ocean: {
-      reminder: { bg: "linear-gradient(135deg, #f0f9ff 0%, #7dd3fc 100%)", border: "#0284c7", color: "#0c4a6e" },
-      todo: { bg: "linear-gradient(135deg, #ecfeff 0%, #67e8f9 100%)", border: "#06b6d4", color: "#164e63" },
-      business: { bg: "linear-gradient(135deg, #f0fdfa 0%, #99f6e4 100%)", border: "#0d9488", color: "#134e4a" },
-      friend: { bg: "linear-gradient(135deg, #e6fffa 0%, #a7f3d0 100%)", border: "#10b981", color: "#065f46" },
-      personal: { bg: "linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)", border: "#0ea5e9", color: "#0c4a6e" },
+      reminder: { bg: "#f0f9ff", border: "#0284c7", color: "#0c4a6e" },
+      todo: { bg: "#ecfeff", border: "#06b6d4", color: "#164e63" },
+      business: { bg: "#f0fdfa", border: "#0d9488", color: "#134e4a" },
+      friend: { bg: "#e6fffa", border: "#10b981", color: "#065f46" },
+      personal: { bg: "#f0f9ff", border: "#0ea5e9", color: "#0c4a6e" },
     },
   };
   return themes[theme];
 };
 
+// Fallback calendar component
 export default function CalendarGrid({
   dbEvents, moonEvents, showMoon,
   showWeather = false,
@@ -128,13 +103,39 @@ export default function CalendarGrid({
   externalDragType = "none",
   onExternalDrop,
 }: Props) {
+  const [CalendarComponent, setCalendarComponent] = useState<any>(null);
+  const [DnDCalendar, setDnDCalendar] = useState<any>(null);
+  const [DndProvider, setDndProvider] = useState<any>(null);
+  const [Backend, setBackend] = useState<any>(null);
   const [localizer, setLocalizer] = useState<any>(null);
-  const [isClient, setIsClient] = useState(false);
 
-  // Initialize localizer only on client side to prevent hydration issues
   useEffect(() => {
-    setLocalizer(createLocalizer());
-    setIsClient(true);
+    // Load all dependencies on client side only
+    Promise.all([
+      import("react-big-calendar"),
+      import("react-big-calendar/lib/addons/dragAndDrop"),
+      import("react-dnd"),
+      import("react-dnd-html5-backend"),
+      import("react-dnd-touch-backend"),
+      import("@/lib/localizer")
+    ]).then(([
+      rbcModule,
+      dndModule, 
+      reactDndModule,
+      html5Module,
+      touchModule,
+      localizerModule
+    ]) => {
+      const isTouchDevice = () => "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      
+      setCalendarComponent(() => rbcModule.Calendar);
+      setDnDCalendar(() => dndModule.default(rbcModule.Calendar as any));
+      setDndProvider(() => reactDndModule.DndProvider);
+      setBackend(() => isTouchDevice() ? touchModule.TouchBackend : html5Module.HTML5Backend);
+      setLocalizer(localizerModule.localizer);
+    }).catch(error => {
+      console.error('Failed to load calendar components:', error);
+    });
   }, []);
 
   const dbUiEvents = useMemo<UiEvent[]>(
@@ -160,22 +161,19 @@ export default function CalendarGrid({
     const r: any = event.resource || {};
     const colors = getThemeColors(theme);
     
-    // Reminders / To-dos (private) - Theme-aware colors
     if (r?.event_type === "reminder") {
       const { bg, border, color } = colors.reminder;
       return {
         style: {
-          background: bg,
+          backgroundColor: bg,
           border: `1px solid ${border}`,
-          borderRadius: "8px",
+          borderRadius: "6px",
           color: color,
           cursor: "pointer",
           fontWeight: "600",
           fontSize: "11px",
-          padding: "3px 6px",
-          lineHeight: "1.2",
-        },
-        className: "enhanced-event reminder-event",
+          padding: "2px 4px",
+        }
       };
     }
     
@@ -183,99 +181,68 @@ export default function CalendarGrid({
       const { bg, border, color } = colors.todo;
       return {
         style: {
-          background: bg,
+          backgroundColor: bg,
           border: `1px solid ${border}`,
-          borderRadius: "8px",
+          borderRadius: "6px",
           color: color,
           cursor: "pointer",
           fontWeight: "600",
           fontSize: "11px",
-          padding: "3px 6px",
-          lineHeight: "1.2",
-        },
-        className: "enhanced-event todo-event",
+          padding: "2px 4px",
+        }
       };
     }
     
-    // Business: enhanced with theme colors
     if (r?.source === "business") {
       const { bg, border, color } = colors.business;
       return {
         style: {
-          background: bg,
+          backgroundColor: bg,
           border: `2px solid ${border}`,
-          borderRadius: "8px",
+          borderRadius: "6px",
           color: color,
           cursor: "pointer",
           fontWeight: "700",
           fontSize: "11px",
-          padding: "3px 6px",
-          lineHeight: "1.2",
-        },
-        className: "enhanced-event business-event",
+          padding: "2px 4px",
+        }
       };
     }
     
-    // Friends' events vs personal events - theme-aware
     if (r?.by_friend) {
       const { bg, border, color } = colors.friend;
       return {
         style: {
-          background: bg,
+          backgroundColor: bg,
           border: `1px solid ${border}`,
-          borderRadius: "8px",
+          borderRadius: "6px",
           color: color,
           cursor: "pointer",
           fontWeight: r?.rsvp_me ? "700" : "500",
           fontSize: "11px",
-          padding: "3px 6px",
-          lineHeight: "1.2",
-        },
-        className: `enhanced-event friend-event ${r?.rsvp_me ? "rsvp-event" : ""}`,
+          padding: "2px 4px",
+        }
       };
     }
     
-    // Personal events - theme colors
+    // Personal events
     const { bg, border, color } = colors.personal;
     return {
       style: {
-        background: bg,
+        backgroundColor: bg,
         border: `1px solid ${border}`,
-        borderRadius: "8px",
+        borderRadius: "6px",
         color: color,
         cursor: "pointer",
         fontWeight: r?.rsvp_me ? "700" : "500",
         fontSize: "11px",
-        padding: "3px 6px",
-        lineHeight: "1.2",
-      },
-      className: `enhanced-event personal-event ${r?.rsvp_me ? "rsvp-event" : ""}`,
+        padding: "2px 4px",
+      }
     };
   };
 
-  // Enhanced day styling
-  const dayPropGetter = (date: Date) => {
-    if (!isClient) return {};
-    
-    const isToday = new Date().toDateString() === date.toDateString();
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-    
-    return {
-      style: {
-        background: isToday 
-          ? "linear-gradient(135deg, rgba(124,58,237,0.1) 0%, rgba(124,58,237,0.05) 100%)"
-          : isWeekend 
-          ? "rgba(249,250,251,0.5)" 
-          : "transparent",
-        border: isToday ? "1px solid rgba(124,58,237,0.2)" : undefined,
-      },
-    };
-  };
-
-  const Backend = isTouchDevice() ? TouchBackend : HTML5Backend;
-
-  // Don't render calendar until client-side hydration is complete
-  if (!isClient || !localizer) {
+  // Don't render until all components are loaded
+  if (!CalendarComponent || !DnDCalendar || !DndProvider || !Backend || !localizer) {
     return (
       <div className="card p-3">
         <div className="flex items-center justify-center" style={{ height: "680px" }}>
@@ -286,108 +253,7 @@ export default function CalendarGrid({
   }
 
   return (
-    <div className="card p-3 modern-calendar-wrapper">
-      <style jsx>{`
-        .modern-calendar-wrapper {
-          position: relative;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-          border-radius: 16px;
-          overflow: hidden;
-          background: 
-            radial-gradient(circle at 20% 80%, rgba(124,58,237,0.03) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(59,130,246,0.03) 0%, transparent 50%),
-            #ffffff;
-        }
-
-        /* Enhanced event styling with hover effects */
-        :global(.enhanced-event) {
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        }
-
-        :global(.enhanced-event:hover) {
-          transform: translateY(-1px) !important;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.2) !important;
-          z-index: 100 !important;
-        }
-
-        /* Calendar header styling */
-        :global(.rbc-header) {
-          background: linear-gradient(135deg, #fafafb 0%, #f4f5f7 100%) !important;
-          border-bottom: 1px solid #e2e8f0 !important;
-          padding: 12px 8px !important;
-          font-weight: 600 !important;
-          color: #374151 !important;
-          font-size: 13px !important;
-        }
-
-        /* Today highlighting with better contrast */
-        :global(.rbc-today) {
-          background: linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(124,58,237,0.06) 100%) !important;
-          border: 1px solid rgba(124,58,237,0.2) !important;
-        }
-
-        /* Toolbar button styling */
-        :global(.rbc-toolbar button) {
-          border: 1px solid #e5e7eb !important;
-          background: #ffffff !important;
-          color: #374151 !important;
-          border-radius: 8px !important;
-          padding: 8px 12px !important;
-          font-weight: 500 !important;
-          transition: all 0.2s ease !important;
-          margin: 0 2px !important;
-        }
-
-        :global(.rbc-toolbar button:hover) {
-          background: #f3f4f6 !important;
-          transform: translateY(-1px) !important;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-        }
-
-        :global(.rbc-toolbar button.rbc-active) {
-          background: #7c3aed !important;
-          color: white !important;
-          border-color: #7c3aed !important;
-        }
-
-        /* Day hover effects */
-        :global(.rbc-day-bg:hover) {
-          background: rgba(124,58,237,0.02) !important;
-          transition: background 0.2s ease !important;
-        }
-
-        /* Better selection styling */
-        :global(.rbc-slot-selection) {
-          background: rgba(124,58,237,0.15) !important;
-          border: 2px dashed #7c3aed !important;
-          border-radius: 4px !important;
-        }
-
-        /* Weekend styling */
-        :global(.rbc-off-range-bg) {
-          background: rgba(248,250,252,0.8) !important;
-        }
-
-        /* Mobile responsiveness */
-        @media (max-width: 768px) {
-          :global(.rbc-toolbar) {
-            flex-direction: column !important;
-            gap: 8px !important;
-          }
-          
-          :global(.rbc-toolbar .rbc-btn-group) {
-            display: flex !important;
-            justify-content: center !important;
-            gap: 4px !important;
-          }
-
-          :global(.enhanced-event) {
-            font-size: 10px !important;
-            padding: 2px 4px !important;
-          }
-        }
-      `}</style>
-
+    <div className="card p-3" style={{ position: "relative" }}>
       {/* Weather overlay */}
       {showWeather && view === "month" && (
         <div style={{
@@ -395,16 +261,15 @@ export default function CalendarGrid({
           top: "20px",
           right: "20px",
           background: "rgba(255,255,255,0.95)",
-          backdropFilter: "blur(8px)",
           borderRadius: "12px",
           padding: "6px 12px",
           fontSize: "12px",
           fontWeight: "500",
           color: "#374151",
-          border: "1px solid rgba(229,231,235,0.8)",
+          border: "1px solid #e5e7eb",
           zIndex: 10,
         }}>
-          ☀️ 22°{temperatureUnit === "celsius" ? "C" : "F"}
+          Weather: 22°{temperatureUnit === "celsius" ? "C" : "F"}
         </div>
       )}
       
@@ -415,18 +280,17 @@ export default function CalendarGrid({
           top: "20px",
           left: "20px",
           background: "rgba(255,255,255,0.95)",
-          backdropFilter: "blur(8px)",
           borderRadius: "12px",
           padding: "6px 12px",
           fontSize: "14px",
-          border: "1px solid rgba(229,231,235,0.8)",
+          border: "1px solid #e5e7eb",
           zIndex: 10,
         }}>
-          🌕
+          Moon phase
         </div>
       )}
 
-      <DndProvider backend={Backend as any} options={isTouchDevice() ? { enableMouseEvents: true } : undefined}>
+      <DndProvider backend={Backend} options={{ enableMouseEvents: true }}>
         <DnDCalendar
           localizer={localizer}
           events={mergedEvents}
@@ -453,8 +317,6 @@ export default function CalendarGrid({
           longPressThreshold={100}
           scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
           eventPropGetter={eventPropGetter}
-          dayPropGetter={dayPropGetter}
-          // External drag from Quick tray (desktop)
           dragFromOutsideItem={
             externalDragType !== "none"
               ? () => ({ title: externalDragType === "reminder" ? "Reminder" : "To-do" })
@@ -472,6 +334,17 @@ export default function CalendarGrid({
           onDragOver={(e: any) => { e.preventDefault(); }}
         />
       </DndProvider>
-    </div>
-  );
-}
+
+      <style jsx global>{`
+        /* Enhanced calendar styling */
+        .rbc-calendar {
+          background: white;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .rbc-header {
+          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+          border-bottom: 1px solid #e2e8f0;
+          padding
