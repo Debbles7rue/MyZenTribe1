@@ -32,6 +32,20 @@ export default function CalendarPage() {
   const [view, setView] = useState<View>("month");
   const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
+  // Load saved theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('calendar-theme') as CalendarTheme;
+    if (savedTheme) {
+      setCalendarTheme(savedTheme);
+    }
+  }, []);
+
+  // Save theme when it changes
+  const handleThemeChange = (newTheme: CalendarTheme) => {
+    setCalendarTheme(newTheme);
+    localStorage.setItem('calendar-theme', newTheme);
+  };
+
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -511,10 +525,7 @@ export default function CalendarPage() {
             <div className="flex items-center gap-2">
               <CalendarThemeSelector 
                 currentTheme={calendarTheme}
-                onThemeChange={(newTheme) => {
-                  console.log('Theme changed to:', newTheme);
-                  setCalendarTheme(newTheme);
-                }}
+                onThemeChange={handleThemeChange}
               />
               
               <div className="segmented" role="tablist" aria-label="Calendar mode">
