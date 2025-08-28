@@ -384,7 +384,7 @@ export default function CalendarPage() {
                   onDragEnd={endDrag}
                   onClick={() => setQuickType((q) => (q === "reminder" ? "none" : "reminder"))}
                   title="Drag onto the calendar (desktop) or tap then tap a time slot (mobile)"
-                  style={{ borderLeft: "6px solid #f59e0b", background: "#fef3c7" }}
+                  style={{ borderLeft: "6px solid #f59e0b", background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "space-between" }}
                 >
                   Reminder (private)
                   <button 
@@ -394,6 +394,7 @@ export default function CalendarPage() {
                     }}
                     className="ml-auto text-xs bg-amber-500 text-white px-2 py-1 rounded hover:bg-amber-600"
                     title="Add reminder now"
+                    style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}
                   >
                     + Add
                   </button>
@@ -405,7 +406,7 @@ export default function CalendarPage() {
                   onDragEnd={endDrag}
                   onClick={() => setQuickType((q) => (q === "todo" ? "none" : "todo"))}
                   title="Drag onto the calendar (desktop) or tap then tap a time slot (mobile)"
-                  style={{ borderLeft: "6px solid #059669", background: "#d1fae5" }}
+                  style={{ borderLeft: "6px solid #059669", background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "space-between" }}
                 >
                   To-do (private)
                   <button 
@@ -415,6 +416,7 @@ export default function CalendarPage() {
                     }}
                     className="ml-auto text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
                     title="Add to-do now"
+                    style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}
                   >
                     + Add
                   </button>
@@ -427,7 +429,7 @@ export default function CalendarPage() {
                     </div>
                     <button 
                       onClick={() => setQuickType("none")}
-                      className="mt-2 text-xs text-gray-600 hover:text-gray-800"
+                      style={{ marginTop: "8px", fontSize: "11px", color: "#6b7280", background: "none", border: "none", cursor: "pointer" }}
                     >
                       Cancel placement mode
                     </button>
