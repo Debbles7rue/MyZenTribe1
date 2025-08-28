@@ -1,16 +1,17 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
-import ModernCreateEventModal from "@/components/ModernCreateEventModal";
+import CreateEventModal from "@/components/CreateEventModal";
 import CalendarThemeSelector from "@/components/CalendarThemeSelector";
 import EventDetails from "@/components/EventDetails";
+import { useMoon } from "@/lib/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// Client-only calendar grid (react-big-calendar + DnD backends)
+// Client-only calendar grid - completely prevent SSR
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
   ssr: false,
   loading: () => (
@@ -28,38 +29,42 @@ type QuickType = "none" | "reminder" | "todo";
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
 export default function CalendarPage() {
+  // ===== ALL HOOKS DECLARED AT TOP - NEVER CONDITIONAL =====
+  
+  // Core state hooks - always called
   const [me, setMe] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
-  }, []);
-
   const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
   const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
-  // Load saved theme on mount
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('calendar-theme') as CalendarTheme;
-    if (savedTheme) {
-      setCalendarTheme(savedTheme);
-    }
-  }, []);
-
-  // Save theme when it changes
-  const handleThemeChange = (newTheme: CalendarTheme) => {
-    setCalendarTheme(newTheme);
-    localStorage.setItem('calendar-theme', newTheme);
-  };
-
+  // Event data hooks - always called
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
 
-  // Quick create modal for reminders/todos
+  // Modal state hooks - always called
+  const [openCreate, setOpenCreate] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selected, setSelected] = useState<DBEvent | null>(null);
+
+  // Form state hooks - always called
+  const [createForm, setCreateForm] = useState({
+    title: "",
+    description: "",
+    location: "",
+    start: "",
+    end: "",
+    visibility: "public" as Visibility,
+    event_type: "",
+    community_id: "",
+    source: "personal" as "personal" | "business",
+    image_path: "",
+  });
+
+  // Quick modal state hooks - always called
   const [quickModal, setQuickModal] = useState<{ open: boolean; type: "reminder" | "todo" | null }>({
     open: false,
     type: null
@@ -71,7 +76,58 @@ export default function CalendarPage() {
     end: "",
   });
 
-  // ---------- My Calendar ----------
+  // Quick action state hooks - always called
+  const [quickType, setQuickType] = useState<QuickType>("none");
+  const [dragType, setDragType] = useState<QuickType>("none");
+
+  // Moon data hook - ALWAYS called, gate usage later
+  const moonEvents = useMoon(date, view);
+
+  // Theme persistence effect - always called
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('calendar-theme') as CalendarTheme;
+    if (savedTheme) {
+      setCalendarTheme(savedTheme);
+    }
+  }, []);
+
+  // User authentication effect - always called
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
+
+  // Calendar loading effect - always called
+  useEffect(() => {
+    if (me !== null) loadCalendar();
+  }, [me]);
+
+  // Realtime subscription effect - always called
+  useEffect(() => {
+    const ch = supabase
+      .channel("events-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, loadCalendar)
+      .subscribe();
+    return () => void supabase.removeChannel(ch);
+  }, []);
+
+  // Feed loading effect - always called
+  useEffect(() => {
+    if (mode === "whats" && me) loadFeed();
+  }, [mode, me]);
+
+  // ===== STABLE CALLBACK FUNCTIONS =====
+
+  const handleThemeChange = useCallback((newTheme: CalendarTheme) => {
+    setCalendarTheme(newTheme);
+    localStorage.setItem('calendar-theme', newTheme);
+  }, []);
+
+  const toLocalInput = useCallback((d: Date) => 
+    new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  , []);
+
+  // ===== DATA LOADING FUNCTIONS =====
+
   async function loadCalendar() {
     setLoading(true);
     setErr(null);
@@ -123,21 +179,6 @@ export default function CalendarPage() {
     }
   }
 
-  useEffect(() => {
-    if (me !== null) loadCalendar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me]);
-
-  useEffect(() => {
-    const ch = supabase
-      .channel("events-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, loadCalendar)
-      .subscribe();
-    return () => void supabase.removeChannel(ch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ---------- What's Happening ----------
   async function loadFeed() {
     if (!me) return;
     setFeedLoading(true);
@@ -170,43 +211,19 @@ export default function CalendarPage() {
       setFeedLoading(false);
     }
   }
-  
-  useEffect(() => {
-    if (mode === "whats" && me) loadFeed();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, me]);
 
-  // ---------- Create modal ----------
-  const [openCreate, setOpenCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    title: "",
-    description: "",
-    location: "",
-    start: "",
-    end: "",
-    visibility: "public" as Visibility,
-    event_type: "",
-    community_id: "",
-    source: "personal" as "personal" | "business",
-    image_path: "",
-  });
+  // ===== EVENT HANDLERS =====
 
-  const toLocalInput = (d: Date) =>
-    new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-
-  // Quick-place flow for Reminder/To-do (mobile tap-then-place)
-  const [quickType, setQuickType] = useState<QuickType>("none");
-  const quickActive = quickType !== "none";
-
-  const handleSelectSlot = (info: { start: Date; end: Date }) => {
+  const handleSelectSlot = useCallback((info: { start: Date; end: Date }) => {
     try {
+      const quickActive = quickType !== "none";
+      
       if (view === "month") {
         setView("day");
         setDate(info.start);
         return;
       }
       if (quickActive) {
-        // place a quick event immediately
         void createQuick(info.start, info.end, quickType);
         setQuickType("none");
         return;
@@ -216,7 +233,51 @@ export default function CalendarPage() {
     } catch (error) {
       console.error('Select slot error:', error);
     }
-  };
+  }, [view, quickType, toLocalInput]);
+
+  const openDetails = useCallback((e: any) => {
+    try {
+      const r = e?.resource as DBEvent | undefined;
+      if (r) { 
+        setSelected(r); 
+        setDetailsOpen(true); 
+        return; 
+      }
+      
+      const id = e?.id;
+      if (id) {
+        const found = events.find((it: any) => it?.id === id);
+        if (found) { 
+          setSelected(found); 
+          setDetailsOpen(true); 
+          return; 
+        }
+      }
+      
+      if (e?.title && e?.start && e?.end) {
+        const faux: DBEvent = {
+          id: id || "",
+          title: e.title,
+          description: null,
+          start_time: new Date(e.start).toISOString(),
+          end_time: new Date(e.end).toISOString(),
+          visibility: "public",
+          created_by: me || "",
+          location: null,
+          image_path: null,
+          source: "personal",
+          status: "scheduled",
+          cancellation_reason: null,
+          event_type: null,
+          invite_code: null,
+        };
+        setSelected(faux); 
+        setDetailsOpen(true);
+      }
+    } catch (error) {
+      console.error('Open details error:', error);
+    }
+  }, [events, me]);
 
   async function createQuick(start: Date, end: Date, kind: Exclude<QuickType, "none">) {
     if (!me) return;
@@ -229,7 +290,7 @@ export default function CalendarPage() {
         end_time: end.toISOString(),
         visibility: "private",
         created_by: me,
-        event_type: kind, // style cue
+        event_type: kind,
         rsvp_public: false,
         community_id: null,
         image_path: null,
@@ -281,7 +342,6 @@ export default function CalendarPage() {
     }
   };
 
-  // Quick create for reminders/todos with custom details
   const createQuickEvent = async () => {
     if (!me || !quickModal.type) return;
     
@@ -314,54 +374,6 @@ export default function CalendarPage() {
     } catch (error) {
       console.error('Create quick event error:', error);
       alert("Failed to create quick event");
-    }
-  };
-
-  // ---------- Details modal ----------
-  const [selected, setSelected] = useState<DBEvent | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-
-  const openDetails = (e: any) => {
-    try {
-      const r = e?.resource as DBEvent | undefined;
-      if (r) { 
-        setSelected(r); 
-        setDetailsOpen(true); 
-        return; 
-      }
-      
-      const id = e?.id;
-      if (id) {
-        const found = events.find((it: any) => it?.id === id);
-        if (found) { 
-          setSelected(found); 
-          setDetailsOpen(true); 
-          return; 
-        }
-      }
-      
-      if (e?.title && e?.start && e?.end) {
-        const faux: DBEvent = {
-          id: id || "",
-          title: e.title,
-          description: null,
-          start_time: new Date(e.start).toISOString(),
-          end_time: new Date(e.end).toISOString(),
-          visibility: "public",
-          created_by: me || "",
-          location: null,
-          image_path: null,
-          source: "personal",
-          status: "scheduled",
-          cancellation_reason: null,
-          event_type: null,
-          invite_code: null,
-        };
-        setSelected(faux); 
-        setDetailsOpen(true);
-      }
-    } catch (error) {
-      console.error('Open details error:', error);
     }
   };
 
@@ -414,12 +426,10 @@ export default function CalendarPage() {
     }
   };
 
-  // External drag (desktop)
-  const [dragType, setDragType] = useState<QuickType>("none");
+  // Drag handlers - simple functions, no hooks
   const startDrag = (t: Exclude<QuickType, "none">) => () => setDragType(t);
   const endDrag = () => setDragType("none");
 
-  // Add button handlers - open quick modal
   const openQuickModal = (type: "reminder" | "todo") => {
     const now = new Date();
     const start = new Date(now.getTime() + 60*60*1000);
@@ -434,7 +444,12 @@ export default function CalendarPage() {
     setQuickModal({ open: true, type });
   };
 
+  // ===== COMPUTED VALUES (NO HOOKS) =====
+  
   const layoutClass = useMemo(() => (mode === "my" ? "grid-cols-calendar" : ""), [mode]);
+  const quickActive = quickType !== "none";
+
+  // ===== RENDER =====
 
   return (
     <div className="page calendar-sand">
@@ -603,8 +618,8 @@ export default function CalendarPage() {
           ) : (
             <CalendarGrid
               dbEvents={events as any}
-              moonEvents={[]}
-              showMoon={false}
+              moonEvents={moonEvents} // Use moon data unconditionally
+              showMoon={false} // Gate the display, not the hook
               theme={calendarTheme}
               showWeather={false}
               temperatureUnit="celsius"
@@ -627,7 +642,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Modals */}
-      <ModernCreateEventModal
+      <CreateEventModal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         sessionUser={me}
