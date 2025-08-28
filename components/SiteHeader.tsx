@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function SiteHeader() {
   const pathname = usePathname();
@@ -52,11 +53,9 @@ export default function SiteHeader() {
               <Nav href="/karma">Karma Corner</Nav>
             </nav>
 
-            <div className="auth-area">
-              <Link
-                href="/messages"
-                className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}
-              >
+            <div className="auth-area" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <NotificationBell href="/notifications" />
+              <Link href="/messages" className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}>
                 Messages
               </Link>
               <button className="btn" onClick={signOut} aria-label="Sign out">
