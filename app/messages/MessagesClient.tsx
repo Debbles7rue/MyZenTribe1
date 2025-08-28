@@ -18,7 +18,6 @@ export default function MessagesClient() {
   const listRef = useRef<HTMLDivElement | null>(null);
   const supabaseRef = useRef<any>(null); // holds the imported supabase client
 
-  // 1) Hydrate Supabase client + session (client-only)
   useEffect(() => {
     let unsub: any;
     (async () => {
@@ -34,24 +33,50 @@ export default function MessagesClient() {
     return () => unsub?.unsubscribe?.();
   }, []);
 
-  // 2) Load friends after auth
+  // Helper: robustly fetch friend IDs using a view if available
+  async function fetchFriendIds(uid: string): Promise<string[]> {
+    const supabase = supabaseRef.current;
+
+    // 1) Try friends_view (friend_id column)
+    {
+      const { data, error } = await supabase.from("friends_view").select("friend_id");
+      if (!error && Array.isArray(data)) {
+        return [...new Set((data as any[]).map(r => r.friend_id).filter(Boolean))];
+      }
+    }
+
+    // 2) Fallback to friendships (a,b)
+    {
+      const { data, error } = await supabase.from("friendships").select("a,b").or(`a.eq.${uid},b.eq.${uid}`);
+      if (!error && Array.isArray(data)) {
+        return [...new Set((data as any[]).map(p => (p.a === uid ? p.b : p.a)).filter(Boolean))];
+      }
+    }
+
+    // 3) Last resort: friendships (user_id, friend_id)
+    {
+      const { data, error } = await supabase.from("friendships").select("user_id,friend_id").or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+      if (!error && Array.isArray(data)) {
+        return [...new Set((data as any[]).map(p => (p.user_id === uid ? p.friend_id : p.user_id)).filter(Boolean))];
+      }
+    }
+
+    return [];
+  }
+
+  // Load friends after auth
   useEffect(() => {
     if (!ready || !userId || !supabaseRef.current) return;
     (async () => {
       const supabase = supabaseRef.current;
-      const { data: pairs } = await supabase
-        .from("friendships")
-        .select("a,b")
-        .or(`a.eq.${userId},b.eq.${userId}`);
-      const ids = [...new Set((pairs ?? []).map((p: any) => (p.a === userId ? p.b : p.a)))];
+
+      const ids = await fetchFriendIds(userId);
       if (!ids.length) {
         setFriends([]);
         return;
       }
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .in("id", ids);
+
+      const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", ids);
       const fr = (profiles ?? []).map((p: any) => ({
         id: p.id,
         full_name: p.full_name,
@@ -72,15 +97,12 @@ export default function MessagesClient() {
     const { data } = await supabase
       .from("messages")
       .select("*")
-      .or(
-        `and(sender_id.eq.${uid},recipient_id.eq.${friendId}),and(sender_id.eq.${friendId},recipient_id.eq.${uid})`
-      )
+      .or(`and(sender_id.eq.${uid},recipient_id.eq.${friendId}),and(sender_id.eq.${friendId},recipient_id.eq.${uid})`)
       .order("created_at", { ascending: true });
     setMsgs((data ?? []) as Msg[]);
     setTimeout(() => listRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }), 50);
   }
 
-  // 3) Load thread on selection
   useEffect(() => {
     if (userId && to) loadThread(userId, to);
   }, [userId, to]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,9 +112,7 @@ export default function MessagesClient() {
     const supabase = supabaseRef.current;
     const text = body.trim();
     setBody("");
-    const { error } = await supabase
-      .from("messages")
-      .insert({ sender_id: userId, recipient_id: to, body: text });
+    const { error } = await supabase.from("messages").insert({ sender_id: userId, recipient_id: to, body: text });
     if (error) {
       alert(error.message);
       setBody(text);
@@ -101,13 +121,9 @@ export default function MessagesClient() {
     await loadThread(userId, to);
   }
 
-  const active = useMemo(
-    () => friends.find((f) => f.id === to) || null,
-    [friends, to]
-  );
+  const active = useMemo(() => friends.find((f) => f.id === to) || null, [friends, to]);
 
-  if (!ready)
-    return <div className="max-w-5xl mx-auto p-4 sm:p-6">Loading…</div>;
+  if (!ready) return <div className="max-w-5xl mx-auto p-4 sm:p-6">Loading…</div>;
   if (!userId)
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6">
@@ -128,9 +144,7 @@ export default function MessagesClient() {
             {friends.map((f) => (
               <button
                 key={f.id}
-                className={`w-full text-left px-2 py-1 rounded ${
-                  to === f.id ? "bg-zinc-100" : "hover:bg-zinc-50"
-                }`}
+                className={`w-full text-left px-2 py-1 rounded ${to === f.id ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
                 onClick={() => setTo(f.id)}
               >
                 {f.full_name || "Member"}
@@ -143,33 +157,14 @@ export default function MessagesClient() {
         <div className="card p-3 flex flex-col">
           {active ? (
             <>
-              <div className="font-medium">
-                Chat with {active.full_name || "Friend"}
-              </div>
-              <div
-                ref={listRef}
-                className="mt-3 flex-1 overflow-auto border rounded p-2"
-                style={{ minHeight: 240 }}
-              >
+              <div className="font-medium">Chat with {active.full_name || "Friend"}</div>
+              <div ref={listRef} className="mt-3 flex-1 overflow-auto border rounded p-2" style={{ minHeight: 240 }}>
                 {msgs.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`my-1 ${
-                      m.sender_id === userId ? "text-right" : "text-left"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block px-2 py-1 rounded ${
-                        m.sender_id === userId
-                          ? "bg-violet-100"
-                          : "bg-zinc-100"
-                      }`}
-                    >
+                  <div key={m.id} className={`my-1 ${m.sender_id === userId ? "text-right" : "text-left"}`}>
+                    <span className={`inline-block px-2 py-1 rounded ${m.sender_id === userId ? "bg-violet-100" : "bg-zinc-100"}`}>
                       {m.body}
                     </span>
-                    <div className="muted text-[11px]">
-                      {new Date(m.created_at).toLocaleString()}
-                    </div>
+                    <div className="muted text-[11px]">{new Date(m.created_at).toLocaleString()}</div>
                   </div>
                 ))}
                 {msgs.length === 0 && <div className="muted">No messages yet.</div>}
