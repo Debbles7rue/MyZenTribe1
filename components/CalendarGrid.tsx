@@ -1,7 +1,7 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo } from "react";
 import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { DndProvider } from "react-dnd";
@@ -66,12 +66,6 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Guaranteed opener
-  const handleOpenEvent = useCallback(
-    (evt: UiEvent) => Promise.resolve().then(() => onSelectEvent(evt)),
-    [onSelectEvent]
-  );
-
   // Styling rules
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
@@ -113,7 +107,7 @@ export default function CalendarGrid({
         className: "text-[11px] leading-tight",
       };
     }
-    // Friends’ public: blue, Mine: soft blue
+    // Friends' public: blue, Mine: soft blue
     const bg = r?.by_friend ? "#bfdbfe" : "#dbeafe";
     return {
       style: {
@@ -127,33 +121,15 @@ export default function CalendarGrid({
     };
   };
 
+  // Simplified event component - no complex click handling
   function EventCell({ event }: { event: UiEvent }) {
     const r = (event.resource || {}) as any;
-    const onClick = (e: React.SyntheticEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      handleOpenEvent(event);
-    };
-    const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-    const titleClass =
-      r?.rsvp_me ? "text-[11px] leading-tight font-semibold" : "text-[11px] leading-tight";
-    const titleStyle = r?.rsvp_me ? { color: "#7c3aed" } : undefined; // purple heading if RSVP’d
+    const titleClass = r?.rsvp_me ? "text-[11px] leading-tight font-semibold" : "text-[11px] leading-tight";
+    const titleStyle = r?.rsvp_me ? { color: "#7c3aed" } : undefined;
 
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        onMouseDown={stop}
-        onTouchStart={stop}
-        onClick={onClick}
-        onDoubleClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleOpenEvent(event); }
-        }}
-      >
-        <div className={titleClass} style={titleStyle}>
-          {(event as any).title}
-        </div>
+      <div className={titleClass} style={titleStyle}>
+        {(event as any).title}
       </div>
     );
   }
@@ -177,8 +153,8 @@ export default function CalendarGrid({
           date={date}
           onNavigate={setDate}
           onSelectSlot={onSelectSlot}
-          onSelectEvent={(e: any) => handleOpenEvent(e as UiEvent)}
-          onDoubleClickEvent={(e: any) => handleOpenEvent(e as UiEvent)}
+          onSelectEvent={onSelectEvent}
+          onDoubleClickEvent={onSelectEvent}
           onEventDrop={onDrop}
           onEventResize={onResize}
           step={30}
