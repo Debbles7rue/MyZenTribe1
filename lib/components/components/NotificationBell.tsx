@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 import { unreadCount, subscribeNotifications } from "@/lib/notifications";
 import { useRouter } from "next/navigation";
 
-export default function NotificationBell({ href = "/profile?tab=notifications" }: { href?: string }) {
+export default function NotificationBell({ href = "/notifications" }: { href?: string }) {
   const [count, setCount] = useState<number>(0);
   const router = useRouter();
 
@@ -21,7 +21,7 @@ export default function NotificationBell({ href = "/profile?tab=notifications" }
       return () => {
         try {
           // @ts-ignore
-          if (ch) window?.supabase?.removeChannel?.(ch);
+          if (ch && (window as any).supabase?.removeChannel) (window as any).supabase.removeChannel(ch);
         } catch {}
       };
     })();
