@@ -5,16 +5,21 @@ import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
-import CreateEventModal from "@/components/CreateEventModal";
+import ModernCreateEventModal from "@/components/ModernCreateEventModal";
+import CalendarThemeSelector from "@/components/CalendarThemeSelector";
 import EventDetails from "@/components/EventDetails";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 // Client-only calendar grid (react-big-calendar + DnD backends)
-const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { ssr: false });
+const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
+  ssr: false,
+  loading: () => <div className="card p-3"><div>Loading calendar...</div></div>
+});
 
 type FeedEvent = DBEvent & { _dismissed?: boolean };
 type Mode = "my" | "whats";
 type QuickType = "none" | "reminder" | "todo";
+type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
 export default function CalendarPage() {
   const [me, setMe] = useState<string | null>(null);
@@ -25,6 +30,7 @@ export default function CalendarPage() {
   const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
+  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,45 +44,51 @@ export default function CalendarPage() {
     setLoading(true);
     setErr(null);
 
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .order("start_time", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("start_time", { ascending: true });
 
-    if (error) {
-      setErr(error.message || "Failed to load events");
-      setEvents([]);
+      if (error) {
+        setErr(error.message || "Failed to load events");
+        setEvents([]);
+        setLoading(false);
+        return;
+      }
+
+      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as any[];
+
+      // RSVP flag for me
+      let rsvpIds = new Set<string>();
+      if (me) {
+        const { data: myAtt } = await supabase
+          .from("event_attendees")
+          .select("event_id")
+          .eq("user_id", me);
+        rsvpIds = new Set((myAtt || []).map((r: any) => r.event_id));
+      }
+
+      // Friend IDs to mark "friends' public events"
+      let friendIds: string[] = [];
+      if (me) {
+        const { data: fr } = await supabase.from("friends_view").select("friend_id");
+        friendIds = (fr || []).map((r: any) => r.friend_id);
+      }
+
+      const withFlags = safe.map((e) => ({
+        ...e,
+        rsvp_me: rsvpIds.has(e.id),
+        by_friend: e.visibility === "public" && friendIds.includes(e.created_by) && e.created_by !== me,
+      }));
+
+      setEvents(withFlags);
       setLoading(false);
-      return;
+    } catch (error) {
+      console.error('Load calendar error:', error);
+      setErr("Failed to load calendar");
+      setLoading(false);
     }
-
-    const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time) as any[];
-
-    // RSVP flag for me
-    let rsvpIds = new Set<string>();
-    if (me) {
-      const { data: myAtt } = await supabase
-        .from("event_attendees")
-        .select("event_id")
-        .eq("user_id", me);
-      rsvpIds = new Set((myAtt || []).map((r: any) => r.event_id));
-    }
-
-    // Friend IDs to mark "friends' public events"
-    let friendIds: string[] = [];
-    if (me) {
-      const { data: fr } = await supabase.from("friends_view").select("friend_id");
-      friendIds = (fr || []).map((r: any) => r.friend_id);
-    }
-
-    const withFlags = safe.map((e) => ({
-      ...e,
-      rsvp_me: rsvpIds.has(e.id),
-      by_friend: e.visibility === "public" && friendIds.includes(e.created_by) && e.created_by !== me,
-    }));
-
-    setEvents(withFlags);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -93,7 +105,7 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- What’s Happening ----------
+  // ---------- What's Happening ----------
   async function loadFeed() {
     if (!me) return;
     setFeedLoading(true);
@@ -126,6 +138,7 @@ export default function CalendarPage() {
       setFeedLoading(false);
     }
   }
+  
   useEffect(() => {
     if (mode === "whats" && me) loadFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,72 +167,86 @@ export default function CalendarPage() {
   const quickActive = quickType !== "none";
 
   const handleSelectSlot = (info: { start: Date; end: Date }) => {
-    if (view === "month") {
-      setView("day");
-      setDate(info.start);
-      return;
+    try {
+      if (view === "month") {
+        setView("day");
+        setDate(info.start);
+        return;
+      }
+      if (quickActive) {
+        // place a quick event immediately
+        void createQuick(info.start, info.end, quickType);
+        setQuickType("none");
+        return;
+      }
+      setCreateForm((f) => ({ ...f, title: "", start: toLocalInput(info.start), end: toLocalInput(info.end) }));
+      setOpenCreate(true);
+    } catch (error) {
+      console.error('Select slot error:', error);
     }
-    if (quickActive) {
-      // place a quick event immediately
-      void createQuick(info.start, info.end, quickType);
-      setQuickType("none");
-      return;
-    }
-    setCreateForm((f) => ({ ...f, title: "", start: toLocalInput(info.start), end: toLocalInput(info.end) }));
-    setOpenCreate(true);
   };
 
   async function createQuick(start: Date, end: Date, kind: Exclude<QuickType, "none">) {
     if (!me) return;
-    const payload: any = {
-      title: kind === "reminder" ? "Reminder" : "To-do",
-      description: null,
-      location: null,
-      start_time: start,
-      end_time: end,
-      visibility: "private",
-      created_by: me,
-      event_type: kind, // style cue
-      rsvp_public: false,
-      community_id: null,
-      image_path: null,
-      source: "personal",
-      status: "scheduled",
-    };
-    const { error } = await supabase.from("events").insert(payload);
-    if (!error) loadCalendar();
+    try {
+      const payload: any = {
+        title: kind === "reminder" ? "Reminder" : "To-do",
+        description: null,
+        location: null,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        visibility: "private",
+        created_by: me,
+        event_type: kind, // style cue
+        rsvp_public: false,
+        community_id: null,
+        image_path: null,
+        source: "personal",
+        status: "scheduled",
+      };
+      const { error } = await supabase.from("events").insert(payload);
+      if (!error) loadCalendar();
+      else console.error('Create quick error:', error);
+    } catch (error) {
+      console.error('Create quick error:', error);
+    }
   }
 
   const createEvent = async () => {
     if (!me) return alert("Please log in.");
     const f = createForm;
-    if (!f.title || !f.start || !f.end) return alert("Missing fields.");
+    if (!f.title || !f.start) return alert("Title and start time are required.");
 
-    const payload: any = {
-      title: f.title,
-      description: f.description || null,
-      location: f.location || null,
-      start_time: new Date(f.start),
-      end_time: new Date(f.end),
-      visibility: f.visibility,
-      created_by: me,
-      event_type: f.event_type || null,
-      rsvp_public: true,
-      community_id: f.community_id || null,
-      image_path: f.image_path || null,
-      source: f.source,
-      status: "scheduled",
-    };
+    try {
+      const payload: any = {
+        title: f.title,
+        description: f.description || null,
+        location: f.location || null,
+        start_time: new Date(f.start).toISOString(),
+        end_time: f.end ? new Date(f.end).toISOString() : new Date(new Date(f.start).getTime() + 60*60*1000).toISOString(),
+        visibility: f.visibility,
+        created_by: me,
+        event_type: f.event_type || null,
+        rsvp_public: true,
+        community_id: f.community_id || null,
+        image_path: f.image_path || null,
+        source: f.source,
+        status: "scheduled",
+      };
 
-    const { error } = await supabase.from("events").insert(payload);
-    if (error) return alert(error.message);
+      const { error } = await supabase.from("events").insert(payload);
+      if (error) return alert(error.message);
 
-    setOpenCreate(false);
-    setCreateForm({
-      title: "", description: "", location: "", start: "", end: "",
-      visibility: "public", event_type: "", community_id: "", source: "personal", image_path: "",
-    });
-    loadCalendar();
+      setOpenCreate(false);
+      setCreateForm({
+        title: "", description: "", location: "", start: "", end: "",
+        visibility: "public", event_type: "", community_id: "", source: "personal", image_path: "",
+      });
+      loadCalendar();
+    } catch (error) {
+      console.error('Create event error:', error);
+      alert("Failed to create event");
+    }
   };
 
   // ---------- Details modal ----------
@@ -227,31 +254,46 @@ export default function CalendarPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const openDetails = (e: any) => {
-    const r = e?.resource as DBEvent | undefined;
-    if (r) { setSelected(r); setDetailsOpen(true); return; }
-    const id = e?.id;
-    if (id) {
-      const found = events.find((it: any) => it?.id === id);
-      if (found) { setSelected(found); setDetailsOpen(true); return; }
-    }
-    if (e?.title && e?.start && e?.end) {
-      const faux: DBEvent = {
-        id: id || "",
-        title: e.title,
-        description: null,
-        start_time: new Date(e.start).toISOString(),
-        end_time: new Date(e.end).toISOString(),
-        visibility: "public",
-        created_by: me || "",
-        location: null,
-        image_path: null,
-        source: "personal",
-        status: "scheduled",
-        cancellation_reason: null,
-        event_type: null,
-        invite_code: null,
-      };
-      setSelected(faux); setDetailsOpen(true);
+    try {
+      const r = e?.resource as DBEvent | undefined;
+      if (r) { 
+        setSelected(r); 
+        setDetailsOpen(true); 
+        return; 
+      }
+      
+      const id = e?.id;
+      if (id) {
+        const found = events.find((it: any) => it?.id === id);
+        if (found) { 
+          setSelected(found); 
+          setDetailsOpen(true); 
+          return; 
+        }
+      }
+      
+      if (e?.title && e?.start && e?.end) {
+        const faux: DBEvent = {
+          id: id || "",
+          title: e.title,
+          description: null,
+          start_time: new Date(e.start).toISOString(),
+          end_time: new Date(e.end).toISOString(),
+          visibility: "public",
+          created_by: me || "",
+          location: null,
+          image_path: null,
+          source: "personal",
+          status: "scheduled",
+          cancellation_reason: null,
+          event_type: null,
+          invite_code: null,
+        };
+        setSelected(faux); 
+        setDetailsOpen(true);
+      }
+    } catch (error) {
+      console.error('Open details error:', error);
     }
   };
 
@@ -259,23 +301,70 @@ export default function CalendarPage() {
     const r = evt?.resource as DBEvent | undefined;
     return !!(r && me && r.created_by === me);
   };
+
   const onDrop = async ({ event, start, end }: any) => {
-    if (!canEdit(event)) return;
-    const r = event.resource as DBEvent;
-    const { error } = await supabase.from("events").update({ start_time: start, end_time: end }).eq("id", r.id);
-    if (error) alert(error.message);
-  };
-  const onResize = async ({ event, start, end }: any) => {
-    if (!canEdit(event)) return;
-    const r = event.resource as DBEvent;
-    const { error } = await supabase.from("events").update({ start_time: start, end_time: end }).eq("id", r.id);
-    if (error) alert(error.message);
+    try {
+      if (!canEdit(event)) return;
+      const r = event.resource as DBEvent;
+      const { error } = await supabase
+        .from("events")
+        .update({ 
+          start_time: start.toISOString(), 
+          end_time: end.toISOString() 
+        })
+        .eq("id", r.id);
+      if (error) {
+        console.error('Drop error:', error);
+        alert(error.message);
+      } else {
+        loadCalendar();
+      }
+    } catch (error) {
+      console.error('Drop error:', error);
+    }
   };
 
-  // External drag (desktop) → we set the “kind” while dragging chips
+  const onResize = async ({ event, start, end }: any) => {
+    try {
+      if (!canEdit(event)) return;
+      const r = event.resource as DBEvent;
+      const { error } = await supabase
+        .from("events")
+        .update({ 
+          start_time: start.toISOString(), 
+          end_time: end.toISOString() 
+        })
+        .eq("id", r.id);
+      if (error) {
+        console.error('Resize error:', error);
+        alert(error.message);
+      } else {
+        loadCalendar();
+      }
+    } catch (error) {
+      console.error('Resize error:', error);
+    }
+  };
+
+  // External drag (desktop) → we set the "kind" while dragging chips
   const [dragType, setDragType] = useState<QuickType>("none");
   const startDrag = (t: Exclude<QuickType, "none">) => () => setDragType(t);
   const endDrag = () => setDragType("none");
+
+  // Add button handlers for mobile
+  const addReminder = () => {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60*60*1000); // 1 hour from now
+    const end = new Date(start.getTime() + 60*60*1000); // 1 hour duration
+    createQuick(start, end, "reminder");
+  };
+
+  const addTodo = () => {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60*60*1000); // 1 hour from now
+    const end = new Date(start.getTime() + 60*60*1000); // 1 hour duration
+    createQuick(start, end, "todo");
+  };
 
   const layoutClass = useMemo(() => (mode === "my" ? "grid-cols-calendar" : ""), [mode]);
 
@@ -295,9 +384,19 @@ export default function CalendarPage() {
                   onDragEnd={endDrag}
                   onClick={() => setQuickType((q) => (q === "reminder" ? "none" : "reminder"))}
                   title="Drag onto the calendar (desktop) or tap then tap a time slot (mobile)"
-                  style={{ borderLeft: "6px solid #ef4444", background: "#fee2e2" }}
+                  style={{ borderLeft: "6px solid #f59e0b", background: "#fef3c7" }}
                 >
                   Reminder (private)
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addReminder();
+                    }}
+                    className="ml-auto text-xs bg-amber-500 text-white px-2 py-1 rounded hover:bg-amber-600"
+                    title="Add reminder now"
+                  >
+                    + Add
+                  </button>
                 </div>
                 <div
                   className="tray-chip"
@@ -306,9 +405,19 @@ export default function CalendarPage() {
                   onDragEnd={endDrag}
                   onClick={() => setQuickType((q) => (q === "todo" ? "none" : "todo"))}
                   title="Drag onto the calendar (desktop) or tap then tap a time slot (mobile)"
-                  style={{ borderLeft: "6px solid #16a34a", background: "#dcfce7" }}
+                  style={{ borderLeft: "6px solid #059669", background: "#d1fae5" }}
                 >
                   To-do (private)
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addTodo();
+                    }}
+                    className="ml-auto text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+                    title="Add to-do now"
+                  >
+                    + Add
+                  </button>
                 </div>
                 {quickActive && (
                   <div className="note">
@@ -316,6 +425,12 @@ export default function CalendarPage() {
                     <div className="codeblock">
                       Tap a slot in Day/Week to place a {quickType}.
                     </div>
+                    <button 
+                      onClick={() => setQuickType("none")}
+                      className="mt-2 text-xs text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel placement mode
+                    </button>
                   </div>
                 )}
               </div>
@@ -328,9 +443,14 @@ export default function CalendarPage() {
             <h1 className="page-title">Calendar</h1>
 
             <div className="flex items-center gap-2">
+              <CalendarThemeSelector 
+                currentTheme={calendarTheme}
+                onThemeChange={setCalendarTheme}
+              />
+              
               <div className="segmented" role="tablist" aria-label="Calendar mode">
                 <button role="tab" aria-selected={mode === "whats"} className={`seg-btn ${mode === "whats" ? "active" : ""}`} onClick={() => setMode("whats")}>
-                  What’s Happening
+                  What's Happening
                 </button>
                 <button role="tab" aria-selected={mode === "my"} className={`seg-btn ${mode === "my" ? "active" : ""}`} onClick={() => setMode("my")}>
                   My Calendar
@@ -401,6 +521,7 @@ export default function CalendarPage() {
               dbEvents={events as any}
               moonEvents={[]}
               showMoon={false}
+              theme={calendarTheme}
               date={date}
               setDate={setDate}
               view={view}
@@ -421,7 +542,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Modals */}
-      <CreateEventModal
+      <ModernCreateEventModal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         sessionUser={me}
