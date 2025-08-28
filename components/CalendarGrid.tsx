@@ -1,12 +1,16 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useMemo } from "react";
+import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
+import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
+import { localizer } from "@/lib/localizer";
 import type { DBEvent } from "@/lib/types";
 
-// Import types only
-import type { View, Event as RBCEvent } from "react-big-calendar";
-
+const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
 export type UiEvent = RBCEvent & { resource: any };
 
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
@@ -36,63 +40,60 @@ type Props = {
   ) => void;
 };
 
-// Theme color palettes
-const getThemeColors = (theme: CalendarTheme = "default") => {
+function isTouchDevice() {
+  if (typeof window === "undefined") return false;
+  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+}
+
+// Theme backgrounds and styling
+const getThemeStyles = (theme: CalendarTheme = "default") => {
   const themes = {
     default: {
-      reminder: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e" },
-      todo: { bg: "#d1fae5", border: "#059669", color: "#064e3b" },
-      business: { bg: "#f8fafc", border: "#7c3aed", color: "#1e293b" },
-      friend: { bg: "#e0e7ff", border: "#8b5cf6", color: "#5b21b6" },
-      personal: { bg: "#dbeafe", border: "#3b82f6", color: "#1d4ed8" },
+      background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+      headerBg: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+      todayBg: "rgba(124,58,237,0.1)",
+      accent: "#7c3aed"
     },
     spring: {
-      reminder: { bg: "#fef7cd", border: "#eab308", color: "#713f12" },
-      todo: { bg: "#dcfce7", border: "#22c55e", color: "#15803d" },
-      business: { bg: "#f0fdf4", border: "#16a34a", color: "#14532d" },
-      friend: { bg: "#f0f9ff", border: "#0ea5e9", color: "#0c4a6e" },
-      personal: { bg: "#ecfdf5", border: "#10b981", color: "#065f46" },
+      background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%)",
+      headerBg: "linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)",
+      todayBg: "rgba(34,197,94,0.15)",
+      accent: "#22c55e"
     },
     summer: {
-      reminder: { bg: "#fed7aa", border: "#ea580c", color: "#9a3412" },
-      todo: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e" },
-      business: { bg: "#fff7ed", border: "#c2410c", color: "#7c2d12" },
-      friend: { bg: "#fef2f2", border: "#ef4444", color: "#991b1b" },
-      personal: { bg: "#ffedd5", border: "#f97316", color: "#c2410c" },
+      background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fef3c7 100%)",
+      headerBg: "linear-gradient(135deg, #fed7aa 0%, #fde68a 100%)",
+      todayBg: "rgba(245,158,11,0.15)",
+      accent: "#f59e0b"
     },
     autumn: {
-      reminder: { bg: "#fed7d7", border: "#dc2626", color: "#7f1d1d" },
-      todo: { bg: "#fed7aa", border: "#ea580c", color: "#9a3412" },
-      business: { bg: "#fff1f2", border: "#b91c1c", color: "#7f1d1d" },
-      friend: { bg: "#fef3c7", border: "#d97706", color: "#92400e" },
-      personal: { bg: "#ffedd5", border: "#c2410c", color: "#9a3412" },
+      background: "linear-gradient(135deg, #fff1f2 0%, #ffedd5 50%, #fef3c7 100%)",
+      headerBg: "linear-gradient(135deg, #fecaca 0%, #fdba74 100%)",
+      todayBg: "rgba(239,68,68,0.15)",
+      accent: "#ef4444"
     },
     winter: {
-      reminder: { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3" },
-      todo: { bg: "#f0f9ff", border: "#0284c7", color: "#0c4a6e" },
-      business: { bg: "#f5f3ff", border: "#7c3aed", color: "#581c87" },
-      friend: { bg: "#ede9fe", border: "#8b5cf6", color: "#6b21a8" },
-      personal: { bg: "#dbeafe", border: "#2563eb", color: "#1e40af" },
+      background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #e0e7ff 100%)",
+      headerBg: "linear-gradient(135deg, #ddd6fe 0%, #c7d2fe 100%)",
+      todayBg: "rgba(99,102,241,0.15)",
+      accent: "#6366f1"
     },
     nature: {
-      reminder: { bg: "#ecfccb", border: "#65a30d", color: "#365314" },
-      todo: { bg: "#f0fdf4", border: "#16a34a", color: "#14532d" },
-      business: { bg: "#f7fee7", border: "#84cc16", color: "#3f6212" },
-      friend: { bg: "#ecfdf5", border: "#10b981", color: "#064e3b" },
-      personal: { bg: "#f0fdfa", border: "#14b8a6", color: "#134e4a" },
+      background: "linear-gradient(135deg, #f7fee7 0%, #ecfdf5 50%, #f0fdfa 100%)",
+      headerBg: "linear-gradient(135deg, #d9f99d 0%, #a7f3d0 100%)",
+      todayBg: "rgba(132,204,22,0.15)",
+      accent: "#84cc16"
     },
     ocean: {
-      reminder: { bg: "#f0f9ff", border: "#0284c7", color: "#0c4a6e" },
-      todo: { bg: "#ecfeff", border: "#06b6d4", color: "#164e63" },
-      business: { bg: "#f0fdfa", border: "#0d9488", color: "#134e4a" },
-      friend: { bg: "#e6fffa", border: "#10b981", color: "#065f46" },
-      personal: { bg: "#f0f9ff", border: "#0ea5e9", color: "#0c4a6e" },
-    },
+      background: "linear-gradient(135deg, #f0f9ff 0%, #ecfeff 50%, #f0fdfa 100%)",
+      headerBg: "linear-gradient(135deg, #bae6fd 0%, #99f6e4 100%)",
+      todayBg: "rgba(14,165,233,0.15)",
+      accent: "#0ea5e9"
+    }
   };
   return themes[theme];
 };
 
-// Fallback calendar component
 export default function CalendarGrid({
   dbEvents, moonEvents, showMoon,
   showWeather = false,
@@ -103,41 +104,6 @@ export default function CalendarGrid({
   externalDragType = "none",
   onExternalDrop,
 }: Props) {
-  const [CalendarComponent, setCalendarComponent] = useState<any>(null);
-  const [DnDCalendar, setDnDCalendar] = useState<any>(null);
-  const [DndProvider, setDndProvider] = useState<any>(null);
-  const [Backend, setBackend] = useState<any>(null);
-  const [localizer, setLocalizer] = useState<any>(null);
-
-  useEffect(() => {
-    // Load all dependencies on client side only
-    Promise.all([
-      import("react-big-calendar"),
-      import("react-big-calendar/lib/addons/dragAndDrop"),
-      import("react-dnd"),
-      import("react-dnd-html5-backend"),
-      import("react-dnd-touch-backend"),
-      import("@/lib/localizer")
-    ]).then(([
-      rbcModule,
-      dndModule, 
-      reactDndModule,
-      html5Module,
-      touchModule,
-      localizerModule
-    ]) => {
-      const isTouchDevice = () => "ontouchstart" in window || navigator.maxTouchPoints > 0;
-      
-      setCalendarComponent(() => rbcModule.Calendar);
-      setDnDCalendar(() => dndModule.default(rbcModule.Calendar as any));
-      setDndProvider(() => reactDndModule.DndProvider);
-      setBackend(() => isTouchDevice() ? touchModule.TouchBackend : html5Module.HTML5Backend);
-      setLocalizer(localizerModule.localizer);
-    }).catch(error => {
-      console.error('Failed to load calendar components:', error);
-    });
-  }, []);
-
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
       dbEvents.map((e) => ({
@@ -156,120 +122,113 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Enhanced styling with theme support
+  const themeStyles = getThemeStyles(theme);
+
+  // Event styling - keep simple to avoid conflicts
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
-    const colors = getThemeColors(theme);
     
     if (r?.event_type === "reminder") {
-      const { bg, border, color } = colors.reminder;
       return {
         style: {
-          backgroundColor: bg,
-          border: `1px solid ${border}`,
+          background: "#fbbf24",
+          border: "1px solid #f59e0b",
           borderRadius: "6px",
-          color: color,
+          color: "#92400e",
           cursor: "pointer",
           fontWeight: "600",
           fontSize: "11px",
-          padding: "2px 4px",
-        }
+        },
       };
     }
     
     if (r?.event_type === "todo") {
-      const { bg, border, color } = colors.todo;
       return {
         style: {
-          backgroundColor: bg,
-          border: `1px solid ${border}`,
+          background: "#34d399",
+          border: "1px solid #059669",
           borderRadius: "6px",
-          color: color,
+          color: "#064e3b",
           cursor: "pointer",
           fontWeight: "600",
           fontSize: "11px",
-          padding: "2px 4px",
-        }
+        },
       };
     }
     
     if (r?.source === "business") {
-      const { bg, border, color } = colors.business;
       return {
         style: {
-          backgroundColor: bg,
-          border: `2px solid ${border}`,
+          background: "#e2e8f0",
+          border: "2px solid #7c3aed",
           borderRadius: "6px",
-          color: color,
+          color: "#1e293b",
           cursor: "pointer",
           fontWeight: "700",
           fontSize: "11px",
-          padding: "2px 4px",
-        }
+        },
       };
     }
     
     if (r?.by_friend) {
-      const { bg, border, color } = colors.friend;
       return {
         style: {
-          backgroundColor: bg,
-          border: `1px solid ${border}`,
+          background: "#c7d2fe",
+          border: "1px solid #8b5cf6",
           borderRadius: "6px",
-          color: color,
+          color: "#5b21b6",
           cursor: "pointer",
           fontWeight: r?.rsvp_me ? "700" : "500",
           fontSize: "11px",
-          padding: "2px 4px",
-        }
+        },
       };
     }
     
     // Personal events
-    const { bg, border, color } = colors.personal;
     return {
       style: {
-        backgroundColor: bg,
-        border: `1px solid ${border}`,
+        background: "#93c5fd",
+        border: "1px solid #3b82f6",
         borderRadius: "6px",
-        color: color,
+        color: "#1d4ed8",
         cursor: "pointer",
         fontWeight: r?.rsvp_me ? "700" : "500",
         fontSize: "11px",
-        padding: "2px 4px",
-      }
+      },
     };
   };
 
-  // Don't render until all components are loaded
-  if (!CalendarComponent || !DnDCalendar || !DndProvider || !Backend || !localizer) {
-    return (
-      <div className="card p-3">
-        <div className="flex items-center justify-center" style={{ height: "680px" }}>
-          <div className="text-gray-500">Loading calendar...</div>
-        </div>
-      </div>
-    );
-  }
+  const Backend = isTouchDevice() ? TouchBackend : HTML5Backend;
 
   return (
-    <div className="card p-3" style={{ position: "relative" }}>
+    <div 
+      className="themed-calendar-container"
+      style={{
+        background: themeStyles.background,
+        borderRadius: "16px",
+        padding: "16px",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+        border: "1px solid rgba(255,255,255,0.2)",
+      }}
+    >
       {/* Weather overlay */}
       {showWeather && view === "month" && (
         <div style={{
           position: "absolute",
-          top: "20px",
-          right: "20px",
+          top: "24px",
+          right: "24px",
           background: "rgba(255,255,255,0.95)",
+          backdropFilter: "blur(8px)",
           borderRadius: "12px",
-          padding: "6px 12px",
+          padding: "8px 12px",
           fontSize: "12px",
-          fontWeight: "500",
+          fontWeight: "600",
           color: "#374151",
-          border: "1px solid #e5e7eb",
+          border: "1px solid rgba(255,255,255,0.5)",
           zIndex: 10,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
         }}>
-          Weather: 22°{temperatureUnit === "celsius" ? "C" : "F"}
+          ☀️ 22°{temperatureUnit === "celsius" ? "C" : "F"}
         </div>
       )}
       
@@ -277,20 +236,22 @@ export default function CalendarGrid({
       {showMoon && view === "month" && (
         <div style={{
           position: "absolute",
-          top: "20px",
-          left: "20px",
+          top: "24px",
+          left: "24px",
           background: "rgba(255,255,255,0.95)",
+          backdropFilter: "blur(8px)",
           borderRadius: "12px",
-          padding: "6px 12px",
+          padding: "8px 12px",
           fontSize: "14px",
-          border: "1px solid #e5e7eb",
+          border: "1px solid rgba(255,255,255,0.5)",
           zIndex: 10,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
         }}>
-          Moon phase
+          🌕
         </div>
       )}
 
-      <DndProvider backend={Backend} options={{ enableMouseEvents: true }}>
+      <DndProvider backend={Backend as any} options={isTouchDevice() ? { enableMouseEvents: true } : undefined}>
         <DnDCalendar
           localizer={localizer}
           events={mergedEvents}
@@ -300,8 +261,10 @@ export default function CalendarGrid({
           resizable
           popup
           style={{ 
-            height: 680,
-            fontFamily: "system-ui, -apple-system, sans-serif",
+            height: 650,
+            background: "rgba(255,255,255,0.8)",
+            borderRadius: "12px",
+            padding: "12px",
           }}
           view={view}
           onView={setView}
@@ -336,15 +299,72 @@ export default function CalendarGrid({
       </DndProvider>
 
       <style jsx global>{`
-        /* Enhanced calendar styling */
-        .rbc-calendar {
-          background: white;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        .themed-calendar-container .rbc-header {
+          background: ${themeStyles.headerBg} !important;
+          border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+          padding: 12px 8px !important;
+          font-weight: 600 !important;
+          color: #374151 !important;
+          font-size: 13px !important;
         }
 
-        .rbc-header {
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          border-bottom: 1px solid #e2e8f0;
-          padding
+        .themed-calendar-container .rbc-today {
+          background: ${themeStyles.todayBg} !important;
+          border-radius: 8px !important;
+        }
+
+        .themed-calendar-container .rbc-toolbar button {
+          border: 1px solid rgba(0,0,0,0.1) !important;
+          background: rgba(255,255,255,0.9) !important;
+          color: #374151 !important;
+          border-radius: 8px !important;
+          padding: 8px 12px !important;
+          font-weight: 500 !important;
+          transition: all 0.2s ease !important;
+          margin: 0 2px !important;
+          backdrop-filter: blur(4px) !important;
+        }
+
+        .themed-calendar-container .rbc-toolbar button:hover {
+          background: rgba(255,255,255,1) !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+        }
+
+        .themed-calendar-container .rbc-toolbar button.rbc-active {
+          background: ${themeStyles.accent} !important;
+          color: white !important;
+          border-color: ${themeStyles.accent} !important;
+        }
+
+        .themed-calendar-container .rbc-day-bg:hover {
+          background: rgba(255,255,255,0.5) !important;
+          transition: background 0.2s ease !important;
+        }
+
+        .themed-calendar-container .rbc-slot-selection {
+          background: ${themeStyles.accent}40 !important;
+          border: 2px dashed ${themeStyles.accent} !important;
+          border-radius: 4px !important;
+        }
+
+        .themed-calendar-container .rbc-off-range-bg {
+          background: rgba(0,0,0,0.02) !important;
+        }
+
+        @media (max-width: 768px) {
+          .themed-calendar-container .rbc-toolbar {
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          
+          .themed-calendar-container .rbc-toolbar .rbc-btn-group {
+            display: flex !important;
+            justify-content: center !important;
+            gap: 4px !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
