@@ -1,7 +1,7 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo } from "react";
 import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import { DndProvider } from "react-dnd";
@@ -43,148 +43,6 @@ function isTouchDevice() {
   return "ontouchstart" in window || navigator.maxTouchPoints > 0;
 }
 
-// Enhanced event component with modern styling and interactions
-function ModernEventCell({ event }: { event: UiEvent }) {
-  const [isHovered, setIsHovered] = useState(false);
-  const r = (event.resource || {}) as any;
-  
-  const getEventStyle = () => {
-    const baseStyle = {
-      borderRadius: "8px",
-      padding: "4px 8px",
-      fontSize: "11px",
-      fontWeight: "500",
-      lineHeight: "1.2",
-      cursor: "pointer",
-      transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-      boxShadow: isHovered ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 3px rgba(0,0,0,0.1)",
-      transform: isHovered ? "translateY(-1px)" : "translateY(0)",
-      border: "1px solid",
-      position: "relative" as const,
-      overflow: "hidden" as const,
-    };
-
-    // Event type specific styling
-    if (r?.event_type === "reminder") {
-      return {
-        ...baseStyle,
-        background: "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)",
-        borderColor: "#fca5a5",
-        color: "#991b1b",
-      };
-    }
-    
-    if (r?.event_type === "todo") {
-      return {
-        ...baseStyle,
-        background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
-        borderColor: "#86efac",
-        color: "#166534",
-      };
-    }
-    
-    if (r?.source === "business") {
-      return {
-        ...baseStyle,
-        background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
-        borderColor: "#cbd5e1",
-        color: "#1e293b",
-        fontWeight: "600",
-      };
-    }
-    
-    // Friends' events vs personal events
-    const isFriendEvent = r?.by_friend;
-    return {
-      ...baseStyle,
-      background: isFriendEvent 
-        ? "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)"
-        : "linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 100%)",
-      borderColor: isFriendEvent ? "#60a5fa" : "#38bdf8",
-      color: "#1e40af",
-      fontWeight: r?.rsvp_me ? "600" : "500",
-    };
-  };
-
-  const titleStyle = r?.rsvp_me ? { 
-    color: "#7c3aed",
-    fontWeight: "700",
-  } : {};
-
-  return (
-    <div
-      style={getEventStyle()}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className="modern-event-cell"
-    >
-      <div style={titleStyle}>
-        {(event as any).title}
-      </div>
-      {r?.location && (
-        <div style={{ 
-          fontSize: "9px", 
-          opacity: 0.8, 
-          marginTop: "1px",
-          whiteSpace: "nowrap" as const,
-          overflow: "hidden" as const,
-          textOverflow: "ellipsis" as const,
-        }}>
-          📍 {r.location}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Weather component (placeholder for now)
-function WeatherDisplay({ date, unit }: { date: Date; unit: "celsius" | "fahrenheit" }) {
-  // This would integrate with your weather API
-  return (
-    <div style={{
-      position: "absolute" as const,
-      top: "8px",
-      right: "8px",
-      background: "rgba(255,255,255,0.9)",
-      backdropFilter: "blur(10px)",
-      borderRadius: "12px",
-      padding: "4px 8px",
-      fontSize: "10px",
-      fontWeight: "500",
-      color: "#374151",
-      border: "1px solid rgba(229,231,235,0.5)",
-    }}>
-      🌤️ 22°{unit === "celsius" ? "C" : "F"}
-    </div>
-  );
-}
-
-// Moon phase component
-function MoonPhaseDisplay({ date }: { date: Date }) {
-  // This would integrate with your moon phase logic
-  const getMoonPhase = () => {
-    // Placeholder logic - replace with your actual moon phase calculation
-    const phases = ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"];
-    return phases[Math.floor(Math.random() * phases.length)];
-  };
-
-  return (
-    <div style={{
-      position: "absolute" as const,
-      top: "8px",
-      left: "8px",
-      background: "rgba(255,255,255,0.9)",
-      backdropFilter: "blur(10px)",
-      borderRadius: "12px",
-      padding: "4px 8px",
-      fontSize: "12px",
-      border: "1px solid rgba(229,231,235,0.5)",
-    }}>
-      {getMoonPhase()}
-    </div>
-  );
-}
-
 export default function CalendarGrid({
   dbEvents, moonEvents, showMoon,
   showWeather = false,
@@ -194,8 +52,6 @@ export default function CalendarGrid({
   externalDragType = "none",
   onExternalDrop,
 }: Props) {
-  const calendarRef = useRef<any>(null);
-
   const dbUiEvents = useMemo<UiEvent[]>(
     () =>
       dbEvents.map((e) => ({
@@ -214,29 +70,94 @@ export default function CalendarGrid({
     [dbUiEvents, moonEvents, showMoon]
   );
 
-  // Enhanced styling function with modern design
+  // Enhanced styling - keeping it simple to avoid conflicts
   const eventPropGetter = (event: UiEvent) => {
     const r: any = event.resource || {};
     
-    const baseProps = {
+    // Reminders / To-dos (private) - Better contrast colors
+    if (r?.event_type === "reminder") {
+      return {
+        style: {
+          background: "linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%)",
+          border: "1px solid #f59e0b",
+          borderRadius: "8px",
+          color: "#92400e",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "11px",
+          boxShadow: "0 2px 4px rgba(245,158,11,0.2)",
+        },
+        className: "enhanced-event reminder-event",
+      };
+    }
+    
+    if (r?.event_type === "todo") {
+      return {
+        style: {
+          background: "linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%)",
+          border: "1px solid #059669",
+          borderRadius: "8px",
+          color: "#064e3b",
+          cursor: "pointer",
+          fontWeight: "600",
+          fontSize: "11px",
+          boxShadow: "0 2px 4px rgba(5,150,105,0.2)",
+        },
+        className: "enhanced-event todo-event",
+      };
+    }
+    
+    // Business: enhanced with purple accent
+    if (r?.source === "business") {
+      return {
+        style: {
+          background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+          border: "2px solid #7c3aed",
+          borderRadius: "8px",
+          color: "#1e293b",
+          cursor: "pointer",
+          fontWeight: "700",
+          fontSize: "11px",
+          boxShadow: "0 2px 6px rgba(124,58,237,0.2)",
+        },
+        className: "enhanced-event business-event",
+      };
+    }
+    
+    // Friends' events vs personal events - better distinction
+    if (r?.by_friend) {
+      return {
+        style: {
+          background: "linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)",
+          border: "1px solid #8b5cf6",
+          borderRadius: "8px",
+          color: "#5b21b6",
+          cursor: "pointer",
+          fontWeight: r?.rsvp_me ? "700" : "500",
+          fontSize: "11px",
+          boxShadow: "0 2px 4px rgba(139,92,246,0.2)",
+        },
+        className: `enhanced-event friend-event ${r?.rsvp_me ? "rsvp-event" : ""}`,
+      };
+    }
+    
+    // Personal events - distinct blue
+    return {
       style: {
-        border: "none",
+        background: "linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%)",
+        border: "1px solid #3b82f6",
         borderRadius: "8px",
-        padding: "2px 4px",
-        fontSize: "11px",
-        fontWeight: "500",
+        color: "#1d4ed8",
         cursor: "pointer",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-        transition: "all 0.2s ease",
+        fontWeight: r?.rsvp_me ? "700" : "500",
+        fontSize: "11px",
+        boxShadow: "0 2px 4px rgba(59,130,246,0.2)",
       },
-      className: "modern-event-item",
+      className: `enhanced-event personal-event ${r?.rsvp_me ? "rsvp-event" : ""}`,
     };
-
-    // Let the ModernEventCell handle styling
-    return baseProps;
   };
 
-  // Custom day prop getter for better day styling
+  // Enhanced day styling
   const dayPropGetter = (date: Date) => {
     const isToday = new Date().toDateString() === date.toDateString();
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -256,168 +177,229 @@ export default function CalendarGrid({
   const Backend = isTouchDevice() ? TouchBackend : HTML5Backend;
 
   return (
-    <div className="modern-calendar-container">
-      <div className="calendar-wrapper" style={{ position: "relative" }}>
-        {/* Weather overlay */}
-        {showWeather && view === "month" && (
-          <WeatherDisplay date={date} unit={temperatureUnit} />
-        )}
-        
-        {/* Moon phase overlay */}
-        {showMoon && view === "month" && (
-          <MoonPhaseDisplay date={date} />
-        )}
+    <div className="card p-3 modern-calendar-wrapper">
+      {/* Enhanced background pattern */}
+      <div className="calendar-background-pattern"></div>
+      
+      {/* Weather overlay */}
+      {showWeather && view === "month" && (
+        <div style={{
+          position: "absolute",
+          top: "20px",
+          right: "20px",
+          background: "rgba(255,255,255,0.95)",
+          backdropFilter: "blur(8px)",
+          borderRadius: "12px",
+          padding: "6px 12px",
+          fontSize: "12px",
+          fontWeight: "500",
+          color: "#374151",
+          border: "1px solid rgba(229,231,235,0.8)",
+          zIndex: 10,
+        }}>
+          ☀️ 22°{temperatureUnit === "celsius" ? "C" : "F"}
+        </div>
+      )}
+      
+      {/* Moon phase overlay */}
+      {showMoon && view === "month" && (
+        <div style={{
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          background: "rgba(255,255,255,0.95)",
+          backdropFilter: "blur(8px)",
+          borderRadius: "12px",
+          padding: "6px 12px",
+          fontSize: "14px",
+          border: "1px solid rgba(229,231,235,0.8)",
+          zIndex: 10,
+        }}>
+          🌕
+        </div>
+      )}
 
-        <DndProvider backend={Backend as any} options={isTouchDevice() ? { enableMouseEvents: true } : undefined}>
-          <DnDCalendar
-            ref={calendarRef}
-            localizer={localizer}
-            events={mergedEvents}
-            startAccessor="start"
-            endAccessor="end"
-            selectable
-            resizable
-            popup
-            style={{ 
-              height: 680,
-              fontFamily: "system-ui, -apple-system, sans-serif",
-            }}
-            view={view}
-            onView={setView}
-            date={date}
-            onNavigate={setDate}
-            onSelectSlot={onSelectSlot}
-            onSelectEvent={onSelectEvent}
-            onDoubleClickEvent={onSelectEvent}
-            onEventDrop={onDrop}
-            onEventResize={onResize}
-            step={30}
-            timeslots={2}
-            longPressThreshold={100}
-            scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
-            components={{ 
-              event: ({ event }) => <ModernEventCell event={event as UiEvent} />
-            }}
-            eventPropGetter={eventPropGetter}
-            dayPropGetter={dayPropGetter}
-            // External drag from Quick tray (desktop)
-            dragFromOutsideItem={
-              externalDragType !== "none"
-                ? () => ({ title: externalDragType === "reminder" ? "Reminder" : "To-do" })
-                : undefined
-            }
-            onDropFromOutside={
-              externalDragType !== "none" && onExternalDrop
-                ? ({ start, end, allDay }) =>
-                    onExternalDrop(
-                      { start, end, allDay },
-                      externalDragType as Exclude<NonNullable<Props["externalDragType"]>, "none">
-                    )
-                : undefined
-            }
-            onDragOver={(e: any) => { e.preventDefault(); }}
-          />
-        </DndProvider>
-      </div>
+      <DndProvider backend={Backend as any} options={isTouchDevice() ? { enableMouseEvents: true } : undefined}>
+        <DnDCalendar
+          localizer={localizer}
+          events={mergedEvents}
+          startAccessor="start"
+          endAccessor="end"
+          selectable
+          resizable
+          popup
+          style={{ 
+            height: 680,
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
+          view={view}
+          onView={setView}
+          date={date}
+          onNavigate={setDate}
+          onSelectSlot={onSelectSlot}
+          onSelectEvent={onSelectEvent}
+          onDoubleClickEvent={onSelectEvent}
+          onEventDrop={onDrop}
+          onEventResize={onResize}
+          step={30}
+          timeslots={2}
+          longPressThreshold={100}
+          scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
+          eventPropGetter={eventPropGetter}
+          dayPropGetter={dayPropGetter}
+          // External drag from Quick tray (desktop)
+          dragFromOutsideItem={
+            externalDragType !== "none"
+              ? () => ({ title: externalDragType === "reminder" ? "Reminder" : "To-do" })
+              : undefined
+          }
+          onDropFromOutside={
+            externalDragType !== "none" && onExternalDrop
+              ? ({ start, end, allDay }) =>
+                  onExternalDrop(
+                    { start, end, allDay },
+                    externalDragType as Exclude<NonNullable<Props["externalDragType"]>, "none">
+                  )
+              : undefined
+          }
+          onDragOver={(e: any) => { e.preventDefault(); }}
+        />
+      </DndProvider>
 
       <style jsx>{`
-        .modern-calendar-container {
-          background: #ffffff;
+        .modern-calendar-wrapper {
+          position: relative;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
           border-radius: 16px;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.08);
           overflow: hidden;
-          border: 1px solid #e5e7eb;
-        }
-        
-        .calendar-wrapper {
-          padding: 16px;
-        }
-
-        .modern-event-cell:hover {
-          z-index: 10;
+          background: 
+            radial-gradient(circle at 20% 80%, rgba(124,58,237,0.03) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(59,130,246,0.03) 0%, transparent 50%),
+            radial-gradient(circle at 40% 40%, rgba(139,92,246,0.02) 0%, transparent 50%),
+            #ffffff;
         }
 
-        /* Enhanced react-big-calendar styling */
-        :global(.rbc-calendar) {
-          font-family: system-ui, -apple-system, sans-serif;
+        .calendar-background-pattern {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-image: 
+            radial-gradient(circle at 1px 1px, rgba(124,58,237,0.08) 1px, transparent 0);
+          background-size: 20px 20px;
+          opacity: 0.3;
+          pointer-events: none;
         }
 
+        /* Enhanced event styling with hover effects */
+        :global(.enhanced-event) {
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          line-height: 1.2 !important;
+          padding: 3px 6px !important;
+        }
+
+        :global(.enhanced-event:hover) {
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.2) !important;
+          z-index: 100 !important;
+        }
+
+        /* Specific event type enhancements */
+        :global(.reminder-event:hover) {
+          box-shadow: 0 4px 16px rgba(245,158,11,0.4) !important;
+        }
+
+        :global(.todo-event:hover) {
+          box-shadow: 0 4px 16px rgba(5,150,105,0.4) !important;
+        }
+
+        :global(.business-event:hover) {
+          box-shadow: 0 4px 16px rgba(124,58,237,0.4) !important;
+        }
+
+        :global(.friend-event:hover) {
+          box-shadow: 0 4px 16px rgba(139,92,246,0.4) !important;
+        }
+
+        :global(.personal-event:hover) {
+          box-shadow: 0 4px 16px rgba(59,130,246,0.4) !important;
+        }
+
+        /* Calendar header styling */
         :global(.rbc-header) {
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          border-bottom: 1px solid #e2e8f0;
-          padding: 12px 8px;
-          font-weight: 600;
-          color: #374151;
-          font-size: 13px;
+          background: linear-gradient(135deg, #fafafb 0%, #f4f5f7 100%) !important;
+          border-bottom: 1px solid #e2e8f0 !important;
+          padding: 12px 8px !important;
+          font-weight: 600 !important;
+          color: #374151 !important;
+          font-size: 13px !important;
         }
 
+        /* Today highlighting with better contrast */
         :global(.rbc-today) {
-          background: linear-gradient(135deg, rgba(124,58,237,0.05) 0%, rgba(124,58,237,0.02) 100%) !important;
+          background: linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(124,58,237,0.06) 100%) !important;
+          border: 1px solid rgba(124,58,237,0.2) !important;
         }
 
-        :global(.rbc-off-range-bg) {
-          background: #f9fafb;
-        }
-
-        :global(.rbc-day-bg:hover) {
-          background: rgba(124,58,237,0.02);
-          transition: background 0.2s ease;
-        }
-
-        :global(.rbc-slot-selection) {
-          background: rgba(124,58,237,0.1);
-          border: 1px dashed #7c3aed;
-        }
-
-        :global(.rbc-time-view .rbc-time-gutter) {
-          background: #f8fafc;
-          border-right: 1px solid #e2e8f0;
-        }
-
-        :global(.rbc-time-header) {
-          border-bottom: 2px solid #e2e8f0;
-        }
-
-        :global(.rbc-toolbar) {
-          margin-bottom: 16px;
-          padding: 0 8px;
-        }
-
+        /* Toolbar button styling */
         :global(.rbc-toolbar button) {
-          border: 1px solid #e5e7eb;
-          background: #ffffff;
-          color: #374151;
-          border-radius: 8px;
-          padding: 8px 12px;
-          font-weight: 500;
-          transition: all 0.2s ease;
+          border: 1px solid #e5e7eb !important;
+          background: #ffffff !important;
+          color: #374151 !important;
+          border-radius: 8px !important;
+          padding: 8px 12px !important;
+          font-weight: 500 !important;
+          transition: all 0.2s ease !important;
+          margin: 0 2px !important;
         }
 
         :global(.rbc-toolbar button:hover) {
-          background: #f3f4f6;
-          transform: translateY(-1px);
+          background: #f3f4f6 !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
         }
 
         :global(.rbc-toolbar button.rbc-active) {
-          background: #7c3aed;
-          color: white;
-          border-color: #7c3aed;
+          background: #7c3aed !important;
+          color: white !important;
+          border-color: #7c3aed !important;
         }
 
+        /* Day hover effects */
+        :global(.rbc-day-bg:hover) {
+          background: rgba(124,58,237,0.02) !important;
+          transition: background 0.2s ease !important;
+        }
+
+        /* Better selection styling */
+        :global(.rbc-slot-selection) {
+          background: rgba(124,58,237,0.15) !important;
+          border: 2px dashed #7c3aed !important;
+          border-radius: 4px !important;
+        }
+
+        /* Weekend styling */
+        :global(.rbc-off-range-bg) {
+          background: rgba(248,250,252,0.8) !important;
+        }
+
+        /* Mobile responsiveness */
         @media (max-width: 768px) {
-          .calendar-wrapper {
-            padding: 8px;
-          }
-          
           :global(.rbc-toolbar) {
-            flex-direction: column;
-            gap: 8px;
+            flex-direction: column !important;
+            gap: 8px !important;
           }
           
           :global(.rbc-toolbar .rbc-btn-group) {
-            display: flex;
-            justify-content: center;
-            gap: 4px;
+            display: flex !important;
+            justify-content: center !important;
+            gap: 4px !important;
+          }
+
+          :global(.enhanced-event) {
+            font-size: 10px !important;
+            padding: 2px 4px !important;
           }
         }
       `}</style>
