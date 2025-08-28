@@ -248,3 +248,20 @@ input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
 .rbc-day-bg,
 .rbc-timeslot-group { touch-action: manipulation; }
 .rbc-event, .rbc-day-bg { -webkit-tap-highlight-color: transparent; }
+
+/* Soft lavender background that fades down the page */
+.lavender-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f5f3ff 0%, #faf5ff 40%, #ffffff 100%);
+}
+
+/* Optional: compact KPI pills */
+.kpi {
+  background: rgba(124, 58, 237, 0.08);
+  color: #4c1d95;
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
