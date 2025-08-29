@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabaseClient";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function SiteHeader() {
-  // ---- hooks (always at top, never conditional) ----
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null | "loading">("loading");
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
@@ -19,7 +18,16 @@ export default function SiteHeader() {
     });
   }, []);
 
-  // ---- helpers ----
+  // close dropdown if clicking elsewhere
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as HTMLElement;
+      if (!t.closest(".nav-caret") && !t.closest(".menu")) setOpenProfileMenu(false);
+    }
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
   const Nav = ({ href, children }: { href: string; children: React.ReactNode }) => {
     const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
     return (
@@ -34,7 +42,6 @@ export default function SiteHeader() {
     window.location.href = "/login";
   };
 
-  // ---- render ----
   return (
     <header className="site-header">
       <div className="header-inner container-app">
@@ -52,7 +59,7 @@ export default function SiteHeader() {
               <Nav href="/">Home</Nav>
               <Nav href="/calendar">Calendar</Nav>
 
-              {/* Profile with Business tucked under it */}
+              {/* Profile + Business under dropdown */}
               <div className="relative inline-flex">
                 <Nav href="/profile">Profile</Nav>
                 <button
@@ -63,11 +70,7 @@ export default function SiteHeader() {
                   ▾
                 </button>
                 {openProfileMenu && (
-                  <div
-                    className="menu"
-                    onMouseLeave={() => setOpenProfileMenu(false)}
-                    role="menu"
-                  >
+                  <div className="menu" role="menu">
                     <Link href="/profile" className="menu-item" role="menuitem">
                       Personal profile
                     </Link>
@@ -83,7 +86,6 @@ export default function SiteHeader() {
             </nav>
 
             <div className="auth-area">
-              {/* Notifications are in the main header; we removed the extra Messages button here */}
               <NotificationBell href="/notifications" />
               <button className="btn" onClick={signOut} aria-label="Sign out">
                 Sign out
