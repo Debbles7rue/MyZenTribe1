@@ -3,8 +3,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./globals.css";
 import type { Metadata } from "next";
 import SiteHeader from "@/components/SiteHeader";
-// ...
-<SiteHeader />
+import FirstRunGate from "@/components/FirstRunGate";
 
 export const metadata: Metadata = {
   title: "MyZenTribe",
@@ -28,8 +27,11 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {/* Single global header (from components/SiteHeader.tsx) */}
+        {/* Global header */}
         <SiteHeader />
+
+        {/* First-run redirect guard (client) */}
+        <FirstRunGate />
 
         {/* Page content */}
         <main className="page-wrap">{children}</main>
