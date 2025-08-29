@@ -3,6 +3,8 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./globals.css";
 import type { Metadata } from "next";
 import SiteHeader from "@/components/SiteHeader";
+// ...
+<SiteHeader />
 
 export const metadata: Metadata = {
   title: "MyZenTribe",
