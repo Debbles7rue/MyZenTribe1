@@ -1,12 +1,16 @@
+// app/legal/terms/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { TERMS_VERSION } from "@/lib/terms";
 
 export default function TermsPage() {
   const router = useRouter();
+  const search = useSearchParams();
+  const nextParam = search.get("next") || "/";
+
   const [uid, setUid] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -24,8 +28,10 @@ export default function TermsPage() {
         terms_accepted_at: new Date().toISOString(),
       })
       .eq("id", uid);
+
     setSaving(false);
-    router.replace("/profile");
+    // After terms, route to safety waiver (and pass through 'next')
+    router.replace(`/safety/waiver?next=${encodeURIComponent(nextParam)}`);
   }
 
   return (
