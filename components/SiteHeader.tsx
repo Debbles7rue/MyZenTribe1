@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import NotificationBell from "@/components/NotificationBell";
+import NotificationBell from "./NotificationBell";
 
 export default function SiteHeader() {
   const pathname = usePathname();
