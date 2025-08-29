@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -60,7 +61,11 @@ export default function ProfilePage() {
       if (!userId) return;
       setLoading(true);
       try {
-        const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
         if (error) throw error;
         if (data) {
           setP({
@@ -73,7 +78,9 @@ export default function ProfilePage() {
             location_is_public: data.location_is_public ?? false,
             show_mutuals: data.show_mutuals ?? true,
           });
-        } else setP(prev => ({ ...prev, id: userId }));
+        } else {
+          setP(prev => ({ ...prev, id: userId }));
+        }
       } catch {
         setTableMissing(true);
       } finally {
@@ -86,18 +93,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!userId) return;
     (async () => {
-      // Prefer friends_view if present
-      const { data: fv, error: fvErr } = await supabase
-        .from("friends_view")
-        .select("friend_id")
-        .eq("user_id", userId);
-
-      if (!fvErr && fv) {
-        setFriendsCount(fv.length);
-        return;
-      }
-
-      // Fallback to friendships(a,b)
       const { count } = await supabase
         .from("friendships")
         .select("a", { count: "exact", head: true })
@@ -112,25 +107,34 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("profiles").update({
-        full_name: p.full_name?.trim() || null,
-        bio: p.bio?.trim() || null,
-        location_text: p.location_text?.trim() || null,
-        location_is_public: !!p.location_is_public,
-        avatar_url: p.avatar_url?.trim() || null,
-        show_mutuals: !!p.show_mutuals,
-      }).eq("id", userId);
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: p.full_name?.trim() || null,
+          bio: p.bio?.trim() || null,
+          location_text: p.location_text?.trim() || null,
+          location_is_public: !!p.location_is_public,
+          avatar_url: p.avatar_url?.trim() || null,
+          show_mutuals: !!p.show_mutuals,
+        })
+        .eq("id", userId);
       if (error) throw error;
       alert("Saved!");
       setEditPersonal(false);
-    } catch (e: any) { alert(e.message || "Save failed"); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      alert(e.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   async function onAvatarChange(url: string) {
     setP(prev => ({ ...prev, avatar_url: url }));
     if (!userId) return;
-    const { error } = await supabase.from("profiles").update({ avatar_url: url || null }).eq("id", userId);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: url || null })
+      .eq("id", userId);
     if (error) alert("Could not save photo: " + error.message);
   }
 
@@ -164,7 +168,9 @@ export default function ProfilePage() {
               <Link href="/business" className="btn">Business profile</Link>
               <Link href="/friends" className="btn">Friends</Link>
               <Link href="/messages" className="btn">Messages</Link>
-              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>{editPersonal ? "Done" : "Edit"}</button>
+              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
+                {editPersonal ? "Done" : "Edit"}
+              </button>
             </div>
           </div>
 
@@ -178,18 +184,49 @@ export default function ProfilePage() {
           )}
 
           {/* Identity header */}
-          <div className="card p-3 mb-3 profile-card" style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}>
-            <div className="profile-header" style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", gap: isDesktop ? 18 : 12, alignItems: isDesktop ? "flex-start" : "center", textAlign: isDesktop ? "left" : "center" }}>
+          <div
+            className="card p-3 mb-3 profile-card"
+            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
+          >
+            <div
+              className="profile-header"
+              style={{
+                display: "flex",
+                flexDirection: isDesktop ? "row" : "column",
+                gap: isDesktop ? 18 : 12,
+                alignItems: isDesktop ? "flex-start" : "center",
+                textAlign: isDesktop ? "left" : "center",
+              }}
+            >
               <div className="shrink-0">
-                <AvatarUploader userId={userId} value={p.avatar_url} onChange={onAvatarChange} label="Profile photo" size={160} />
+                <AvatarUploader
+                  userId={userId}
+                  value={p.avatar_url}
+                  onChange={onAvatarChange}
+                  label="Profile photo"
+                  size={160}
+                />
               </div>
               <div className="profile-heading" style={{ minWidth: 0, width: "100%" }}>
                 <div className="profile-name">{displayName}</div>
-                <div className="kpis" style={{ display: "flex", gap: 12, justifyContent: isDesktop ? "flex-start" : "center", flexWrap: "wrap" }}>
+
+                {/* KPIs (Friends now clickable) */}
+                <div
+                  className="kpis"
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    justifyContent: isDesktop ? "flex-start" : "center",
+                    flexWrap: "wrap",
+                  }}
+                >
                   <span className="kpi"><strong>0</strong> Followers</span>
                   <span className="kpi"><strong>0</strong> Following</span>
-                  {/* Make Friends KPI clickable → /friends */}
-                  <Link href="/friends" className="kpi hover:underline">
+                  <Link
+                    href="/friends"
+                    className="kpi underline decoration-dotted hover:decoration-solid"
+                    title="Open your friends list"
+                  >
                     <strong>{friendsCount}</strong> Friends
                   </Link>
                 </div>
@@ -203,7 +240,15 @@ export default function ProfilePage() {
           </div>
 
           {/* Columns */}
-          <div className="columns" style={{ display: "grid", gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr", gap: 16, alignItems: "start" }}>
+          <div
+            className="columns"
+            style={{
+              display: "grid",
+              gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr",
+              gap: 16,
+              alignItems: "start",
+            }}
+          >
             <div className="stack">
               {!isDesktop && QuickActions}
 
@@ -211,31 +256,61 @@ export default function ProfilePage() {
                 <section className="card p-3">
                   <h2 className="section-title">Edit your info</h2>
                   <div className="stack">
-                    <label className="field"><span className="label">Name</span>
-                      <input className="input" value={p.full_name ?? ""} onChange={(e) => setP({ ...p, full_name: e.target.value })} />
+                    <label className="field">
+                      <span className="label">Name</span>
+                      <input
+                        className="input"
+                        value={p.full_name ?? ""}
+                        onChange={(e) => setP({ ...p, full_name: e.target.value })}
+                      />
                     </label>
 
-                    <div className="grid" style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}>
-                      <label className="field"><span className="label">Location</span>
-                        <input className="input" value={p.location_text ?? ""} onChange={(e) => setP({ ...p, location_text: e.target.value })} placeholder="City, State" />
+                    <div
+                      className="grid"
+                      style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}
+                    >
+                      <label className="field">
+                        <span className="label">Location</span>
+                        <input
+                          className="input"
+                          value={p.location_text ?? ""}
+                          onChange={(e) => setP({ ...p, location_text: e.target.value })}
+                          placeholder="City, State"
+                        />
                       </label>
                       <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <input type="checkbox" checked={!!p.location_is_public} onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} />
+                        <input
+                          type="checkbox"
+                          checked={!!p.location_is_public}
+                          onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
+                        />
                         Show on public profile
                       </label>
                     </div>
 
-                    <label className="field"><span className="label">Bio</span>
-                      <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e) => setP({ ...p, bio: e.target.value })} />
+                    <label className="field">
+                      <span className="label">Bio</span>
+                      <textarea
+                        className="input"
+                        rows={4}
+                        value={p.bio ?? ""}
+                        onChange={(e) => setP({ ...p, bio: e.target.value })}
+                      />
                     </label>
 
                     <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input type="checkbox" checked={!!p.show_mutuals} onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={!!p.show_mutuals}
+                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
+                      />
                       <span>Show mutual friends</span>
                     </label>
 
                     <div className="right" style={{ textAlign: "right" }}>
-                      <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>
+                        {saving ? "Saving..." : "Save"}
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -243,9 +318,19 @@ export default function ProfilePage() {
                 <section className="card p-3">
                   <h2 className="section-title">About</h2>
                   <div className="stack">
-                    {p.location_is_public && p.location_text ? (<div><strong>Location:</strong> {p.location_text}</div>) : null}
-                    {p.bio ? (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>) : (<div className="muted">Add a bio and location using Edit.</div>)}
-                    {!p.location_is_public && p.location_text ? (<div className="muted text-sm">(Location is private)</div>) : null}
+                    {p.location_is_public && p.location_text ? (
+                      <div>
+                        <strong>Location:</strong> {p.location_text}
+                      </div>
+                    ) : null}
+                    {p.bio ? (
+                      <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
+                    ) : (
+                      <div className="muted">Add a bio and location using Edit.</div>
+                    )}
+                    {!p.location_is_public && p.location_text ? (
+                      <div className="muted text-sm">(Location is private)</div>
+                    ) : null}
                   </div>
                 </section>
               )}
