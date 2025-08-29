@@ -4,17 +4,18 @@
 import { supabase } from "@/lib/supabaseClient";
 
 /**
- * Insert an event for the current user.
- * - Ensures owner_id is set to the signed-in user.
- * - Tries both "events" and "calendar_events" tables (first one that exists).
- * - Tries both column pairs: start_at/end_at, then start_time/end_time (first that works).
- * - Returns { id } of the created row.
+ * Insert an event for the current user in a schema-agnostic way.
+ * We try both "events" and "calendar_events" and multiple column name variants:
+ * - owner: owner_id | user_id | created_by
+ * - time: (start_at,end_at) | (start_time,end_time) | (starts_at,ends_at)
+ * - visibility: visibility ("public"/"private") | is_public (boolean)
+ * - description: notes | description (we pass in notes; you can update description after)
  */
 export async function insertEventForUser(input: {
   title: string;
-  startISO: string;     // e.g. 2025-08-29T18:00:00.000Z
-  endISO: string;       // e.g. 2025-08-29T19:00:00.000Z
-  visibility?: "public" | "private"; // "public" => appears in Happenings; "private" => My Calendar only
+  startISO: string;
+  endISO: string;
+  visibility?: "public" | "private";
   location?: string | null;
   notes?: string | null;
 }) {
@@ -22,31 +23,55 @@ export async function insertEventForUser(input: {
   const user = auth.user;
   if (!user) throw new Error("Please sign in.");
 
-  const visibility = input.visibility ?? "private";
-  const base = {
+  const tables = ["events", "calendar_events"];
+
+  // candidate owner field names
+  const ownerKeys = ["owner_id", "user_id", "created_by"];
+
+  // candidate time column pairs
+  const timePairs: Array<[string, string]> = [
+    ["start_at", "end_at"],
+    ["start_time", "end_time"],
+    ["starts_at", "ends_at"],
+  ];
+
+  // candidate visibility representations
+  const makeVisibilityVariants = (v: "public" | "private") => [
+    { visibility: v },
+    { is_public: v === "public" },
+  ];
+
+  const baseCommon = {
     title: (input.title || "").trim() || "Untitled",
-    visibility,
-    owner_id: user.id,
     location: input.location ?? null,
     notes: input.notes ?? null,
-  };
+    source: "personal",
+    rsvp_public: true,
+  } as Record<string, any>;
 
-  const byStartAt = { ...base, start_at: input.startISO, end_at: input.endISO };
-  const byStartTime = { ...base, start_time: input.startISO, end_time: input.endISO };
-
-  const tables = ["events", "calendar_events"];
   let lastErr: any = null;
 
   for (const table of tables) {
-    // Try start_at/end_at first
-    let r = await supabase.from(table).insert(byStartAt).select("id").single();
-    if (!r.error && r.data) return r.data;
+    // try each owner key
+    for (const ownerKey of ownerKeys) {
+      // try each time column pair
+      for (const [startKey, endKey] of timePairs) {
+        // try visibility as enum or boolean
+        for (const vis of makeVisibilityVariants(input.visibility ?? "private")) {
+          const payload: Record<string, any> = {
+            ...baseCommon,
+            [ownerKey]: user.id,
+            [startKey]: input.startISO,
+            [endKey]: input.endISO,
+            ...vis,
+          };
 
-    // If that failed (maybe columns differ), try start_time/end_time
-    let r2 = await supabase.from(table).insert(byStartTime).select("id").single();
-    if (!r2.error && r2.data) return r2.data;
-
-    lastErr = r2.error || r.error;
+          const res = await supabase.from(table).insert(payload).select("id").single();
+          if (!res.error && res.data) return res.data;
+          lastErr = res.error;
+        }
+      }
+    }
   }
 
   throw new Error(lastErr?.message || "Could not create event.");
