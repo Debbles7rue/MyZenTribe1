@@ -5,47 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { unreadCount, subscribeNotifications } from "@/lib/notifications";
-
-// Inline bell (so build can't fail on a missing file path). You can
-// later swap back to a separate component if you prefer.
-function NotificationBellInline({ className = "", href = "/notifications" }: { className?: string; href?: string }) {
-  const [count, setCount] = useState(0);
-
-  async function refresh() {
-    const n = await unreadCount();
-    setCount(n || 0);
-  }
-
-  useEffect(() => {
-    let channel: any;
-    refresh();
-    (async () => {
-      channel = await subscribeNotifications(() => { void refresh(); });
-    })();
-    return () => { try { channel?.unsubscribe?.(); } catch {} };
-  }, []);
-
-  return (
-    <Link
-      href={href}
-      className={`relative inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm ${className}`}
-      aria-label={count > 0 ? `${count} unread notifications` : "Notifications"}
-      title="Notifications"
-    >
-      <span className="mr-1.5" aria-hidden>🔔</span>
-      {count > 0 && (
-        <span className="absolute -top-1 -right-1 min-w-[20px] rounded-full bg-violet-600 px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
-    </Link>
-  );
-}
+import NotificationBell from "@/components/NotificationBell";
 
 export default function SiteHeader() {
+  // ---- hooks (always at top, never conditional) ----
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null | "loading">("loading");
+  const [openProfileMenu, setOpenProfileMenu] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -53,11 +19,7 @@ export default function SiteHeader() {
     });
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
-
+  // ---- helpers ----
   const Nav = ({ href, children }: { href: string; children: React.ReactNode }) => {
     const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
     return (
@@ -67,6 +29,12 @@ export default function SiteHeader() {
     );
   };
 
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  };
+
+  // ---- render ----
   return (
     <header className="site-header">
       <div className="header-inner container-app">
@@ -81,24 +49,42 @@ export default function SiteHeader() {
         ) : userId ? (
           <>
             <nav className="main-nav">
+              <Nav href="/">Home</Nav>
               <Nav href="/calendar">Calendar</Nav>
-              <Nav href="/communities">Communities</Nav>
-              <Nav href="/meditation">Meditation room</Nav>
-              <Nav href="/profile">Profile</Nav>
-              <Nav href="/business">Business</Nav>
+
+              {/* Profile with Business tucked under it */}
+              <div className="relative inline-flex">
+                <Nav href="/profile">Profile</Nav>
+                <button
+                  aria-label="Profile menu"
+                  className="nav-caret"
+                  onClick={() => setOpenProfileMenu((v) => !v)}
+                >
+                  ▾
+                </button>
+                {openProfileMenu && (
+                  <div
+                    className="menu"
+                    onMouseLeave={() => setOpenProfileMenu(false)}
+                    role="menu"
+                  >
+                    <Link href="/profile" className="menu-item" role="menuitem">
+                      Personal profile
+                    </Link>
+                    <Link href="/business" className="menu-item" role="menuitem">
+                      Business profile
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              <Nav href="/meditation">Meditation</Nav>
               <Nav href="/karma">Karma Corner</Nav>
             </nav>
 
             <div className="auth-area">
-              {/* Notifications bell */}
-              <NotificationBellInline className="mr-2" />
-
-              <Link
-                href="/messages"
-                className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}
-              >
-                Messages
-              </Link>
+              {/* Notifications are in the main header; we removed the extra Messages button here */}
+              <NotificationBell href="/notifications" />
               <button className="btn" onClick={signOut} aria-label="Sign out">
                 Sign out
               </button>
@@ -112,6 +98,36 @@ export default function SiteHeader() {
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .nav-caret {
+          margin-left: -6px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          padding: 0 6px;
+          color: inherit;
+        }
+        .menu {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          margin-top: 8px;
+          background: #fff;
+          border: 1px solid rgba(0,0,0,.08);
+          border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0,0,0,.12);
+          min-width: 180px;
+          z-index: 50;
+        }
+        .menu-item {
+          display: block;
+          padding: 10px 12px;
+          font-size: 14px;
+          color: #1f2937;
+        }
+        .menu-item:hover { background: #f9fafb; }
+      `}</style>
     </header>
   );
 }
