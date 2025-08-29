@@ -4,11 +4,20 @@
 import React from "react";
 import type { DBEvent } from "@/lib/types";
 
-/**
- * Minimal, SAFE modal for viewing event details.
- * No hooks at all (prevents hook-order issues when toggling).
- * Add richer actions later without introducing conditional hooks.
- */
+// Safely read a date from any supported column name
+function getDate(e: any, keys: string[]) {
+  for (const k of keys) {
+    if (e?.[k]) return new Date(e[k]);
+  }
+  return null;
+}
+function getField(e: any, keys: string[]) {
+  for (const k of keys) {
+    if (e?.[k] !== undefined && e?.[k] !== null) return e[k];
+  }
+  return null;
+}
+
 export default function EventDetails({
   event,
   onClose,
@@ -16,10 +25,15 @@ export default function EventDetails({
   event: DBEvent | null;
   onClose: () => void;
 }) {
-  if (!event) return null; // no hooks above, so this is safe
+  if (!event) return null;
 
-  const start = new Date((event as any).start_time);
-  const end = new Date((event as any).end_time);
+  const start =
+    getDate(event, ["start_time", "start_at", "starts_at"]) || new Date();
+  const end = getDate(event, ["end_time", "end_at", "ends_at"]) || start;
+  const location = getField(event, ["location"]);
+  const visibility =
+    getField(event, ["visibility"]) ??
+    (getField(event, ["is_public"]) ? "public" : "private");
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -53,16 +67,16 @@ export default function EventDetails({
               <span className="font-medium">When: </span>
               {start.toLocaleString()} — {end.toLocaleString()}
             </div>
-            {(event as any).location ? (
+            {location ? (
               <div>
                 <span className="font-medium">Location: </span>
-                {(event as any).location}
+                {location}
               </div>
             ) : null}
-            {(event as any).visibility ? (
+            {visibility ? (
               <div>
                 <span className="font-medium">Visibility: </span>
-                {(event as any).visibility}
+                {String(visibility)}
               </div>
             ) : null}
           </div>
@@ -75,14 +89,7 @@ export default function EventDetails({
         </div>
 
         <div className="px-5 py-4 border-t flex flex-wrap gap-2 justify-end">
-          {/* Placeholder actions – wire up later if needed */}
-          {/* <button className="btn">Interested</button>
-          <button className="btn">RSVP</button>
-          <button className="btn">Share</button> */}
-          <button
-            onClick={onClose}
-            className="btn btn-brand"
-          >
+          <button onClick={onClose} className="btn btn-brand">
             Done
           </button>
         </div>
