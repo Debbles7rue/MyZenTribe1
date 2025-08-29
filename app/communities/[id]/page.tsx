@@ -9,6 +9,8 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
+<Link href={`/communities/${id}/admin`} className="btn">Admin</Link>
+
 const AddPinModal = dynamic(() => import("@/components/community/AddPinModal"), { ssr: false });
 const MapExplorerClient = dynamic(() => import("@/components/community/MapExplorerClient"), { ssr: false });
 
