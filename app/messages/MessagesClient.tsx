@@ -16,9 +16,9 @@ export default function MessagesClient() {
 
   const search = useSearchParams();
   const listRef = useRef<HTMLDivElement | null>(null);
-  const supabaseRef = useRef<any>(null);
+  const supabaseRef = useRef<any>(null); // holds the imported supabase client
 
-  // hydrate supabase + session
+  // 1) Hydrate Supabase client + session (client-only)
   useEffect(() => {
     let unsub: any;
     (async () => {
@@ -34,43 +34,45 @@ export default function MessagesClient() {
     return () => unsub?.unsubscribe?.();
   }, []);
 
-  // load friends from friends_view (RLS-safe)
+  async function fetchFriendIds(uid: string): Promise<string[]> {
+    const supabase = supabaseRef.current;
+    // Prefer friends_view(user_id, friend_id)
+    const { data: fv, error: fvErr } = await supabase
+      .from("friends_view")
+      .select("friend_id")
+      .eq("user_id", uid);
+
+    if (!fvErr && fv) return fv.map((r: any) => r.friend_id);
+
+    // Fallback to friendships(a,b)
+    const { data: pairs } = await supabase.from("friendships").select("a,b").or(`a.eq.${uid},b.eq.${uid}`);
+    return [...new Set((pairs ?? []).map((p: any) => (p.a === uid ? p.b : p.a)))];
+  }
+
+  // 2) Load friends after auth
   useEffect(() => {
     if (!ready || !userId || !supabaseRef.current) return;
     (async () => {
       const supabase = supabaseRef.current;
 
-      // Get friend ids visible to the current user
-      const { data: fv, error } = await supabase
-        .from("friends_view")
-        .select("friend_id");
-      if (error) {
-        console.warn("friends_view error:", error.message);
-      }
-      const ids: string[] = [...new Set((fv ?? []).map((r: any) => r.friend_id))];
-
+      const ids = await fetchFriendIds(userId);
       if (!ids.length) {
         setFriends([]);
-        setTo(null);
         return;
       }
-
-      // fetch their profiles
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
         .in("id", ids);
-
-      const fr: Friend[] = (profiles ?? []).map((p: any) => ({
+      const fr = (profiles ?? []).map((p: any) => ({
         id: p.id,
         full_name: p.full_name,
         avatar_url: p.avatar_url,
       }));
       setFriends(fr);
 
-      // honor ?to=… if present
       const qto = search.get("to");
-      if (qto && fr.find((f) => f.id === qto)) setTo(qto);
+      if (qto && fr.find((f: any) => f.id === qto)) setTo(qto);
       else if (!to && fr.length) setTo(fr[0].id);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,12 +89,10 @@ export default function MessagesClient() {
       )
       .order("created_at", { ascending: true });
     setMsgs((data ?? []) as Msg[]);
-    setTimeout(
-      () => listRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }),
-      50
-    );
+    setTimeout(() => listRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }), 50);
   }
 
+  // 3) Load thread on selection
   useEffect(() => {
     if (userId && to) loadThread(userId, to);
   }, [userId, to]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -148,9 +148,7 @@ export default function MessagesClient() {
                 {f.full_name || "Member"}
               </button>
             ))}
-            {!friends.length && (
-              <div className="muted">You have no friends yet.</div>
-            )}
+            {!friends.length && <div className="muted">You have no friends yet.</div>}
           </div>
         </div>
 
@@ -174,7 +172,9 @@ export default function MessagesClient() {
                   >
                     <span
                       className={`inline-block px-2 py-1 rounded ${
-                        m.sender_id === userId ? "bg-violet-100" : "bg-zinc-100"
+                        m.sender_id === userId
+                          ? "bg-violet-100"
+                          : "bg-zinc-100"
                       }`}
                     >
                       {m.body}
@@ -184,9 +184,7 @@ export default function MessagesClient() {
                     </div>
                   </div>
                 ))}
-                {msgs.length === 0 && (
-                  <div className="muted">No messages yet.</div>
-                )}
+                {msgs.length === 0 && <div className="muted">No messages yet.</div>}
               </div>
               <div className="mt-3 flex gap-2">
                 <input
