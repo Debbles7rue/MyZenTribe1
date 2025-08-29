@@ -5,7 +5,43 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import NotificationBell from "./NotificationBell";
+import { unreadCount, subscribeNotifications } from "@/lib/notifications";
+
+// Inline bell (so build can't fail on a missing file path). You can
+// later swap back to a separate component if you prefer.
+function NotificationBellInline({ className = "", href = "/notifications" }: { className?: string; href?: string }) {
+  const [count, setCount] = useState(0);
+
+  async function refresh() {
+    const n = await unreadCount();
+    setCount(n || 0);
+  }
+
+  useEffect(() => {
+    let channel: any;
+    refresh();
+    (async () => {
+      channel = await subscribeNotifications(() => { void refresh(); });
+    })();
+    return () => { try { channel?.unsubscribe?.(); } catch {} };
+  }, []);
+
+  return (
+    <Link
+      href={href}
+      className={`relative inline-flex items-center justify-center rounded-full border bg-white px-3 py-2 text-sm ${className}`}
+      aria-label={count > 0 ? `${count} unread notifications` : "Notifications"}
+      title="Notifications"
+    >
+      <span className="mr-1.5" aria-hidden>🔔</span>
+      {count > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[20px] rounded-full bg-violet-600 px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 export default function SiteHeader() {
   const pathname = usePathname();
@@ -54,8 +90,8 @@ export default function SiteHeader() {
             </nav>
 
             <div className="auth-area">
-              {/* New: notifications bell */}
-              <NotificationBell className="mr-2" />
+              {/* Notifications bell */}
+              <NotificationBellInline className="mr-2" />
 
               <Link
                 href="/messages"
