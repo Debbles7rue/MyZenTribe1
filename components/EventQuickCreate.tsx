@@ -1,9 +1,9 @@
-// components/EventQuickCreate.tsx
 "use client";
 
 import { Dialog } from "@headlessui/react";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { insertEventForUser } from "@/lib/events";
 
 export default function EventQuickCreate({
   open,
@@ -55,34 +55,46 @@ export default function EventQuickCreate({
   }, [open, defaults?.start?.getTime(), defaults?.end?.getTime()]);
 
   const create = async () => {
-    if (!sessionUser) return alert("Please log in.");
-    if (!form.title) return alert("Title is required.");
+    try {
+      if (!sessionUser) return alert("Please log in.");
+      if (!form.title) return alert("Title is required.");
 
-    let start: Date, end: Date;
-    if (form.allDay) {
-      const sd = new Date(form.start + "T00:00");
-      const ed = new Date(form.end + "T23:59");
-      start = sd; end = ed;
-    } else {
-      start = new Date(form.start);
-      end = new Date(form.end);
+      let start: Date, end: Date;
+      if (form.allDay) {
+        const sd = new Date(form.start + "T00:00");
+        const ed = new Date(form.end + "T23:59");
+        start = sd;
+        end = ed;
+      } else {
+        start = new Date(form.start);
+        end = new Date(form.end);
+      }
+
+      // 1) Create (owner-aware, schema-agnostic)
+      const { id } = await insertEventForUser({
+        title: form.title,
+        startISO: start.toISOString(),
+        endISO: end.toISOString(),
+        visibility: form.visibility,
+        location: form.location || null,
+        notes: form.description || null,
+      });
+
+      // 2) Best-effort attach optional fields (ignore if table/cols differ)
+      const updates: Record<string, any> = {
+        image_path: form.image_path || null,
+        description: form.description || null,
+        location: form.location || null,
+        location_visibility: form.location_visibility,
+      };
+      await supabase.from("events").update(updates).eq("id", id);
+      await supabase.from("calendar_events").update(updates).eq("id", id);
+
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      alert(e?.message || "Could not create event.");
     }
-
-    const { error } = await supabase.from("events").insert({
-      title: form.title,
-      description: form.description || null,
-      image_path: form.image_path || null,
-      start_time: start,
-      end_time: end,
-      location: form.location || null,
-      location_visibility: form.location_visibility,
-      visibility: form.visibility,
-      created_by: sessionUser,
-      source: "personal",
-      rsvp_public: true,
-    });
-    if (error) return alert(error.message);
-    onCreated();
   };
 
   return (
@@ -95,9 +107,12 @@ export default function EventQuickCreate({
           <div className="modal-body mt-3">
             <div className="field">
               <label className="label">Title</label>
-              <input className="input" value={form.title}
+              <input
+                className="input"
+                value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g., Dinner at Grandma’s" />
+                placeholder="e.g., Dinner at Grandma’s"
+              />
             </div>
 
             <div className="mt-3">
@@ -115,26 +130,42 @@ export default function EventQuickCreate({
               <div className="form-grid mt-3">
                 <div className="field">
                   <label className="label">Start</label>
-                  <input className="input" type="datetime-local" value={form.start}
-                    onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} />
+                  <input
+                    className="input"
+                    type="datetime-local"
+                    value={form.start}
+                    onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
+                  />
                 </div>
                 <div className="field">
                   <label className="label">End</label>
-                  <input className="input" type="datetime-local" value={form.end}
-                    onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))} />
+                  <input
+                    className="input"
+                    type="datetime-local"
+                    value={form.end}
+                    onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
+                  />
                 </div>
               </div>
             ) : (
               <div className="form-grid mt-3">
                 <div className="field">
                   <label className="label">Start date</label>
-                  <input className="input" type="date" value={form.start.slice(0,10) || toLocalDate(new Date())}
-                    onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} />
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.start.slice(0, 10) || toLocalDate(new Date())}
+                    onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
+                  />
                 </div>
                 <div className="field">
                   <label className="label">End date</label>
-                  <input className="input" type="date" value={form.end.slice(0,10) || toLocalDate(new Date())}
-                    onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))} />
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.end.slice(0, 10) || toLocalDate(new Date())}
+                    onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
+                  />
                 </div>
               </div>
             )}
@@ -142,8 +173,13 @@ export default function EventQuickCreate({
             <div className="form-grid mt-3">
               <div className="field">
                 <label className="label">Visibility</label>
-                <select className="select" value={form.visibility}
-                  onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value as any }))}>
+                <select
+                  className="select"
+                  value={form.visibility}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, visibility: e.target.value as any }))
+                  }
+                >
                   <option value="private">Private</option>
                   <option value="public">Public</option>
                 </select>
@@ -151,37 +187,72 @@ export default function EventQuickCreate({
 
               <div className="field">
                 <label className="label">Image URL (optional)</label>
-                <input className="input" value={form.image_path}
-                  onChange={(e) => setForm((f) => ({ ...f, image_path: e.target.value }))} placeholder="https://…" />
+                <input
+                  className="input"
+                  value={form.image_path}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, image_path: e.target.value }))
+                  }
+                  placeholder="https://…"
+                />
               </div>
             </div>
 
             <div className="field mt-3">
               <label className="label">Location</label>
-              <input className="input" value={form.location}
-                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Address or place" />
+              <input
+                className="input"
+                value={form.location}
+                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                placeholder="Address or place"
+              />
               <div className="mt-2 text-sm">
                 <label className="mr-3">
-                  <input type="radio" name="locvis" checked={form.location_visibility === "public"}
-                    onChange={() => setForm((f) => ({ ...f, location_visibility: "public" }))} /> Public location
+                  <input
+                    type="radio"
+                    name="locvis"
+                    checked={form.location_visibility === "public"}
+                    onChange={() =>
+                      setForm((f) => ({ ...f, location_visibility: "public" }))
+                    }
+                  />{" "}
+                  Public location
                 </label>
                 <label>
-                  <input type="radio" name="locvis" checked={form.location_visibility === "attendees"}
-                    onChange={() => setForm((f) => ({ ...f, location_visibility: "attendees" }))} /> Show to RSVP’d attendees only
+                  <input
+                    type="radio"
+                    name="locvis"
+                    checked={form.location_visibility === "attendees"}
+                    onChange={() =>
+                      setForm((f) => ({ ...f, location_visibility: "attendees" }))
+                    }
+                  />{" "}
+                  Show to RSVP’d attendees only
                 </label>
               </div>
             </div>
 
             <div className="field mt-3">
               <label className="label">Details</label>
-              <textarea className="input" rows={4} value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Anything attendees should know…" />
+              <textarea
+                className="input"
+                rows={4}
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+                placeholder="Anything attendees should know…"
+              />
             </div>
           </div>
 
           <div className="modal-footer">
-            <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn btn-brand" onClick={create}>Create</button>
+            <button className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn btn-brand" onClick={create}>
+              Create
+            </button>
           </div>
         </Dialog.Panel>
       </div>
