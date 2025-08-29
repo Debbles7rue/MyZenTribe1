@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
-import ProfileInviteQR from "@/components/ProfileInviteQR";
+import InviteFriendsPanel from "@/components/InviteFriendsPanel";
 
 type Profile = {
   id: string;
@@ -33,12 +33,14 @@ function useIsDesktop(minWidth = 1024) {
 }
 
 export default function ProfilePage() {
+  // ---- hooks (never conditional) ----
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editPersonal, setEditPersonal] = useState(false);
   const [friendsCount, setFriendsCount] = useState<number>(0);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const isDesktop = useIsDesktop(1024);
 
   const [p, setP] = useState<Profile>({
@@ -78,9 +80,7 @@ export default function ProfilePage() {
             location_is_public: data.location_is_public ?? false,
             show_mutuals: data.show_mutuals ?? true,
           });
-        } else {
-          setP(prev => ({ ...prev, id: userId }));
-        }
+        } else setP(prev => ({ ...prev, id: userId }));
       } catch {
         setTableMissing(true);
       } finally {
@@ -138,34 +138,15 @@ export default function ProfilePage() {
     if (error) alert("Could not save photo: " + error.message);
   }
 
-  const QuickActions = (
-    <div className="quick-actions" style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
-      <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Friends</h3></div>
-        <p className="muted" style={{ fontSize: 13 }}>Browse, search, add private notes.</p>
-        <a className="btn mt-2" href="/friends">Open</a>
-      </section>
-      <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3></div>
-        <p className="muted" style={{ fontSize: 13 }}>Capture daily gratitude.</p>
-        <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
-      </section>
-      <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3></div>
-        <p className="muted" style={{ fontSize: 13 }}>Private chat with friends.</p>
-        <a className="btn mt-2" href="/messages">Open</a>
-      </section>
-    </div>
-  );
-
   return (
     <div className="page-wrap">
       <div className="page">
         <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
           <div className="header-bar">
             <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
             <div className="controls flex items-center gap-2">
-              <Link href="/business" className="btn">Business profile</Link>
+              <Link href="/profile" className="btn">Business profile</Link>
               <Link href="/friends" className="btn">Friends</Link>
               <Link href="/messages" className="btn">Messages</Link>
               <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
@@ -183,10 +164,13 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header */}
+          {/* Identity header card */}
           <div
             className="card p-3 mb-3 profile-card"
-            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
+            style={{
+              borderColor: "rgba(196, 181, 253, 0.7)",
+              background: "linear-gradient(180deg, #f5f3ff 0%, #faf7ff 100%)",
+            }}
           >
             <div
               className="profile-header"
@@ -206,11 +190,15 @@ export default function ProfilePage() {
                   label="Profile photo"
                   size={160}
                 />
+                <div className="muted text-xs mt-2">
+                  JPG/PNG/WebP supported. Large photos are auto-resized.
+                </div>
               </div>
+
               <div className="profile-heading" style={{ minWidth: 0, width: "100%" }}>
                 <div className="profile-name">{displayName}</div>
 
-                {/* KPIs (Friends now clickable) */}
+                {/* KPIs  */}
                 <div
                   className="kpis"
                   style={{
@@ -220,41 +208,61 @@ export default function ProfilePage() {
                     flexWrap: "wrap",
                   }}
                 >
-                  <span className="kpi"><strong>0</strong> Followers</span>
-                  <span className="kpi"><strong>0</strong> Following</span>
-                  <Link
-                    href="/friends"
-                    className="kpi underline decoration-dotted hover:decoration-solid"
-                    title="Open your friends list"
-                  >
+                  <span className="kpi">
+                    <strong>0</strong> Followers
+                  </span>
+                  <span className="kpi">
+                    <strong>0</strong> Following
+                  </span>
+                  <Link href="/friends" className="kpi underline decoration-dotted hover:decoration-solid">
                     <strong>{friendsCount}</strong> Friends
                   </Link>
                 </div>
 
-                {/* Invite dropdown / QR */}
-                <div style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
-                  <ProfileInviteQR userId={userId} embed qrSize={180} />
+                {/* Invite → dropdown */}
+                <details className="mt-3">
+                  <summary className="cursor-pointer select-none inline-flex items-center gap-2">
+                    <span className="triangle">►</span> Invite
+                  </summary>
+                  <div className="mt-3">
+                    <InviteFriendsPanel userId={userId} />
+                  </div>
+                </details>
+
+                {/* Footer buttons on the card */}
+                <div
+                  className="mt-4 flex items-center justify-between"
+                  style={{ gap: 12, flexWrap: "wrap" }}
+                >
+                  <Link href="/gratitude" className="btn">
+                    Gratitude
+                  </Link>
+
+                  <div className="flex items-center gap-2">
+                    <Link href="/notifications" className="btn">
+                      Notifications
+                    </Link>
+                    <Link href="/messages" className="btn">
+                      Messages
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Columns */}
-          <div
-            className="columns"
-            style={{
-              display: "grid",
-              gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr",
-              gap: 16,
-              alignItems: "start",
-            }}
-          >
-            <div className="stack">
-              {!isDesktop && QuickActions}
+          {/* About (collapsible) */}
+          <div className="mb-3">
+            <button
+              className="btn"
+              onClick={() => setAboutOpen((v) => !v)}
+            >
+              {aboutOpen ? "Hide About" : "About"}
+            </button>
 
-              {editPersonal ? (
-                <section className="card p-3">
-                  <h2 className="section-title">Edit your info</h2>
+            {aboutOpen && (
+              <section className="card p-3 mt-2">
+                {editPersonal ? (
                   <div className="stack">
                     <label className="field">
                       <span className="label">Name</span>
@@ -267,7 +275,11 @@ export default function ProfilePage() {
 
                     <div
                       className="grid"
-                      style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}
+                      style={{
+                        display: "grid",
+                        gap: 12,
+                        gridTemplateColumns: isDesktop ? "1fr auto" : "1fr",
+                      }}
                     >
                       <label className="field">
                         <span className="label">Location</span>
@@ -278,7 +290,10 @@ export default function ProfilePage() {
                           placeholder="City, State"
                         />
                       </label>
-                      <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <label
+                        className="flex items-center gap-2 text-sm"
+                        style={{ display: "flex", alignItems: "center", gap: 8 }}
+                      >
                         <input
                           type="checkbox"
                           checked={!!p.location_is_public}
@@ -313,10 +328,7 @@ export default function ProfilePage() {
                       </button>
                     </div>
                   </div>
-                </section>
-              ) : (
-                <section className="card p-3">
-                  <h2 className="section-title">About</h2>
+                ) : (
                   <div className="stack">
                     {p.location_is_public && p.location_text ? (
                       <div>
@@ -332,14 +344,13 @@ export default function ProfilePage() {
                       <div className="muted text-sm">(Location is private)</div>
                     ) : null}
                   </div>
-                </section>
-              )}
-
-              <PhotosFeed userId={userId} />
-            </div>
-
-            {isDesktop && <div className="stack">{QuickActions}</div>}
+                )}
+              </section>
+            )}
           </div>
+
+          {/* Photos feed (new posts first) */}
+          <PhotosFeed userId={userId} />
 
           {loading && <p className="muted mt-3">Loading...</p>}
         </div>
