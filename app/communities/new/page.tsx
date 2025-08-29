@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import NextLink from "next/link";
-import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
@@ -20,7 +19,7 @@ export default function CommunityCreatePage() {
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [about, setAbout] = useState("");
 
-  // NEW: optional cover image
+  // optional cover image
   const [cover, setCover] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
@@ -41,7 +40,7 @@ export default function CommunityCreatePage() {
     try {
       setSaving(true);
 
-      // Insert the new community (NEW: cover_url added)
+      // Insert the new community (cover_url kept)
       const { data, error } = await supabase
         .from("communities")
         .insert({
@@ -50,14 +49,14 @@ export default function CommunityCreatePage() {
           zip: zip.trim() || null,
           about: about.trim() || null,
           visibility,
-          cover_url: cover || null,            // ← NEW
-          created_by: me,
+          cover_url: cover || null,
+          created_by: me,            // <- your schema uses created_by; keep this
         })
         .select("id")
         .single();
       if (error) throw error;
 
-      // Make creator an admin member (unchanged)
+      // Make creator an admin member
       await supabase.from("community_members").insert({
         community_id: data.id,
         user_id: me,
@@ -75,7 +74,6 @@ export default function CommunityCreatePage() {
 
   return (
     <div className="page-wrap">
-      <SiteHeader />
       <div className="page" style={{ background: "linear-gradient(#fff8e0,#fff)" }}>
         <div className="container-app">
           <div className="header-bar">
@@ -110,7 +108,6 @@ export default function CommunityCreatePage() {
                 </select>
               </label>
 
-              {/* NEW: optional cover image uploader */}
               <CommunityPhotoUploader
                 value={cover}
                 onChange={setCover}
