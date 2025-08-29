@@ -53,9 +53,14 @@ export default function SiteHeader() {
               <Nav href="/karma">Karma Corner</Nav>
             </nav>
 
-            <div className="auth-area" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <NotificationBell href="/notifications" />
-              <Link href="/messages" className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}>
+            <div className="auth-area">
+              {/* New: notifications bell */}
+              <NotificationBell className="mr-2" />
+
+              <Link
+                href="/messages"
+                className={`btn ${pathname?.startsWith("/messages") ? "btn-brand" : ""}`}
+              >
                 Messages
               </Link>
               <button className="btn" onClick={signOut} aria-label="Sign out">
