@@ -55,17 +55,12 @@ export default function ProfilePage() {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // profile data
   useEffect(() => {
     const load = async () => {
       if (!userId) return;
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle();
+        const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
         if (error) throw error;
         if (data) {
           setP({
@@ -78,7 +73,7 @@ export default function ProfilePage() {
             location_is_public: data.location_is_public ?? false,
             show_mutuals: data.show_mutuals ?? true,
           });
-        } else setP((prev) => ({ ...prev, id: userId }));
+        } else setP(prev => ({ ...prev, id: userId }));
       } catch {
         setTableMissing(true);
       } finally {
@@ -88,13 +83,26 @@ export default function ProfilePage() {
     load();
   }, [userId]);
 
-  // friends count via friends_view
   useEffect(() => {
     if (!userId) return;
     (async () => {
-      const { data } = await supabase.from("friends_view").select("friend_id");
-      const ids = [...new Set((data ?? []).map((r: any) => r.friend_id))];
-      setFriendsCount(ids.length);
+      // Prefer friends_view if present
+      const { data: fv, error: fvErr } = await supabase
+        .from("friends_view")
+        .select("friend_id")
+        .eq("user_id", userId);
+
+      if (!fvErr && fv) {
+        setFriendsCount(fv.length);
+        return;
+      }
+
+      // Fallback to friendships(a,b)
+      const { count } = await supabase
+        .from("friendships")
+        .select("a", { count: "exact", head: true })
+        .or(`a.eq.${userId},b.eq.${userId}`);
+      if (typeof count === "number") setFriendsCount(count);
     })();
   }, [userId]);
 
@@ -104,55 +112,59 @@ export default function ProfilePage() {
     if (!userId) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: p.full_name?.trim() || null,
-          bio: p.bio?.trim() || null,
-          location_text: p.location_text?.trim() || null,
-          location_is_public: !!p.location_is_public,
-          avatar_url: p.avatar_url?.trim() || null,
-          show_mutuals: !!p.show_mutuals,
-        })
-        .eq("id", userId);
+      const { error } = await supabase.from("profiles").update({
+        full_name: p.full_name?.trim() || null,
+        bio: p.bio?.trim() || null,
+        location_text: p.location_text?.trim() || null,
+        location_is_public: !!p.location_is_public,
+        avatar_url: p.avatar_url?.trim() || null,
+        show_mutuals: !!p.show_mutuals,
+      }).eq("id", userId);
       if (error) throw error;
       alert("Saved!");
       setEditPersonal(false);
-    } catch (e: any) {
-      alert(e.message || "Save failed");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e: any) { alert(e.message || "Save failed"); }
+    finally { setSaving(false); }
   };
 
   async function onAvatarChange(url: string) {
-    setP((prev) => ({ ...prev, avatar_url: url }));
+    setP(prev => ({ ...prev, avatar_url: url }));
     if (!userId) return;
-    const { error } = await supabase
-      .from("profiles")
-      .update({ avatar_url: url || null })
-      .eq("id", userId);
+    const { error } = await supabase.from("profiles").update({ avatar_url: url || null }).eq("id", userId);
     if (error) alert("Could not save photo: " + error.message);
   }
 
+  const QuickActions = (
+    <div className="quick-actions" style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Friends</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Browse, search, add private notes.</p>
+        <a className="btn mt-2" href="/friends">Open</a>
+      </section>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Capture daily gratitude.</p>
+        <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
+      </section>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Private chat with friends.</p>
+        <a className="btn mt-2" href="/messages">Open</a>
+      </section>
+    </div>
+  );
+
   return (
-    <div className="page-wrap lavender-page">
+    <div className="page-wrap">
       <div className="page">
         <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>
-              Profile
-            </h1>
+            <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
             <div className="controls flex items-center gap-2">
-              <Link href="/business" className="btn">
-                Business profile
-              </Link>
-              <Link href="/friends" className="btn">
-                Friends
-              </Link>
-              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
-                {editPersonal ? "Done" : "Edit"}
-              </button>
+              <Link href="/business" className="btn">Business profile</Link>
+              <Link href="/friends" className="btn">Friends</Link>
+              <Link href="/messages" className="btn">Messages</Link>
+              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>{editPersonal ? "Done" : "Edit"}</button>
             </div>
           </div>
 
@@ -165,178 +177,85 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Identity header card */}
-          <div
-            className="card p-3 mb-3 profile-card"
-            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.5)" }}
-          >
-            <div
-              className="profile-header"
-              style={{
-                display: "flex",
-                flexDirection: isDesktop ? "row" : "column",
-                gap: isDesktop ? 18 : 12,
-                alignItems: isDesktop ? "flex-start" : "center",
-                textAlign: isDesktop ? "left" : "center",
-              }}
-            >
+          {/* Identity header */}
+          <div className="card p-3 mb-3 profile-card" style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}>
+            <div className="profile-header" style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", gap: isDesktop ? 18 : 12, alignItems: isDesktop ? "flex-start" : "center", textAlign: isDesktop ? "left" : "center" }}>
               <div className="shrink-0">
-                <AvatarUploader
-                  userId={userId}
-                  value={p.avatar_url}
-                  onChange={onAvatarChange}
-                  label="Profile photo"
-                  size={160}
-                />
+                <AvatarUploader userId={userId} value={p.avatar_url} onChange={onAvatarChange} label="Profile photo" size={160} />
               </div>
-
               <div className="profile-heading" style={{ minWidth: 0, width: "100%" }}>
                 <div className="profile-name">{displayName}</div>
-
-                <div
-                  className="kpis"
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    justifyContent: isDesktop ? "flex-start" : "center",
-                    flexWrap: "wrap",
-                    marginTop: 4,
-                  }}
-                >
-                  <span className="kpi">
-                    <strong>0</strong> Followers
-                  </span>
-                  <span className="kpi">
-                    <strong>0</strong> Following
-                  </span>
-                  <Link href="/friends" className="kpi underline">
+                <div className="kpis" style={{ display: "flex", gap: 12, justifyContent: isDesktop ? "flex-start" : "center", flexWrap: "wrap" }}>
+                  <span className="kpi"><strong>0</strong> Followers</span>
+                  <span className="kpi"><strong>0</strong> Following</span>
+                  {/* Make Friends KPI clickable → /friends */}
+                  <Link href="/friends" className="kpi hover:underline">
                     <strong>{friendsCount}</strong> Friends
                   </Link>
                 </div>
 
-                {/* Compact action buttons */}
-                <div
-                  className="flex gap-2 flex-wrap"
-                  style={{ marginTop: 10, justifyContent: isDesktop ? "space-between" : "center" }}
-                >
-                  <div className="flex gap-2">
-                    <Link href="/gratitude" className="btn">
-                      Gratitude
-                    </Link>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Link href="/notifications" className="btn">
-                      Notifications
-                    </Link>
-                    <Link href="/messages" className="btn btn-brand">
-                      Messages
-                    </Link>
-                  </div>
+                {/* Invite dropdown / QR */}
+                <div style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
+                  <ProfileInviteQR userId={userId} embed qrSize={180} />
                 </div>
-
-                {/* Invite collapsible */}
-                <details style={{ marginTop: 12 }}>
-                  <summary className="cursor-pointer select-none font-medium">Invite</summary>
-                  <div style={{ maxWidth: 520, marginTop: 10 }}>
-                    <ProfileInviteQR userId={userId} embed qrSize={180} />
-                  </div>
-                </details>
               </div>
             </div>
           </div>
 
-          {/* About collapsible */}
-          <details className="card p-3" style={{ marginBottom: 12 }}>
-            <summary className="cursor-pointer select-none font-medium">About</summary>
-            <div className="mt-2 stack">
-              {p.location_is_public && p.location_text ? (
-                <div>
-                  <strong>Location:</strong> {p.location_text}
-                </div>
-              ) : null}
-              {p.bio ? (
-                <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
+          {/* Columns */}
+          <div className="columns" style={{ display: "grid", gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr", gap: 16, alignItems: "start" }}>
+            <div className="stack">
+              {!isDesktop && QuickActions}
+
+              {editPersonal ? (
+                <section className="card p-3">
+                  <h2 className="section-title">Edit your info</h2>
+                  <div className="stack">
+                    <label className="field"><span className="label">Name</span>
+                      <input className="input" value={p.full_name ?? ""} onChange={(e) => setP({ ...p, full_name: e.target.value })} />
+                    </label>
+
+                    <div className="grid" style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}>
+                      <label className="field"><span className="label">Location</span>
+                        <input className="input" value={p.location_text ?? ""} onChange={(e) => setP({ ...p, location_text: e.target.value })} placeholder="City, State" />
+                      </label>
+                      <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input type="checkbox" checked={!!p.location_is_public} onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} />
+                        Show on public profile
+                      </label>
+                    </div>
+
+                    <label className="field"><span className="label">Bio</span>
+                      <textarea className="input" rows={4} value={p.bio ?? ""} onChange={(e) => setP({ ...p, bio: e.target.value })} />
+                    </label>
+
+                    <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input type="checkbox" checked={!!p.show_mutuals} onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} />
+                      <span>Show mutual friends</span>
+                    </label>
+
+                    <div className="right" style={{ textAlign: "right" }}>
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+                    </div>
+                  </div>
+                </section>
               ) : (
-                <div className="muted">Add a bio and location using Edit.</div>
+                <section className="card p-3">
+                  <h2 className="section-title">About</h2>
+                  <div className="stack">
+                    {p.location_is_public && p.location_text ? (<div><strong>Location:</strong> {p.location_text}</div>) : null}
+                    {p.bio ? (<div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>) : (<div className="muted">Add a bio and location using Edit.</div>)}
+                    {!p.location_is_public && p.location_text ? (<div className="muted text-sm">(Location is private)</div>) : null}
+                  </div>
+                </section>
               )}
-              {!p.location_is_public && p.location_text ? (
-                <div className="muted text-sm">(Location is private)</div>
-              ) : null}
+
+              <PhotosFeed userId={userId} />
             </div>
-          </details>
 
-          {/* Edit form */}
-          {editPersonal && (
-            <section className="card p-3 mb-3">
-              <h2 className="section-title">Edit your info</h2>
-              <div className="stack">
-                <label className="field">
-                  <span className="label">Name</span>
-                  <input
-                    className="input"
-                    value={p.full_name ?? ""}
-                    onChange={(e) => setP({ ...p, full_name: e.target.value })}
-                  />
-                </label>
+            {isDesktop && <div className="stack">{QuickActions}</div>}
+          </div>
 
-                <div
-                  className="grid"
-                  style={{
-                    display: "grid",
-                    gap: 12,
-                    gridTemplateColumns: isDesktop ? "1fr auto" : "1fr",
-                  }}
-                >
-                  <label className="field">
-                    <span className="label">Location</span>
-                    <input
-                      className="input"
-                      value={p.location_text ?? ""}
-                      onChange={(e) => setP({ ...p, location_text: e.target.value })}
-                      placeholder="City, State"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={!!p.location_is_public}
-                      onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
-                    />
-                    Show on public profile
-                  </label>
-                </div>
-
-                <label className="field">
-                  <span className="label">Bio</span>
-                  <textarea
-                    className="input"
-                    rows={4}
-                    value={p.bio ?? ""}
-                    onChange={(e) => setP({ ...p, bio: e.target.value })}
-                  />
-                </label>
-
-                <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={!!p.show_mutuals}
-                    onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
-                  />
-                  <span>Show mutual friends</span>
-                </label>
-
-                <div className="right" style={{ textAlign: "right" }}>
-                  <button className="btn btn-brand" onClick={save} disabled={saving}>
-                    {saving ? "Saving..." : "Save"}
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Photos thread — newest first if your component supports it */}
-          <PhotosFeed userId={userId} />
           {loading && <p className="muted mt-3">Loading...</p>}
         </div>
       </div>
