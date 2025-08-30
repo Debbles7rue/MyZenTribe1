@@ -1,193 +1,348 @@
-// app/(protected)/calendar/page.tsx  (or app/calendar/page.tsx)
+// app/profile/page.tsx
 "use client";
 
-// ✅ Force SSR and bypass static prerender (no `revalidate` export at all)
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import AvatarUploader from "@/components/AvatarUploader";
+import PhotosFeed from "@/components/PhotosFeed";
+import ProfileInviteQR from "@/components/ProfileInviteQR";
 
-// react-big-calendar
-import { Calendar, dateFnsLocalizer, Views } from "react-big-calendar";
-import { startOfWeek, getDay, format, parse } from "date-fns";
-
-type DbEvent = {
-  id: string | number;
-  title: string | null;
-  start_at?: string | null;
-  end_at?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  visibility?: "public" | "private" | null;
-  owner_id?: string | null;
+type Profile = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
   location?: string | null;
-};
-type UiEvent = {
-  id: string | number;
-  title: string;
-  start: Date;
-  end: Date;
-  visibility: "public" | "private";
+  location_text?: string | null;
+  location_is_public?: boolean | null;
+  show_mutuals: boolean | null;
 };
 
-const locales: any = {};
-const localizer = dateFnsLocalizer({
-  format,
-  parse: (str: string, fmt: string, ref: Date) => parse(str, fmt, ref),
-  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 0 }),
-  getDay,
-  locales,
-});
-
-// ---- helpers ---------------------------------------------------------------
-
-async function getUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
-}
-function pickDate(e: DbEvent, a: keyof DbEvent, b: keyof DbEvent) {
-  return (e[a] as string) ?? (e[b] as string) ?? null;
-}
-function toUi(rows: DbEvent[]): UiEvent[] {
-  const ui = (rows || [])
-    .map((e) => {
-      const startIso = pickDate(e, "start_at", "start_time");
-      const endIso = pickDate(e, "end_at", "end_time");
-      if (!startIso || !endIso) return null;
-      return {
-        id: e.id,
-        title: (e.title ?? "Untitled").trim(),
-        start: new Date(startIso),
-        end: new Date(endIso),
-        visibility: (e.visibility ?? "private") as "public" | "private",
-      };
-    })
-    .filter(Boolean) as UiEvent[];
-  ui.sort((a, b) => a.start.getTime() - b.start.getTime());
-  return ui;
+function useIsDesktop(minWidth = 1024) {
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(min-width:${minWidth}px)`);
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, [minWidth]);
+  return isDesktop;
 }
 
-// ---- page ------------------------------------------------------------------
+export default function ProfilePage() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tableMissing, setTableMissing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editPersonal, setEditPersonal] = useState(false);
+  const [friendsCount, setFriendsCount] = useState<number>(0);
+  const isDesktop = useIsDesktop(1024);
 
-export default function CalendarPage() {
-  const [tab, setTab] = useState<"public" | "mine">("public");
-  const [loading, setLoading] = useState(false);
-  const [publicEvents, setPublicEvents] = useState<UiEvent[]>([]);
-  const [myEvents, setMyEvents] = useState<UiEvent[]>([]);
-
-  // Keep your create route
-  const CREATE_EVENT_PATH = "/events/new";
-
-  async function load() {
-    setLoading(true);
-    try {
-      // What's Happening: all public events
-      {
-        const r = await supabase
-          .from("events")
-          .select("id,title,start_at,end_at,start_time,end_time,visibility,owner_id,location")
-          .eq("visibility", "public");
-
-        if (!r.error && r.data) {
-          setPublicEvents(toUi(r.data as DbEvent[]));
-        } else {
-          const r2 = await supabase
-            .from("calendar_events")
-            .select("id,title,start_at,end_at,start_time,end_time,visibility,owner_id,location")
-            .eq("visibility", "public");
-          setPublicEvents(!r2.error && r2.data ? toUi(r2.data as DbEvent[]) : []);
-        }
-      }
-
-      // My Calendar: only events owned by the signed-in user (unique per person)
-      const uid = await getUserId();
-      if (uid) {
-        const r = await supabase
-          .from("events")
-          .select("id,title,start_at,end_at,start_time,end_time,visibility,owner_id,location")
-          .eq("owner_id", uid);
-
-        if (!r.error && r.data) {
-          setMyEvents(toUi(r.data as DbEvent[]));
-        } else {
-          const r2 = await supabase
-            .from("calendar_events")
-            .select("id,title,start_at,end_at,start_time,end_time,visibility,owner_id,location")
-            .eq("owner_id", uid);
-          setMyEvents(!r2.error && r2.data ? toUi(r2.data as DbEvent[]) : []);
-        }
-      } else {
-        setMyEvents([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [p, setP] = useState<Profile>({
+    id: "",
+    full_name: "",
+    avatar_url: "",
+    bio: "",
+    location: "",
+    location_text: "",
+    location_is_public: false,
+    show_mutuals: true,
+  });
 
   useEffect(() => {
-    load();
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  const events = tab === "public" ? publicEvents : myEvents;
+  useEffect(() => {
+    const load = async () => {
+      if (!userId) return;
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) {
+          setP({
+            id: data.id,
+            full_name: data.full_name ?? "",
+            avatar_url: data.avatar_url ?? "",
+            bio: data.bio ?? "",
+            location: data.location ?? "",
+            location_text: (data.location_text ?? data.location) ?? "",
+            location_is_public: data.location_is_public ?? false,
+            show_mutuals: data.show_mutuals ?? true,
+          });
+        } else {
+          setP(prev => ({ ...prev, id: userId }));
+        }
+      } catch {
+        setTableMissing(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [userId]);
 
-  const toolbar = (
-    <div className="flex items-center gap-2">
-      <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 bg-white shadow-sm">
-        <span>🌤️</span>
-        <span>Summer</span>
-        <span className="text-neutral-400">▾</span>
-      </div>
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { count } = await supabase
+        .from("friendships")
+        .select("a", { count: "exact", head: true })
+        .or(`a.eq.${userId},b.eq.${userId}`);
+      if (typeof count === "number") setFriendsCount(count);
+    })();
+  }, [userId]);
 
-      <div className="ml-2 inline-flex rounded-lg overflow-hidden border">
-        <button
-          className={`px-3 py-2 ${tab === "public" ? "bg-neutral-900 text-white" : "bg-white"}`}
-          onClick={() => setTab("public")}
-        >
-          What&apos;s Happening
-        </button>
-        <button
-          className={`px-3 py-2 ${tab === "mine" ? "bg-neutral-900 text-white" : "bg-white"}`}
-          onClick={() => setTab("mine")}
-        >
-          My Calendar
-        </button>
-      </div>
+  const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
-      <Link href={CREATE_EVENT_PATH} className="btn btn-brand ml-2">
-        + Create event
-      </Link>
+  const save = async () => {
+    if (!userId) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: p.full_name?.trim() || null,
+          bio: p.bio?.trim() || null,
+          location_text: p.location_text?.trim() || null,
+          location_is_public: !!p.location_is_public,
+          avatar_url: p.avatar_url?.trim() || null,
+          show_mutuals: !!p.show_mutuals,
+        })
+        .eq("id", userId);
+      if (error) throw error;
+      alert("Saved!");
+      setEditPersonal(false);
+    } catch (e: any) {
+      alert(e.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      <button className="btn ml-2" onClick={load}>
-        Refresh
-      </button>
+  async function onAvatarChange(url: string) {
+    setP(prev => ({ ...prev, avatar_url: url }));
+    if (!userId) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: url || null })
+      .eq("id", userId);
+    if (error) alert("Could not save photo: " + error.message);
+  }
+
+  const QuickActions = (
+    <div className="quick-actions" style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Friends</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Browse, search, add private notes.</p>
+        <a className="btn mt-2" href="/friends">Open</a>
+      </section>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Capture daily gratitude.</p>
+        <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
+      </section>
+      <section className="card p-3" style={{ padding: 12 }}>
+        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3></div>
+        <p className="muted" style={{ fontSize: 13 }}>Private chat with friends.</p>
+        <a className="btn mt-2" href="/messages">Open</a>
+      </section>
     </div>
   );
 
   return (
-    <div className="container-app mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-      <h1 className="page-title">Calendar</h1>
-      <div className="mt-3">{toolbar}</div>
+    <div className="page-wrap">
+      <div className="page">
+        <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="header-bar">
+            <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
+            <div className="controls flex items-center gap-2">
+              <Link href="/business" className="btn">Business profile</Link>
+              <Link href="/friends" className="btn">Friends</Link>
+              <Link href="/messages" className="btn">Messages</Link>
+              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
+                {editPersonal ? "Done" : "Edit"}
+              </button>
+            </div>
+          </div>
 
-      <div className="mt-3 card p-3">
-        {loading ? (
-          <div className="muted">Loading…</div>
-        ) : events.length === 0 ? (
-          <div className="muted">Nothing new right now. Check back later.</div>
-        ) : (
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            titleAccessor="title"
-            defaultView={Views.MONTH}
-            style={{ height: 640 }}
-            popup
-            tooltipAccessor={(e) => e.title}
-          />
-        )}
+          <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
+
+          {tableMissing && (
+            <div className="note">
+              <div className="note-title">Tables not found</div>
+              <div className="note-body">Run the SQL migration, then reload.</div>
+            </div>
+          )}
+
+          {/* Identity header */}
+          <div
+            className="card p-3 mb-3 profile-card"
+            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
+          >
+            <div
+              className="profile-header"
+              style={{
+                display: "flex",
+                flexDirection: isDesktop ? "row" : "column",
+                gap: isDesktop ? 18 : 12,
+                alignItems: isDesktop ? "flex-start" : "center",
+                textAlign: isDesktop ? "left" : "center",
+              }}
+            >
+              <div className="shrink-0">
+                <AvatarUploader
+                  userId={userId}
+                  value={p.avatar_url}
+                  onChange={onAvatarChange}
+                  label="Profile photo"
+                  size={160}
+                />
+              </div>
+              <div className="profile-heading" style={{ minWidth: 0, width: "100%" }}>
+                <div className="profile-name">{displayName}</div>
+
+                {/* KPIs (Friends now clickable) */}
+                <div
+                  className="kpis"
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    justifyContent: isDesktop ? "flex-start" : "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span className="kpi"><strong>0</strong> Followers</span>
+                  <span className="kpi"><strong>0</strong> Following</span>
+                  <Link
+                    href="/friends"
+                    className="kpi underline decoration-dotted hover:decoration-solid"
+                    title="Open your friends list"
+                  >
+                    <strong>{friendsCount}</strong> Friends
+                  </Link>
+                </div>
+
+                {/* Invite dropdown / QR */}
+                <div style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
+                  <ProfileInviteQR userId={userId} embed qrSize={180} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Columns */}
+          <div
+            className="columns"
+            style={{
+              display: "grid",
+              gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr",
+              gap: 16,
+              alignItems: "start",
+            }}
+          >
+            <div className="stack">
+              {!isDesktop && QuickActions}
+
+              {editPersonal ? (
+                <section className="card p-3">
+                  <h2 className="section-title">Edit your info</h2>
+                  <div className="stack">
+                    <label className="field">
+                      <span className="label">Name</span>
+                      <input
+                        className="input"
+                        value={p.full_name ?? ""}
+                        onChange={(e) => setP({ ...p, full_name: e.target.value })}
+                      />
+                    </label>
+
+                    <div
+                      className="grid"
+                      style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}
+                    >
+                      <label className="field">
+                        <span className="label">Location</span>
+                        <input
+                          className="input"
+                          value={p.location_text ?? ""}
+                          onChange={(e) => setP({ ...p, location_text: e.target.value })}
+                          placeholder="City, State"
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={!!p.location_is_public}
+                          onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
+                        />
+                        Show on public profile
+                      </label>
+                    </div>
+
+                    <label className="field">
+                      <span className="label">Bio</span>
+                      <textarea
+                        className="input"
+                        rows={4}
+                        value={p.bio ?? ""}
+                        onChange={(e) => setP({ ...p, bio: e.target.value })}
+                      />
+                    </label>
+
+                    <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={!!p.show_mutuals}
+                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
+                      />
+                      <span>Show mutual friends</span>
+                    </label>
+
+                    <div className="right" style={{ textAlign: "right" }}>
+                      <button className="btn btn-brand" onClick={save} disabled={saving}>
+                        {saving ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <section className="card p-3">
+                  <h2 className="section-title">About</h2>
+                  <div className="stack">
+                    {p.location_is_public && p.location_text ? (
+                      <div>
+                        <strong>Location:</strong> {p.location_text}
+                      </div>
+                    ) : null}
+                    {p.bio ? (
+                      <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
+                    ) : (
+                      <div className="muted">Add a bio and location using Edit.</div>
+                    )}
+                    {!p.location_is_public && p.location_text ? (
+                      <div className="muted text-sm">(Location is private)</div>
+                    ) : null}
+                  </div>
+                </section>
+              )}
+
+              <PhotosFeed userId={userId} />
+            </div>
+
+            {isDesktop && <div className="stack">{QuickActions}</div>}
+          </div>
+
+          {loading && <p className="muted mt-3">Loading...</p>}
+        </div>
       </div>
     </div>
   );
