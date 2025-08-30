@@ -1,349 +1,897 @@
-// app/profile/page.tsx
+// app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
+import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
-import AvatarUploader from "@/components/AvatarUploader";
-import PhotosFeed from "@/components/PhotosFeed";
-import ProfileInviteQR from "@/components/ProfileInviteQR";
+import CreateEventModal from "@/components/CreateEventModal";
+import CalendarThemeSelector from "@/components/CalendarThemeSelector";
+import EventDetails from "@/components/EventDetails";
+import { useMoon } from "@/lib/useMoon";
+import type { DBEvent, Visibility } from "@/lib/types";
 
-type Profile = {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  location?: string | null;
-  location_text?: string | null;
-  location_is_public?: boolean | null;
-  show_mutuals: boolean | null;
-};
+// Client-only calendar grid - completely prevent SSR
+const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
+  ssr: false,
+  loading: () => (
+    <div className="card p-3">
+      <div style={{ height: "680px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div>Loading calendar...</div>
+      </div>
+    </div>
+  )
+});
 
-function useIsDesktop(minWidth = 1024) {
-  const [isDesktop, setIsDesktop] = useState<boolean>(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia(`(min-width:${minWidth}px)`);
-    const update = () => setIsDesktop(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, [minWidth]);
-  return isDesktop;
-}
+type FeedEvent = DBEvent & { _dismissed?: boolean };
+type Mode = "my" | "whats";
+type QuickType = "none" | "reminder" | "todo";
+type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
-export default function ProfilePage() {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tableMissing, setTableMissing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editPersonal, setEditPersonal] = useState(false);
-  const [friendsCount, setFriendsCount] = useState<number>(0);
-  const isDesktop = useIsDesktop(1024);
+export default function CalendarPage() {
+  // ===== ALL HOOKS DECLARED AT TOP - NEVER CONDITIONAL =====
+  const [me, setMe] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("my");
+  const [date, setDate] = useState<Date>(new Date());
+  const [view, setView] = useState<View>("month");
+  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
-  const [p, setP] = useState<Profile>({
-    id: "",
-    full_name: "",
-    avatar_url: "",
-    bio: "",
+  // Event data
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Feed (What's Happening)
+  const [feed, setFeed] = useState<FeedEvent[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+
+  // Modals
+  const [openCreate, setOpenCreate] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selected, setSelected] = useState<DBEvent | null>(null);
+
+  // Create form
+  const [createForm, setCreateForm] = useState({
+    title: "",
+    description: "",
     location: "",
-    location_text: "",
-    location_is_public: false,
-    show_mutuals: true,
+    start: "",
+    end: "",
+    visibility: "public" as Visibility,
+    event_type: "",
+    community_id: "",
+    source: "personal" as "personal" | "business",
+    image_path: "",
   });
 
+  // Quick create (chip) mode
+  const [quickType, setQuickType] = useState<QuickType>("none");
+  const [dragType, setDragType] = useState<QuickType>("none");
+
+  // NEW: dragging a specific list item (reminder/todo) to copy onto calendar
+  const [dragItem, setDragItem] = useState<{ id: string; type: "reminder" | "todo"; title: string } | null>(null);
+
+  // “Quick Create” modal (button on chips)
+  const [quickModal, setQuickModal] = useState<{ open: boolean; type: "reminder" | "todo" | null }>({
+    open: false,
+    type: null
+  });
+  const [quickForm, setQuickForm] = useState({
+    title: "",
+    description: "",
+    start: "",
+    end: "",
+  });
+
+  // NEW: lists UI state
+  const [showRemindersList, setShowRemindersList] = useState(false);
+  const [showTodosList, setShowTodosList] = useState(false);
+  const [showCompletedReminders, setShowCompletedReminders] = useState(false);
+  const [showUnfinishedReminders, setShowUnfinishedReminders] = useState(true);
+  const [showCompletedTodos, setShowCompletedTodos] = useState(false);
+  const [showUnfinishedTodos, setShowUnfinishedTodos] = useState(true);
+
+  // Moon data (always call hook, but we toggle display)
+  const moonEvents = useMoon(date, view);
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    const savedTheme = localStorage.getItem("calendar-theme") as CalendarTheme;
+    if (savedTheme) setCalendarTheme(savedTheme);
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      if (!userId) return;
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle();
-        if (error) throw error;
-        if (data) {
-          setP({
-            id: data.id,
-            full_name: data.full_name ?? "",
-            avatar_url: data.avatar_url ?? "",
-            bio: data.bio ?? "",
-            location: data.location ?? "",
-            location_text: (data.location_text ?? data.location) ?? "",
-            location_is_public: data.location_is_public ?? false,
-            show_mutuals: data.show_mutuals ?? true,
-          });
-        } else {
-          setP(prev => ({ ...prev, id: userId }));
-        }
-      } catch {
-        setTableMissing(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [userId]);
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
 
   useEffect(() => {
-    if (!userId) return;
-    (async () => {
-      const { count } = await supabase
-        .from("friendships")
-        .select("a", { count: "exact", head: true })
-        .or(`a.eq.${userId},b.eq.${userId}`);
-      if (typeof count === "number") setFriendsCount(count);
-    })();
-  }, [userId]);
+    if (me !== null) loadCalendar(); // load after we know user or know there is none
+  }, [me]);
 
-  const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
+  useEffect(() => {
+    const ch = supabase
+      .channel("events-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, loadCalendar)
+      .subscribe();
+    return () => void supabase.removeChannel(ch);
+  }, []);
 
-  const save = async () => {
-    if (!userId) return;
-    setSaving(true);
+  useEffect(() => {
+    if (mode === "whats" && me) loadFeed();
+  }, [mode, me]);
+
+  // ===== STABLE CALLBACKS =====
+  const handleThemeChange = useCallback((newTheme: CalendarTheme) => {
+    setCalendarTheme(newTheme);
+    localStorage.setItem("calendar-theme", newTheme);
+  }, []);
+
+  const toLocalInput = useCallback(
+    (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+    []
+  );
+
+  // ===== DATA LOADING =====
+  async function loadCalendar() {
+    setLoading(true);
+    setErr(null);
+
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: p.full_name?.trim() || null,
-          bio: p.bio?.trim() || null,
-          location_text: p.location_text?.trim() || null,
-          location_is_public: !!p.location_is_public,
-          avatar_url: p.avatar_url?.trim() || null,
-          show_mutuals: !!p.show_mutuals,
-        })
-        .eq("id", userId);
-      if (error) throw error;
-      alert("Saved!");
-      setEditPersonal(false);
-    } catch (e: any) {
-      alert(e.message || "Save failed");
+      // --- UNIQUE "MY CALENDAR" ---
+      // 1) events I created
+      let owned: any[] = [];
+      if (me) {
+        const rOwned = await supabase.from("events").select("*").eq("created_by", me).order("start_time", { ascending: true });
+        owned = (rOwned.data || []).filter((e: any) => e?.start_time && e?.end_time);
+      }
+
+      // 2) public events I added via “Add to Calendar” (event_interests)
+      let interested: any[] = [];
+      if (me) {
+        const rInt = await supabase.from("event_interests").select("event_id").eq("user_id", me);
+        const ids = (rInt.data || []).map((x: any) => x.event_id);
+        if (ids.length) {
+          const chunk = (arr: string[], size: number) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+          for (const part of chunk(ids, 100)) {
+            const r = await supabase.from("events").select("*").in("id", part).order("start_time", { ascending: true });
+            interested.push(...((r.data || []).filter((e: any) => e?.start_time && e?.end_time)));
+          }
+        }
+      }
+
+      // union (no duplicates)
+      const seen = new Set<string>();
+      const mine = [...owned, ...interested.filter((e: any) => !seen.has((seen.add(e.id), e.id)))];
+
+      // Mark RSVPs and friends for styling (optional)
+      let rsvpIds = new Set<string>();
+      if (me) {
+        const { data: myAtt } = await supabase.from("event_attendees").select("event_id").eq("user_id", me);
+        rsvpIds = new Set((myAtt || []).map((r: any) => r.event_id));
+      }
+      let friendIds: string[] = [];
+      if (me) {
+        const { data: fr } = await supabase.from("friends_view").select("friend_id");
+        friendIds = (fr || []).map((r: any) => r.friend_id);
+      }
+
+      const withFlags = mine.map((e) => ({
+        ...e,
+        rsvp_me: rsvpIds.has(e.id),
+        by_friend: e.visibility === "public" && friendIds.includes(e.created_by) && e.created_by !== me,
+      }));
+
+      setEvents(withFlags);
+    } catch (error) {
+      console.error("Load calendar error:", error);
+      setErr("Failed to load calendar");
     } finally {
-      setSaving(false);
+      setLoading(false);
+    }
+  }
+
+  async function loadFeed() {
+    if (!me) return;
+    setFeedLoading(true);
+    try {
+      const { data: f } = await supabase.from("friends_view").select("friend_id").limit(500);
+      const friendIds = (f || []).map((r: any) => r.friend_id);
+
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+
+      let query = supabase
+        .from("events")
+        .select("*")
+        .gte("start_time", from.toISOString())
+        .order("start_time", { ascending: true })
+        .neq("created_by", me)
+        .eq("visibility", "public");
+
+      if (friendIds.length) {
+        // friends' public events OR business
+        query = query.or(`created_by.in.(${friendIds.join(",")}),source.eq.business`);
+      } else {
+        query = query.eq("source", "business");
+      }
+
+      const { data } = await query;
+      setFeed((data || []) as FeedEvent[]);
+    } catch {
+      setFeed([]);
+    } finally {
+      setFeedLoading(false);
+    }
+  }
+
+  // ===== EVENT HELPERS =====
+  const canEdit = (evt: any) => {
+    const r = evt?.resource as DBEvent | undefined;
+    return !!(r && me && r.created_by === me);
+  };
+
+  // create a quick private item (reminder/todo) — can optionally override title
+  async function createQuick(start: Date, end: Date, kind: Exclude<QuickType, "none">, opts?: { title?: string; description?: string }) {
+    if (!me) return;
+    try {
+      const payload: any = {
+        title: opts?.title ?? (kind === "reminder" ? "Reminder" : "To-do"),
+        description: opts?.description ?? null,
+        location: null,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        visibility: "private",
+        created_by: me,
+        event_type: kind,
+        rsvp_public: false,
+        community_id: null,
+        image_path: null,
+        source: "personal",
+        status: "scheduled",
+      };
+      const { error } = await supabase.from("events").insert(payload);
+      if (error) console.error("Create quick error:", error);
+      await loadCalendar();
+    } catch (error) {
+      console.error("Create quick error:", error);
+    }
+  }
+
+  const createEvent = async () => {
+    if (!me) return alert("Please log in.");
+    const f = createForm;
+    if (!f.title || !f.start) return alert("Title and start time are required.");
+
+    try {
+      const payload: any = {
+        title: f.title,
+        description: f.description || null,
+        location: f.location || null,
+        start_time: new Date(f.start).toISOString(),
+        end_time: f.end ? new Date(f.end).toISOString() : new Date(new Date(f.start).getTime() + 60 * 60 * 1000).toISOString(),
+        visibility: f.visibility,
+        created_by: me,
+        event_type: f.event_type || null,
+        rsvp_public: true,
+        community_id: f.community_id || null,
+        image_path: f.image_path || null,
+        source: f.source,
+        status: "scheduled",
+      };
+
+      const { error } = await supabase.from("events").insert(payload);
+      if (error) return alert(error.message);
+
+      setOpenCreate(false);
+      setCreateForm({
+        title: "", description: "", location: "", start: "", end: "",
+        visibility: "public", event_type: "", community_id: "", source: "personal", image_path: "",
+      });
+      await loadCalendar();
+    } catch (error) {
+      console.error("Create event error:", error);
+      alert("Failed to create event");
     }
   };
 
-  async function onAvatarChange(url: string) {
-    setP(prev => ({ ...prev, avatar_url: url }));
-    if (!userId) return;
-    const { error } = await supabase
-      .from("profiles")
-      .update({ avatar_url: url || null })
-      .eq("id", userId);
-    if (error) alert("Could not save photo: " + error.message);
-  }
+  const createQuickEvent = async () => {
+    if (!me || !quickModal.type) return;
+    const f = quickForm;
+    if (!f.title || !f.start) return alert("Title and start time are required.");
 
-  const QuickActions = (
-    <div className="quick-actions" style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
-      <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Friends</h3></div>
-        <p className="muted" style={{ fontSize: 13 }}>Browse, search, add private notes.</p>
-        <a className="btn mt-2" href="/friends">Open</a>
-      </section>
-      <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Gratitude</h3></div>
-        <p className="muted" style={{ fontSize: 13 }}>Capture daily gratitude.</p>
-        <a className="btn btn-brand mt-2" href="/gratitude">Open</a>
-      </section>
-      <section className="card p-3" style={{ padding: 12 }}>
-        <div className="section-row"><h3 className="section-title" style={{ marginBottom: 4 }}>Messages</h3></div>
-        <p className="muted" style={{ fontSize: 13 }}>Private chat with friends.</p>
-        <a className="btn mt-2" href="/messages">Open</a>
-      </section>
-    </div>
+    try {
+      await createQuick(
+        new Date(f.start),
+        f.end ? new Date(f.end) : new Date(new Date(f.start).getTime() + 60 * 60 * 1000),
+        quickModal.type,
+        { title: f.title, description: f.description || undefined }
+      );
+      setQuickModal({ open: false, type: null });
+      setQuickForm({ title: "", description: "", start: "", end: "" });
+    } catch (error) {
+      console.error("Create quick event error:", error);
+      alert("Failed to create quick event");
+    }
+  };
+
+  const onDrop = async ({ event, start, end }: any) => {
+    try {
+      if (!canEdit(event)) return;
+      const r = event.resource as DBEvent;
+      const { error } = await supabase
+        .from("events")
+        .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+        .eq("id", r.id);
+      if (error) {
+        console.error("Drop error:", error);
+        alert(error.message);
+      } else {
+        await loadCalendar();
+      }
+    } catch (error) {
+      console.error("Drop error:", error);
+    }
+  };
+
+  const onResize = async ({ event, start, end }: any) => {
+    try {
+      if (!canEdit(event)) return;
+      const r = event.resource as DBEvent;
+      const { error } = await supabase
+        .from("events")
+        .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+        .eq("id", r.id);
+      if (error) {
+        console.error("Resize error:", error);
+        alert(error.message);
+      } else {
+        await loadCalendar();
+      }
+    } catch (error) {
+      console.error("Resize error:", error);
+    }
+  };
+
+  // Drag helpers for the chips
+  const startDrag = (t: Exclude<QuickType, "none">) => () => setDragType(t);
+  const endDrag = () => setDragType("none");
+
+  // NEW: start/stop dragging a specific list item (to copy)
+  const startItemDrag = (item: { id: string; type: "reminder" | "todo"; title: string }) => () => {
+    setDragItem(item);
+    setDragType(item.type);
+  };
+  const endItemDrag = () => {
+    setDragItem(null);
+    setDragType("none");
+  };
+
+  const openQuickModal = (type: "reminder" | "todo") => {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    setQuickForm({
+      title: type === "reminder" ? "Reminder" : "To-do",
+      description: "",
+      start: toLocalInput(start),
+      end: toLocalInput(end),
+    });
+    setQuickModal({ open: true, type });
+  };
+
+  const layoutClass = useMemo(() => (mode === "my" ? "grid-cols-calendar" : ""), [mode]);
+  const quickActive = quickType !== "none";
+
+  // Derived lists for the sidebar (from my events)
+  const myReminders = useMemo(
+    () => (events as any[]).filter((e) => e?.created_by === me && e?.event_type === "reminder"),
+    [events, me]
+  );
+  const myTodos = useMemo(
+    () => (events as any[]).filter((e) => e?.created_by === me && e?.event_type === "todo"),
+    [events, me]
   );
 
+  // Complete/Undo toggle
+  const toggleComplete = async (id: string, done: boolean) => {
+    await supabase.from("events").update({ status: done ? "done" : "scheduled" }).eq("id", id);
+    await loadCalendar();
+  };
+
+  // Edit title
+  const editItem = async (it: any) => {
+    const t = window.prompt("Edit title", it?.title || "");
+    if (t == null) return;
+    await supabase.from("events").update({ title: t || "Untitled" }).eq("id", it.id);
+    await loadCalendar();
+  };
+
+  // Delete
+  const deleteItem = async (it: any) => {
+    if (!window.confirm("Delete this item?")) return;
+    await supabase.from("events").delete().eq("id", it.id);
+    await loadCalendar();
+  };
+
   return (
-    <div className="page-wrap">
-      <div className="page">
-        <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="page calendar-sand">
+      <div className={`container-app ${layoutClass}`}>
+        {/* Sidebar tray (only in My Calendar mode) */}
+        {mode === "my" && (
+          <aside className="task-tray">
+            <div className="card p-3">
+              <div className="section-title">Quick add</div>
+              <div className="stack">
+                {/* Chips (placement mode or open modal) */}
+                <div
+                  className="tray-chip"
+                  draggable
+                  onDragStart={startDrag("reminder")}
+                  onDragEnd={endDrag}
+                  onClick={() => setQuickType((q) => (q === "reminder" ? "none" : "reminder"))}
+                  title="Drag onto the calendar (desktop) or tap then tap a time slot (mobile)"
+                  style={{ borderLeft: "6px solid #f59e0b", background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                >
+                  Reminder (private)
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openQuickModal("reminder");
+                    }}
+                    style={{
+                      marginLeft: "8px",
+                      fontSize: "10px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      background: "#f59e0b",
+                      color: "white",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                    title="Create custom reminder"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                <div
+                  className="tray-chip"
+                  draggable
+                  onDragStart={startDrag("todo")}
+                  onDragEnd={endDrag}
+                  onClick={() => setQuickType((q) => (q === "todo" ? "none" : "todo"))}
+                  title="Drag onto the calendar (desktop) or tap then tap a time slot (mobile)"
+                  style={{ borderLeft: "6px solid #059669", background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                >
+                  To-do (private)
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openQuickModal("todo");
+                    }}
+                    style={{
+                      marginLeft: "8px",
+                      fontSize: "10px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      background: "#059669",
+                      color: "white",
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                    title="Create custom to-do"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {quickActive && (
+                  <div className="note">
+                    <div className="note-title">Placement mode</div>
+                    <div className="codeblock">
+                      Tap a slot in Day/Week to place a {quickType}.
+                    </div>
+                    <button
+                      onClick={() => setQuickType("none")}
+                      style={{ marginTop: "8px", fontSize: "11px", color: "#6b7280", background: "none", border: "none", cursor: "pointer" }}
+                    >
+                      Cancel placement mode
+                    </button>
+                  </div>
+                )}
+
+                {/* NEW: Reminders list */}
+                <div className="mt-3">
+                  <button
+                    className="btn"
+                    onClick={() => setShowRemindersList((v) => !v)}
+                    aria-expanded={showRemindersList}
+                  >
+                    {showRemindersList ? "▾" : "▸"} Reminders
+                  </button>
+
+                  {showRemindersList && (
+                    <div className="mt-2 space-y-2">
+                      <div className="text-xs text-neutral-600 flex gap-3 items-center">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={showUnfinishedReminders}
+                            onChange={(e) => setShowUnfinishedReminders(e.target.checked)}
+                          />{" "}
+                          Show unfinished
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={showCompletedReminders}
+                            onChange={(e) => setShowCompletedReminders(e.target.checked)}
+                          />{" "}
+                          Show completed
+                        </label>
+                      </div>
+
+                      {(myReminders || [])
+                        .filter((it) => {
+                          const done = (it.status || "").toLowerCase() === "done";
+                          return (done && showCompletedReminders) || (!done && showUnfinishedReminders);
+                        })
+                        .map((it) => {
+                          const done = (it.status || "").toLowerCase() === "done";
+                          return (
+                            <div
+                              key={it.id}
+                              className="p-2 rounded-lg border bg-white flex items-center justify-between gap-2"
+                              draggable
+                              onDragStart={startItemDrag({ id: it.id, type: "reminder", title: it.title || "Reminder" })}
+                              onDragEnd={endItemDrag}
+                              title="Drag onto the calendar to make a copy"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={done}
+                                  onChange={(e) => toggleComplete(it.id, e.target.checked)}
+                                  title={done ? "Mark as unfinished" : "Mark as done"}
+                                />
+                                <div className={`text-sm truncate ${done ? "line-through text-neutral-400" : ""}`}>
+                                  {it.title || "Reminder"}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button className="btn" onClick={() => editItem(it)}>Edit</button>
+                                <button className="btn" onClick={() => deleteItem(it)}>Delete</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {myReminders.length === 0 && <div className="muted">No reminders yet.</div>}
+                    </div>
+                  )}
+                </div>
+
+                {/* NEW: To-dos list */}
+                <div className="mt-3">
+                  <button
+                    className="btn"
+                    onClick={() => setShowTodosList((v) => !v)}
+                    aria-expanded={showTodosList}
+                  >
+                    {showTodosList ? "▾" : "▸"} To-dos
+                  </button>
+
+                  {showTodosList && (
+                    <div className="mt-2 space-y-2">
+                      <div className="text-xs text-neutral-600 flex gap-3 items-center">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={showUnfinishedTodos}
+                            onChange={(e) => setShowUnfinishedTodos(e.target.checked)}
+                          />{" "}
+                          Show unfinished
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={showCompletedTodos}
+                            onChange={(e) => setShowCompletedTodos(e.target.checked)}
+                          />{" "}
+                          Show completed
+                        </label>
+                      </div>
+
+                      {(myTodos || [])
+                        .filter((it) => {
+                          const done = (it.status || "").toLowerCase() === "done";
+                          return (done && showCompletedTodos) || (!done && showUnfinishedTodos);
+                        })
+                        .map((it) => {
+                          const done = (it.status || "").toLowerCase() === "done";
+                          return (
+                            <div
+                              key={it.id}
+                              className="p-2 rounded-lg border bg-white flex items-center justify-between gap-2"
+                              draggable
+                              onDragStart={startItemDrag({ id: it.id, type: "todo", title: it.title || "To-do" })}
+                              onDragEnd={endItemDrag}
+                              title="Drag onto the calendar to make a copy"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={done}
+                                  onChange={(e) => toggleComplete(it.id, e.target.checked)}
+                                  title={done ? "Mark as unfinished" : "Mark as done"}
+                                />
+                                <div className={`text-sm truncate ${done ? "line-through text-neutral-400" : ""}`}>
+                                  {it.title || "To-do"}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button className="btn" onClick={() => editItem(it)}>Edit</button>
+                                <button className="btn" onClick={() => deleteItem(it)}>Delete</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {myTodos.length === 0 && <div className="muted">No to-dos yet.</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Main column */}
+        <div>
           <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Profile</h1>
-            <div className="controls flex items-center gap-2">
-              <Link href="/business" className="btn">Business profile</Link>
-              <Link href="/friends" className="btn">Friends</Link>
-              <Link href="/messages" className="btn">Messages</Link>
-              <button className="btn" onClick={() => setEditPersonal(!editPersonal)}>
-                {editPersonal ? "Done" : "Edit"}
+            <h1 className="page-title">Calendar</h1>
+
+            <div className="flex items-center gap-2">
+              <CalendarThemeSelector 
+                currentTheme={calendarTheme}
+                onThemeChange={handleThemeChange}
+              />
+              
+              <div className="segmented" role="tablist" aria-label="Calendar mode">
+                <button role="tab" aria-selected={mode === "whats"} className={`seg-btn ${mode === "whats" ? "active" : ""}`} onClick={() => setMode("whats")}>
+                  What&apos;s Happening
+                </button>
+                <button role="tab" aria-selected={mode === "my"} className={`seg-btn ${mode === "my" ? "active" : ""}`} onClick={() => setMode("my")}>
+                  My Calendar
+                </button>
+              </div>
+
+              <button className="btn btn-brand" onClick={() => setOpenCreate(true)}>+ Create event</button>
+              <button className="btn" onClick={loadCalendar}>Refresh</button>
+              {loading && mode === "my" && <span className="muted">Loading…</span>}
+              {err && <span className="text-rose-700 text-sm">Error: {err}</span>}
+            </div>
+          </div>
+
+          {mode === "whats" ? (
+            <div className="card p-3">
+              {feedLoading ? (
+                <div className="muted">Loading feed…</div>
+              ) : feed.filter((e) => !e._dismissed).length === 0 ? (
+                <div className="muted">Nothing new right now. Check back later.</div>
+              ) : (
+                <ul className="space-y-2">
+                  {feed.filter((e) => !e._dismissed).map((e) => (
+                    <li
+                      key={e.id}
+                      className="border border-neutral-200 rounded-lg p-3 flex items-center justify-between gap-3"
+                      onTouchStart={(ev) => {
+                        (ev.currentTarget as any)._sx = ev.changedTouches[0].clientX;
+                      }}
+                      onTouchEnd={async (ev) => {
+                        const sx = (ev.currentTarget as any)._sx ?? 0;
+                        const dx = ev.changedTouches[0].clientX - sx;
+                        if (dx > 60) {
+                          if (me) await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
+                          setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
+                          loadCalendar();
+                        } else if (dx < -60) {
+                          setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
+                        }
+                      }}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{e.title || "Untitled event"}</div>
+                        <div className="text-xs text-neutral-600">
+                          {new Date(e.start_time!).toLocaleString()} — {e.location || "TBD"}
+                          {e.source ? ` · ${e.source}` : ""}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="btn" onClick={() => setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x))}>Dismiss</button>
+                        <button className="btn btn-brand" onClick={async () => {
+                          if (!me) return;
+                          await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
+                          setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
+                          loadCalendar();
+                        }}>
+                          Add to Calendar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <CalendarGrid
+              dbEvents={events as any}
+              moonEvents={moonEvents}
+              showMoon={false}
+              theme={calendarTheme}
+              showWeather={false}
+              temperatureUnit="celsius"
+              date={date}
+              setDate={setDate}
+              view={view}
+              setView={setView}
+              onSelectSlot={useCallback((info: { start: Date; end: Date }) => {
+                try {
+                  const quickActiveNow = quickType !== "none";
+                  if (view === "month") {
+                    setView("day");
+                    setDate(info.start);
+                    return;
+                  }
+                  if (quickActiveNow) {
+                    void createQuick(info.start, info.end, quickType);
+                    setQuickType("none");
+                    return;
+                  }
+                  setCreateForm((f) => ({ ...f, title: "", start: toLocalInput(info.start), end: toLocalInput(info.end) }));
+                  setOpenCreate(true);
+                } catch (error) {
+                  console.error("Select slot error:", error);
+                }
+              }, [view, quickType, toLocalInput])}
+              onSelectEvent={useCallback((e: any) => {
+                try {
+                  const r = e?.resource as DBEvent | undefined;
+                  if (r) {
+                    setSelected(r);
+                    setDetailsOpen(true);
+                    return;
+                  }
+                  const id = e?.id;
+                  if (id) {
+                    const found = events.find((it: any) => it?.id === id);
+                    if (found) {
+                      setSelected(found);
+                      setDetailsOpen(true);
+                      return;
+                    }
+                  }
+                  if (e?.title && e?.start && e?.end) {
+                    const faux: DBEvent = {
+                      id: id || "",
+                      title: e.title,
+                      description: null,
+                      start_time: new Date(e.start).toISOString(),
+                      end_time: new Date(e.end).toISOString(),
+                      visibility: "public",
+                      created_by: me || "",
+                      location: null,
+                      image_path: null,
+                      source: "personal",
+                      status: "scheduled",
+                      cancellation_reason: null,
+                      event_type: null,
+                      invite_code: null,
+                    };
+                    setSelected(faux);
+                    setDetailsOpen(true);
+                  }
+                } catch (error) {
+                  console.error("Open details error:", error);
+                }
+              }, [events, me])}
+              onDrop={onDrop}
+              onResize={onResize}
+              externalDragType={dragType}
+              onExternalDrop={async ({ start, end }, kind) => {
+                // If dragging a specific list item, copy its title; otherwise use generic
+                const title = dragItem?.title;
+                await createQuick(start, end, kind, title ? { title } : undefined);
+                setDragItem(null);
+                setDragType("none");
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Create Event Modal */}
+      <CreateEventModal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        sessionUser={me}
+        value={createForm}
+        onChange={(v) => setCreateForm((prev) => ({ ...prev, ...v }))}
+        onSave={createEvent}
+      />
+
+      {/* Quick Create Modal for Reminders/Todos */}
+      {quickModal.open && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold">
+                Create {quickModal.type === "reminder" ? "Reminder" : "To-do"}
+              </h3>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <input
+                  type="text"
+                  value={quickForm.title}
+                  onChange={(e) => setQuickForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder={`What do you need to ${quickModal.type === "reminder" ? "remember" : "do"}?`}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+                <textarea
+                  value={quickForm.description}
+                  onChange={(e) => setQuickForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Add any additional details..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start</label>
+                  <input
+                    type="datetime-local"
+                    value={quickForm.start}
+                    onChange={(e) => setQuickForm(f => ({ ...f, start: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={quickForm.end}
+                    onChange={(e) => setQuickForm(f => ({ ...f, end: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t flex justify-end gap-2">
+              <button
+                onClick={() => setQuickModal({ open: false, type: null })}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createQuickEvent}
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+              >
+                Create {quickModal.type === "reminder" ? "Reminder" : "To-do"}
               </button>
             </div>
           </div>
-
-          <div className="h-px bg-violet-200/60" style={{ margin: "12px 0 16px" }} />
-
-          {tableMissing && (
-            <div className="note">
-              <div className="note-title">Tables not found</div>
-              <div className="note-body">Run the SQL migration, then reload.</div>
-            </div>
-          )}
-
-          {/* Identity header */}
-          <div
-            className="card p-3 mb-3 profile-card"
-            style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}
-          >
-            <div
-              className="profile-header"
-              style={{
-                display: "flex",
-                flexDirection: isDesktop ? "row" : "column",
-                gap: isDesktop ? 18 : 12,
-                alignItems: isDesktop ? "flex-start" : "center",
-                textAlign: isDesktop ? "left" : "center",
-              }}
-            >
-              <div className="shrink-0">
-                <AvatarUploader
-                  userId={userId}
-                  value={p.avatar_url}
-                  onChange={onAvatarChange}
-                  label="Profile photo"
-                  size={160}
-                />
-              </div>
-              <div className="profile-heading" style={{ minWidth: 0, width: "100%" }}>
-                <div className="profile-name">{displayName}</div>
-
-                {/* KPIs (Friends now clickable) */}
-                <div
-                  className="kpis"
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    justifyContent: isDesktop ? "flex-start" : "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span className="kpi"><strong>0</strong> Followers</span>
-                  <span className="kpi"><strong>0</strong> Following</span>
-                  <Link
-                    href="/friends"
-                    className="kpi underline decoration-dotted hover:decoration-solid"
-                    title="Open your friends list"
-                  >
-                    <strong>{friendsCount}</strong> Friends
-                  </Link>
-                </div>
-
-                {/* Invite dropdown / QR */}
-                <div style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
-                  <ProfileInviteQR userId={userId} embed qrSize={180} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Columns */}
-          <div
-            className="columns"
-            style={{
-              display: "grid",
-              gridTemplateColumns: isDesktop ? "minmax(0,1fr) 320px" : "1fr",
-              gap: 16,
-              alignItems: "start",
-            }}
-          >
-            <div className="stack">
-              {!isDesktop && QuickActions}
-
-              {editPersonal ? (
-                <section className="card p-3">
-                  <h2 className="section-title">Edit your info</h2>
-                  <div className="stack">
-                    <label className="field">
-                      <span className="label">Name</span>
-                      <input
-                        className="input"
-                        value={p.full_name ?? ""}
-                        onChange={(e) => setP({ ...p, full_name: e.target.value })}
-                      />
-                    </label>
-
-                    <div
-                      className="grid"
-                      style={{ display: "grid", gap: 12, gridTemplateColumns: isDesktop ? "1fr auto" : "1fr" }}
-                    >
-                      <label className="field">
-                        <span className="label">Location</span>
-                        <input
-                          className="input"
-                          value={p.location_text ?? ""}
-                          onChange={(e) => setP({ ...p, location_text: e.target.value })}
-                          placeholder="City, State"
-                        />
-                      </label>
-                      <label className="flex items-center gap-2 text-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={!!p.location_is_public}
-                          onChange={(e) => setP({ ...p, location_is_public: e.target.checked })}
-                        />
-                        Show on public profile
-                      </label>
-                    </div>
-
-                    <label className="field">
-                      <span className="label">Bio</span>
-                      <textarea
-                        className="input"
-                        rows={4}
-                        value={p.bio ?? ""}
-                        onChange={(e) => setP({ ...p, bio: e.target.value })}
-                      />
-                    </label>
-
-                    <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={!!p.show_mutuals}
-                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })}
-                      />
-                      <span>Show mutual friends</span>
-                    </label>
-
-                    <div className="right" style={{ textAlign: "right" }}>
-                      <button className="btn btn-brand" onClick={save} disabled={saving}>
-                        {saving ? "Saving..." : "Save"}
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              ) : (
-                <section className="card p-3">
-                  <h2 className="section-title">About</h2>
-                  <div className="stack">
-                    {p.location_is_public && p.location_text ? (
-                      <div>
-                        <strong>Location:</strong> {p.location_text}
-                      </div>
-                    ) : null}
-                    {p.bio ? (
-                      <div style={{ whiteSpace: "pre-wrap" }}>{p.bio}</div>
-                    ) : (
-                      <div className="muted">Add a bio and location using Edit.</div>
-                    )}
-                    {!p.location_is_public && p.location_text ? (
-                      <div className="muted text-sm">(Location is private)</div>
-                    ) : null}
-                  </div>
-                </section>
-              )}
-
-              <PhotosFeed userId={userId} />
-            </div>
-
-            {isDesktop && <div className="stack">{QuickActions}</div>}
-          </div>
-
-          {loading && <p className="muted mt-3">Loading...</p>}
         </div>
-      </div>
+      )}
+
+      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
     </div>
   );
 }
