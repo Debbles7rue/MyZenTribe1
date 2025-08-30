@@ -1,6 +1,7 @@
 // app/(protected)/calendar/page.tsx  (or app/calendar/page.tsx)
 "use client";
 
+// ✅ Fix: make the route fully dynamic and set a valid revalidate primitive
 export const dynamic = "force-dynamic";
 export const revalidate = false;
 
@@ -15,6 +16,7 @@ import { startOfWeek, getDay, format, parse } from "date-fns";
 type DbEvent = {
   id: string | number;
   title: string | null;
+  // support either column pair present in your DB
   start_at?: string | null;
   end_at?: string | null;
   start_time?: string | null;
@@ -35,25 +37,25 @@ type UiEvent = {
 const locales: any = {};
 const localizer = dateFnsLocalizer({
   format,
-  parse: (str: string, fmt: string, refDate: Date) => parse(str, fmt, refDate),
+  parse: (str: string, fmt: string, ref: Date) => parse(str, fmt, ref),
   startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 0 }),
   getDay,
   locales,
 });
 
-// ----- helpers ---------------------------------------------------------------
+// -------- helpers ------------------------------------------------------------
 
 async function getUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
 }
 
-function pickDate(e: DbEvent, keyA: keyof DbEvent, keyB: keyof DbEvent): string | null {
-  return (e[keyA] as string) ?? (e[keyB] as string) ?? null;
+function pickDate(e: DbEvent, a: keyof DbEvent, b: keyof DbEvent) {
+  return (e[a] as string) ?? (e[b] as string) ?? null;
 }
 
-function toUi(events: DbEvent[]): UiEvent[] {
-  const ui = (events || [])
+function toUi(rows: DbEvent[]): UiEvent[] {
+  const ui = (rows || [])
     .map((e) => {
       const startIso = pickDate(e, "start_at", "start_time");
       const endIso = pickDate(e, "end_at", "end_time");
@@ -68,31 +70,26 @@ function toUi(events: DbEvent[]): UiEvent[] {
     })
     .filter(Boolean) as UiEvent[];
 
-  // Sort client-side so we don’t depend on which date columns exist
+  // sort client-side to avoid depending on which date columns exist
   ui.sort((a, b) => a.start.getTime() - b.start.getTime());
   return ui;
 }
 
-// ----- page ------------------------------------------------------------------
+// -------- page ---------------------------------------------------------------
 
 export default function CalendarPage() {
-  const [me, setMe] = useState<string | null>(null);
   const [tab, setTab] = useState<"public" | "mine">("public");
   const [loading, setLoading] = useState(false);
   const [publicEvents, setPublicEvents] = useState<UiEvent[]>([]);
   const [myEvents, setMyEvents] = useState<UiEvent[]>([]);
 
-  // Change if your creator lives elsewhere
+  // adjust if your creator lives elsewhere
   const CREATE_EVENT_PATH = "/events/new";
-
-  useEffect(() => {
-    getUserId().then(setMe);
-  }, []);
 
   async function load() {
     setLoading(true);
     try {
-      // PUBLIC (What’s Happening)
+      // PUBLIC (What's Happening) — all public events, any owner
       {
         const r = await supabase
           .from("events")
@@ -102,6 +99,7 @@ export default function CalendarPage() {
         if (!r.error && r.data) {
           setPublicEvents(toUi(r.data as DbEvent[]));
         } else {
+          // fallback table name if you use calendar_events
           const r2 = await supabase
             .from("calendar_events")
             .select("id,title,start_at,end_at,start_time,end_time,visibility,owner_id,location")
@@ -110,7 +108,7 @@ export default function CalendarPage() {
         }
       }
 
-      // MINE (owner_id === current user)
+      // MINE (My Calendar) — strictly events owned by the signed-in user (unique per person)
       const uid = await getUserId();
       if (uid) {
         const r = await supabase
