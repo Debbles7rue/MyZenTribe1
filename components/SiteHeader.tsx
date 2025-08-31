@@ -58,6 +58,7 @@ export default function SiteHeader() {
             <nav className="main-nav">
               <Nav href="/">Home</Nav>
               <Nav href="/calendar">Calendar</Nav>
+              <Nav href="/communities">Communities</Nav>
 
               {/* Profile + Business under dropdown */}
               <div className="relative inline-flex">
