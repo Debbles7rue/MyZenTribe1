@@ -222,4 +222,54 @@ async function fileToImage(file: File): Promise<HTMLImageElement> {
       ctx.drawImage(bmp as any, 0, 0);
       const img = new Image();
       img.src = canvas.toDataURL("image/jpeg", 0.95);
-      awa
+      await imgDecode(img);
+      return img;
+    } catch {
+      // fall through
+    }
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = url;
+    await imgDecode(img);
+    return img;
+  } finally {
+    // revoke after decode to avoid timing issues
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 1500);
+  }
+}
+
+// Avoid TS narrowing to never; prefer event listeners/Promise wrapper
+function imgDecode(img: HTMLImageElement): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const anyImg = img as any;
+    if (typeof anyImg.decode === "function") {
+      anyImg.decode().then(() => resolve()).catch(() => {
+        img.addEventListener("load", () => resolve(), { once: true });
+        img.addEventListener("error", () => reject(new Error("Image load failed")), { once: true });
+      });
+    } else {
+      img.addEventListener("load", () => resolve(), { once: true });
+      img.addEventListener("error", () => reject(new Error("Image load failed")), { once: true });
+    }
+  });
+}
+
+function drawToCanvas(img: HTMLImageElement, maxDim: number): { canvas: HTMLCanvasElement; mime: string } {
+  const { width, height } = img;
+  const scale = Math.min(1, maxDim / Math.max(width, height));
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h);
+  return { canvas, mime: "image/jpeg" };
+}
