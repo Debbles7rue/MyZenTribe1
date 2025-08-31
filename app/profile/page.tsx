@@ -7,7 +7,6 @@ import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
 import PhotosFeed from "@/components/PhotosFeed";
 import ProfileInviteQR from "@/components/ProfileInviteQR";
-import { getEmergencySettings, saveEmergencySettings } from "@/lib/sos";
 
 type Profile = {
   id: string;
@@ -58,7 +57,6 @@ function AnimatedCounter({ value, label, icon }: { value: number; label: string;
 
   return (
     <div className="stat-card">
-      {icon && <span className="stat-icon">{icon}</span>}
       <div className="stat-number">{displayValue.toLocaleString()}</div>
       <div className="stat-label">{label}</div>
     </div>
@@ -85,15 +83,6 @@ export default function ProfilePage() {
     location_is_public: false,
     show_mutuals: true,
   });
-
-  // Safety/SOS UI state
-  const [editSafety, setEditSafety] = useState(false);
-  const [sosEnabled, setSosEnabled] = useState(false);
-  const [ecName, setEcName] = useState("");
-  const [ecMethod, setEcMethod] = useState<"sms" | "email" | "">("");
-  const [ecValue, setEcValue] = useState("");
-  const [savingSafety, setSavingSafety] = useState(false);
-  const [saveSafetyMsg, setSaveSafetyMsg] = useState<string | null>(null);
 
   useEffect(() => { 
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); 
@@ -132,17 +121,6 @@ export default function ProfilePage() {
     })();
   }, [userId]);
 
-  // Load emergency settings
-  useEffect(() => {
-    (async () => {
-      const s = await getEmergencySettings();
-      setSosEnabled(!!s.sos_enabled);
-      setEcName(s.emergency_contact_name ?? "");
-      setEcMethod((s.emergency_contact_method as "sms" | "email" | null) ?? "");
-      setEcValue(s.emergency_contact_value ?? "");
-    })();
-  }, []);
-
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
   const save = async () => {
@@ -159,7 +137,6 @@ export default function ProfilePage() {
       }).eq("id", userId);
       if (error) throw error;
       
-      // Show success message
       alert("✨ Profile saved successfully!");
       setEditPersonal(false);
     } catch (e: any) { 
@@ -176,156 +153,6 @@ export default function ProfilePage() {
     if (error) alert("Could not save photo: " + error.message);
   }
 
-  async function saveSafety() {
-    setSavingSafety(true);
-    setSaveSafetyMsg(null);
-    try {
-      const { ok, error } = await saveEmergencySettings({
-        sos_enabled: sosEnabled,
-        emergency_contact_name: ecName?.trim() || null,
-        emergency_contact_method: (ecMethod || null) as any,
-        emergency_contact_value: ecValue?.trim() || null,
-      });
-      if (!ok) throw new Error(error || "Failed to save");
-      setSaveSafetyMsg("✅ Safety settings saved!");
-      setEditSafety(false);
-    } catch (e: any) {
-      setSaveSafetyMsg(e?.message || "Could not save settings. If columns are missing, run the migration.");
-    } finally {
-      setSavingSafety(false);
-      setTimeout(() => setSaveSafetyMsg(null), 3000);
-    }
-  }
-
-  const QuickActions = (
-    <div className="quick-actions-container">
-      {/* Friends */}
-      <div className="card action-card">
-        <div className="action-header">
-          <div className="action-icon">👥</div>
-          <h3 className="action-title">Friends</h3>
-        </div>
-        <p className="action-description">Browse, search, and add private notes about your connections.</p>
-        <Link href="/friends" className="btn btn-primary action-button">
-          Explore Friends
-        </Link>
-      </div>
-
-      {/* Safety & SOS */}
-      <div className="card action-card">
-        <div className="action-header">
-          <div className="action-icon">🛡️</div>
-          <h3 className="action-title">Safety & SOS</h3>
-          <span className={`status-badge ${sosEnabled ? 'enabled' : 'disabled'}`}>
-            {sosEnabled ? 'Enabled' : 'Disabled'}
-          </span>
-        </div>
-        <p className="action-description">Configure your emergency contact and use the SOS button when needed.</p>
-        
-        {!editSafety ? (
-          <div className="action-buttons">
-            <button className="btn btn-primary" onClick={() => setEditSafety(true)}>
-              Configure
-            </button>
-            <Link href="/safety" className="btn btn-neutral">
-              Open Safety
-            </Link>
-          </div>
-        ) : (
-          <div className="safety-form">
-            <div className="form-field">
-              <label className="form-label">Contact name</label>
-              <input 
-                className="form-input"
-                value={ecName} 
-                onChange={(e) => setEcName(e.target.value)} 
-                placeholder="e.g., Mom / Alex / Partner" 
-              />
-            </div>
-            
-            <div className="form-row">
-              <div className="form-field">
-                <label className="form-label">Method</label>
-                <select 
-                  className="form-input"
-                  value={ecMethod} 
-                  onChange={(e) => setEcMethod(e.target.value as any)}
-                >
-                  <option value="">Select…</option>
-                  <option value="sms">SMS</option>
-                  <option value="email">Email</option>
-                </select>
-              </div>
-              <div className="form-field">
-                <label className="form-label">
-                  {ecMethod === "sms" ? "Phone (E.164)" : "Email"}
-                </label>
-                <input 
-                  className="form-input"
-                  value={ecValue} 
-                  onChange={(e) => setEcValue(e.target.value)} 
-                  placeholder={ecMethod === "sms" ? "+15551234567" : "name@example.com"} 
-                />
-              </div>
-            </div>
-
-            <label className="checkbox-label">
-              <input 
-                type="checkbox" 
-                checked={sosEnabled} 
-                onChange={(e) => setSosEnabled(e.target.checked)} 
-              />
-              <span>Enable SOS quick button</span>
-            </label>
-
-            <div className="form-actions">
-              <button className="btn btn-neutral" onClick={() => setEditSafety(false)}>
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary"
-                onClick={saveSafety} 
-                disabled={savingSafety}
-              >
-                {savingSafety ? "Saving…" : "Save Settings"}
-              </button>
-            </div>
-            
-            {saveSafetyMsg && (
-              <div className={`form-message ${saveSafetyMsg.includes('✅') ? 'success' : 'error'}`}>
-                {saveSafetyMsg}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Gratitude */}
-      <div className="card action-card">
-        <div className="action-header">
-          <div className="action-icon">🙏</div>
-          <h3 className="action-title">Gratitude Journal</h3>
-        </div>
-        <p className="action-description">Capture daily moments of gratitude and positive reflections.</p>
-        <Link href="/gratitude" className="btn btn-primary action-button">
-          Open Journal
-        </Link>
-      </div>
-
-      {/* Messages */}
-      <div className="card action-card">
-        <div className="action-header">
-          <div className="action-icon">💬</div>
-          <h3 className="action-title">Messages</h3>
-        </div>
-        <p className="action-description">Private conversations and connections with your friends.</p>
-        <Link href="/messages" className="btn btn-primary action-button">
-          View Messages
-        </Link>
-      </div>
-    </div>
-  );
-
   return (
     <div className="profile-page">
       {/* Header */}
@@ -333,8 +160,6 @@ export default function ProfilePage() {
         <h1 className="page-title">Your Profile</h1>
         <div className="header-controls">
           <Link href="/business" className="btn btn-neutral">Business Profile</Link>
-          <Link href="/friends" className="btn btn-neutral">Friends</Link>
-          <Link href="/messages" className="btn btn-neutral">Messages</Link>
           <button 
             className="btn btn-primary"
             onClick={() => setEditPersonal(!editPersonal)}
@@ -373,14 +198,29 @@ export default function ProfilePage() {
           <div className="profile-info">
             <h2 className="profile-name">{displayName}</h2>
             
-            {/* Stats */}
-            <div className="stats-grid">
-              <AnimatedCounter value={0} label="Followers" icon="👤" />
-              <AnimatedCounter value={0} label="Following" icon="➕" />
-              <AnimatedCounter value={friendsCount} label="Friends" icon="🤝" />
+            {/* Stats Row */}
+            <div className="stats-row">
+              <div className="stats-grid">
+                <AnimatedCounter value={0} label="Followers" />
+                <AnimatedCounter value={0} label="Following" />
+                <AnimatedCounter value={friendsCount} label="Friends" />
+              </div>
+              
+              {/* Action Buttons - Right next to stats */}
+              <div className="profile-actions">
+                <Link href="/friends" className="btn btn-compact">
+                  👥 Browse Friends
+                </Link>
+                <Link href="/gratitude" className="btn btn-compact">
+                  🙏 Gratitude
+                </Link>
+                <Link href="/messages" className="btn btn-compact">
+                  💬 Messages
+                </Link>
+              </div>
             </div>
 
-            {/* Invite Friends */}
+            {/* Invite Friends - Compact */}
             <div className="invite-section">
               <button
                 onClick={() => setInviteExpanded(!inviteExpanded)}
@@ -400,133 +240,111 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Content Grid */}
-      <div className={`content-grid ${isDesktop ? 'desktop' : 'mobile'}`}>
-        {/* Main Content */}
-        <div className="main-content">
-          {/* Mobile Quick Actions */}
-          {!isDesktop && (
-            <div className="mobile-actions">
-              <h3 className="section-title">Quick Actions</h3>
-              {QuickActions}
+      {/* About Section - Short and Sweet */}
+      {editPersonal ? (
+        <div className="card edit-card">
+          <h3 className="card-title">
+            <span className="title-icon">✏️</span>
+            Edit Your Information
+          </h3>
+          
+          <div className="edit-form">
+            <div className="form-field">
+              <label className="form-label">Name</label>
+              <input 
+                className="form-input"
+                value={p.full_name ?? ""} 
+                onChange={(e) => setP({ ...p, full_name: e.target.value })} 
+                placeholder="Your full name"
+              />
             </div>
-          )}
 
-          {/* About Section */}
-          {editPersonal ? (
-            <div className="card edit-card">
-              <h3 className="card-title">
-                <span className="title-icon">✏️</span>
-                Edit Your Information
-              </h3>
-              
-              <div className="edit-form">
-                <div className="form-field">
-                  <label className="form-label">Name</label>
-                  <input 
-                    className="form-input"
-                    value={p.full_name ?? ""} 
-                    onChange={(e) => setP({ ...p, full_name: e.target.value })} 
-                    placeholder="Your full name"
-                  />
-                </div>
-
-                <div className={`form-row ${isDesktop ? 'desktop' : 'mobile'}`}>
-                  <div className="form-field flex-grow">
-                    <label className="form-label">Location</label>
-                    <input 
-                      className="form-input"
-                      value={p.location_text ?? ""} 
-                      onChange={(e) => setP({ ...p, location_text: e.target.value })} 
-                      placeholder="City, State" 
-                    />
-                  </div>
-                  <div className="form-field checkbox-field">
-                    <label className="checkbox-label compact">
-                      <input 
-                        type="checkbox"
-                        checked={!!p.location_is_public} 
-                        onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} 
-                      />
-                      <span>Public</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">Bio</label>
-                  <textarea 
-                    className="form-input textarea"
-                    rows={4} 
-                    value={p.bio ?? ""} 
-                    onChange={(e) => setP({ ...p, bio: e.target.value })} 
-                    placeholder="Tell people about yourself..."
-                  />
-                </div>
-
-                <label className="checkbox-label">
+            <div className={`form-row ${isDesktop ? 'desktop' : 'mobile'}`}>
+              <div className="form-field flex-grow">
+                <label className="form-label">Location</label>
+                <input 
+                  className="form-input"
+                  value={p.location_text ?? ""} 
+                  onChange={(e) => setP({ ...p, location_text: e.target.value })} 
+                  placeholder="City, State" 
+                />
+              </div>
+              <div className="form-field checkbox-field">
+                <label className="checkbox-label compact">
                   <input 
                     type="checkbox"
-                    checked={!!p.show_mutuals} 
-                    onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} 
+                    checked={!!p.location_is_public} 
+                    onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} 
                   />
-                  <span>Show mutual friends</span>
+                  <span>Public</span>
                 </label>
-
-                <div className="form-actions">
-                  <button 
-                    className="btn btn-primary save-button"
-                    onClick={save} 
-                    disabled={saving}
-                  >
-                    {saving ? "💾 Saving..." : "✨ Save Changes"}
-                  </button>
-                </div>
               </div>
             </div>
-          ) : (
-            <div className="card about-card">
-              <h3 className="card-title">
-                <span className="title-icon">👤</span>
-                About
-              </h3>
-              
-              <div className="about-content">
-                {p.location_is_public && p.location_text && (
-                  <div className="about-item">
-                    <span className="about-icon">📍</span>
-                    <span><strong>Location:</strong> {p.location_text}</span>
-                  </div>
-                )}
-                
-                {p.bio ? (
-                  <div className="bio-text">{p.bio}</div>
-                ) : (
-                  <div className="empty-state">Add a bio and location using the Edit button above.</div>
-                )}
-                
-                {!p.location_is_public && p.location_text && (
-                  <div className="privacy-note">
-                    <span>🔒</span>
-                    <span>Location is private</span>
-                  </div>
-                )}
-              </div>
+
+            <div className="form-field">
+              <label className="form-label">Bio</label>
+              <textarea 
+                className="form-input textarea"
+                rows={3} 
+                value={p.bio ?? ""} 
+                onChange={(e) => setP({ ...p, bio: e.target.value })} 
+                placeholder="Tell people about yourself..."
+              />
             </div>
-          )}
 
-          {/* Photos Feed */}
-          <PhotosFeed userId={userId} />
-        </div>
+            <label className="checkbox-label">
+              <input 
+                type="checkbox"
+                checked={!!p.show_mutuals} 
+                onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} 
+              />
+              <span>Show mutual friends</span>
+            </label>
 
-        {/* Desktop Sidebar */}
-        {isDesktop && (
-          <div className="sidebar">
-            <h3 className="section-title">Quick Actions</h3>
-            {QuickActions}
+            <div className="form-actions">
+              <button 
+                className="btn btn-primary save-button"
+                onClick={save} 
+                disabled={saving}
+              >
+                {saving ? "💾 Saving..." : "✨ Save Changes"}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="card about-card">
+          <h3 className="card-title">
+            <span className="title-icon">👤</span>
+            About
+          </h3>
+          
+          <div className="about-content">
+            {p.location_is_public && p.location_text && (
+              <div className="about-item">
+                <span className="about-icon">📍</span>
+                <span><strong>Location:</strong> {p.location_text}</span>
+              </div>
+            )}
+            
+            {p.bio ? (
+              <div className="bio-text">{p.bio}</div>
+            ) : (
+              <div className="empty-state">Add a bio and location using the Edit button above.</div>
+            )}
+            
+            {!p.location_is_public && p.location_text && (
+              <div className="privacy-note">
+                <span>🔒</span>
+                <span>Location is private</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Photos Feed - This is the main content! */}
+      <PhotosFeed userId={userId} />
 
       {loading && (
         <div className="loading-state">
@@ -538,8 +356,29 @@ export default function ProfilePage() {
       <style jsx>{`
         .profile-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
           padding: 2rem 1rem;
+          position: relative;
+        }
+
+        .profile-page::before {
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: 
+            radial-gradient(circle at 20% 30%, rgba(139,92,246,0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 70%, rgba(245,158,11,0.08) 0%, transparent 50%),
+            radial-gradient(circle at 40% 80%, rgba(16,185,129,0.06) 0%, transparent 50%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .profile-page > * {
+          position: relative;
+          z-index: 1;
         }
 
         .page-header {
@@ -592,20 +431,22 @@ export default function ProfilePage() {
 
         .profile-main-card {
           padding: 2rem;
-          margin-bottom: 2rem;
-          background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,250,252,0.9));
+          margin-bottom: 1.5rem;
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(255,255,255,0.5);
+          border: 1px solid rgba(255,255,255,0.6);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
         }
 
         .profile-layout {
           display: flex;
           gap: 2rem;
-          align-items: center;
+          align-items: flex-start;
         }
 
         .profile-layout.mobile {
           flex-direction: column;
+          align-items: center;
           text-align: center;
         }
 
@@ -652,19 +493,33 @@ export default function ProfilePage() {
           margin: 0 0 1rem 0;
         }
 
+        .stats-row {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        @media (min-width: 768px) {
+          .stats-row {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+          }
+        }
+
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 1rem;
-          margin-bottom: 1.5rem;
-          max-width: 24rem;
+          max-width: 20rem;
         }
 
         .stat-card {
-          background: rgba(255,255,255,0.7);
-          border: 1px solid rgba(255,255,255,0.8);
+          background: rgba(255,255,255,0.8);
+          border: 1px solid rgba(139,92,246,0.2);
           border-radius: 0.75rem;
-          padding: 1rem;
+          padding: 0.75rem;
           text-align: center;
           transition: all 0.2s ease;
           cursor: pointer;
@@ -672,18 +527,13 @@ export default function ProfilePage() {
 
         .stat-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          background: rgba(255,255,255,0.9);
-        }
-
-        .stat-icon {
-          font-size: 1.25rem;
-          display: block;
-          margin-bottom: 0.25rem;
+          box-shadow: 0 4px 12px rgba(139,92,246,0.2);
+          background: rgba(255,255,255,0.95);
+          border-color: rgba(139,92,246,0.3);
         }
 
         .stat-number {
-          font-size: 1.5rem;
+          font-size: 1.25rem;
           font-weight: 700;
           color: var(--brand);
           margin-bottom: 0.25rem;
@@ -693,6 +543,18 @@ export default function ProfilePage() {
           font-size: 0.75rem;
           color: #6b7280;
           font-weight: 500;
+        }
+
+        .profile-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+
+        .btn-compact {
+          padding: 0.5rem 0.75rem;
+          font-size: 0.875rem;
+          border-radius: 0.5rem;
         }
 
         .invite-section {
@@ -708,6 +570,8 @@ export default function ProfilePage() {
           align-items: center;
           justify-content: space-between;
           width: 100%;
+          font-size: 0.875rem;
+          padding: 0.75rem 1rem;
         }
 
         .btn.btn-special:hover {
@@ -733,129 +597,39 @@ export default function ProfilePage() {
           border-radius: 0.75rem;
         }
 
-        .content-grid {
-          display: grid;
-          gap: 2rem;
-          align-items: start;
-        }
-
-        .content-grid.desktop {
-          grid-template-columns: 2fr 1fr;
-        }
-
-        .content-grid.mobile {
-          grid-template-columns: 1fr;
-        }
-
-        .main-content {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-        }
-
-        .mobile-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .section-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 1rem 0;
-        }
-
-        .quick-actions-container {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .action-card {
+        .edit-card, .about-card {
           padding: 1.5rem;
-          transition: all 0.2s ease;
-          background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(248,250,252,0.8));
+          margin-bottom: 1.5rem;
+          background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,250,252,0.8));
           backdrop-filter: blur(5px);
         }
 
-        .action-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.95));
-        }
-
-        .action-header {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 0.75rem;
-        }
-
-        .action-icon {
-          width: 2.5rem;
-          height: 2.5rem;
-          background: linear-gradient(135deg, var(--brand), #8b5cf6);
-          border-radius: 0.75rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.125rem;
-          color: white;
-          box-shadow: 0 2px 8px rgba(139,92,246,0.3);
-        }
-
-        .action-title {
+        .card-title {
           font-size: 1.125rem;
           font-weight: 600;
           color: #1f2937;
-          margin: 0;
-          flex-grow: 1;
-        }
-
-        .status-badge {
-          padding: 0.25rem 0.5rem;
-          border-radius: 0.375rem;
-          font-size: 0.75rem;
-          font-weight: 500;
-        }
-
-        .status-badge.enabled {
-          background: #d1fae5;
-          color: #065f46;
-        }
-
-        .status-badge.disabled {
-          background: #f3f4f6;
-          color: #6b7280;
-        }
-
-        .action-description {
-          color: #6b7280;
-          font-size: 0.875rem;
-          line-height: 1.5;
           margin: 0 0 1rem 0;
-        }
-
-        .action-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .action-buttons {
           display: flex;
+          align-items: center;
           gap: 0.75rem;
-          flex-wrap: wrap;
         }
 
-        .safety-form {
+        .title-icon {
+          width: 1.75rem;
+          height: 1.75rem;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          border-radius: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 0.875rem;
+        }
+
+        .edit-form {
           display: flex;
           flex-direction: column;
           gap: 1rem;
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid rgba(0,0,0,0.1);
         }
 
         .form-field {
@@ -870,7 +644,7 @@ export default function ProfilePage() {
         }
 
         .form-row.desktop {
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr auto;
         }
 
         .form-row.mobile {
@@ -907,7 +681,7 @@ export default function ProfilePage() {
 
         .form-input.textarea {
           resize: vertical;
-          min-height: 4rem;
+          min-height: 3rem;
         }
 
         .checkbox-label {
@@ -932,73 +706,17 @@ export default function ProfilePage() {
         .form-actions {
           display: flex;
           justify-content: flex-end;
-          gap: 0.75rem;
           padding-top: 0.5rem;
         }
 
-        .form-message {
-          padding: 0.75rem;
-          border-radius: 0.5rem;
-          font-size: 0.875rem;
-        }
-
-        .form-message.success {
-          background: #d1fae5;
-          color: #065f46;
-          border: 1px solid #a7f3d0;
-        }
-
-        .form-message.error {
-          background: #fef2f2;
-          color: #dc2626;
-          border: 1px solid #fecaca;
-        }
-
-        .edit-card {
-          padding: 1.5rem;
-        }
-
-        .about-card {
-          padding: 1.5rem;
-        }
-
-        .card-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 1rem 0;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .title-icon {
-          width: 2rem;
-          height: 2rem;
-          background: linear-gradient(135deg, var(--brand), #8b5cf6);
-          border-radius: 0.5rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 0.875rem;
-        }
-
-        .edit-form {
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
-        }
-
         .save-button {
-          align-self: flex-end;
           min-width: 8rem;
         }
 
         .about-content {
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 0.75rem;
         }
 
         .about-item {
@@ -1031,23 +749,18 @@ export default function ProfilePage() {
           font-size: 0.875rem;
         }
 
-        .sidebar {
-          position: sticky;
-          top: 2rem;
-        }
-
         .loading-state {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 0.75rem;
-          padding: 3rem 0;
+          padding: 2rem 0;
           color: #6b7280;
         }
 
         .loading-spinner {
-          width: 2rem;
-          height: 2rem;
+          width: 1.5rem;
+          height: 1.5rem;
           border: 2px solid #e5e7eb;
           border-top: 2px solid var(--brand);
           border-radius: 50%;
@@ -1063,6 +776,10 @@ export default function ProfilePage() {
           transition: all 0.2s ease;
           font-weight: 500;
           text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.25rem;
         }
 
         .btn:hover {
@@ -1083,12 +800,12 @@ export default function ProfilePage() {
         .btn-neutral {
           background: rgba(255,255,255,0.9);
           color: #374151;
-          border: 1px solid rgba(0,0,0,0.1);
+          border: 1px solid rgba(139,92,246,0.2);
         }
 
         .btn-neutral:hover {
           background: white;
-          border-color: rgba(0,0,0,0.2);
+          border-color: rgba(139,92,246,0.3);
         }
       `}</style>
     </div>
