@@ -1,3 +1,4 @@
+// app/messages/MessagesClient.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -118,6 +119,21 @@ export default function MessagesClient() {
     [friends, to]
   );
 
+  // Helpers: group messages by day & format times
+  function sameDate(a: Date, b: Date) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+  function dayLabel(d: Date) {
+    const today = new Date();
+    const yest = new Date(); yest.setDate(today.getDate() - 1);
+    if (sameDate(d, today)) return "Today";
+    if (sameDate(d, yest)) return "Yesterday";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
+  }
+  function timeLabel(d: Date) {
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
   if (!ready)
     return <div className="max-w-5xl mx-auto p-4 sm:p-6">Loading…</div>;
   if (!userId)
@@ -134,15 +150,14 @@ export default function MessagesClient() {
       <h1 className="text-xl font-semibold">Messages</h1>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[220px_1fr]">
+        {/* Friends list */}
         <div className="card p-3">
           <div className="font-medium mb-2">Friends</div>
           <div className="space-y-1">
             {friends.map((f) => (
               <button
                 key={f.id}
-                className={`w-full text-left px-2 py-1 rounded ${
-                  to === f.id ? "bg-zinc-100" : "hover:bg-zinc-50"
-                }`}
+                className={`w-full text-left px-2 py-2 rounded ${to === f.id ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
                 onClick={() => setTo(f.id)}
               >
                 {f.full_name || "Member"}
@@ -152,40 +167,64 @@ export default function MessagesClient() {
           </div>
         </div>
 
+        {/* Thread */}
         <div className="card p-3 flex flex-col">
           {active ? (
             <>
-              <div className="font-medium">
-                Chat with {active.full_name || "Friend"}
-              </div>
+              <div className="font-medium">Chat with {active.full_name || "Friend"}</div>
               <div
                 ref={listRef}
-                className="mt-3 flex-1 overflow-auto border rounded p-2"
-                style={{ minHeight: 240 }}
+                className="mt-3 flex-1 overflow-auto p-2 rounded"
+                style={{ minHeight: 260, background: "linear-gradient(180deg,#f5f3ff 0%, #fff7ed 100%)" }}
               >
-                {msgs.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`my-1 ${
-                      m.sender_id === userId ? "text-right" : "text-left"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block px-2 py-1 rounded ${
-                        m.sender_id === userId
-                          ? "bg-violet-100"
-                          : "bg-zinc-100"
-                      }`}
-                    >
-                      {m.body}
-                    </span>
-                    <div className="muted text-[11px]">
-                      {new Date(m.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
+                {(() => {
+                  let lastDay: string | null = null;
+                  return msgs.map((m) => {
+                    const dt = new Date(m.created_at);
+                    const dLabel = dayLabel(dt);
+                    const isMine = m.sender_id === userId;
+                    const bubble = (
+                      <div
+                        key={m.id}
+                        className={`max-w-[80%] inline-block px-3 py-2 rounded-2xl shadow-sm`}
+                        style={{
+                          background: isMine ? "#ede9fe" : "#f4f4f5",
+                          border: "1px solid rgba(0,0,0,.06)",
+                        }}
+                      >
+                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.body}</div>
+                        <div className="muted text-[11px] mt-1">{timeLabel(dt)}</div>
+                      </div>
+                    );
+
+                    const row = (
+                      <div key={`${m.id}-row`} className={`my-1 flex ${isMine ? "justify-end" : "justify-start"}`}>
+                        {bubble}
+                      </div>
+                    );
+
+                    if (lastDay !== dLabel) {
+                      lastDay = dLabel;
+                      return (
+                        <div key={`${m.id}-group`}>
+                          <div className="text-center my-2">
+                            <span
+                              className="text-xs px-2 py-1 rounded-full"
+                              style={{ background: "#fff", border: "1px solid rgba(0,0,0,.06)" }}
+                            >
+                              {dLabel}
+                            </span>
+                          </div>
+                          {row}
+                        </div>
+                      );
+                    }
+                    return row;
+                  });
+                })()}
                 {msgs.length === 0 && <div className="muted">No messages yet.</div>}
               </div>
+
               <div className="mt-3 flex gap-2">
                 <input
                   className="input flex-1"
@@ -195,6 +234,7 @@ export default function MessagesClient() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") send();
                   }}
+                  aria-label="Type a message"
                 />
                 <button className="btn btn-brand" onClick={send}>
                   Send
