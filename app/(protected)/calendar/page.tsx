@@ -282,14 +282,7 @@ export default function CalendarPage() {
 
   // create a quick private item (reminder/todo) — can optionally override title
   async function createQuick(start: Date, end: Date, kind: Exclude<QuickType, "none">, opts?: { title?: string; description?: string }) {
-    if (!me) {
-      showToast({
-        type: 'warning',
-        title: 'Authentication Required',
-        message: 'Please sign in to create items',
-      });
-      return;
-    }
+    if (!me) return;
 
     try {
       const payload: any = {
@@ -336,14 +329,7 @@ export default function CalendarPage() {
   }
 
   const createEvent = async () => {
-    if (!me) {
-      showToast({
-        type: 'warning',
-        title: 'Authentication Required',
-        message: 'Please sign in to create events',
-      });
-      return;
-    }
+    if (!me) return;
     
     const f = createForm;
     if (!f.title || !f.start) {
