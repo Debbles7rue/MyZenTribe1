@@ -57,83 +57,12 @@ function AnimatedCounter({ value, label, icon }: { value: number; label: string;
   }, [value]);
 
   return (
-    <div className="group cursor-pointer transform transition-all duration-300 hover:scale-105">
-      <div className="flex flex-col items-center space-y-1 p-3 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 transition-all duration-300">
-        {icon && <span className="text-xl">{icon}</span>}
-        <div className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
-          {displayValue.toLocaleString()}
-        </div>
-        <div className="text-sm text-violet-700 font-medium">{label}</div>
-      </div>
+    <div className="stat-card">
+      {icon && <span className="stat-icon">{icon}</span>}
+      <div className="stat-number">{displayValue.toLocaleString()}</div>
+      <div className="stat-label">{label}</div>
     </div>
   );
-}
-
-// Enhanced Quick Action Card
-function QuickActionCard({ 
-  title, 
-  description, 
-  href, 
-  buttonText, 
-  icon, 
-  status, 
-  onClick,
-  children 
-}: {
-  title: string;
-  description: string;
-  href?: string;
-  buttonText: string;
-  icon: string;
-  status?: string;
-  onClick?: () => void;
-  children?: React.ReactNode;
-}) {
-  const content = (
-    <div className="group p-6 rounded-2xl bg-white/40 backdrop-blur-md border border-white/50 hover:bg-white/50 transition-all duration-300 hover:shadow-lg hover:shadow-violet-200/50 hover:-translate-y-1">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 flex items-center justify-center text-white text-lg shadow-lg">
-            {icon}
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-        </div>
-        {status && (
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-            status === 'Enabled' 
-              ? 'bg-green-100 text-green-700' 
-              : 'bg-gray-100 text-gray-600'
-          }`}>
-            {status}
-          </span>
-        )}
-      </div>
-      <p className="text-gray-600 text-sm leading-relaxed mb-4">{description}</p>
-      
-      {children ? (
-        <div className="space-y-3">{children}</div>
-      ) : href ? (
-        <Link 
-          href={href}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-lg hover:from-violet-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
-        >
-          {buttonText}
-          <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      ) : (
-        <button 
-          onClick={onClick}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-lg hover:from-violet-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
-        >
-          {buttonText}
-        </button>
-      )}
-    </div>
-  );
-
-  return content;
 }
 
 export default function ProfilePage() {
@@ -230,13 +159,8 @@ export default function ProfilePage() {
       }).eq("id", userId);
       if (error) throw error;
       
-      // Success feedback with smooth transition
-      const successMsg = document.createElement('div');
-      successMsg.textContent = '✨ Profile saved successfully!';
-      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-bounce';
-      document.body.appendChild(successMsg);
-      setTimeout(() => successMsg.remove(), 3000);
-      
+      // Show success message
+      alert("✨ Profile saved successfully!");
       setEditPersonal(false);
     } catch (e: any) { 
       alert(e.message || "Save failed"); 
@@ -274,393 +198,897 @@ export default function ProfilePage() {
   }
 
   const QuickActions = (
-    <div className="space-y-4">
-      <QuickActionCard
-        title="Friends"
-        description="Browse, search, and add private notes about your connections."
-        href="/friends"
-        buttonText="Explore Friends"
-        icon="👥"
-      />
+    <div className="quick-actions-container">
+      {/* Friends */}
+      <div className="card action-card">
+        <div className="action-header">
+          <div className="action-icon">👥</div>
+          <h3 className="action-title">Friends</h3>
+        </div>
+        <p className="action-description">Browse, search, and add private notes about your connections.</p>
+        <Link href="/friends" className="btn btn-primary action-button">
+          Explore Friends
+        </Link>
+      </div>
 
-      <QuickActionCard
-        title="Safety & SOS"
-        description="Configure your emergency contact and use the SOS button when needed."
-        buttonText={editSafety ? "Cancel" : "Configure"}
-        icon="🛡️"
-        status={sosEnabled ? "Enabled" : "Disabled"}
-        onClick={() => setEditSafety(!editSafety)}
-      >
-        {editSafety && (
-          <>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact name</label>
-                <input 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200"
-                  value={ecName} 
-                  onChange={(e) => setEcName(e.target.value)} 
-                  placeholder="e.g., Mom / Alex / Partner" 
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
-                  <select 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200"
-                    value={ecMethod} 
-                    onChange={(e) => setEcMethod(e.target.value as any)}
-                  >
-                    <option value="">Select…</option>
-                    <option value="sms">SMS</option>
-                    <option value="email">Email</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {ecMethod === "sms" ? "Phone (E.164)" : "Email"}
-                  </label>
-                  <input 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200"
-                    value={ecValue} 
-                    onChange={(e) => setEcValue(e.target.value)} 
-                    placeholder={ecMethod === "sms" ? "+15551234567" : "name@example.com"} 
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="form-checkbox h-4 w-4 text-violet-600 transition duration-150 ease-in-out"
-                  checked={sosEnabled} 
-                  onChange={(e) => setSosEnabled(e.target.checked)} 
-                />
-                <span className="text-sm text-gray-700">Enable SOS quick button</span>
-              </label>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <Link 
-                  href="/safety"
-                  className="px-4 py-2 text-violet-600 hover:text-violet-700 font-medium transition-colors duration-200"
-                >
-                  Open Safety Page
-                </Link>
-                <button 
-                  className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-lg hover:from-violet-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={saveSafety} 
-                  disabled={savingSafety}
-                >
-                  {savingSafety ? "Saving…" : "Save Settings"}
-                </button>
-              </div>
-              {saveSafetyMsg && (
-                <div className={`text-sm p-2 rounded ${
-                  saveSafetyMsg.includes('✅') ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
-                }`}>
-                  {saveSafetyMsg}
-                </div>
-              )}
+      {/* Safety & SOS */}
+      <div className="card action-card">
+        <div className="action-header">
+          <div className="action-icon">🛡️</div>
+          <h3 className="action-title">Safety & SOS</h3>
+          <span className={`status-badge ${sosEnabled ? 'enabled' : 'disabled'}`}>
+            {sosEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+        <p className="action-description">Configure your emergency contact and use the SOS button when needed.</p>
+        
+        {!editSafety ? (
+          <div className="action-buttons">
+            <button className="btn btn-primary" onClick={() => setEditSafety(true)}>
+              Configure
+            </button>
+            <Link href="/safety" className="btn btn-neutral">
+              Open Safety
+            </Link>
+          </div>
+        ) : (
+          <div className="safety-form">
+            <div className="form-field">
+              <label className="form-label">Contact name</label>
+              <input 
+                className="form-input"
+                value={ecName} 
+                onChange={(e) => setEcName(e.target.value)} 
+                placeholder="e.g., Mom / Alex / Partner" 
+              />
             </div>
-          </>
+            
+            <div className="form-row">
+              <div className="form-field">
+                <label className="form-label">Method</label>
+                <select 
+                  className="form-input"
+                  value={ecMethod} 
+                  onChange={(e) => setEcMethod(e.target.value as any)}
+                >
+                  <option value="">Select…</option>
+                  <option value="sms">SMS</option>
+                  <option value="email">Email</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label">
+                  {ecMethod === "sms" ? "Phone (E.164)" : "Email"}
+                </label>
+                <input 
+                  className="form-input"
+                  value={ecValue} 
+                  onChange={(e) => setEcValue(e.target.value)} 
+                  placeholder={ecMethod === "sms" ? "+15551234567" : "name@example.com"} 
+                />
+              </div>
+            </div>
+
+            <label className="checkbox-label">
+              <input 
+                type="checkbox" 
+                checked={sosEnabled} 
+                onChange={(e) => setSosEnabled(e.target.checked)} 
+              />
+              <span>Enable SOS quick button</span>
+            </label>
+
+            <div className="form-actions">
+              <button className="btn btn-neutral" onClick={() => setEditSafety(false)}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={saveSafety} 
+                disabled={savingSafety}
+              >
+                {savingSafety ? "Saving…" : "Save Settings"}
+              </button>
+            </div>
+            
+            {saveSafetyMsg && (
+              <div className={`form-message ${saveSafetyMsg.includes('✅') ? 'success' : 'error'}`}>
+                {saveSafetyMsg}
+              </div>
+            )}
+          </div>
         )}
-      </QuickActionCard>
+      </div>
 
-      <QuickActionCard
-        title="Gratitude Journal"
-        description="Capture daily moments of gratitude and positive reflections."
-        href="/gratitude"
-        buttonText="Open Journal"
-        icon="🙏"
-      />
+      {/* Gratitude */}
+      <div className="card action-card">
+        <div className="action-header">
+          <div className="action-icon">🙏</div>
+          <h3 className="action-title">Gratitude Journal</h3>
+        </div>
+        <p className="action-description">Capture daily moments of gratitude and positive reflections.</p>
+        <Link href="/gratitude" className="btn btn-primary action-button">
+          Open Journal
+        </Link>
+      </div>
 
-      <QuickActionCard
-        title="Messages"
-        description="Private conversations and connections with your friends."
-        href="/messages"
-        buttonText="View Messages"
-        icon="💬"
-      />
+      {/* Messages */}
+      <div className="card action-card">
+        <div className="action-header">
+          <div className="action-icon">💬</div>
+          <h3 className="action-title">Messages</h3>
+        </div>
+        <p className="action-description">Private conversations and connections with your friends.</p>
+        <Link href="/messages" className="btn btn-primary action-button">
+          View Messages
+        </Link>
+      </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-pink-50">
-      {/* Animated background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-violet-400 to-purple-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-pink-400 to-violet-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{animationDelay: '2s'}}></div>
-      </div>
-
-      <div className="relative z-10">
-        <div className="container mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent mb-4 sm:mb-0">
-              Your Profile
-            </h1>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link 
-                href="/business" 
-                className="px-4 py-2 bg-white/60 backdrop-blur-sm border border-white/80 text-gray-700 rounded-lg hover:bg-white/80 transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-              >
-                Business Profile
-              </Link>
-              <Link 
-                href="/friends" 
-                className="px-4 py-2 bg-white/60 backdrop-blur-sm border border-white/80 text-gray-700 rounded-lg hover:bg-white/80 transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-              >
-                Friends
-              </Link>
-              <Link 
-                href="/messages" 
-                className="px-4 py-2 bg-white/60 backdrop-blur-sm border border-white/80 text-gray-700 rounded-lg hover:bg-white/80 transition-all duration-200 shadow-sm hover:shadow-md font-medium"
-              >
-                Messages
-              </Link>
-              <button 
-                className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-lg hover:from-violet-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
-                onClick={() => setEditPersonal(!editPersonal)}
-              >
-                {editPersonal ? "✓ Done" : "✏️ Edit"}
-              </button>
-            </div>
-          </div>
-
-          {/* Error State */}
-          {tableMissing && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="text-red-800 font-medium">Tables not found</div>
-              <div className="text-red-600 text-sm">Run the SQL migration, then reload.</div>
-            </div>
-          )}
-
-          {/* Main Profile Card */}
-          <div className="mb-8 p-8 rounded-3xl bg-white/50 backdrop-blur-lg border border-white/60 shadow-xl">
-            <div className={`flex ${isDesktop ? 'flex-row' : 'flex-col'} ${isDesktop ? 'items-start' : 'items-center'} gap-8`}>
-              {/* Avatar Section */}
-              <div className="flex-shrink-0 relative group">
-                <div className="w-40 h-40 rounded-full bg-gradient-to-r from-violet-400 to-purple-400 p-1 shadow-lg group-hover:shadow-xl transition-all duration-300">
-                  <AvatarUploader 
-                    userId={userId} 
-                    value={p.avatar_url} 
-                    onChange={onAvatarChange} 
-                    label="Profile photo" 
-                    size={160} 
-                  />
-                </div>
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-r from-violet-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm shadow-lg">
-                  ✨
-                </div>
-              </div>
-
-              {/* Profile Info */}
-              <div className="flex-grow min-w-0 text-center sm:text-left">
-                <h2 className="text-3xl font-bold text-gray-800 mb-2">{displayName}</h2>
-                
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-4 mb-6 max-w-md">
-                  <AnimatedCounter value={0} label="Followers" icon="👤" />
-                  <AnimatedCounter value={0} label="Following" icon="➕" />
-                  <AnimatedCounter value={friendsCount} label="Friends" icon="🤝" />
-                </div>
-
-                {/* Invite Friends */}
-                <div className="max-w-lg">
-                  <button
-                    onClick={() => setInviteExpanded(!inviteExpanded)}
-                    className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-amber-400 to-orange-400 text-white rounded-xl hover:from-amber-500 hover:to-orange-500 transition-all duration-200 shadow-lg hover:shadow-xl font-medium transform hover:scale-105"
-                  >
-                    🎉 Invite Friends
-                    <svg 
-                      className={`w-4 h-4 ml-2 transition-transform duration-200 ${inviteExpanded ? 'rotate-180' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  
-                  {inviteExpanded && (
-                    <div className="mt-4 p-4 bg-white/60 rounded-xl border border-white/80 animate-fade-in">
-                      <ProfileInviteQR userId={userId} embed qrSize={180} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Content Grid */}
-          <div className={`grid gap-8 ${isDesktop ? 'grid-cols-3' : 'grid-cols-1'}`}>
-            {/* Main Content */}
-            <div className="col-span-2 space-y-6">
-              {/* Mobile Quick Actions */}
-              {!isDesktop && (
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Quick Actions</h3>
-                  {QuickActions}
-                </div>
-              )}
-
-              {/* About Section */}
-              {editPersonal ? (
-                <div className="p-6 rounded-2xl bg-white/50 backdrop-blur-md border border-white/60 shadow-lg">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
-                    <span className="w-8 h-8 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg flex items-center justify-center text-white mr-3">
-                      ✏️
-                    </span>
-                    Edit Your Information
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                      <input 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 bg-white/80"
-                        value={p.full_name ?? ""} 
-                        onChange={(e) => setP({ ...p, full_name: e.target.value })} 
-                        placeholder="Your full name"
-                      />
-                    </div>
-
-                    <div className={`grid gap-4 ${isDesktop ? 'grid-cols-4' : 'grid-cols-1'}`}>
-                      <div className="col-span-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                        <input 
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 bg-white/80"
-                          value={p.location_text ?? ""} 
-                          onChange={(e) => setP({ ...p, location_text: e.target.value })} 
-                          placeholder="City, State" 
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center space-x-2 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-                          <input 
-                            type="checkbox" 
-                            className="form-checkbox h-4 w-4 text-violet-600"
-                            checked={!!p.location_is_public} 
-                            onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} 
-                          />
-                          <span className="text-sm text-gray-700">Public</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                      <textarea 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200 bg-white/80 resize-none"
-                        rows={4} 
-                        value={p.bio ?? ""} 
-                        onChange={(e) => setP({ ...p, bio: e.target.value })} 
-                        placeholder="Tell people about yourself..."
-                      />
-                    </div>
-
-                    <label className="flex items-center space-x-2 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-                      <input 
-                        type="checkbox" 
-                        className="form-checkbox h-4 w-4 text-violet-600"
-                        checked={!!p.show_mutuals} 
-                        onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} 
-                      />
-                      <span className="text-sm text-gray-700">Show mutual friends</span>
-                    </label>
-
-                    <div className="flex justify-end pt-4">
-                      <button 
-                        className="px-8 py-3 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-xl hover:from-violet-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed font-medium transform hover:scale-105"
-                        onClick={save} 
-                        disabled={saving}
-                      >
-                        {saving ? "💾 Saving..." : "✨ Save Changes"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-6 rounded-2xl bg-white/50 backdrop-blur-md border border-white/60 shadow-lg">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg flex items-center justify-center text-white mr-3">
-                      👤
-                    </span>
-                    About
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {p.location_is_public && p.location_text && (
-                      <div className="flex items-center space-x-2 text-gray-700">
-                        <span className="text-violet-500">📍</span>
-                        <span><strong>Location:</strong> {p.location_text}</span>
-                      </div>
-                    )}
-                    
-                    {p.bio ? (
-                      <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">{p.bio}</div>
-                    ) : (
-                      <div className="text-gray-500 italic">Add a bio and location using the Edit button above.</div>
-                    )}
-                    
-                    {!p.location_is_public && p.location_text && (
-                      <div className="text-gray-400 text-sm flex items-center space-x-1">
-                        <span>🔒</span>
-                        <span>Location is private</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Photos Feed */}
-              <PhotosFeed userId={userId} />
-            </div>
-
-            {/* Desktop Sidebar */}
-            {isDesktop && (
-              <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-gray-800">Quick Actions</h3>
-                {QuickActions}
-              </div>
-            )}
-          </div>
-
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
-              <span className="ml-3 text-gray-600">Loading your amazing profile...</span>
-            </div>
-          )}
+    <div className="profile-page">
+      {/* Header */}
+      <div className="page-header">
+        <h1 className="page-title">Your Profile</h1>
+        <div className="header-controls">
+          <Link href="/business" className="btn btn-neutral">Business Profile</Link>
+          <Link href="/friends" className="btn btn-neutral">Friends</Link>
+          <Link href="/messages" className="btn btn-neutral">Messages</Link>
+          <button 
+            className="btn btn-primary"
+            onClick={() => setEditPersonal(!editPersonal)}
+          >
+            {editPersonal ? "✓ Done" : "✏️ Edit"}
+          </button>
         </div>
       </div>
 
-      <style jsx global>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+      {/* Error State */}
+      {tableMissing && (
+        <div className="error-banner">
+          <div className="error-title">Tables not found</div>
+          <div className="error-message">Run the SQL migration, then reload.</div>
+        </div>
+      )}
+
+      {/* Main Profile Card */}
+      <div className="card profile-main-card">
+        <div className={`profile-layout ${isDesktop ? 'desktop' : 'mobile'}`}>
+          {/* Avatar Section */}
+          <div className="avatar-section">
+            <div className="avatar-wrapper">
+              <AvatarUploader 
+                userId={userId} 
+                value={p.avatar_url} 
+                onChange={onAvatarChange} 
+                label="Profile photo" 
+                size={160} 
+              />
+              <div className="avatar-badge">✨</div>
+            </div>
+          </div>
+
+          {/* Profile Info */}
+          <div className="profile-info">
+            <h2 className="profile-name">{displayName}</h2>
+            
+            {/* Stats */}
+            <div className="stats-grid">
+              <AnimatedCounter value={0} label="Followers" icon="👤" />
+              <AnimatedCounter value={0} label="Following" icon="➕" />
+              <AnimatedCounter value={friendsCount} label="Friends" icon="🤝" />
+            </div>
+
+            {/* Invite Friends */}
+            <div className="invite-section">
+              <button
+                onClick={() => setInviteExpanded(!inviteExpanded)}
+                className="btn btn-special invite-button"
+              >
+                🎉 Invite Friends
+                <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
+              </button>
+              
+              {inviteExpanded && (
+                <div className="invite-content">
+                  <ProfileInviteQR userId={userId} embed qrSize={180} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content Grid */}
+      <div className={`content-grid ${isDesktop ? 'desktop' : 'mobile'}`}>
+        {/* Main Content */}
+        <div className="main-content">
+          {/* Mobile Quick Actions */}
+          {!isDesktop && (
+            <div className="mobile-actions">
+              <h3 className="section-title">Quick Actions</h3>
+              {QuickActions}
+            </div>
+          )}
+
+          {/* About Section */}
+          {editPersonal ? (
+            <div className="card edit-card">
+              <h3 className="card-title">
+                <span className="title-icon">✏️</span>
+                Edit Your Information
+              </h3>
+              
+              <div className="edit-form">
+                <div className="form-field">
+                  <label className="form-label">Name</label>
+                  <input 
+                    className="form-input"
+                    value={p.full_name ?? ""} 
+                    onChange={(e) => setP({ ...p, full_name: e.target.value })} 
+                    placeholder="Your full name"
+                  />
+                </div>
+
+                <div className={`form-row ${isDesktop ? 'desktop' : 'mobile'}`}>
+                  <div className="form-field flex-grow">
+                    <label className="form-label">Location</label>
+                    <input 
+                      className="form-input"
+                      value={p.location_text ?? ""} 
+                      onChange={(e) => setP({ ...p, location_text: e.target.value })} 
+                      placeholder="City, State" 
+                    />
+                  </div>
+                  <div className="form-field checkbox-field">
+                    <label className="checkbox-label compact">
+                      <input 
+                        type="checkbox"
+                        checked={!!p.location_is_public} 
+                        onChange={(e) => setP({ ...p, location_is_public: e.target.checked })} 
+                      />
+                      <span>Public</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Bio</label>
+                  <textarea 
+                    className="form-input textarea"
+                    rows={4} 
+                    value={p.bio ?? ""} 
+                    onChange={(e) => setP({ ...p, bio: e.target.value })} 
+                    placeholder="Tell people about yourself..."
+                  />
+                </div>
+
+                <label className="checkbox-label">
+                  <input 
+                    type="checkbox"
+                    checked={!!p.show_mutuals} 
+                    onChange={(e) => setP({ ...p, show_mutuals: e.target.checked })} 
+                  />
+                  <span>Show mutual friends</span>
+                </label>
+
+                <div className="form-actions">
+                  <button 
+                    className="btn btn-primary save-button"
+                    onClick={save} 
+                    disabled={saving}
+                  >
+                    {saving ? "💾 Saving..." : "✨ Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card about-card">
+              <h3 className="card-title">
+                <span className="title-icon">👤</span>
+                About
+              </h3>
+              
+              <div className="about-content">
+                {p.location_is_public && p.location_text && (
+                  <div className="about-item">
+                    <span className="about-icon">📍</span>
+                    <span><strong>Location:</strong> {p.location_text}</span>
+                  </div>
+                )}
+                
+                {p.bio ? (
+                  <div className="bio-text">{p.bio}</div>
+                ) : (
+                  <div className="empty-state">Add a bio and location using the Edit button above.</div>
+                )}
+                
+                {!p.location_is_public && p.location_text && (
+                  <div className="privacy-note">
+                    <span>🔒</span>
+                    <span>Location is private</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Photos Feed */}
+          <PhotosFeed userId={userId} />
+        </div>
+
+        {/* Desktop Sidebar */}
+        {isDesktop && (
+          <div className="sidebar">
+            <h3 className="section-title">Quick Actions</h3>
+            {QuickActions}
+          </div>
+        )}
+      </div>
+
+      {loading && (
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <span>Loading your amazing profile...</span>
+        </div>
+      )}
+
+      <style jsx>{`
+        .profile-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+          padding: 2rem 1rem;
         }
-        
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
+
+        .page-header {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 2rem;
         }
-        
-        .form-checkbox:checked {
-          background-color: #8b5cf6;
-          border-color: #8b5cf6;
+
+        @media (min-width: 768px) {
+          .page-header {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+          }
         }
-        
-        .form-checkbox {
-          border-radius: 4px;
-          border: 2px solid #d1d5db;
-          transition: all 0.2s ease-in-out;
+
+        .page-title {
+          font-size: 2rem;
+          font-weight: 700;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          margin: 0;
         }
-        
-        .form-checkbox:focus {
-          ring: 2px;
-          ring-color: rgba(139, 92, 246, 0.3);
-          ring-offset: 2px;
+
+        .header-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+        }
+
+        .error-banner {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 0.75rem;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .error-title {
+          font-weight: 600;
+          color: #dc2626;
+        }
+
+        .error-message {
+          color: #b91c1c;
+          font-size: 0.875rem;
+        }
+
+        .profile-main-card {
+          padding: 2rem;
+          margin-bottom: 2rem;
+          background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,250,252,0.9));
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255,255,255,0.5);
+        }
+
+        .profile-layout {
+          display: flex;
+          gap: 2rem;
+          align-items: center;
+        }
+
+        .profile-layout.mobile {
+          flex-direction: column;
+          text-align: center;
+        }
+
+        .profile-layout.desktop {
+          flex-direction: row;
+          text-align: left;
+        }
+
+        .avatar-section {
+          flex-shrink: 0;
+          position: relative;
+        }
+
+        .avatar-wrapper {
+          position: relative;
+          display: inline-block;
+        }
+
+        .avatar-badge {
+          position: absolute;
+          bottom: -0.5rem;
+          right: -0.5rem;
+          width: 2rem;
+          height: 2rem;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.875rem;
+          color: white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .profile-info {
+          flex-grow: 1;
+          min-width: 0;
+        }
+
+        .profile-name {
+          font-size: 1.875rem;
+          font-weight: 700;
+          color: #1f2937;
+          margin: 0 0 1rem 0;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+          max-width: 24rem;
+        }
+
+        .stat-card {
+          background: rgba(255,255,255,0.7);
+          border: 1px solid rgba(255,255,255,0.8);
+          border-radius: 0.75rem;
+          padding: 1rem;
+          text-align: center;
+          transition: all 0.2s ease;
+          cursor: pointer;
+        }
+
+        .stat-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          background: rgba(255,255,255,0.9);
+        }
+
+        .stat-icon {
+          font-size: 1.25rem;
+          display: block;
+          margin-bottom: 0.25rem;
+        }
+
+        .stat-number {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: var(--brand);
+          margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+          font-size: 0.75rem;
+          color: #6b7280;
+          font-weight: 500;
+        }
+
+        .invite-section {
+          max-width: 20rem;
+        }
+
+        .btn.btn-special {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          color: white;
+          border: none;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+        }
+
+        .btn.btn-special:hover {
+          background: linear-gradient(135deg, #d97706, #b45309);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(245,158,11,0.4);
+        }
+
+        .invite-arrow {
+          transition: transform 0.2s ease;
+          font-size: 0.75rem;
+        }
+
+        .invite-arrow.expanded {
+          transform: rotate(180deg);
+        }
+
+        .invite-content {
+          margin-top: 1rem;
+          padding: 1rem;
+          background: rgba(255,255,255,0.6);
+          border: 1px solid rgba(255,255,255,0.8);
+          border-radius: 0.75rem;
+        }
+
+        .content-grid {
+          display: grid;
+          gap: 2rem;
+          align-items: start;
+        }
+
+        .content-grid.desktop {
+          grid-template-columns: 2fr 1fr;
+        }
+
+        .content-grid.mobile {
+          grid-template-columns: 1fr;
+        }
+
+        .main-content {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+
+        .mobile-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .section-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 1rem 0;
+        }
+
+        .quick-actions-container {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .action-card {
+          padding: 1.5rem;
+          transition: all 0.2s ease;
+          background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(248,250,252,0.8));
+          backdrop-filter: blur(5px);
+        }
+
+        .action-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.95));
+        }
+
+        .action-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .action-icon {
+          width: 2.5rem;
+          height: 2.5rem;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          border-radius: 0.75rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.125rem;
+          color: white;
+          box-shadow: 0 2px 8px rgba(139,92,246,0.3);
+        }
+
+        .action-title {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0;
+          flex-grow: 1;
+        }
+
+        .status-badge {
+          padding: 0.25rem 0.5rem;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .status-badge.enabled {
+          background: #d1fae5;
+          color: #065f46;
+        }
+
+        .status-badge.disabled {
+          background: #f3f4f6;
+          color: #6b7280;
+        }
+
+        .action-description {
+          color: #6b7280;
+          font-size: 0.875rem;
+          line-height: 1.5;
+          margin: 0 0 1rem 0;
+        }
+
+        .action-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .safety-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .form-field {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .form-row {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .form-row.desktop {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .form-row.mobile {
+          grid-template-columns: 1fr;
+        }
+
+        .flex-grow {
+          flex-grow: 1;
+        }
+
+        .checkbox-field {
+          align-items: end;
+        }
+
+        .form-label {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: #374151;
+        }
+
+        .form-input {
+          padding: 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.5rem;
+          background: rgba(255,255,255,0.9);
+          transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+          outline: none;
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+
+        .form-input.textarea {
+          resize: vertical;
+          min-height: 4rem;
+        }
+
+        .checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+        }
+
+        .checkbox-label.compact {
+          justify-content: center;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+          width: 1rem;
+          height: 1rem;
+          accent-color: var(--brand);
+        }
+
+        .form-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 0.75rem;
+          padding-top: 0.5rem;
+        }
+
+        .form-message {
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+          font-size: 0.875rem;
+        }
+
+        .form-message.success {
+          background: #d1fae5;
+          color: #065f46;
+          border: 1px solid #a7f3d0;
+        }
+
+        .form-message.error {
+          background: #fef2f2;
+          color: #dc2626;
+          border: 1px solid #fecaca;
+        }
+
+        .edit-card {
+          padding: 1.5rem;
+        }
+
+        .about-card {
+          padding: 1.5rem;
+        }
+
+        .card-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 1rem 0;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .title-icon {
+          width: 2rem;
+          height: 2rem;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          border-radius: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 0.875rem;
+        }
+
+        .edit-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+
+        .save-button {
+          align-self: flex-end;
+          min-width: 8rem;
+        }
+
+        .about-content {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .about-item {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #374151;
+        }
+
+        .about-icon {
+          color: var(--brand);
+        }
+
+        .bio-text {
+          color: #374151;
+          line-height: 1.6;
+          white-space: pre-wrap;
+        }
+
+        .empty-state {
+          color: #9ca3af;
+          font-style: italic;
+        }
+
+        .privacy-note {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          color: #9ca3af;
+          font-size: 0.875rem;
+        }
+
+        .sidebar {
+          position: sticky;
+          top: 2rem;
+        }
+
+        .loading-state {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          padding: 3rem 0;
+          color: #6b7280;
+        }
+
+        .loading-spinner {
+          width: 2rem;
+          height: 2rem;
+          border: 2px solid #e5e7eb;
+          border-top: 2px solid var(--brand);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Enhanced button styles */
+        .btn {
+          transition: all 0.2s ease;
+          font-weight: 500;
+          text-decoration: none;
+        }
+
+        .btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          color: white;
+          border: none;
+        }
+
+        .btn-primary:hover {
+          background: linear-gradient(135deg, #7c2d12, #6d28d9);
+        }
+
+        .btn-neutral {
+          background: rgba(255,255,255,0.9);
+          color: #374151;
+          border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .btn-neutral:hover {
+          background: white;
+          border-color: rgba(0,0,0,0.2);
         }
       `}</style>
     </div>
