@@ -4,6 +4,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import SiteHeader from "@/components/SiteHeader";
 import FirstRunGate from "@/components/FirstRunGate";
+import { ToastProvider } from "@/components/ToastProvider";
 
 export const metadata: Metadata = {
   title: "MyZenTribe",
@@ -27,14 +28,14 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {/* Global header */}
-        <SiteHeader />
-
-        {/* First-run redirect guard (client) */}
-        <FirstRunGate />
-
-        {/* Page content */}
-        <main className="page-wrap">{children}</main>
+        <ToastProvider>
+          {/* Global header */}
+          <SiteHeader />
+          {/* First-run redirect guard (client) */}
+          <FirstRunGate />
+          {/* Page content */}
+          <main className="page-wrap">{children}</main>
+        </ToastProvider>
       </body>
     </html>
   );
