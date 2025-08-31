@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -164,7 +165,7 @@ export default function ProfilePage() {
         <a className="btn mt-2" href="/friends">Open</a>
       </section>
 
-      {/* NEW: Safety & SOS (compact card) */}
+      {/* Safety & SOS */}
       <section className="card p-3" style={{ padding: 12 }}>
         <div className="section-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h3 className="section-title" style={{ marginBottom: 4 }}>Safety & SOS</h3>
@@ -255,7 +256,7 @@ export default function ProfilePage() {
           )}
 
           {/* Identity header */}
-          <div className="card p-3 mb-3 profile-card" style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.4)" }}>
+          <div className="card p-3 mb-3 profile-card" style={{ borderColor: "rgba(196, 181, 253, 0.7)", background: "rgba(245, 243, 255, 0.55)" }}>
             <div className="profile-header" style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", gap: isDesktop ? 18 : 12, alignItems: isDesktop ? "flex-start" : "center", textAlign: isDesktop ? "left" : "center" }}>
               <div className="shrink-0">
                 <AvatarUploader userId={userId} value={p.avatar_url} onChange={onAvatarChange} label="Profile photo" size={160} />
@@ -268,10 +269,13 @@ export default function ProfilePage() {
                   <span className="kpi"><strong>{friendsCount}</strong> Friends</span>
                 </div>
 
-                {/* Invite dropdown / QR embed */}
-                <div style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
-                  <ProfileInviteQR userId={userId} embed qrSize={180} />
-                </div>
+                {/* Invite dropdown (compact) */}
+                <details style={{ maxWidth: 520, margin: isDesktop ? "10px 0 0 0" : "10px auto 0" }}>
+                  <summary className="btn btn-neutral" style={{ width: "fit-content" }}>Invite friends</summary>
+                  <div className="mt-2">
+                    <ProfileInviteQR userId={userId} embed qrSize={180} />
+                  </div>
+                </details>
               </div>
             </div>
           </div>
@@ -333,6 +337,16 @@ export default function ProfilePage() {
           {loading && <p className="muted mt-3">Loading...</p>}
         </div>
       </div>
+
+      {/* Page background theme */}
+      <style jsx global>{`
+        .page-wrap {
+          background: linear-gradient(180deg, #f5f3ff 0%, #fff7ed 100%);
+          min-height: 100vh;
+        }
+        .profile-name { font-size: 22px; font-weight: 600; }
+        .kpi strong { color: #6d28d9; }
+      `}</style>
     </div>
   );
 }
