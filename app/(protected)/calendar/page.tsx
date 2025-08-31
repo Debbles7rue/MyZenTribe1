@@ -38,7 +38,12 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
   )
 });
 
-type FeedEvent = DBEvent & { _dismissed?: boolean };
+type FeedEvent = DBEvent & { 
+  _dismissed?: boolean;
+  _eventSource?: 'business' | 'community' | 'friend_invite';
+  _userRelation?: 'following' | 'member' | 'invited';
+};
+
 type Mode = "my" | "whats";
 type QuickType = "none" | "reminder" | "todo";
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
@@ -59,9 +64,10 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Feed (What's Happening)
+  // Feed (What's Happening) - Enhanced
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
+  const [selectedFeedEvent, setSelectedFeedEvent] = useState<FeedEvent | null>(null);
 
   // Modals
   const [openCreate, setOpenCreate] = useState(false);
@@ -230,33 +236,107 @@ export default function CalendarPage() {
     }
   }
 
+  // ENHANCED: Load feed with multiple sources and categorization
   async function loadFeed() {
     if (!me) return;
     setFeedLoading(true);
+    
     try {
-      const { data: f } = await supabase.from("friends_view").select("friend_id").limit(500);
-      const friendIds = (f || []).map((r: any) => r.friend_id);
-
       const now = new Date();
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+      const to = new Date(now.getFullYear(), now.getMonth() + 2, now.getDate()); // 2 months ahead
+      
+      let allFeedEvents: FeedEvent[] = [];
 
-      let query = supabase
-        .from("events")
-        .select("*")
-        .gte("start_time", from.toISOString())
-        .order("start_time", { ascending: true })
-        .neq("created_by", me)
-        .eq("visibility", "public");
+      // 1. Get friends list
+      const { data: friendsData } = await supabase.from("friends_view").select("friend_id").limit(500);
+      const friendIds = (friendsData || []).map((r: any) => r.friend_id);
 
-      if (friendIds.length) {
-        // friends' public events OR business
-        query = query.or(`created_by.in.(${friendIds.join(",")}),source.eq.business`);
-      } else {
-        query = query.eq("source", "business");
+      // 2. Get businesses they follow (assuming there's a business_follows table)
+      const { data: businessData } = await supabase
+        .from("business_follows")
+        .select("business_id")
+        .eq("user_id", me);
+      const businessIds = (businessData || []).map((r: any) => r.business_id);
+
+      // 3. Get communities they're part of (assuming there's a community_members table)
+      const { data: communityData } = await supabase
+        .from("community_members")
+        .select("community_id")
+        .eq("user_id", me);
+      const communityIds = (communityData || []).map((r: any) => r.community_id);
+
+      // 4. Load business events
+      if (businessIds.length > 0) {
+        const { data: businessEvents } = await supabase
+          .from("events")
+          .select("*")
+          .in("created_by", businessIds)
+          .eq("source", "business")
+          .eq("visibility", "public")
+          .gte("start_time", from.toISOString())
+          .lte("start_time", to.toISOString())
+          .order("start_time", { ascending: true });
+
+        if (businessEvents) {
+          allFeedEvents.push(...businessEvents.map(e => ({
+            ...e,
+            _eventSource: 'business' as const,
+            _userRelation: 'following' as const
+          })));
+        }
       }
 
-      const { data } = await query;
-      setFeed((data || []) as FeedEvent[]);
+      // 5. Load friend events
+      if (friendIds.length > 0) {
+        const { data: friendEvents } = await supabase
+          .from("events")
+          .select("*")
+          .in("created_by", friendIds)
+          .eq("visibility", "public")
+          .gte("start_time", from.toISOString())
+          .lte("start_time", to.toISOString())
+          .neq("created_by", me)
+          .order("start_time", { ascending: true });
+
+        if (friendEvents) {
+          allFeedEvents.push(...friendEvents.map(e => ({
+            ...e,
+            _eventSource: 'friend_invite' as const,
+            _userRelation: 'invited' as const
+          })));
+        }
+      }
+
+      // 6. Load community events
+      if (communityIds.length > 0) {
+        const { data: communityEvents } = await supabase
+          .from("events")
+          .select("*")
+          .in("community_id", communityIds)
+          .eq("visibility", "community")
+          .gte("start_time", from.toISOString())
+          .lte("start_time", to.toISOString())
+          .neq("created_by", me)
+          .order("start_time", { ascending: true });
+
+        if (communityEvents) {
+          allFeedEvents.push(...communityEvents.map(e => ({
+            ...e,
+            _eventSource: 'community' as const,
+            _userRelation: 'member' as const
+          })));
+        }
+      }
+
+      // Remove duplicates and sort by start time
+      const uniqueEvents = allFeedEvents.filter((event, index, self) => 
+        index === self.findIndex(e => e.id === event.id)
+      );
+
+      uniqueEvents.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+      setFeed(uniqueEvents);
     } catch (error) {
       console.error("Load feed error:", error);
       setFeed([]);
@@ -273,6 +353,94 @@ export default function CalendarPage() {
       setFeedLoading(false);
     }
   }
+
+  // Enhanced feed event actions
+  const handleShowInterest = async (event: FeedEvent) => {
+    if (!me) return;
+    try {
+      await supabase.from("event_interests").upsert({ event_id: event.id, user_id: me });
+      showToast({
+        type: 'success',
+        title: 'Interest Registered',
+        message: `"${event.title}" added with interest indicator`,
+      });
+      setFeed(prev => prev.map(e => e.id === event.id ? { ...e, _dismissed: true } : e));
+      loadCalendar();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Failed to Register Interest',
+        message: 'Please try again',
+      });
+    }
+  };
+
+  const handleRSVP = async (event: FeedEvent) => {
+    if (!me) return;
+    try {
+      await supabase.from("event_attendees").upsert({ 
+        event_id: event.id, 
+        user_id: me,
+        status: 'going'
+      });
+      showToast({
+        type: 'success',
+        title: 'RSVP Confirmed',
+        message: `You're going to "${event.title}"!`,
+      });
+      setFeed(prev => prev.map(e => e.id === event.id ? { ...e, _dismissed: true } : e));
+      loadCalendar();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'RSVP Failed',
+        message: 'Please try again',
+      });
+    }
+  };
+
+  const dismissFeedEvent = (eventId: string) => {
+    setFeed(prev => prev.map(e => e.id === eventId ? { ...e, _dismissed: true } : e));
+  };
+
+  // Get color styling for feed events
+  const getFeedEventStyle = (event: FeedEvent) => {
+    switch (event._eventSource) {
+      case 'business':
+        return {
+          borderLeft: '4px solid #3b82f6',
+          backgroundColor: '#dbeafe'
+        };
+      case 'community':
+        return {
+          borderLeft: '4px solid #10b981',
+          backgroundColor: '#d1fae5'
+        };
+      case 'friend_invite':
+        return {
+          borderLeft: '4px solid #f59e0b',
+          backgroundColor: '#fef3c7'
+        };
+      default:
+        return {
+          borderLeft: '4px solid #6b7280',
+          backgroundColor: '#f9fafb'
+        };
+    }
+  };
+
+  const getSourceLabel = (event: FeedEvent) => {
+    switch (event._eventSource) {
+      case 'business':
+        return '🏢 Business';
+      case 'community':
+        return '🏘️ Community';
+      case 'friend_invite':
+        return '👥 Friend';
+      default:
+        return '📅 Event';
+    }
+  };
 
   // ===== EVENT HELPERS =====
   const canEdit = (evt: any) => {
@@ -867,54 +1035,62 @@ export default function CalendarPage() {
               ) : feed.filter((e) => !e._dismissed).length === 0 ? (
                 <div className="muted">Nothing new right now. Check back later.</div>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-3">
                   {feed.filter((e) => !e._dismissed).map((e) => (
                     <li
                       key={e.id}
-                      className="border border-neutral-200 rounded-lg p-3 flex items-center justify-between gap-3"
-                      onTouchStart={(ev) => {
-                        (ev.currentTarget as any)._sx = ev.changedTouches[0].clientX;
-                      }}
-                      onTouchEnd={async (ev) => {
-                        const sx = (ev.currentTarget as any)._sx ?? 0;
-                        const dx = ev.changedTouches[0].clientX - sx;
-                        if (dx > 60) {
-                          if (me) {
-                            await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
-                            showToast({
-                              type: 'success',
-                              title: 'Event Added',
-                              message: `"${e.title}" added to your calendar`,
-                            });
-                          }
-                          setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
-                          loadCalendar();
-                        } else if (dx < -60) {
-                          setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
-                        }
-                      }}
+                      className="border border-neutral-200 rounded-lg p-4 flex items-start justify-between gap-4"
+                      style={getFeedEventStyle(e)}
                     >
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{e.title || "Untitled event"}</div>
-                        <div className="text-xs text-neutral-600">
-                          {new Date(e.start_time!).toLocaleString()} — {e.location || "TBD"}
-                          {e.source ? ` · ${e.source}` : ""}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-medium text-neutral-600">
+                            {getSourceLabel(e)}
+                          </span>
+                          <span className="text-xs text-neutral-400">•</span>
+                          <span className="text-xs text-neutral-500">
+                            {new Date(e.start_time).toLocaleDateString()}
+                          </span>
                         </div>
+                        <div className="text-sm font-medium truncate mb-1">{e.title || "Untitled event"}</div>
+                        <div className="text-xs text-neutral-600">
+                          {new Date(e.start_time).toLocaleString()} — {e.location || "TBD"}
+                        </div>
+                        {e.description && (
+                          <div className="text-xs text-neutral-500 mt-1 line-clamp-2">
+                            {e.description}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <button className="btn" onClick={() => setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x))}>Dismiss</button>
-                        <button className="btn btn-brand" onClick={async () => {
-                          if (!me) return;
-                          await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
-                          showToast({
-                            type: 'success',
-                            title: 'Event Added',
-                            message: `"${e.title}" added to your calendar`,
-                          });
-                          setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
-                          loadCalendar();
-                        }}>
-                          Add to Calendar
+                      <div className="flex flex-col gap-2 min-w-0">
+                        <button 
+                          className="btn text-xs py-1 px-2" 
+                          onClick={() => dismissFeedEvent(e.id)}
+                        >
+                          Dismiss
+                        </button>
+                        <button 
+                          className="btn btn-secondary text-xs py-1 px-2" 
+                          onClick={() => handleShowInterest(e)}
+                          title="Add to calendar with interest indicator"
+                        >
+                          Interested
+                        </button>
+                        <button 
+                          className="btn btn-brand text-xs py-1 px-2" 
+                          onClick={() => handleRSVP(e)}
+                          title="RSVP as going - adds to calendar"
+                        >
+                          I'm Going
+                        </button>
+                        <button 
+                          className="btn text-xs py-1 px-2" 
+                          onClick={() => {
+                            setSelectedFeedEvent(e);
+                            setDetailsOpen(true);
+                          }}
+                        >
+                          Details
                         </button>
                       </div>
                     </li>
@@ -1093,7 +1269,13 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <EventDetails event={detailsOpen ? selected : null} onClose={() => setDetailsOpen(false)} />
+      <EventDetails 
+        event={detailsOpen ? (selectedFeedEvent || selected) : null} 
+        onClose={() => {
+          setDetailsOpen(false);
+          setSelectedFeedEvent(null);
+        }} 
+      />
     </div>
   );
 }
