@@ -1,8 +1,7 @@
 // components/CreateEventModal.tsx
 "use client";
 
-import React, { useState, useRef } from "react";
-import { Dialog } from "@headlessui/react";
+import React, { useState, useRef, useEffect } from "react";
 
 // Keep it local so we don't depend on other type files
 type Visibility = "public" | "friends" | "private" | "community";
@@ -33,7 +32,7 @@ interface Community {
 type Props = {
   open: boolean;
   onClose: () => void;
-  sessionUser: string | null; // kept for API parity, not used here
+  sessionUser: string | null;
   value: FormValue;
   onChange: (patch: Partial<FormValue>) => void;
   onSave: () => void;
@@ -52,40 +51,32 @@ export default function CreateEventModal({
   communities = []
 }: Props) {
   const [step, setStep] = useState(1);
-  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
-  const [selectedCommunities, setSelectedCommunities] = useState<string[]>([]);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = async (file: File) => {
-    setIsUploading(true);
-    try {
-      // Replace with your actual image upload logic
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      // Mock upload - replace with actual implementation
-      const imageUrl = URL.createObjectURL(file);
-      setImagePreview(imageUrl);
-      onChange({ image_path: imageUrl });
-    } catch (error) {
-      console.error('Upload failed:', error);
-    } finally {
-      setIsUploading(false);
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+      setStep(1); // Reset step when modal closes
     }
-  };
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [open]);
 
-  const generateGoogleMapsUrl = (location: string) => {
-    if (!location) return '';
-    return `https://www.google.com/maps/search/${encodeURIComponent(location)}`;
+  if (!open) return null;
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
   };
 
   const isStepValid = (stepNum: number) => {
     switch (stepNum) {
       case 1: return value.title.trim().length > 0;
       case 2: return value.start && value.location;
-      case 3: return true; // Privacy step is always valid
+      case 3: return true;
       default: return true;
     }
   };
@@ -96,430 +87,437 @@ export default function CreateEventModal({
 
   const prevStep = () => setStep(step - 1);
 
-  const handleSave = () => {
-    if (value.visibility === 'public' && (selectedFriends.length || selectedCommunities.length)) {
-      // Handle sharing logic here
-      console.log('Share with friends:', selectedFriends);
-      console.log('Share with communities:', selectedCommunities);
-    }
-    onSave();
-  };
-
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-[999]">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
-      
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-4 text-white">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Create Event</h2>
-              <button 
-                onClick={onClose}
-                className="text-white/80 hover:text-white text-2xl font-light"
-              >
-                ×
-              </button>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '16px',
+      }}
+      onClick={handleBackdropClick}
+    >
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          maxWidth: '600px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
+          color: 'white',
+          padding: '24px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, marginBottom: '4px' }}>
+                Create Event
+              </h2>
+              <p style={{ fontSize: '14px', opacity: 0.9, margin: 0 }}>
+                Share your event with the community
+              </p>
             </div>
-            
-            {/* Progress Steps */}
-            <div className="flex items-center mt-4 space-x-4">
-              {[1, 2, 3].map((num) => (
-                <div key={num} className="flex items-center">
-                  <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                    ${step >= num ? 'bg-white text-violet-600' : 'bg-white/20 text-white/60'}
-                  `}>
-                    {num}
-                  </div>
-                  {num < 3 && (
-                    <div className={`
-                      w-12 h-0.5 mx-2
-                      ${step > num ? 'bg-white' : 'bg-white/20'}
-                    `} />
-                  )}
-                </div>
-              ))}
-            </div>
+            <button
+              onClick={onClose}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          {/* Content */}
-          <div className="px-6 py-6" style={{ minHeight: '400px' }}>
-            {step === 1 && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Event Details</h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Event Title *
-                      </label>
-                      <input
-                        type="text"
-                        value={value.title}
-                        onChange={(e) => onChange({ title: e.target.value })}
-                        placeholder="What's happening?"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent text-lg"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Description
-                      </label>
-                      <textarea
-                        value={value.description}
-                        onChange={(e) => onChange({ description: e.target.value })}
-                        placeholder="Add details about your event..."
-                        rows={3}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Event Image (Optional)
-                      </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                        {imagePreview ? (
-                          <div className="relative">
-                            <img 
-                              src={imagePreview} 
-                              alt="Event preview" 
-                              className="w-full h-32 object-cover rounded-lg"
-                            />
-                            <button
-                              onClick={() => {
-                                setImagePreview(null);
-                                onChange({ image_path: '' });
-                              }}
-                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <div className="text-gray-400 mb-2">📸</div>
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              disabled={isUploading}
-                              className="text-violet-600 hover:text-violet-700 font-medium"
-                            >
-                              {isUploading ? 'Uploading...' : 'Add a photo'}
-                            </button>
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleImageUpload(file);
-                              }}
-                              className="hidden"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Event Type
-                        </label>
-                        <input
-                          type="text"
-                          value={value.event_type}
-                          onChange={(e) => onChange({ event_type: e.target.value })}
-                          placeholder="e.g., Workshop, Social, Meeting..."
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Source
-                        </label>
-                        <select
-                          value={value.source}
-                          onChange={(e) => onChange({ source: e.target.value as "personal" | "business" })}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                        >
-                          <option value="personal">Personal</option>
-                          <option value="business">Business</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
+          {/* Progress Steps */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {[1, 2, 3].map((num) => (
+              <React.Fragment key={num}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: step >= num ? 'white' : 'rgba(255, 255, 255, 0.3)',
+                  color: step >= num ? '#7c3aed' : 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                }}>
+                  {num}
                 </div>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">When & Where</h3>
-                  
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Start Time *
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={value.start}
-                          onChange={(e) => onChange({ start: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          End Time (Optional)
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={value.end}
-                          onChange={(e) => onChange({ end: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Location *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={value.location}
-                          onChange={(e) => onChange({ location: e.target.value })}
-                          placeholder="Where is this happening?"
-                          className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                        />
-                        {value.location && (
-                          <a
-                            href={generateGoogleMapsUrl(value.location)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-500 hover:text-blue-600 text-xl"
-                            title="Open in Google Maps"
-                          >
-                            🗺️
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Privacy & Sharing</h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Who can see this event?
-                      </label>
-                      <div className="space-y-3">
-                        <label className="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="radio"
-                            name="visibility"
-                            value="private"
-                            checked={value.visibility === 'private'}
-                            onChange={(e) => onChange({ visibility: e.target.value as Visibility })}
-                            className="mt-1"
-                          />
-                          <div>
-                            <div className="font-medium">Private</div>
-                            <div className="text-sm text-gray-500">Only you can see this event</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="radio"
-                            name="visibility"
-                            value="friends"
-                            checked={value.visibility === 'friends'}
-                            onChange={(e) => onChange({ visibility: e.target.value as Visibility })}
-                            className="mt-1"
-                          />
-                          <div>
-                            <div className="font-medium">Friends & Acquaintances</div>
-                            <div className="text-sm text-gray-500">Your friends and connections can see this</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="radio"
-                            name="visibility"
-                            value="public"
-                            checked={value.visibility === 'public'}
-                            onChange={(e) => onChange({ visibility: e.target.value as Visibility })}
-                            className="mt-1"
-                          />
-                          <div>
-                            <div className="font-medium">Public</div>
-                            <div className="text-sm text-gray-500">Anyone can discover and join</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="radio"
-                            name="visibility"
-                            value="community"
-                            checked={value.visibility === 'community'}
-                            onChange={(e) => onChange({ visibility: e.target.value as Visibility })}
-                            className="mt-1"
-                          />
-                          <div>
-                            <div className="font-medium">Community</div>
-                            <div className="text-sm text-gray-500">Share with specific communities</div>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-
-                    {(value.visibility === 'public' || value.visibility === 'friends') && (
-                      <div className="space-y-4 pl-6 border-l-2 border-violet-200">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Additional sharing options
-                          </label>
-                          
-                          {friends.length > 0 && value.visibility === 'friends' && (
-                            <div className="mb-4">
-                              <div className="text-sm font-medium text-gray-700 mb-2">Specific Friends</div>
-                              <div className="max-h-32 overflow-y-auto border rounded-lg p-2">
-                                {friends.map((friend) => (
-                                  <label key={friend.friend_id} className="flex items-center space-x-2 p-1 hover:bg-gray-50 rounded">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedFriends.includes(friend.friend_id)}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setSelectedFriends([...selectedFriends, friend.friend_id]);
-                                        } else {
-                                          setSelectedFriends(selectedFriends.filter(id => id !== friend.friend_id));
-                                        }
-                                      }}
-                                    />
-                                    <span className="text-sm">{friend.name}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {communities.length > 0 && (
-                            <div>
-                              <div className="text-sm font-medium text-gray-700 mb-2">Communities</div>
-                              <div className="max-h-32 overflow-y-auto border rounded-lg p-2">
-                                {communities.map((community) => (
-                                  <label key={community.id} className="flex items-center space-x-2 p-1 hover:bg-gray-50 rounded">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedCommunities.includes(community.id)}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setSelectedCommunities([...selectedCommunities, community.id]);
-                                        } else {
-                                          setSelectedCommunities(selectedCommunities.filter(id => id !== community.id));
-                                        }
-                                      }}
-                                    />
-                                    <span className="text-sm">{community.name}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="flex items-center space-x-2">
-                            <input type="checkbox" defaultChecked />
-                            <span className="text-sm text-gray-700">Allow comments on this event</span>
-                          </label>
-                        </div>
-                      </div>
-                    )}
-
-                    {value.visibility === 'community' && (
-                      <div className="pl-6 border-l-2 border-violet-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Community ID
-                        </label>
-                        <input
-                          type="text"
-                          value={value.community_id}
-                          onChange={(e) => onChange({ community_id: e.target.value })}
-                          placeholder="Enter community identifier"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+                {num < 3 && (
+                  <div style={{
+                    width: '40px',
+                    height: '2px',
+                    backgroundColor: step > num ? 'white' : 'rgba(255, 255, 255, 0.3)',
+                  }} />
+                )}
+              </React.Fragment>
+            ))}
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
-            <div className="flex space-x-2">
-              {step > 1 && (
-                <button
-                  onClick={prevStep}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-                >
-                  Back
-                </button>
-              )}
-            </div>
-
-            <div className="flex space-x-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-              >
-                Cancel
-              </button>
+        {/* Content */}
+        <div style={{ padding: '24px', maxHeight: '400px', overflowY: 'auto' }}>
+          {step === 1 && (
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+                Event Details
+              </h3>
               
-              {step < 3 ? (
-                <button
-                  onClick={nextStep}
-                  disabled={!isStepValid(step)}
-                  className="px-6 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  Next
-                </button>
-              ) : (
-                <button
-                  onClick={handleSave}
-                  className="px-6 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 font-medium"
-                >
-                  Create Event
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                    Event Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={value.title}
+                    onChange={(e) => onChange({ title: e.target.value })}
+                    placeholder="What's happening?"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                    Description
+                  </label>
+                  <textarea
+                    value={value.description}
+                    onChange={(e) => onChange({ description: e.target.value })}
+                    placeholder="Add details about your event..."
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      resize: 'vertical',
+                      minHeight: '80px',
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                      Event Type
+                    </label>
+                    <input
+                      type="text"
+                      value={value.event_type}
+                      onChange={(e) => onChange({ event_type: e.target.value })}
+                      placeholder="Workshop, Social..."
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                      Source
+                    </label>
+                    <select
+                      value={value.source}
+                      onChange={(e) => onChange({ source: e.target.value as "personal" | "business" })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        outline: 'none',
+                        backgroundColor: 'white',
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                    >
+                      <option value="personal">Personal</option>
+                      <option value="business">Business</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+                When & Where
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                      Start Time *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={value.start}
+                      onChange={(e) => onChange({ start: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                      End Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={value.end}
+                      onChange={(e) => onChange({ end: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                    Location *
+                  </label>
+                  <input
+                    type="text"
+                    value={value.location}
+                    onChange={(e) => onChange({ location: e.target.value })}
+                    placeholder="Where is this happening?"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      outline: 'none',
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
+                Privacy & Sharing
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {[
+                  { value: 'private', title: 'Private', desc: 'Only you can see this event' },
+                  { value: 'friends', title: 'Friends', desc: 'Your friends and connections can see this' },
+                  { value: 'public', title: 'Public', desc: 'Anyone can discover and join' },
+                  { value: 'community', title: 'Community', desc: 'Share with specific communities' }
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px',
+                      border: value.visibility === option.value ? '2px solid #7c3aed' : '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      backgroundColor: value.visibility === option.value ? '#f3f4f6' : 'white',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="visibility"
+                      value={option.value}
+                      checked={value.visibility === option.value}
+                      onChange={(e) => onChange({ visibility: e.target.value as Visibility })}
+                      style={{ marginRight: '12px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '500', fontSize: '14px', color: '#111827' }}>
+                        {option.title}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {option.desc}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {value.visibility === 'community' && (
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                    Community ID
+                  </label>
+                  <input
+                    type="text"
+                    value={value.community_id}
+                    onChange={(e) => onChange({ community_id: e.target.value })}
+                    placeholder="Enter community identifier"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      outline: 'none',
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '16px 24px',
+          borderTop: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <div>
+            {step > 1 && (
+              <button
+                onClick={prevStep}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: '#6b7280',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                }}
+              >
+                ← Back
+              </button>
+            )}
           </div>
-        </Dialog.Panel>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#6b7280',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              Cancel
+            </button>
+
+            {step < 3 ? (
+              <button
+                onClick={nextStep}
+                disabled={!isStepValid(step)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: isStepValid(step) ? '#7c3aed' : '#d1d5db',
+                  color: 'white',
+                  cursor: isStepValid(step) ? 'pointer' : 'not-allowed',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                }}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                onClick={onSave}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#7c3aed',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                }}
+              >
+                Create Event
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-    </Dialog>
+    </div>
   );
 }
