@@ -21,90 +21,111 @@ export default function AvatarUploader({
   size = 160,
   bucket = "avatars",
 }: Props) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [broken, setBroken] = useState(false); // if <img> fails to render (e.g., HEIC on some browsers)
+  const [broken, setBroken] = useState(false);
 
-  // Keep preview in sync if the parent value changes outside
-  useEffect(() => {
-    setPreview(null);
-    setBroken(false);
-  }, [value]);
+  // Cropper state
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null); // object URL
+  const [imgWH, setImgWH] = useState<{w:number;h:number} | null>(null);
+  const [zoom, setZoom] = useState(1);          // user-controlled zoom
+  const [dx, setDx] = useState(0);              // drag offset x (px)
+  const [dy, setDy] = useState(0);              // drag offset y (px)
+  const cropSize = 260;                          // viewport size (square px)
 
-  const src = useMemo(() => {
+  useEffect(() => { setPreview(null); setBroken(false); }, [value]);
+
+  const showSrc = useMemo(() => {
     if (preview) return preview;
     if (value && !broken) return value;
     return "/default-avatar.png";
   }, [preview, value, broken]);
 
-  function pickFile() {
-    inputRef.current?.click();
-  }
+  function pickFile() { fileInputRef.current?.click(); }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
     setErr(null);
 
-    // Show an immediate local preview (works even before upload finishes)
-    const localUrl = URL.createObjectURL(file);
-    setPreview(localUrl);
-    setBroken(false);
+    // Open cropper with local object URL
+    const objUrl = URL.createObjectURL(file);
+    setCropSrc(objUrl);
+    setZoom(1);
+    setDx(0); setDy(0);
+    // Load image dims
+    const img = new Image();
+    img.onload = () => {
+      setImgWH({ w: img.naturalWidth, h: img.naturalHeight });
+      setCropOpen(true);
+    };
+    img.onerror = () => {
+      setErr("Could not read image.");
+    };
+    img.src = objUrl;
+
+    // Clear the input so picking the same file twice still triggers change
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function saveCrop() {
+    if (!userId || !cropSrc || !imgWH) return;
     setBusy(true);
+    setErr(null);
 
     try {
-      // Resize to max 1024px on the long edge, encode JPEG if possible
-      const processed = await tryResizeToJpeg(file, 1024);
-      const blob = processed?.blob ?? file;
-      const ext = processed?.ext ?? guessExt(file.type) ?? "bin";
-      const contentType = processed?.type ?? (file.type || "application/octet-stream");
+      // Draw the cropped square to canvas (JPEG)
+      const blob = await renderCroppedBlob(cropSrc, imgWH, { dx, dy, zoom, cropSize });
+      const path = `${userId}/avatar_${Date.now()}.jpg`;
 
-      // If the original is HEIC/HEIF and we couldn't convert, warn (we’ll still upload)
-      if (!processed && /heic|heif/i.test(file.type)) {
-        // Most browsers can’t render HEIC; upload will succeed but preview may not.
-        // We'll keep our local preview and later fall back to default if the URL can't render.
-        console.warn("HEIC image detected. Uploaded original; some browsers cannot display HEIC.");
-      }
-
-      const path = `${userId}/avatar_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from(bucket)
         .upload(path, blob, {
           cacheControl: "3600",
           upsert: true,
-          contentType,
+          contentType: "image/jpeg",
         });
       if (upErr) throw upErr;
 
-      // Public URL
       const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
       const publicUrl = pub.publicUrl;
 
-      // Persist immediately to profiles
       const { error: dbErr } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
         .eq("id", userId);
       if (dbErr) throw dbErr;
 
-      // Swap preview to the final public URL
+      // Update UI
       setPreview(publicUrl);
       onChange?.(publicUrl);
+      setCropOpen(false);
+      cleanupCrop();
     } catch (e: any) {
       console.error(e);
       setErr(e?.message || "Upload failed");
-      // Keep the local preview so the user still sees something
     } finally {
-      // Clear the file input and free the local object URL after a moment
-      if (inputRef.current) inputRef.current.value = "";
-      setTimeout(() => {
-        try { URL.revokeObjectURL(localUrl); } catch {}
-      }, 1500);
       setBusy(false);
     }
   }
+
+  function cleanupCrop() {
+    if (cropSrc) {
+      try { URL.revokeObjectURL(cropSrc); } catch {}
+    }
+    setCropSrc(null);
+    setImgWH(null);
+    setDx(0); setDy(0); setZoom(1);
+  }
+
+  // Drag to move image inside viewport
+  const drag = useDrag(({dx: mx, dy: my}) => {
+    setDx((v) => v + mx);
+    setDy((v) => v + my);
+  });
 
   return (
     <div className="stack" style={{ gap: 8 }}>
@@ -113,7 +134,7 @@ export default function AvatarUploader({
       <div className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
+          src={showSrc}
           alt="Avatar"
           width={size}
           height={size}
@@ -132,24 +153,20 @@ export default function AvatarUploader({
             <button className="btn btn-brand" onClick={pickFile} disabled={!userId || busy}>
               {busy ? "Uploading…" : "Change photo"}
             </button>
-            {/* Optional: quick remove sets avatar to null */}
             <button
               className="btn"
               disabled={!userId || busy}
               onClick={async () => {
-                setBusy(true);
-                setErr(null);
                 try {
+                  setBusy(true);
+                  setErr(null);
                   const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", userId);
                   if (error) throw error;
-                  setPreview(null);
-                  setBroken(false);
+                  setPreview(null); setBroken(false);
                   onChange?.("");
                 } catch (e: any) {
                   setErr(e?.message || "Could not remove photo");
-                } finally {
-                  setBusy(false);
-                }
+                } finally { setBusy(false); }
               }}
             >
               Remove
@@ -157,119 +174,223 @@ export default function AvatarUploader({
           </div>
 
           <input
-            ref={inputRef}
+            ref={fileInputRef}
             type="file"
-            accept="image/*"   // Important: no `capture` so mobile can pick Camera OR Photo Library
+            accept="image/*"     // no `capture`, so iOS lets users choose Camera or Photo Library
             hidden
-            onChange={handleFile}
+            onChange={onFileSelected}
           />
 
           <div className="text-xs" style={{ color: "#6b7280" }}>
-            JPG/PNG/WebP recommended. Large photos auto-resize. HEIC uploads are supported, but some browsers can’t display them—try JPG if your photo doesn’t appear.
+            Crop to fit. JPG/PNG/WebP recommended. HEIC uploads are supported but may not display in some browsers.
           </div>
           {err && <div className="text-xs" style={{ color: "#b91c1c" }}>{err}</div>}
         </div>
       </div>
 
+      {/* Crop dialog */}
+      {cropOpen && cropSrc && imgWH && (
+        <div className="crop-modal">
+          <div className="crop-sheet" role="dialog" aria-modal="true">
+            <div className="crop-header">
+              <div>Adjust your photo</div>
+              <button className="crop-x" aria-label="Close" onClick={() => { setCropOpen(false); cleanupCrop(); }}>✕</button>
+            </div>
+
+            <div className="crop-body">
+              <div
+                className="crop-viewport"
+                style={{ width: cropSize, height: cropSize }}
+                {...drag.bindings}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cropSrc}
+                  alt=""
+                  draggable={false}
+                  style={imageTransformStyle(imgWH, cropSize, zoom, dx, dy)}
+                />
+              </div>
+
+              <div className="crop-controls">
+                <label className="text-xs">Zoom</label>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(parseFloat(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="crop-footer">
+              <button className="btn" onClick={() => { setCropOpen(false); cleanupCrop(); }} disabled={busy}>Cancel</button>
+              <button className="btn btn-brand" onClick={saveCrop} disabled={busy}>
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+          <div className="crop-backdrop" onClick={() => { setCropOpen(false); cleanupCrop(); }} />
+        </div>
+      )}
+
       <style jsx>{`
         .btn-brand {
-          background: #8b5cf6; /* lavender */
+          background: #8b5cf6;
           color: #fff;
           border: 1px solid rgba(0,0,0,.06);
         }
         .btn-brand:hover { filter: brightness(.95); }
+
+        .crop-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; }
+        .crop-backdrop { position: fixed; inset:0; background: rgba(0,0,0,.4); }
+        .crop-sheet {
+          position: relative;
+          width: min(94vw, 520px);
+          background: #fff;
+          border-radius: 16px;
+          box-shadow: 0 20px 50px rgba(0,0,0,.25);
+          z-index: 101;
+          display: flex; flex-direction: column;
+          overflow: hidden;
+        }
+        .crop-header, .crop-footer { padding: 12px 14px; display:flex; align-items:center; justify-content:space-between; }
+        .crop-header { border-bottom: 1px solid rgba(0,0,0,.06); font-weight: 600; }
+        .crop-footer { border-top: 1px solid rgba(0,0,0,.06); gap: 8px; justify-content: flex-end; }
+        .crop-x { background:transparent; border:none; font-size: 18px; cursor:pointer; padding:4px 6px; }
+        .crop-body { padding: 14px; display: grid; gap: 14px; place-items:center; }
+        .crop-viewport {
+          position: relative;
+          border-radius: 16px;
+          overflow: hidden;
+          border: 1px solid rgba(0,0,0,.08);
+          background: #111;
+          touch-action: none; /* enables pointer drag without scroll hijack */
+        }
+        .crop-viewport img { user-select: none; will-change: transform; }
+        .crop-controls { width: 100%; display: grid; gap: 6px; }
+        input[type="range"] { width: 100%; }
       `}</style>
     </div>
   );
 }
 
-/**
- * Resize to maxDim and encode JPEG. Returns { blob, type, ext } or null if we can’t decode (e.g., some HEIC).
- */
-async function tryResizeToJpeg(file: File, maxDim: number): Promise<{ blob: Blob; type: string; ext: string } | null> {
-  try {
-    const img = await fileToImage(file);
-    const { canvas, mime } = drawToCanvas(img, maxDim);
-    const blob: Blob = await new Promise((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Encode failed"))), mime, 0.85)
-    );
-    return { blob, type: mime, ext: "jpg" };
-  } catch {
-    // Fallback: upload the original (may be HEIC; upload still works even if we can’t preview)
-    return null;
+/* -------- Helpers -------- */
+
+function useDrag(onDelta: (d: {dx:number; dy:number}) => void) {
+  const last = useRef<{x:number;y:number}|null>(null);
+  function onDown(e: React.PointerEvent) {
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    last.current = { x: e.clientX, y: e.clientY };
   }
+  function onMove(e: React.PointerEvent) {
+    if (!last.current) return;
+    const dx = e.clientX - last.current.x;
+    const dy = e.clientY - last.current.y;
+    last.current = { x: e.clientX, y: e.clientY };
+    onDelta({ dx, dy });
+  }
+  function onUp() { last.current = null; }
+  return {
+    bindings: { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp },
+  };
 }
 
-function guessExt(mime?: string | null): string | null {
-  if (!mime) return null;
-  if (mime.includes("jpeg")) return "jpg";
-  if (mime.includes("png")) return "png";
-  if (mime.includes("webp")) return "webp";
-  if (mime.includes("heic") || mime.includes("heif")) return "heic";
-  if (mime.includes("gif")) return "gif";
-  return null;
+function imageTransformStyle(
+  imgWH: {w:number;h:number},
+  viewport: number,
+  zoom: number,
+  dx: number,
+  dy: number
+): React.CSSProperties {
+  // Base cover scale so the shorter side fits the square, then multiply by user zoom.
+  const cover = Math.max(viewport / imgWH.w, viewport / imgWH.h);
+  const scale = cover * zoom;
+
+  const imgW = imgWH.w * scale;
+  const imgH = imgWH.h * scale;
+
+  // Center the image, then apply user drag offsets.
+  const left = (viewport - imgW) / 2 + dx;
+  const top  = (viewport - imgH) / 2 + dy;
+
+  return {
+    position: "absolute",
+    left, top,
+    width: imgW,
+    height: imgH,
+  };
 }
 
-async function fileToImage(file: File): Promise<HTMLImageElement> {
-  // Try createImageBitmap (fast path). If it fails (e.g., unsupported HEIC), fallback to <img>.
-  if ("createImageBitmap" in window) {
-    try {
-      const bmp = await createImageBitmap(file as any);
-      const canvas = document.createElement("canvas");
-      canvas.width = (bmp as any).width;
-      canvas.height = (bmp as any).height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(bmp as any, 0, 0);
-      const img = new Image();
-      img.src = canvas.toDataURL("image/jpeg", 0.95);
-      await imgDecode(img);
-      return img;
-    } catch {
-      // fall through
-    }
-  }
+async function renderCroppedBlob(
+  srcUrl: string,
+  imgWH: {w:number;h:number},
+  opts: { dx:number; dy:number; zoom:number; cropSize:number }
+): Promise<Blob> {
+  const { dx, dy, zoom, cropSize } = opts;
 
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = url;
-    await imgDecode(img);
-    return img;
-  } finally {
-    // revoke after decode to avoid timing issues
-    setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 1500);
-  }
+  // Compute same geometry as imageTransformStyle
+  const cover = Math.max(cropSize / imgWH.w, cropSize / imgWH.h);
+  const scale = cover * zoom;
+  const imgW = imgWH.w * scale;
+  const imgH = imgWH.h * scale;
+  const left = (cropSize - imgW) / 2 + dx;
+  const top  = (cropSize - imgH) / 2 + dy;
+
+  // Map the viewport square to source rect on the original image
+  const sx = Math.max(0, (-left) / scale);
+  const sy = Math.max(0, (-top)  / scale);
+  const sw = Math.min(imgWH.w, cropSize / scale);
+  const sh = Math.min(imgWH.h, cropSize / scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;  // output size
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  const img = await urlToImage(srcUrl);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  const blob = await canvasToBlob(canvas, "image/jpeg", 0.9);
+  return blob;
 }
 
-// Avoid TS narrowing to never; prefer event listeners/Promise wrapper
-function imgDecode(img: HTMLImageElement): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const anyImg = img as any;
-    if (typeof anyImg.decode === "function") {
-      anyImg.decode().then(() => resolve()).catch(() => {
-        img.addEventListener("load", () => resolve(), { once: true });
-        img.addEventListener("error", () => reject(new Error("Image load failed")), { once: true });
-      });
+function urlToImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error("Image load failed"));
+    i.src = url;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
+  return new Promise((resolve) => {
+    if (canvas.toBlob) {
+      canvas.toBlob((b) => {
+        if (b) return resolve(b);
+        // Fallback via dataURL
+        const data = canvas.toDataURL(type, quality);
+        resolve(dataURLtoBlob(data));
+      }, type, quality);
     } else {
-      img.addEventListener("load", () => resolve(), { once: true });
-      img.addEventListener("error", () => reject(new Error("Image load failed")), { once: true });
+      const data = canvas.toDataURL(type, quality);
+      resolve(dataURLtoBlob(data));
     }
   });
 }
 
-function drawToCanvas(img: HTMLImageElement, maxDim: number): { canvas: HTMLCanvasElement; mime: string } {
-  const { width, height } = img;
-  const scale = Math.min(1, maxDim / Math.max(width, height));
-  const w = Math.max(1, Math.round(width * scale));
-  const h = Math.max(1, Math.round(height * scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, w, h);
-  return { canvas, mime: "image/jpeg" };
+function dataURLtoBlob(dataURL: string): Blob {
+  const arr = dataURL.split(",");
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new Blob([u8arr], { type: mime });
 }
