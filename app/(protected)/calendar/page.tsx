@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import CalendarThemeSelector from "@/components/CalendarThemeSelector";
 import EventDetails from "@/components/EventDetails";
+import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 
@@ -17,7 +18,21 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
   loading: () => (
     <div className="card p-3">
       <div style={{ height: "680px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div>Loading calendar...</div>
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-32 mb-4"></div>
+          <div className="space-y-3">
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="h-8 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="h-16 bg-gray-100 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -29,6 +44,9 @@ type QuickType = "none" | "reminder" | "todo";
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
 export default function CalendarPage() {
+  // ===== TOAST SYSTEM =====
+  const { showToast } = useToast();
+
   // ===== ALL HOOKS DECLARED AT TOP - NEVER CONDITIONAL =====
   const [me, setMe] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("my");
@@ -71,7 +89,7 @@ export default function CalendarPage() {
   // NEW: dragging a specific list item (reminder/todo) to copy onto calendar
   const [dragItem, setDragItem] = useState<{ id: string; type: "reminder" | "todo"; title: string } | null>(null);
 
-  // “Quick Create” modal (button on chips)
+  // "Quick Create" modal (button on chips)
   const [quickModal, setQuickModal] = useState<{ open: boolean; type: "reminder" | "todo" | null }>({
     open: false,
     type: null
@@ -123,7 +141,12 @@ export default function CalendarPage() {
   const handleThemeChange = useCallback((newTheme: CalendarTheme) => {
     setCalendarTheme(newTheme);
     localStorage.setItem("calendar-theme", newTheme);
-  }, []);
+    showToast({
+      type: 'success',
+      title: 'Theme Updated',
+      message: `Switched to ${newTheme} theme`,
+    });
+  }, [showToast]);
 
   const toLocalInput = useCallback(
     (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
@@ -144,7 +167,7 @@ export default function CalendarPage() {
         owned = (rOwned.data || []).filter((e: any) => e?.start_time && e?.end_time);
       }
 
-      // 2) public events I added via “Add to Calendar” (event_interests)
+      // 2) public events I added via "Add to Calendar" (event_interests)
       let interested: any[] = [];
       if (me) {
         const rInt = await supabase.from("event_interests").select("event_id").eq("user_id", me);
@@ -181,9 +204,27 @@ export default function CalendarPage() {
       }));
 
       setEvents(withFlags);
+      
+      if (withFlags.length > 0) {
+        showToast({
+          type: 'success',
+          title: 'Calendar Updated',
+          message: `Loaded ${withFlags.length} events`,
+        });
+      }
     } catch (error) {
       console.error("Load calendar error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       setErr("Failed to load calendar");
+      showToast({
+        type: 'error',
+        title: 'Calendar Load Failed',
+        message: errorMessage,
+        action: {
+          label: 'Retry',
+          onClick: () => loadCalendar()
+        }
+      });
     } finally {
       setLoading(false);
     }
@@ -216,8 +257,18 @@ export default function CalendarPage() {
 
       const { data } = await query;
       setFeed((data || []) as FeedEvent[]);
-    } catch {
+    } catch (error) {
+      console.error("Load feed error:", error);
       setFeed([]);
+      showToast({
+        type: 'error',
+        title: 'Feed Load Failed',
+        message: 'Could not load What\'s Happening feed',
+        action: {
+          label: 'Retry',
+          onClick: () => loadFeed()
+        }
+      });
     } finally {
       setFeedLoading(false);
     }
@@ -231,7 +282,15 @@ export default function CalendarPage() {
 
   // create a quick private item (reminder/todo) — can optionally override title
   async function createQuick(start: Date, end: Date, kind: Exclude<QuickType, "none">, opts?: { title?: string; description?: string }) {
-    if (!me) return;
+    if (!me) {
+      showToast({
+        type: 'warning',
+        title: 'Authentication Required',
+        message: 'Please sign in to create items',
+      });
+      return;
+    }
+
     try {
       const payload: any = {
         title: opts?.title ?? (kind === "reminder" ? "Reminder" : "To-do"),
@@ -249,17 +308,52 @@ export default function CalendarPage() {
         status: "scheduled",
       };
       const { error } = await supabase.from("events").insert(payload);
-      if (error) console.error("Create quick error:", error);
+      if (error) {
+        console.error("Create quick error:", error);
+        showToast({
+          type: 'error',
+          title: 'Creation Failed',
+          message: error.message,
+        });
+        return;
+      }
+      
+      showToast({
+        type: 'success',
+        title: `${kind === "reminder" ? "Reminder" : "To-do"} Created`,
+        message: `${opts?.title || (kind === "reminder" ? "Reminder" : "To-do")} added to calendar`,
+      });
+      
       await loadCalendar();
     } catch (error) {
       console.error("Create quick error:", error);
+      showToast({
+        type: 'error',
+        title: 'Creation Failed',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
     }
   }
 
   const createEvent = async () => {
-    if (!me) return alert("Please log in.");
+    if (!me) {
+      showToast({
+        type: 'warning',
+        title: 'Authentication Required',
+        message: 'Please sign in to create events',
+      });
+      return;
+    }
+    
     const f = createForm;
-    if (!f.title || !f.start) return alert("Title and start time are required.");
+    if (!f.title || !f.start) {
+      showToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Event title and start time are required',
+      });
+      return;
+    }
 
     try {
       const payload: any = {
@@ -279,24 +373,49 @@ export default function CalendarPage() {
       };
 
       const { error } = await supabase.from("events").insert(payload);
-      if (error) return alert(error.message);
+      if (error) {
+        showToast({
+          type: 'error',
+          title: 'Event Creation Failed',
+          message: error.message,
+        });
+        return;
+      }
 
       setOpenCreate(false);
       setCreateForm({
         title: "", description: "", location: "", start: "", end: "",
         visibility: "public", event_type: "", community_id: "", source: "personal", image_path: "",
       });
+      
+      showToast({
+        type: 'success',
+        title: 'Event Created',
+        message: `"${f.title}" has been added to your calendar`,
+      });
+      
       await loadCalendar();
     } catch (error) {
       console.error("Create event error:", error);
-      alert("Failed to create event");
+      showToast({
+        type: 'error',
+        title: 'Event Creation Failed',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
     }
   };
 
   const createQuickEvent = async () => {
     if (!me || !quickModal.type) return;
     const f = quickForm;
-    if (!f.title || !f.start) return alert("Title and start time are required.");
+    if (!f.title || !f.start) {
+      showToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Title and start time are required',
+      });
+      return;
+    }
 
     try {
       await createQuick(
@@ -309,13 +428,24 @@ export default function CalendarPage() {
       setQuickForm({ title: "", description: "", start: "", end: "" });
     } catch (error) {
       console.error("Create quick event error:", error);
-      alert("Failed to create quick event");
+      showToast({
+        type: 'error',
+        title: 'Creation Failed',
+        message: error instanceof Error ? error.message : 'Failed to create item',
+      });
     }
   };
 
   const onDrop = async ({ event, start, end }: any) => {
     try {
-      if (!canEdit(event)) return;
+      if (!canEdit(event)) {
+        showToast({
+          type: 'warning',
+          title: 'Cannot Edit Event',
+          message: 'You can only edit events you created',
+        });
+        return;
+      }
       const r = event.resource as DBEvent;
       const { error } = await supabase
         .from("events")
@@ -323,18 +453,39 @@ export default function CalendarPage() {
         .eq("id", r.id);
       if (error) {
         console.error("Drop error:", error);
-        alert(error.message);
+        showToast({
+          type: 'error',
+          title: 'Update Failed',
+          message: error.message,
+        });
       } else {
+        showToast({
+          type: 'success',
+          title: 'Event Moved',
+          message: `"${r.title}" updated successfully`,
+        });
         await loadCalendar();
       }
     } catch (error) {
       console.error("Drop error:", error);
+      showToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: error instanceof Error ? error.message : 'Failed to move event',
+      });
     }
   };
 
   const onResize = async ({ event, start, end }: any) => {
     try {
-      if (!canEdit(event)) return;
+      if (!canEdit(event)) {
+        showToast({
+          type: 'warning',
+          title: 'Cannot Edit Event',
+          message: 'You can only edit events you created',
+        });
+        return;
+      }
       const r = event.resource as DBEvent;
       const { error } = await supabase
         .from("events")
@@ -342,12 +493,26 @@ export default function CalendarPage() {
         .eq("id", r.id);
       if (error) {
         console.error("Resize error:", error);
-        alert(error.message);
+        showToast({
+          type: 'error',
+          title: 'Update Failed',
+          message: error.message,
+        });
       } else {
+        showToast({
+          type: 'success',
+          title: 'Event Resized',
+          message: `"${r.title}" updated successfully`,
+        });
         await loadCalendar();
       }
     } catch (error) {
       console.error("Resize error:", error);
+      showToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: error instanceof Error ? error.message : 'Failed to resize event',
+      });
     }
   };
 
@@ -393,23 +558,62 @@ export default function CalendarPage() {
 
   // Complete/Undo toggle
   const toggleComplete = async (id: string, done: boolean) => {
-    await supabase.from("events").update({ status: done ? "done" : "scheduled" }).eq("id", id);
-    await loadCalendar();
+    try {
+      await supabase.from("events").update({ status: done ? "done" : "scheduled" }).eq("id", id);
+      showToast({
+        type: 'success',
+        title: done ? 'Item Completed' : 'Item Reopened',
+        message: done ? 'Great job!' : 'Item marked as unfinished',
+      });
+      await loadCalendar();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: error instanceof Error ? error.message : 'Failed to update item',
+      });
+    }
   };
 
   // Edit title
   const editItem = async (it: any) => {
     const t = window.prompt("Edit title", it?.title || "");
     if (t == null) return;
-    await supabase.from("events").update({ title: t || "Untitled" }).eq("id", it.id);
-    await loadCalendar();
+    try {
+      await supabase.from("events").update({ title: t || "Untitled" }).eq("id", it.id);
+      showToast({
+        type: 'success',
+        title: 'Item Updated',
+        message: 'Title changed successfully',
+      });
+      await loadCalendar();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: error instanceof Error ? error.message : 'Failed to update title',
+      });
+    }
   };
 
   // Delete
   const deleteItem = async (it: any) => {
     if (!window.confirm("Delete this item?")) return;
-    await supabase.from("events").delete().eq("id", it.id);
-    await loadCalendar();
+    try {
+      await supabase.from("events").delete().eq("id", it.id);
+      showToast({
+        type: 'success',
+        title: 'Item Deleted',
+        message: `"${it.title}" has been removed`,
+      });
+      await loadCalendar();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Delete Failed',
+        message: error instanceof Error ? error.message : 'Failed to delete item',
+      });
+    }
   };
 
   return (
@@ -689,7 +893,14 @@ export default function CalendarPage() {
                         const sx = (ev.currentTarget as any)._sx ?? 0;
                         const dx = ev.changedTouches[0].clientX - sx;
                         if (dx > 60) {
-                          if (me) await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
+                          if (me) {
+                            await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
+                            showToast({
+                              type: 'success',
+                              title: 'Event Added',
+                              message: `"${e.title}" added to your calendar`,
+                            });
+                          }
                           setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
                           loadCalendar();
                         } else if (dx < -60) {
@@ -709,6 +920,11 @@ export default function CalendarPage() {
                         <button className="btn btn-brand" onClick={async () => {
                           if (!me) return;
                           await supabase.from("event_interests").upsert({ event_id: e.id, user_id: me });
+                          showToast({
+                            type: 'success',
+                            title: 'Event Added',
+                            message: `"${e.title}" added to your calendar`,
+                          });
                           setFeed((prev) => prev.map(x => x.id === e.id ? { ...x, _dismissed: true } : x));
                           loadCalendar();
                         }}>
