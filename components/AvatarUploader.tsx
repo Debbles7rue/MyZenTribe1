@@ -1,7 +1,7 @@
 // components/AvatarUploader.tsx
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
@@ -21,78 +21,51 @@ export default function AvatarUploader({
   size = 160,
   bucket = "avatars",
 }: Props) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [broken, setBroken] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
-  // Cropper state
-  const [cropOpen, setCropOpen] = useState(false);
-  const [cropSrc, setCropSrc] = useState<string | null>(null); // object URL
-  const [imgWH, setImgWH] = useState<{w:number;h:number} | null>(null);
-  const [zoom, setZoom] = useState(1);          // user-controlled zoom
-  const [dx, setDx] = useState(0);              // drag offset x (px)
-  const [dy, setDy] = useState(0);              // drag offset y (px)
-  const cropSize = 260;                          // viewport size (square px)
+  const src = useMemo(() => preview || value || "/default-avatar.png", [preview, value]);
 
-  useEffect(() => { setPreview(null); setBroken(false); }, [value]);
-
-  const showSrc = useMemo(() => {
-    if (preview) return preview;
-    if (value && !broken) return value;
-    return "/default-avatar.png";
-  }, [preview, value, broken]);
-
-  function pickFile() { fileInputRef.current?.click(); }
-
-  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-    setErr(null);
-
-    // Open cropper with local object URL
-    const objUrl = URL.createObjectURL(file);
-    setCropSrc(objUrl);
-    setZoom(1);
-    setDx(0); setDy(0);
-    // Load image dims
-    const img = new Image();
-    img.onload = () => {
-      setImgWH({ w: img.naturalWidth, h: img.naturalHeight });
-      setCropOpen(true);
-    };
-    img.onerror = () => {
-      setErr("Could not read image.");
-    };
-    img.src = objUrl;
-
-    // Clear the input so picking the same file twice still triggers change
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  function pickFile() {
+    setShowInstructions(true); // Show instructions when user initiates upload
+    inputRef.current?.click();
   }
 
-  async function saveCrop() {
-    if (!userId || !cropSrc || !imgWH) return;
-    setBusy(true);
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !userId) {
+      setShowInstructions(false); // Hide if cancelled
+      return;
+    }
+    
     setErr(null);
+    setBusy(true);
 
     try {
-      // Draw the cropped square to canvas (JPEG)
-      const blob = await renderCroppedBlob(cropSrc, imgWH, { dx, dy, zoom, cropSize });
-      const path = `${userId}/avatar_${Date.now()}.jpg`;
+      // Resize to max 1024px on the long edge, encode JPEG
+      const processed = await tryResizeToJpeg(file, 1024);
+      const blob = processed?.blob ?? file;
+      const ext = processed?.ext ?? guessExt(file.type) ?? "bin";
+      const contentType = processed?.type ?? (file.type || "application/octet-stream");
 
+      const path = `${userId}/avatar_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from(bucket)
         .upload(path, blob, {
           cacheControl: "3600",
           upsert: true,
-          contentType: "image/jpeg",
+          contentType,
         });
       if (upErr) throw upErr;
 
+      // Public URL
       const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
       const publicUrl = pub.publicUrl;
 
+      // Persist immediately
       const { error: dbErr } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
@@ -102,295 +75,229 @@ export default function AvatarUploader({
       // Update UI
       setPreview(publicUrl);
       onChange?.(publicUrl);
-      setCropOpen(false);
-      cleanupCrop();
+      
+      // Hide instructions after successful upload
+      setShowInstructions(false);
     } catch (e: any) {
-      console.error(e);
       setErr(e?.message || "Upload failed");
+      // Keep instructions visible if there's an error
     } finally {
+      if (inputRef.current) inputRef.current.value = "";
       setBusy(false);
     }
   }
 
-  function cleanupCrop() {
-    if (cropSrc) {
-      try { URL.revokeObjectURL(cropSrc); } catch {}
-    }
-    setCropSrc(null);
-    setImgWH(null);
-    setDx(0); setDy(0); setZoom(1);
-  }
-
-  // Drag to move image inside viewport
-  const drag = useDrag(({dx: mx, dy: my}) => {
-    setDx((v) => v + mx);
-    setDy((v) => v + my);
-  });
-
   return (
-    <div className="stack" style={{ gap: 8 }}>
+    <div className="avatar-uploader">
       {label && <div className="label">{label}</div>}
 
-      <div className="flex items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+      <div className="avatar-container">
+        {/* Avatar Image */}
         <img
-          src={showSrc}
+          src={src}
           alt="Avatar"
           width={size}
           height={size}
-          onError={() => setBroken(true)}
+          className="avatar-image"
           style={{
             width: size,
             height: size,
-            borderRadius: 9999,
+            borderRadius: "50%",
             objectFit: "cover",
-            border: "1px solid #e5e7eb",
+            border: "2px solid rgba(139,92,246,0.2)",
             background: "#fafafa",
+            transition: "all 0.2s ease",
+            cursor: userId ? "pointer" : "default",
           }}
+          onClick={userId ? pickFile : undefined}
+          onMouseEnter={() => setShowInstructions(true)}
+          onMouseLeave={() => !busy && !err && setShowInstructions(false)}
         />
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button className="btn btn-brand" onClick={pickFile} disabled={!userId || busy}>
-              {busy ? "Uploading…" : "Change photo"}
-            </button>
-            <button
-              className="btn"
-              disabled={!userId || busy}
-              onClick={async () => {
-                try {
-                  setBusy(true);
-                  setErr(null);
-                  const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", userId);
-                  if (error) throw error;
-                  setPreview(null); setBroken(false);
-                  onChange?.("");
-                } catch (e: any) {
-                  setErr(e?.message || "Could not remove photo");
-                } finally { setBusy(false); }
-              }}
-            >
-              Remove
-            </button>
-          </div>
-
+        
+        {/* Upload Button */}
+        <div className="upload-controls">
+          <button 
+            className="upload-button" 
+            onClick={pickFile} 
+            disabled={!userId || busy}
+            style={{
+              padding: "0.5rem 1rem",
+              background: busy ? "#9ca3af" : "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+              color: "white",
+              border: "none",
+              borderRadius: "0.5rem",
+              fontSize: "0.875rem",
+              fontWeight: "500",
+              cursor: busy || !userId ? "not-allowed" : "pointer",
+              transition: "all 0.2s ease",
+              boxShadow: "0 2px 4px rgba(139,92,246,0.2)",
+            }}
+          >
+            {busy ? "Uploading…" : "Change photo"}
+          </button>
+          
           <input
-            ref={fileInputRef}
+            ref={inputRef}
             type="file"
-            accept="image/*"     // no `capture`, so iOS lets users choose Camera or Photo Library
-            hidden
-            onChange={onFileSelected}
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handleFile}
           />
-
-          <div className="text-xs" style={{ color: "#6b7280" }}>
-            Crop to fit. JPG/PNG/WebP recommended. HEIC uploads are supported but may not display in some browsers.
-          </div>
-          {err && <div className="text-xs" style={{ color: "#b91c1c" }}>{err}</div>}
         </div>
       </div>
 
-      {/* Crop dialog */}
-      {cropOpen && cropSrc && imgWH && (
-        <div className="crop-modal">
-          <div className="crop-sheet" role="dialog" aria-modal="true">
-            <div className="crop-header">
-              <div>Adjust your photo</div>
-              <button className="crop-x" aria-label="Close" onClick={() => { setCropOpen(false); cleanupCrop(); }}>✕</button>
-            </div>
-
-            <div className="crop-body">
-              <div
-                className="crop-viewport"
-                style={{ width: cropSize, height: cropSize }}
-                {...drag.bindings}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={cropSrc}
-                  alt=""
-                  draggable={false}
-                  style={imageTransformStyle(imgWH, cropSize, zoom, dx, dy)}
-                />
-              </div>
-
-              <div className="crop-controls">
-                <label className="text-xs">Zoom</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.01}
-                  value={zoom}
-                  onChange={(e) => setZoom(parseFloat(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="crop-footer">
-              <button className="btn" onClick={() => { setCropOpen(false); cleanupCrop(); }} disabled={busy}>Cancel</button>
-              <button className="btn btn-brand" onClick={saveCrop} disabled={busy}>
-                {busy ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-          <div className="crop-backdrop" onClick={() => { setCropOpen(false); cleanupCrop(); }} />
+      {/* Instructions - Only when needed */}
+      {(showInstructions || busy) && (
+        <div className="upload-instructions" style={{
+          marginTop: "0.5rem",
+          padding: "0.5rem 0.75rem",
+          background: "rgba(139,92,246,0.1)",
+          border: "1px solid rgba(139,92,246,0.2)",
+          borderRadius: "0.5rem",
+          fontSize: "0.75rem",
+          color: "#6b7280",
+          animation: "fadeIn 0.2s ease-in-out",
+        }}>
+          📸 JPG/PNG/WebP supported. Large photos are auto-resized.
+        </div>
+      )}
+      
+      {/* Error Message */}
+      {err && (
+        <div className="error-message" style={{
+          marginTop: "0.5rem",
+          padding: "0.5rem 0.75rem",
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          borderRadius: "0.5rem",
+          fontSize: "0.75rem",
+          color: "#dc2626",
+          animation: "fadeIn 0.2s ease-in-out",
+        }}>
+          ❌ {err}
         </div>
       )}
 
       <style jsx>{`
-        .btn-brand {
-          background: #8b5cf6;
-          color: #fff;
-          border: 1px solid rgba(0,0,0,.06);
+        .avatar-uploader {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
         }
-        .btn-brand:hover { filter: brightness(.95); }
 
-        .crop-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; }
-        .crop-backdrop { position: fixed; inset:0; background: rgba(0,0,0,.4); }
-        .crop-sheet {
-          position: relative;
-          width: min(94vw, 520px);
-          background: #fff;
-          border-radius: 16px;
-          box-shadow: 0 20px 50px rgba(0,0,0,.25);
-          z-index: 101;
-          display: flex; flex-direction: column;
-          overflow: hidden;
+        .avatar-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1rem;
         }
-        .crop-header, .crop-footer { padding: 12px 14px; display:flex; align-items:center; justify-content:space-between; }
-        .crop-header { border-bottom: 1px solid rgba(0,0,0,.06); font-weight: 600; }
-        .crop-footer { border-top: 1px solid rgba(0,0,0,.06); gap: 8px; justify-content: flex-end; }
-        .crop-x { background:transparent; border:none; font-size: 18px; cursor:pointer; padding:4px 6px; }
-        .crop-body { padding: 14px; display: grid; gap: 14px; place-items:center; }
-        .crop-viewport {
-          position: relative;
-          border-radius: 16px;
-          overflow: hidden;
-          border: 1px solid rgba(0,0,0,.08);
-          background: #111;
-          touch-action: none; /* enables pointer drag without scroll hijack */
+
+        .avatar-image:hover {
+          border-color: rgba(139,92,246,0.4);
+          box-shadow: 0 4px 8px rgba(139,92,246,0.15);
+          transform: scale(1.02);
         }
-        .crop-viewport img { user-select: none; will-change: transform; }
-        .crop-controls { width: 100%; display: grid; gap: 6px; }
-        input[type="range"] { width: 100%; }
+
+        .upload-button:hover:not(:disabled) {
+          background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(139,92,246,0.3) !important;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .label {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: #374151;
+          margin-bottom: 0.25rem;
+        }
       `}</style>
     </div>
   );
 }
 
-/* -------- Helpers -------- */
-
-function useDrag(onDelta: (d: {dx:number; dy:number}) => void) {
-  const last = useRef<{x:number;y:number}|null>(null);
-  function onDown(e: React.PointerEvent) {
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    last.current = { x: e.clientX, y: e.clientY };
+/**
+ * Resize to maxDim and encode JPEG. Returns { blob, type, ext } or null if we can't decode (e.g., some HEIC).
+ */
+async function tryResizeToJpeg(file: File, maxDim: number): Promise<{ blob: Blob; type: string; ext: string } | null> {
+  try {
+    const img = await fileToImage(file);
+    const { canvas, mime } = drawToCanvas(img, maxDim);
+    const blob: Blob = await new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Encode failed"))), mime, 0.85)
+    );
+    return { blob, type: mime, ext: "jpg" };
+  } catch {
+    // Fallback: upload the original (may be HEIC; upload still works even if we can't preview)
+    return null;
   }
-  function onMove(e: React.PointerEvent) {
-    if (!last.current) return;
-    const dx = e.clientX - last.current.x;
-    const dy = e.clientY - last.current.y;
-    last.current = { x: e.clientX, y: e.clientY };
-    onDelta({ dx, dy });
-  }
-  function onUp() { last.current = null; }
-  return {
-    bindings: { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp },
-  };
 }
 
-function imageTransformStyle(
-  imgWH: {w:number;h:number},
-  viewport: number,
-  zoom: number,
-  dx: number,
-  dy: number
-): React.CSSProperties {
-  // Base cover scale so the shorter side fits the square, then multiply by user zoom.
-  const cover = Math.max(viewport / imgWH.w, viewport / imgWH.h);
-  const scale = cover * zoom;
-
-  const imgW = imgWH.w * scale;
-  const imgH = imgWH.h * scale;
-
-  // Center the image, then apply user drag offsets.
-  const left = (viewport - imgW) / 2 + dx;
-  const top  = (viewport - imgH) / 2 + dy;
-
-  return {
-    position: "absolute",
-    left, top,
-    width: imgW,
-    height: imgH,
-  };
+function guessExt(mime?: string | null): string | null {
+  if (!mime) return null;
+  if (mime.includes("jpeg")) return "jpg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("heic") || mime.includes("heif")) return "heic";
+  if (mime.includes("gif")) return "gif";
+  return null;
 }
 
-async function renderCroppedBlob(
-  srcUrl: string,
-  imgWH: {w:number;h:number},
-  opts: { dx:number; dy:number; zoom:number; cropSize:number }
-): Promise<Blob> {
-  const { dx, dy, zoom, cropSize } = opts;
+async function fileToImage(file: File): Promise<HTMLImageElement> {
+  // Try createImageBitmap (fast path). If it fails (e.g., unsupported HEIC), fallback to <img>.
+  if ("createImageBitmap" in window) {
+    try {
+      const bmp = await createImageBitmap(file as any);
+      const canvas = document.createElement("canvas");
+      canvas.width = (bmp as any).width;
+      canvas.height = (bmp as any).height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(bmp as any, 0, 0);
+      (bmp as any).close();
+      return canvas as any; // Return canvas disguised as an image for the drawing function
+    } catch {
+      // Fall back to URL approach
+    }
+  }
 
-  // Compute same geometry as imageTransformStyle
-  const cover = Math.max(cropSize / imgWH.w, cropSize / imgWH.h);
-  const scale = cover * zoom;
-  const imgW = imgWH.w * scale;
-  const imgH = imgWH.h * scale;
-  const left = (cropSize - imgW) / 2 + dx;
-  const top  = (cropSize - imgH) / 2 + dy;
+  // Fallback: create <img> and wait for load
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`Could not load image: ${file.name}`));
+    };
+    img.src = url;
+  });
+}
 
-  // Map the viewport square to source rect on the original image
-  const sx = Math.max(0, (-left) / scale);
-  const sy = Math.max(0, (-top)  / scale);
-  const sw = Math.min(imgWH.w, cropSize / scale);
-  const sh = Math.min(imgWH.h, cropSize / scale);
+function drawToCanvas(img: HTMLImageElement | HTMLCanvasElement, maxDim: number) {
+  const iw = img.width || (img as any).naturalWidth;
+  const ih = img.height || (img as any).naturalHeight;
+  const scale = Math.min(maxDim / iw, maxDim / ih, 1); // Don't upscale
+  const newW = Math.round(iw * scale);
+  const newH = Math.round(ih * scale);
 
   const canvas = document.createElement("canvas");
-  canvas.width = 512;  // output size
-  canvas.height = 512;
+  canvas.width = newW;
+  canvas.height = newH;
   const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img as any, 0, 0, newW, newH);
 
-  const img = await urlToImage(srcUrl);
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-
-  const blob = await canvasToBlob(canvas, "image/jpeg", 0.9);
-  return blob;
-}
-
-function urlToImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = () => rej(new Error("Image load failed"));
-    i.src = url;
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
-  return new Promise((resolve) => {
-    if (canvas.toBlob) {
-      canvas.toBlob((b) => {
-        if (b) return resolve(b);
-        // Fallback via dataURL
-        const data = canvas.toDataURL(type, quality);
-        resolve(dataURLtoBlob(data));
-      }, type, quality);
-    } else {
-      const data = canvas.toDataURL(type, quality);
-      resolve(dataURLtoBlob(data));
-    }
-  });
-}
-
-function dataURLtoBlob(dataURL: string): Blob {
-  const arr = dataURL.split(",");
-  const mimeMatch = arr[0].match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) u8arr[n] = bstr.charCodeAt(n);
-  return new Blob([u8arr], { type: mime });
+  return { canvas, mime: "image/jpeg" };
 }
