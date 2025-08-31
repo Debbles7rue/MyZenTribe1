@@ -1,97 +1,82 @@
-// components/SOSButton.tsx
 "use client";
 
-import React, { useCallback, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
   className?: string;
-  label?: string;
-  // Optional: custom message (prepend); we'll append a timestamp + link.
-  messagePrefix?: string;
 };
 
-export default function SOSButton({ className, label = "SOS — I feel unsafe", messagePrefix }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
+export default function SOSButton({ className }: Props) {
+  const router = useRouter();
+  const [sending, setSending] = useState(false);
 
-  const onClick = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    setOk(false);
-
+  async function handleSOS() {
     try {
+      setSending(true);
+
+      // Must be signed in and we must include user_id in the insert (RLS requirement)
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) {
-        setError("Please sign in first.");
-        setBusy(false);
+      if (!user) {
+        alert("Please log in to use SOS.");
+        router.push("/login");
         return;
       }
 
-      let lat: number | null = null;
-      let lon: number | null = null;
+      // Try to get location (optional)
+      const loc = await getLocation().catch(() => null);
 
-      // Try to get current position (best effort)
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          if (!("geolocation" in navigator)) reject(new Error("Geolocation not available"));
-          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
-        });
-        lat = pos.coords.latitude;
-        lon = pos.coords.longitude;
-      } catch {
-        // If permission denied or unavailable, we continue — location will be null in DB
-      }
+      // You can customize the message
+      const message = "SOS triggered from MyZenTribe app";
 
-      const nowIso = new Date().toISOString();
-      const textParts = [
-        messagePrefix?.trim() || "SOS — I don’t feel safe.",
-        `Time: ${nowIso}`,
-        lat != null && lon != null ? `Location: https://maps.google.com/?q=${lat},${lon}` : "(Location unavailable)"
-      ].filter(Boolean);
-      const message = textParts.join(" | ");
-
-      // Create an sos_alerts row (server can pick this up to email/SMS)
-      const { error: insErr } = await supabase.from("sos_alerts").insert({
-        user_id: user.id,
+      const { error } = await supabase.from("sos_incidents").insert({
+        user_id: user.id,            // ✅ REQUIRED for RLS
+        kind: "sos",
         message,
-        lat, lon,
-        status: "new",
+        lat: loc?.lat ?? null,
+        lon: loc?.lon ?? null,
+        status: "open",
       });
-      if (insErr) throw insErr;
 
-      // Optional: Try an Edge Function if you later add one (no-build-fail guard)
-      try {
-        // @ts-ignore
-        if (supabase.functions) {
-          // This function name is just a placeholder; wrap in try/catch to avoid breaking if missing.
-          await supabase.functions.invoke("send-sos", { body: { message, lat, lon } });
-        }
-      } catch {
-        // ignore if not set up
-      }
+      if (error) throw error;
 
-      setOk(true);
+      alert("SOS sent. Your emergency contacts will be notified.");
+      // Optional: route to an SOS status page
+      // router.push("/safety");
     } catch (e: any) {
-      setError(e?.message || "Could not send SOS.");
+      alert(`Could not send SOS. ${e?.message ?? "Unknown error"}`);
     } finally {
-      setBusy(false);
+      setSending(false);
     }
-  }, [messagePrefix]);
+  }
 
   return (
-    <div className={className}>
-      <button
-        onClick={onClick}
-        disabled={busy}
-        className="w-full rounded-xl border border-red-200 bg-red-600 px-4 py-3 text-white font-semibold shadow hover:bg-red-700 active:translate-y-[1px]"
-        title="Send SOS to your emergency contact"
-      >
-        {busy ? "Sending…" : label}
-      </button>
-      {ok && <p className="mt-2 text-sm text-green-700">SOS sent (queued). We’ll notify your emergency contact.</p>}
-      {error && <p className="mt-2 text-sm text-rose-600">Error: {error}</p>}
-    </div>
+    <button
+      aria-label="Send SOS"
+      onClick={handleSOS}
+      disabled={sending}
+      className={className ?? "fixed bottom-6 right-6 rounded-full px-5 py-3 text-white bg-rose-500 shadow-lg"}
+      style={{ opacity: sending ? 0.7 : 1 }}
+    >
+      {sending ? "Sending…" : "SOS"}
+    </button>
   );
+}
+
+function getLocation(): Promise<{ lat: number; lon: number }> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      return reject(new Error("Geolocation unavailable"));
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+        }),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
 }
