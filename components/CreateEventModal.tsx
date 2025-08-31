@@ -1,7 +1,7 @@
 // components/CreateEventModal.tsx
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
 // Keep it local so we don't depend on other type files
 type Visibility = "public" | "friends" | "private" | "community";
@@ -222,7 +222,7 @@ export default function CreateEventModal({
                     value={value.description}
                     onChange={(e) => onChange({ description: e.target.value })}
                     placeholder="Add details about your event..."
-                    rows={3}
+                    rows={4}
                     style={{
                       width: '100%',
                       padding: '12px 16px',
@@ -231,7 +231,7 @@ export default function CreateEventModal({
                       fontSize: '16px',
                       outline: 'none',
                       resize: 'vertical',
-                      minHeight: '80px',
+                      minHeight: '100px',
                     }}
                     onFocus={(e) => e.target.style.borderColor = '#7c3aed'}
                     onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
