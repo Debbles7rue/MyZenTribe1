@@ -209,7 +209,8 @@ div[style*="position: fixed"] > div[style*="max-width"] {
 }
 
 .textarea {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-vertical;
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent;
+  resize: vertical; /* Standard CSS property, not a Tailwind class */
   font-size: 16px; /* Prevents zoom on iOS */
 }
 
