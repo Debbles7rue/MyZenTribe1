@@ -9,7 +9,7 @@ type Post = {
   image_path: string;
   caption: string | null;
   description: string | null;
-  visibility: "friends" | "public";
+  visibility: "private" | "public";
   created_at: string;
   url: string;
   tags: string[];
@@ -17,8 +17,8 @@ type Post = {
 };
 
 const VISIBILITY_OPTIONS = [
-  { value: "friends", label: "Private", icon: "🔒", description: "Only on your profile" },
-  { value: "public", label: "Public", icon: "👥", description: "Friends can see in their feed" },
+  { value: "private", label: "Private", icon: "🔒", description: "Only on your profile + tagged friends" },
+  { value: "public", label: "Public", icon: "👥", description: "Shows in friends' feeds" },
 ] as const;
 
 // Create Post Modal Component
@@ -37,7 +37,7 @@ function CreatePostModal({
   const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [visibility, setVisibility] = useState<"friends" | "public">("friends");
+  const [visibility, setVisibility] = useState<"private" | "public">("private");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,7 @@ function CreatePostModal({
       setCaption("");
       setDescription("");
       setTags("");
-      setVisibility("friends");
+      setVisibility("private");
       setSelectedFiles([]);
       setPreviewUrls([]);
       setError(null);
