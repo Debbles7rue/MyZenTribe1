@@ -1,21 +1,16 @@
-// components/HomeFeed.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { createPost, listHomeFeed, Post } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
+import { getEmergencySettings } from "@/lib/sos";
+import type { EmergencySettings } from "@/lib/sos";
 
-/**
- * HomeFeed: A friendly, mobile-first landing feed for MyZenTribe.
- * - Hero with quick actions
- * - Clean composer (Public / Friends / Only me)
- * - Privacy hints aligned with your platform rules
- * - Polished loading + empty states
- *
- * NOTE: This file intentionally keeps the same createPost/listHomeFeed API
- * you already use, so you can drop it in with no backend changes.
- */
+// Dynamically import modal to avoid SSR issues
+const EditSOSModal = dynamic(() => import("@/components/EditSOSModal"), { 
+  ssr: false 
+});
 
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
@@ -23,6 +18,11 @@ export default function HomeFeed() {
   const [body, setBody] = useState("");
   const [privacy, setPrivacy] = useState<Post["privacy"]>("friends");
   const [saving, setSaving] = useState(false);
+  
+  // SOS-related state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [sosSettings, setSosSettings] = useState<EmergencySettings | null>(null);
+  const [sosLoading, setSosLoading] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -31,189 +31,189 @@ export default function HomeFeed() {
     setLoading(false);
   }
 
-  useEffect(() => {
+  // Load SOS settings
+  async function loadSOSSettings() {
+    setSosLoading(true);
+    const settings = await getEmergencySettings();
+    setSosSettings(settings);
+    setSosLoading(false);
+  }
+
+  useEffect(() => { 
     load();
+    loadSOSSettings();
   }, []);
 
   async function post() {
-    const text = body.trim();
-    if (!text) return;
+    if (!body.trim()) return;
     setSaving(true);
-    try {
-      await createPost(text, privacy);
-      setBody("");
-      await load();
-    } finally {
-      setSaving(false);
-    }
+    await createPost(body.trim(), privacy);
+    setBody("");
+    setSaving(false);
+    await load();
   }
 
-  // Tiny, friendly helper line under the privacy select
-  const privacyHint = useMemo(() => {
-    switch (privacy) {
-      case "public":
-        return "Public: Visible on Home for everyone.";
-      case "friends":
-        return "Friends: Shared with your friends (Restricted friends are not included).";
-      case "private":
-      case "only_me":
-        return "Only me: Saved privately to your profile.";
-      default:
-        return undefined;
+  const handleSOSClick = async () => {
+    if (!sosSettings?.sos_enabled) {
+      // If not configured, open setup modal
+      setShowEditModal(true);
+    } else {
+      // If configured, send SOS
+      if (confirm("Send SOS alert to your emergency contact?")) {
+        try {
+          const { supabase } = await import("@/lib/supabaseClient");
+          
+          // Get location if available
+          let lat = null, lon = null;
+          if ("geolocation" in navigator) {
+            try {
+              const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  enableHighAccuracy: true,
+                  timeout: 8000,
+                  maximumAge: 0
+                });
+              });
+              lat = position.coords.latitude;
+              lon = position.coords.longitude;
+            } catch (e) {
+              // Location not available, continue without it
+            }
+          }
+
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            alert("Please log in first.");
+            return;
+          }
+
+          const { error } = await supabase.from("sos_incidents").insert({
+            user_id: user.id,
+            kind: "sos",
+            message: "Emergency — please check on me.",
+            lat,
+            lon,
+            status: "open",
+          });
+
+          if (error) {
+            alert(`Could not send SOS. ${error.message}`);
+          } else {
+            alert("SOS sent! Your emergency contact has been notified.");
+          }
+        } catch (e: any) {
+          alert(`Could not send SOS. ${e?.message || "Unknown error"}`);
+        }
+      }
     }
-  }, [privacy]);
+  };
 
   return (
-    <div className="mx-auto max-w-3xl p-4 sm:p-6">
-      {/* Hero / Welcome */}
-      <section className="mb-6">
-        <div className="rounded-2xl border border-[rgba(0,0,0,.06)] bg-white/70 p-5 shadow-[0_6px_24px_rgba(0,0,0,.06)] dark:bg-zinc-900/60 dark:border-zinc-800">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-            Welcome to <span className="text-brand-600">My</span>
-            <span className="italic">Zen</span>Tribe
-          </h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Share uplifting moments, post photos, and spread the word about gatherings. Public posts appear on Home.
-            Invited-only events show up on invitees’ <em>What’s Happening</em>.
-          </p>
-
-          {/* Quick Actions */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/calendar?create=1" className="btn btn-brand">
-              Share an Event
-            </Link>
-            <Link href="/profile#photos" className="btn">
-              Upload Photos
-            </Link>
-            <a
-              href="#composer"
-              className="btn"
-              onClick={(e) => {
-                e.preventDefault();
-                const el = document.getElementById("composer");
-                el?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
-            >
-              Write a Post
-            </a>
-          </div>
-
-          {/* Sharing rule hint */}
-          <div className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
-            <strong>Heads up:</strong> If you share an event to <em>Everyone</em>, it will appear on the Home page.
-            If you invite specific friends, acquaintances, or communities, it will show only on their <em>What’s
-            Happening</em> pages.
-          </div>
-        </div>
-      </section>
-
+    <div className="max-w-2xl mx-auto p-4 sm:p-6">
       {/* Composer */}
-      <section id="composer" className="mb-6">
-        <div className="card p-3 sm:p-4">
-          <label htmlFor="post-body" className="sr-only">
-            Write a post
-          </label>
-          <textarea
-            id="post-body"
-            className="input min-h-[90px]"
-            rows={3}
-            placeholder="Share something kind, inspiring, or helpful…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
+      <div className="card p-3 mb-4">
+        <textarea
+          className="input"
+          rows={3}
+          placeholder="Share something with your friends…"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <select className="input w-[150px]" value={privacy} onChange={(e) => setPrivacy(e.target.value as any)}>
+            <option value="friends">Friends</option>
+            <option value="public">Public</option>
+            <option value="private">Only me</option>
+          </select>
+          <button className="btn btn-brand ml-auto" onClick={post} disabled={saving || !body.trim()}>
+            {saving ? "Posting…" : "Post"}
+          </button>
+        </div>
+      </div>
 
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
-              <label htmlFor="privacy" className="sr-only">
-                Privacy
-              </label>
-              <select
-                id="privacy"
-                className="input w-[170px]"
-                value={privacy}
-                onChange={(e) => setPrivacy(e.target.value as Post["privacy"])}
-              >
-                <option value="public">Public</option>
-                <option value="friends">Friends</option>
-                <option value="private">Only me</option>
-              </select>
-              {privacyHint && (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">{privacyHint}</span>
-              )}
+      {/* Feed */}
+      {loading ? (
+        <div className="muted">Loading…</div>
+      ) : rows.length ? (
+        <div className="stack gap-3">
+          {rows.map((p) => (
+            <PostCard key={p.id} post={p} onChanged={load} />
+          ))}
+        </div>
+      ) : (
+        <div className="card p-4 text-center">
+          <div className="text-lg font-medium">No posts yet</div>
+          <div className="muted mt-1">Say hello with your first post above.</div>
+        </div>
+      )}
+
+      {/* SOS Section */}
+      <div className="mt-8 mb-4">
+        <div className="card p-4" style={{
+          background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+          border: "none",
+        }}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex-1">
+              <h3 className="text-white font-semibold text-lg mb-1">Emergency SOS</h3>
+              <p className="text-white/90 text-sm">
+                {sosSettings?.sos_enabled ? (
+                  <>Contact: {sosSettings.emergency_contact_name || "Set"}</>
+                ) : (
+                  "Set up your emergency contact"
+                )}
+              </p>
             </div>
-
-            <div className="sm:ml-auto flex items-center gap-2">
-              {/* Optional future enhancement hooks (non-breaking): */}
-              {/* <button className="btn" disabled>Attach Photo</button>
-              <button className="btn" disabled>Tag Event</button> */}
+            <div className="flex gap-2">
               <button
-                className="btn btn-brand"
-                onClick={post}
-                disabled={saving || !body.trim()}
-                aria-disabled={saving || !body.trim()}
+                onClick={handleSOSClick}
+                className="px-6 py-3 bg-white text-red-600 rounded-lg font-semibold hover:bg-gray-100 transition-all"
+                disabled={sosLoading}
               >
-                {saving ? "Posting…" : "Post"}
+                {sosLoading ? "..." : sosSettings?.sos_enabled ? "SOS" : "Setup"}
+              </button>
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="px-4 py-3 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all"
+                aria-label="Edit emergency settings"
+              >
+                <svg 
+                  className="w-5 h-5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" 
+                  />
+                </svg>
+                <span className="sr-only">Edit</span>
               </button>
             </div>
           </div>
         </div>
-      </section>
-
-      {/* Feed */}
-      <section aria-busy={loading}>
-        {loading ? (
-          <div className="space-y-3">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-        ) : rows.length ? (
-          <div className="stack gap-3">
-            {rows.map((p) => (
-              <PostCard key={p.id} post={p} onChanged={load} />
-            ))}
-          </div>
-        ) : (
-          <div className="card p-6 text-center">
-            <div className="text-lg font-medium">Your Home is peaceful… for now 🕊️</div>
-            <div className="muted mt-1">
-              Say hello with your first post above, or{" "}
-              <Link className="underline" href="/calendar?create=1">
-                share an event
-              </Link>
-              .
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Footer quick links */}
-      <div className="mt-10 flex flex-wrap justify-center gap-3">
-        <Link className="btn" href="/contact">
-          Contact
-        </Link>
-        <Link className="btn" href="/suggestions">
-          Suggestions
-        </Link>
-        <Link className="btn btn-brand" href="/donations">
-          Donations
-        </Link>
       </div>
-    </div>
-  );
-}
 
-/** Simple loading placeholder that matches your card look */
-function SkeletonCard() {
-  return (
-    <div className="card p-4">
-      <div className="flex items-start gap-3">
-        <div className="h-10 w-10 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
-        <div className="flex-1 space-y-2">
-          <div className="h-4 w-1/2 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
-          <div className="h-4 w-2/3 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
-          <div className="h-4 w-1/3 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
-        </div>
+      {/* Bottom buttons */}
+      <div className="mt-4 flex justify-center gap-3 flex-wrap">
+        <a className="btn" href="/contact">Contact</a>
+        <a className="btn" href="/suggestions">Suggestions</a>
+        <a className="btn btn-brand" href="/donate">Donations</a>
       </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <EditSOSModal 
+          onClose={() => setShowEditModal(false)}
+          onSaved={() => {
+            loadSOSSettings();
+            setShowEditModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
