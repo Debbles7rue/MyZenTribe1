@@ -65,12 +65,14 @@ function AnimatedCounter({ value, label, icon }: { value: number; label: string;
 
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [sessionExp, setSessionExp] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editPersonal, setEditPersonal] = useState(false);
   const [friendsCount, setFriendsCount] = useState<number>(0);
   const [inviteExpanded, setInviteExpanded] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const isDesktop = useIsDesktop(1024);
 
   const [p, setP] = useState<Profile>({
@@ -84,8 +86,36 @@ export default function ProfilePage() {
     show_mutuals: true,
   });
 
+  // Mobile-safe avatar upload state
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  // Mobile-safe session refresh
+  async function refreshSession() {
+    const { data } = await supabase.auth.refreshSession();
+    if (data?.session) {
+      setUserId(data.session.user?.id ?? null);
+      setSessionExp(
+        data.session.expires_at 
+          ? new Date(data.session.expires_at * 1000).toISOString() 
+          : null
+      );
+    }
+  }
+
   useEffect(() => { 
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); 
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data.user;
+      setUserId(user?.id ?? null);
+    });
+    
+    // Also get session expiry for mobile debugging
+    supabase.auth.getSession().then(({ data }) => {
+      setSessionExp(
+        data.session?.expires_at 
+          ? new Date(data.session.expires_at * 1000).toISOString()
+          : null
+      );
+    });
   }, []);
 
   useEffect(() => {
@@ -123,24 +153,67 @@ export default function ProfilePage() {
 
   const displayName = useMemo(() => p.full_name || "Member", [p.full_name]);
 
+  // Mobile-safe avatar upload
+  async function uploadAvatar() {
+    if (!avatarFile || !userId) return p.avatar_url;
+    
+    try {
+      const ext = (avatarFile.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      
+      const { error } = await supabase.storage.from("avatars").upload(path, avatarFile, {
+        upsert: false,
+        cacheControl: "3600",
+        contentType: avatarFile.type || undefined,
+      });
+      
+      if (error) throw error;
+      
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      return data.publicUrl;
+    } catch (err: any) {
+      throw new Error(`Avatar upload failed: ${err.message}`);
+    }
+  }
+
+  // Mobile-safe profile save using RPC (like the working demo)
   const save = async () => {
     if (!userId) return;
     setSaving(true);
+    setStatus("Saving…");
+    
     try {
-      const { error } = await supabase.from("profiles").update({
-        full_name: p.full_name?.trim() || null,
-        bio: p.bio?.trim() || null,
-        location_text: p.location_text?.trim() || null,
-        location_is_public: !!p.location_is_public,
-        avatar_url: p.avatar_url?.trim() || null,
-        show_mutuals: !!p.show_mutuals,
-      }).eq("id", userId);
+      // Upload avatar if changed
+      let avatarUrl = p.avatar_url;
+      if (avatarFile) {
+        avatarUrl = await uploadAvatar();
+      }
+
+      // Use RPC function for mobile-safe saving (like demo)
+      const { error } = await supabase.rpc("upsert_my_profile", {
+        p_display_name: p.full_name?.trim() || null,
+        p_avatar_url: avatarUrl?.trim() || null,
+        p_bio: p.bio?.trim() || null,
+        p_location_text: p.location_text?.trim() || null,
+        p_location_is_public: !!p.location_is_public,
+        p_show_mutuals: !!p.show_mutuals,
+      });
+
       if (error) throw error;
       
-      alert("✨ Profile saved successfully!");
+      setStatus("Saved ✅");
+      setAvatarFile(null);
+      setP(prev => ({ ...prev, avatar_url: avatarUrl }));
       setEditPersonal(false);
-    } catch (e: any) { 
-      alert(e.message || "Save failed"); 
+      
+      // Clear status after 3 seconds
+      setTimeout(() => setStatus(null), 3000);
+      
+    } catch (e: any) {
+      console.error("Save error:", e);
+      setStatus(`Save failed: ${e.message}`);
+      // Clear error after 5 seconds  
+      setTimeout(() => setStatus(null), 5000);
     } finally { 
       setSaving(false); 
     }
@@ -148,9 +221,6 @@ export default function ProfilePage() {
 
   async function onAvatarChange(url: string) {
     setP(prev => ({ ...prev, avatar_url: url }));
-    if (!userId) return;
-    const { error } = await supabase.from("profiles").update({ avatar_url: url || null }).eq("id", userId);
-    if (error) alert("Could not save photo: " + error.message);
   }
 
   return (
@@ -166,8 +236,41 @@ export default function ProfilePage() {
           >
             {editPersonal ? "✓ Done" : "✏️ Edit"}
           </button>
+          {/* Mobile debug info - remove in production */}
+          {!isDesktop && (
+            <button 
+              className="btn btn-neutral text-xs"
+              onClick={refreshSession}
+              title="Refresh session"
+            >
+              🔄
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Status Messages */}
+      {status && (
+        <div className={`status-message ${status.includes('failed') || status.includes('ERROR') ? 'error' : 'success'}`}>
+          {status}
+        </div>
+      )}
+
+      {/* Session Debug Info (Mobile) */}
+      {!isDesktop && userId && (
+        <div className="mobile-debug">
+          <div className="debug-row">
+            <span>User ID:</span> 
+            <code>{userId.substring(0, 8)}...</code>
+          </div>
+          {sessionExp && (
+            <div className="debug-row">
+              <span>Session expires:</span>
+              <code>{new Date(sessionExp).toLocaleTimeString()}</code>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error State */}
       {tableMissing && (
@@ -183,13 +286,32 @@ export default function ProfilePage() {
           {/* Avatar Section */}
           <div className="avatar-section">
             <div className="avatar-wrapper">
-              <AvatarUploader 
-                userId={userId} 
-                value={p.avatar_url} 
-                onChange={onAvatarChange} 
-                label="Profile photo" 
-                size={160} 
-              />
+              {editPersonal ? (
+                // Mobile-safe file input for editing
+                <div className="avatar-edit">
+                  <img
+                    src={avatarFile ? URL.createObjectURL(avatarFile) : (p.avatar_url || "/default-avatar.png")}
+                    alt="Profile"
+                    className="avatar-image"
+                    style={{ width: 160, height: 160 }}
+                  />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                    className="file-input"
+                  />
+                  <label className="file-label">Change Photo</label>
+                </div>
+              ) : (
+                <AvatarUploader 
+                  userId={userId} 
+                  value={p.avatar_url} 
+                  onChange={onAvatarChange} 
+                  label="Profile photo" 
+                  size={160} 
+                />
+              )}
               <div className="avatar-badge">✨</div>
             </div>
           </div>
@@ -256,6 +378,8 @@ export default function ProfilePage() {
                 value={p.full_name ?? ""} 
                 onChange={(e) => setP({ ...p, full_name: e.target.value })} 
                 placeholder="Your full name"
+                autoComplete="name"
+                inputMode="text"
               />
             </div>
 
@@ -267,6 +391,8 @@ export default function ProfilePage() {
                   value={p.location_text ?? ""} 
                   onChange={(e) => setP({ ...p, location_text: e.target.value })} 
                   placeholder="City, State" 
+                  autoComplete="address-level2"
+                  inputMode="text"
                 />
               </div>
               <div className="form-field checkbox-field">
@@ -289,6 +415,7 @@ export default function ProfilePage() {
                 value={p.bio ?? ""} 
                 onChange={(e) => setP({ ...p, bio: e.target.value })} 
                 placeholder="Tell people about yourself..."
+                inputMode="text"
               />
             </div>
 
@@ -409,6 +536,49 @@ export default function ProfilePage() {
           display: flex;
           flex-wrap: wrap;
           gap: 0.75rem;
+          align-items: center;
+        }
+
+        .status-message {
+          padding: 0.75rem 1rem;
+          border-radius: 0.75rem;
+          margin-bottom: 1rem;
+          font-weight: 500;
+          text-align: center;
+        }
+
+        .status-message.success {
+          background: #d1fae5;
+          color: #065f46;
+          border: 1px solid #a7f3d0;
+        }
+
+        .status-message.error {
+          background: #fef2f2;
+          color: #dc2626;
+          border: 1px solid #fecaca;
+        }
+
+        .mobile-debug {
+          background: rgba(255,255,255,0.8);
+          border-radius: 0.5rem;
+          padding: 0.75rem;
+          margin-bottom: 1rem;
+          font-size: 0.75rem;
+        }
+
+        .debug-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.25rem;
+        }
+
+        .debug-row code {
+          font-family: monospace;
+          background: rgba(0,0,0,0.1);
+          padding: 0.125rem 0.25rem;
+          border-radius: 0.25rem;
         }
 
         .error-banner {
@@ -463,6 +633,37 @@ export default function ProfilePage() {
         .avatar-wrapper {
           position: relative;
           display: inline-block;
+        }
+
+        .avatar-edit {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .avatar-image {
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid rgba(139,92,246,0.2);
+        }
+
+        .file-input {
+          position: absolute;
+          opacity: 0;
+          width: 1px;
+          height: 1px;
+        }
+
+        .file-label {
+          padding: 0.5rem 1rem;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
         }
 
         .avatar-badge {
@@ -671,6 +872,7 @@ export default function ProfilePage() {
           border-radius: 0.5rem;
           background: rgba(255,255,255,0.9);
           transition: all 0.2s ease;
+          font-size: 16px; /* Prevents zoom on iOS */
         }
 
         .form-input:focus {
@@ -780,6 +982,7 @@ export default function ProfilePage() {
           align-items: center;
           justify-content: center;
           gap: 0.25rem;
+          font-size: 16px; /* Prevents zoom on iOS */
         }
 
         .btn:hover {
@@ -806,6 +1009,27 @@ export default function ProfilePage() {
         .btn-neutral:hover {
           background: white;
           border-color: rgba(139,92,246,0.3);
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+          .profile-page {
+            padding: 1rem 0.5rem;
+          }
+          
+          .form-input {
+            font-size: 16px; /* Critical for iOS - prevents zoom */
+          }
+          
+          .profile-actions {
+            justify-content: center;
+            width: 100%;
+          }
+          
+          .btn-compact {
+            flex: 1;
+            min-width: 0;
+          }
         }
       `}</style>
     </div>
