@@ -55,18 +55,18 @@ function CreatePostModal({
     }
   }, [isOpen]);
 
-  // Handle file selection (multiple files)
+  // Handle file selection (unlimited photos/videos)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files || []);
     if (newFiles.length === 0) return;
 
-    // Combine existing files with new files, limit total to 5
-    const combinedFiles = [...selectedFiles, ...newFiles].slice(0, 5);
+    // Combine existing files with new files (no limit!)
+    const combinedFiles = [...selectedFiles, ...newFiles];
     setSelectedFiles(combinedFiles);
 
     // Create preview URLs for new files only
     const newUrls = newFiles.map(file => URL.createObjectURL(file));
-    const combinedUrls = [...previewUrls, ...newUrls].slice(0, 5);
+    const combinedUrls = [...previewUrls, ...newUrls];
     setPreviewUrls(combinedUrls);
     setError(null);
 
@@ -200,7 +200,7 @@ function CreatePostModal({
                 <div className="upload-placeholder">
                   <div className="upload-icon">📸</div>
                   <div className="upload-text">Click to select photos or videos</div>
-                  <div className="upload-hint">You can select multiple files</div>
+                  <div className="upload-hint">Select as many files as you want</div>
                 </div>
               ) : (
                 <div className="selected-files">
