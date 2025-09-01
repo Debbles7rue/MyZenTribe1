@@ -18,7 +18,12 @@ export default function ProfileEditorPage() {
   const [otp, setOtp] = useState<string>("");
   const [waitingOtp, setWaitingOtp] = useState(false);
 
-  const [displayName, setDisplayName] = useState("");
+  // All profile fields
+  const [fullName, setFullName] = useState("");
+  const [bio, setBio] = useState("");
+  const [locationText, setLocationText] = useState("");
+  const [locationIsPublic, setLocationIsPublic] = useState(false);
+  const [showMutuals, setShowMutuals] = useState(true);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string>("");
 
@@ -36,16 +41,25 @@ export default function ProfileEditorPage() {
     setUserId(data.user?.id ?? null);
 
     if (data.user?.id) {
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("display_name, avatar_url")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      setDisplayName(prof?.display_name ?? "");
-      setAvatarUrl(prof?.avatar_url ?? "");
+      // Use the RPC function to get profile
+      const { data: profileData, error } = await supabase.rpc('get_my_profile');
+      
+      if (!error && profileData?.success && profileData?.profile) {
+        const prof = profileData.profile;
+        setFullName(prof.full_name ?? "");
+        setBio(prof.bio ?? "");
+        setLocationText(prof.location_text ?? "");
+        setLocationIsPublic(prof.location_is_public ?? false);
+        setShowMutuals(prof.show_mutuals ?? true);
+        setAvatarUrl(prof.avatar_url ?? "");
+      }
     } else {
-      setDisplayName("");
+      // Clear form if not logged in
+      setFullName("");
+      setBio("");
+      setLocationText("");
+      setLocationIsPublic(false);
+      setShowMutuals(true);
       setAvatarUrl("");
     }
   }
@@ -109,18 +123,23 @@ export default function ProfileEditorPage() {
       let url = avatarUrl;
       if (avatarFile) url = await uploadAvatar();
 
-      const { error } = await supabase.rpc("upsert_my_profile", {
-        p_display_name: displayName,
+      // Call the updated RPC function with ALL fields
+      const { data, error } = await supabase.rpc("upsert_my_profile", {
+        p_full_name: fullName,
+        p_bio: bio,
+        p_location_text: locationText,
+        p_location_is_public: locationIsPublic,
+        p_show_mutuals: showMutuals,
         p_avatar_url: url,
       });
 
       if (error) throw error;
-      setStatus("Saved ✅");
+      
+      setStatus("Saved ✅ - " + JSON.stringify(data));
       setAvatarFile(null);
       setAvatarUrl(url);
       await refreshUser();
     } catch (e: any) {
-      // Our RPC returns NO_SESSION if not signed in — show clearly on mobile
       setStatus("Save failed: " + e.message);
     }
   }
@@ -131,9 +150,9 @@ export default function ProfileEditorPage() {
     <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5] text-neutral-800">
       <div className="max-w-md mx-auto p-6 space-y-6">
         <header>
-          <h1 className="text-2xl font-semibold">Profile (Mobile-Safe)</h1>
+          <h1 className="text-2xl font-semibold">Profile Editor (Mobile-Safe)</h1>
           <p className="text-xs text-gray-600 mt-1">
-            Project: <code className="font-mono">{projectRef(process.env.NEXT_PUBLIC_SUPABASE_URL)}</code>
+            Project: <code className="font-mono">{ref}</code>
           </p>
         </header>
 
@@ -185,14 +204,57 @@ export default function ProfileEditorPage() {
             </div>
 
             <div className="bg-white rounded-2xl p-4 shadow">
-              <h2 className="font-semibold mb-3">Edit profile</h2>
-              <label className="block text-sm mb-1">Display name</label>
+              <h2 className="font-semibold mb-3">Edit All Profile Fields</h2>
+              
+              {/* Full Name */}
+              <label className="block text-sm mb-1">Full Name</label>
               <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 className="w-full border rounded-lg p-2 mb-3"
                 placeholder="Your name"
               />
+              
+              {/* Bio */}
+              <label className="block text-sm mb-1">Bio</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full border rounded-lg p-2 mb-3"
+                rows={3}
+                placeholder="Tell us about yourself"
+              />
+              
+              {/* Location */}
+              <label className="block text-sm mb-1">Location</label>
+              <input
+                value={locationText}
+                onChange={(e) => setLocationText(e.target.value)}
+                className="w-full border rounded-lg p-2 mb-2"
+                placeholder="City, State"
+              />
+              
+              {/* Location Privacy */}
+              <label className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={locationIsPublic}
+                  onChange={(e) => setLocationIsPublic(e.target.checked)}
+                />
+                <span className="text-sm">Show location publicly</span>
+              </label>
+              
+              {/* Show Mutuals */}
+              <label className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={showMutuals}
+                  onChange={(e) => setShowMutuals(e.target.checked)}
+                />
+                <span className="text-sm">Show mutual friends</span>
+              </label>
+              
+              {/* Avatar */}
               <label className="block text-sm mb-1">Avatar</label>
               <input
                 type="file"
@@ -203,15 +265,36 @@ export default function ProfileEditorPage() {
               {avatarUrl && (
                 <img src={avatarUrl} alt="avatar" className="w-24 h-24 rounded-full object-cover border mb-3" />
               )}
+              
               <button onClick={saveProfile} className="w-full rounded-xl bg-purple-500 hover:bg-purple-600 text-white py-2">
-                Save profile
+                Save All Profile Data
               </button>
             </div>
           </>
         )}
 
         {status && (
-          <div className="text-sm text-gray-800">{status}</div>
+          <div className={`text-sm p-3 rounded-lg ${
+            status.includes("✅") ? "bg-green-100 text-green-800" : 
+            status.includes("failed") || status.includes("Error") ? "bg-red-100 text-red-800" : 
+            "bg-gray-100 text-gray-800"
+          }`}>
+            {status}
+          </div>
+        )}
+        
+        {/* Debug Data Display */}
+        {signedIn && (
+          <div className="bg-gray-100 rounded-lg p-3 text-xs">
+            <h3 className="font-semibold mb-2">Current Profile Data:</h3>
+            <div className="font-mono space-y-1">
+              <div>full_name: {fullName || "(empty)"}</div>
+              <div>bio: {bio || "(empty)"}</div>
+              <div>location: {locationText || "(empty)"}</div>
+              <div>location_public: {locationIsPublic ? "true" : "false"}</div>
+              <div>show_mutuals: {showMutuals ? "true" : "false"}</div>
+            </div>
+          </div>
         )}
       </div>
     </div>
