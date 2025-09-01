@@ -1,267 +1,263 @@
-/* ===== NO FullCalendar imports here. Do NOT add @import for @fullcalendar/* ===== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* ===== Layout helpers ===== */
-.page-wrap { padding-bottom: 40px; }
-.container-app { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
-.card { background: var(--brand-bg, #fff); border: 1px solid #e5e7eb; border-radius: 16px; }
-.p-3 { padding: 12px; }
-.mb-3 { margin-bottom: 12px; }
+/* Optional: brand font for the big title */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap');
 
-/* ===== Header ===== */
-.site-header { position: sticky; top: 0; z-index: 40; background: #fff; border-bottom: 1px solid #eee; }
-.header-inner { display:flex; align-items:center; gap:16px; padding: 10px 16px; }
-.brand { display:flex; align-items:center; gap:10px; text-decoration:none; }
-.brand-logo { width:32px; height:32px; border-radius:9999px; }
-.brand-name { font-weight:700; font-size:18px; color:#111827; }
-.main-nav { display:flex; gap:12px; margin-left:auto; }
-.nav-link { padding:8px 12px; border-radius:10px; text-decoration:none; color:#111827; }
-.nav-link:hover { background:#f3f4f6; }
-.auth-area { display:flex; gap:10px; align-items:center; }
-.user-chip { font-size:12px; background:#f3f4f6; padding:6px 10px; border-radius:9999px; }
-
-/* ===== Buttons & inputs ===== */
-.btn { padding:8px 14px; border-radius:12px; border:1px solid #e5e7eb; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
-.btn-brand { background: var(--brand-accent,#7c3aed); color:#fff; border-color: transparent; }
-.btn-brand:hover { filter: brightness(0.95); }
-.btn-neutral { background:#fff; color:#111827; }
-.page { padding: 20px 0; }
-.page-title { font-size:28px; font-weight:700; margin: 8px 0 10px; }
-.header-bar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:10px; }
-
-.form-grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-.form-grid .span-2 { grid-column: span 2; }
-.controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
-
-.segmented { display:inline-flex; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
-.seg-btn { padding:8px 12px; background:#fff; }
-.seg-btn.active { background:#111827; color:#fff; }
-
-.check { display:inline-flex; align-items:center; gap:8px; font-size:14px; }
-.select { padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
-
-.search-input { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; font-size:14px; }
-
-.muted { color:#6b7280; }
-
-/* ===== Theme tokens (seasonal) ===== */
 :root {
-  --brand-bg: #ffffff;
-  --brand-accent: #7c3aed; /* purple */
+  --brand: theme(colors.violet.600);
+  --gold: #eab308; /* tailwind amber-500 */
+  --jade: #10b981; /* tailwind emerald-500 */
 }
-[data-theme="spring"] { --brand-bg:#f0fdf4; --brand-accent:#22c55e; }
-[data-theme="summer"] { --brand-bg:#fff7ed; --brand-accent:#f59e0b; }
-[data-theme="autumn"] { --brand-bg:#fff1f2; --brand-accent:#ef4444; }
-[data-theme="winter"] { --brand-bg:#f5f3ff; --brand-accent:#6366f1; }
 
-/* ===== Brand polish ===== */
-.brand-name { font-weight:700; font-size:20px; color:#111827; letter-spacing:-0.2px; }
-.brand-name .brand-zen { font-style: italic; }
-.brand-logo { width:24px; height:24px; border-radius:6px; }
-.brand { gap:8px; }
-
-/* ===== Profile tweaks ===== */
-input[disabled], textarea[disabled] { background:#f9fafb; color:#6b7280; }
-
-.profile-card { background: var(--brand-bg,#fff); }
-.profile-header { display:flex; align-items:flex-start; gap:16px; }
-.avatar { width:80px; height:80px; border-radius:16px; object-fit:cover; border:1px solid #e5e7eb; }
-.profile-heading { flex:1; min-width:0; }
-.profile-name { font-size:18px; font-weight:700; color:#111827; }
-.profile-sub { font-size:12px; color:#6b7280; margin-top:2px; }
-.kpis { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
-.kpi { font-size:12px; color:#374151; background:#f3f4f6; padding:4px 8px; border-radius:9999px; }
-.profile-actions { display:flex; gap:8px; margin-left:auto; }
-
-.columns { display:grid; grid-template-columns: 1fr; gap:12px; margin-top:12px; }
-@media (min-width: 900px) { .columns { grid-template-columns: 1fr 1fr; } }
-
-.section-title { font-size:16px; font-weight:700; margin-bottom:8px; }
-.section-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-
-.stack { display:flex; flex-direction:column; gap:10px; }
-.field { display:flex; flex-direction:column; gap:6px; }
-.label { font-size:12px; color:#374151; }
-.input { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; font-size:14px; background:#fff; }
-.checkbox { display:inline-flex; align-items:center; gap:8px; font-size:14px; }
-.right { display:flex; justify-content:flex-end; }
-
-/* ===== Friendly note ===== */
-.note { background:#FFFBEB; border:1px solid #FDE68A; border-radius:12px; padding:12px; margin-bottom:12px; }
-.note-title { font-weight:600; margin-bottom:4px; }
-.note .codeblock { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:12px; white-space:pre-wrap; background:#fff; border:1px solid #f3f4f6; border-radius:10px; padding:8px; }
-.linkish { color:#374151; cursor:pointer; text-decoration:underline; }
-
-/* ===== Home & Commitment (lavender-centered) ===== */
-.lavender-hero {
-  background: linear-gradient(180deg, var(--brand-bg, #f5f3ff) 0%, #ffffff 45%);
-  border-bottom: 1px solid #eee;
+/* Base body styles */
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-zinc-950 dark:text-zinc-100;
 }
-.hero-inner { padding: 36px 16px; text-align: center; }
-.brand-display { font-size: 40px; margin: 0; letter-spacing: -0.2px; color: #111827; }
-.hero-tagline { margin: 8px 0 14px; color: #4b5563; font-size: 16px; }
-.hero-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
-.home-card { margin-top: 14px; }
-.center-wrap { max-width: 800px; margin: 0 auto; text-align: center; }
-.home-section-title { font-size: 22px; font-weight: 700; margin: 0 0 8px; }
-.home-copy { color: #111827; line-height: 1.6; font-size: 16px; }
-
-/* commitment grid of white cards centered on lavender */
-.commit-wrap { padding: 16px 0 24px; }
-.commit-grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 960px; margin: 0 auto; }
-@media (min-width: 720px) { .commit-grid { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1100px) { .commit-grid { grid-template-columns: 1fr 1fr 1fr; } }
-.commit-card { background:#fff; border-radius:16px; border:1px solid #e5e7eb; padding:16px; }
-.commit-title { font-size:18px; font-weight:700; margin:0 0 6px; color:#111827; text-align:center; }
-.commit-text { color:#374151; line-height:1.6; text-align:center; }
-
-/* seasonal lavender */
-[data-theme="winter"] .lavender-hero { background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 45%); }
-[data-theme="autumn"] .lavender-hero { background: linear-gradient(180deg, #fff1f2 0%, #ffffff 45%); }
-[data-theme="summer"] .lavender-hero { background: linear-gradient(180deg, #fff7ed 0%, #ffffff 45%); }
-[data-theme="spring"] .lavender-hero { background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 45%); }
-
-/* ===== Home / Welcome / Commitment ===== */
-.home-wrap { max-width: 920px; margin: 24px auto; padding: 0 16px; }
-
-/* Brand lockup */
+/* Small helpers for the welcome/commitment pages */
 .brand-lockup {
-  margin: 6px 0 18px;
   font-family: "Playfair Display", ui-serif, Georgia, serif;
-  font-size: 42px;
-  font-weight: 700;
-  line-height: 1.1;
   letter-spacing: 0.2px;
-  color: #111827;
 }
-.brand-word .zen { font-style: italic; }
 
-/* Welcome / intention card */
-.hero-card {
-  background: var(--brand-bg, #fff);
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  padding: 22px;
-  box-shadow: 0 6px 14px rgba(17,24,39,0.05);
-  margin-bottom: 22px;
+.card {
+  @apply bg-white border border-gray-200 rounded-2xl shadow-sm;
 }
-.hero-title { margin: 0 0 8px; font-size: 22px; font-weight: 700; }
-.hero-text { color: #374151; font-size: 16px; margin: 0 0 14px; }
-.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.btn.subtle { background: #f8fafc; border-color: #e5e7eb; }
 
-/* Why we’re different */
-.why-wrap { margin: 10px 0 36px; }
-.why-title { font-size: 20px; font-weight: 700; margin: 0 0 10px; }
-.why-grid { display: grid; grid-template-columns: repeat( auto-fit, minmax(260px, 1fr) ); gap: 14px; }
-.why-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px; }
-.why-card h4 { margin:0 0 6px; font-size:16px; font-weight:700; color:#111827; }
-.why-card p { margin:0; color:#374151; font-size:14px; }
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+}
+.btn-primary { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
+.btn-neutral { @apply bg-white text-gray-900 border border-gray-200 hover:bg-gray-50; }
+.btn-brand { @apply bg-violet-600 text-white hover:bg-violet-700; }
 
-/* ===== Modal (centered) ===== */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; }
-.modal-center { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
+/* ============================================= */
+/* MODAL FIXES - Proper scrolling for all modals */
+/* ============================================= */
+
+/* Modal backdrop/overlay */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  padding: 20px;
+}
+
+/* Modal content wrapper */
+.modal-sheet,
+.modal-content,
 .modal-panel {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 18px;
-  width: min(760px, calc(100% - 32px)); box-shadow: 0 10px 30px rgba(17,24,39,.15);
-  max-height: calc(100dvh - 48px); display: flex; flex-direction: column;
+  position: relative; /* NOT fixed - this is key! */
+  max-height: calc(100vh - 40px); /* Leave some space at top/bottom */
+  overflow-y: auto; /* Allow content to scroll */
+  margin: 20px auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 600px; /* Default max width */
 }
-.modal-body { overflow: auto; padding-right: 6px; margin-right: -6px; }
+
+/* Modal body content */
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  max-height: calc(80vh - 120px); /* Account for header and footer */
+}
+
+/* Modal footer - Sticky at bottom */
 .modal-footer {
-  position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e5e7eb; padding-top: 10px;
-  display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;
-}
-.modal-body img { max-width:100%; height:auto; border-radius:12px; }
-
-/* ===== AddPinModal (sheet above map) ===== */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding: 16px; z-index: 1000; }
-.modal-sheet {
-  width: 100%; max-width: 720px; max-height: calc(100vh - 48px); overflow: auto; background: #fff;
-  border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,.25); padding: 16px;
-}
-
-/* ===== Community page breathing room ===== */
-.community-page .page { padding: 28px 0 44px; }
-.community-page .community-header { margin-bottom: 18px; }
-.community-page .community-cover { margin-bottom: 16px; }
-.community-page .community-title { font-size: 34px; line-height: 1.15; margin: 6px 0 6px; }
-.community-page .community-subtitle { margin-bottom: 16px; }
-.community-page .tabbar { display: flex; gap: 12px; margin: 14px 0 18px; }
-.community-page .card-lg { padding: 18px; border-radius: 18px; }
-.community-page .tabbar .btn { padding: 9px 14px; }
-.community-page .controls .btn { padding: 10px 14px; }
-
-/* ===== Big calendar readability + polish (react-big-calendar) ===== */
-.rbc-event { color: #111 !important; }
-.rbc-event-label { color: rgba(0,0,0,.7) !important; }
-.mzt-big-calendar .rbc-day-bg + .rbc-day-bg { border-left-color: rgba(0,0,0,0.04); }
-.mzt-big-calendar .rbc-today { background: rgba(255, 225, 0, 0.08); }
-
-/* ---- Responsive layout for calendar page ---- */
-.grid-cols-calendar { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
-@media (max-width: 900px) {
-  .grid-cols-calendar { grid-template-columns: 1fr; }
-  .task-tray { order: 2; }
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  z-index: 10;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-radius: 0 0 12px 12px;
 }
 
-/* ---- Task tray ---- */
-.task-tray .tray-chip {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; cursor: grab;
-}
-.task-tray .tray-chip:active { cursor: grabbing; }
-
-/* ---- Deck card ---- */
-.deck-card { border-radius: 16px; }
-.deck-card .btn { min-width: 80px; }
-
-/* ---- Weather badge ---- */
-.badge-wx {
-  background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 9999px;
-  padding: 6px 10px; font-size: 12px; color: #374151;
+/* Modal header - Sticky at top */
+.modal-header {
+  position: sticky;
+  top: 0;
+  background: white;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  z-index: 10;
+  border-radius: 12px 12px 0 0;
 }
 
-/* accessibility tweaks */
-.seg-btn:focus, .btn:focus { outline: 2px solid #7c3aed; outline-offset: 2px; }
-
-/* ---- Sandy look for the calendar page ---- */
-.calendar-sand {
-  --brand-bg: #fff7ed; /* sand */
-  background:
-    radial-gradient(1200px 220px at 50% 0%, #fff7ed 0%, #ffffff 65%),
-    #ffffff;
+/* Fix for Dialog.Panel from @headlessui/react */
+[role="dialog"] .fixed.inset-0 {
+  overflow-y: auto;
+  padding: 20px;
 }
 
-/* ---- Tutorial styles ---- */
-.tutorial-hero { background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%); border-bottom: 1px solid #f5e6c6; }
-.tutorial-list { display: grid; grid-template-columns: 1fr; gap: 14px; list-style: none; padding: 0; margin: 0; }
-.tutorial-list .bullet { font-size: 18px; width: 26px; display: inline-flex; align-items: center; justify-content: center; }
-.tutorial-list li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; }
-.tutorial-list .item-title { font-weight: 700; color: #111827; margin-bottom: 2px; }
-.tutorial-list .item-desc { color: #374151; font-size: 14px; line-height: 1.45; }
-@media (max-width: 520px) { .tutorial-list .item-desc { font-size: 13px; } }
-
-/* --- Mobile touch improvements for react-big-calendar --- */
-.rbc-month-view,
-.rbc-month-row,
-.rbc-time-view,
-.rbc-time-content,
-.rbc-day-bg,
-.rbc-timeslot-group { touch-action: manipulation; }
-.rbc-event, .rbc-day-bg { -webkit-tap-highlight-color: transparent; }
-
-/* Soft lavender background that fades down the page */
-.lavender-page {
-  min-height: 100vh;
-  background: linear-gradient(180deg, #f5f3ff 0%, #faf5ff 40%, #ffffff 100%);
+[role="dialog"] [data-headlessui-state] {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  margin: 20px auto;
 }
 
-/* Optional: compact KPI pills */
-.kpi {
-  background: rgba(124, 58, 237, 0.08);
-  color: #4c1d95;
-  border: 1px solid rgba(124, 58, 237, 0.15);
-  border-radius: 9999px;
-  padding: 4px 10px;
-  font-size: 12px;
+/* Mobile-specific modal adjustments */
+@media (max-width: 640px) {
+  .modal-backdrop {
+    padding: 10px;
+  }
+  
+  .modal-sheet,
+  .modal-content,
+  .modal-panel {
+    max-height: calc(100vh - 20px);
+    margin: 10px;
+    width: calc(100% - 20px);
+  }
+  
+  .modal-body {
+    max-height: calc(85vh - 100px);
+    padding: 1rem;
+  }
+  
+  .modal-footer {
+    padding: 1rem;
+    /* Extra padding bottom for mobile safe area */
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+  
+  /* Ensure save buttons are always visible on mobile */
+  .modal-footer button {
+    min-height: 44px; /* Apple's minimum touch target */
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
 }
 
+/* Fix for modals with inline styles */
+div[style*="position: fixed"] > div[style*="max-width"] {
+  max-height: calc(100vh - 40px) !important;
+  overflow-y: auto !important;
+  margin: 20px auto !important;
+}
+
+/* Ensure forms in modals don't cause zoom on iOS */
+.modal-sheet input,
+.modal-sheet textarea,
+.modal-sheet select,
+.modal-content input,
+.modal-content textarea,
+.modal-content select {
+  font-size: 16px; /* Prevents zoom on iOS focus */
+}
+
+/* Scrollbar styling for modals */
+.modal-body::-webkit-scrollbar,
+.modal-sheet::-webkit-scrollbar,
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track,
+.modal-sheet::-webkit-scrollbar-track,
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb,
+.modal-sheet::-webkit-scrollbar-thumb,
+.modal-content::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover,
+.modal-sheet::-webkit-scrollbar-thumb:hover,
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Form field helpers */
+.field {
+  @apply mb-4;
+}
+
+.label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+.input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent;
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+.select {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white;
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+.textarea {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-vertical;
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+/* Page layout helpers */
+.page {
+  @apply min-h-screen bg-gradient-to-b from-gray-50 to-gray-100;
+}
+
+.container-app {
+  @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6;
+}
+
+.page-title {
+  @apply text-2xl font-bold text-gray-900 mb-6;
+}
+
+/* Additional utility classes */
+.shadow-modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.text-muted {
+  @apply text-gray-500;
+}
+
+.text-error {
+  @apply text-red-600;
+}
+
+.text-success {
+  @apply text-green-600;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
