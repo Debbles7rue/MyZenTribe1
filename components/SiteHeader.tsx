@@ -68,7 +68,7 @@ export default function SiteHeader() {
         ) : userId ? (
           <>
             <nav className="main-nav">
-              <Nav href="/">Home</Nav>
+              <Nav href="/dashboard">Dashboard</Nav>
               <Nav href="/calendar">Calendar</Nav>
               <Nav href="/communities">Communities</Nav>
 
