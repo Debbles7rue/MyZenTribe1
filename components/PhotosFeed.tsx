@@ -57,17 +57,21 @@ function CreatePostModal({
 
   // Handle file selection (multiple files)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+    const newFiles = Array.from(e.target.files || []);
+    if (newFiles.length === 0) return;
 
-    // Limit to 5 files for now
-    const limitedFiles = files.slice(0, 5);
-    setSelectedFiles(limitedFiles);
+    // Combine existing files with new files, limit total to 5
+    const combinedFiles = [...selectedFiles, ...newFiles].slice(0, 5);
+    setSelectedFiles(combinedFiles);
 
-    // Create preview URLs
-    const urls = limitedFiles.map(file => URL.createObjectURL(file));
-    setPreviewUrls(urls);
+    // Create preview URLs for new files only
+    const newUrls = newFiles.map(file => URL.createObjectURL(file));
+    const combinedUrls = [...previewUrls, ...newUrls].slice(0, 5);
+    setPreviewUrls(combinedUrls);
     setError(null);
+
+    // Reset the input so same file can be selected again if needed
+    e.target.value = '';
   };
 
   // Remove a selected file
