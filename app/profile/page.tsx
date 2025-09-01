@@ -176,7 +176,7 @@ export default function ProfilePage() {
     }
   }
 
-  // Mobile-safe profile save using RPC (like the working demo)
+  // Mobile-safe profile save using RPC with CORRECT parameter names
   const save = async () => {
     if (!userId) return;
     setSaving(true);
@@ -189,14 +189,14 @@ export default function ProfilePage() {
         avatarUrl = await uploadAvatar();
       }
 
-      // Use RPC function for mobile-safe saving (like demo)
+      // Use RPC function with CORRECT parameter names matching the SQL function
       const { error } = await supabase.rpc("upsert_my_profile", {
-        p_display_name: p.full_name?.trim() || null,
-        p_avatar_url: avatarUrl?.trim() || null,
+        p_full_name: p.full_name?.trim() || null,
         p_bio: p.bio?.trim() || null,
         p_location_text: p.location_text?.trim() || null,
         p_location_is_public: !!p.location_is_public,
         p_show_mutuals: !!p.show_mutuals,
+        p_avatar_url: avatarUrl?.trim() || null
       });
 
       if (error) throw error;
