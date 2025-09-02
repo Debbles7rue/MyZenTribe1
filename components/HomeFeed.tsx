@@ -1,12 +1,9 @@
+// components/HomeFeed.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { createPost, listHomeFeed, Post } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
-import SOSButton from "@/components/SOSButton";
-import { getEmergencySettings } from "@/lib/sos";
-import type { EmergencySettings } from "@/lib/sos";
 
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
@@ -14,10 +11,6 @@ export default function HomeFeed() {
   const [body, setBody] = useState("");
   const [privacy, setPrivacy] = useState<Post["privacy"]>("friends");
   const [saving, setSaving] = useState(false);
-  
-  // SOS-related state
-  const [sosSettings, setSosSettings] = useState<EmergencySettings | null>(null);
-  const [sosLoading, setSosLoading] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -26,23 +19,7 @@ export default function HomeFeed() {
     setLoading(false);
   }
 
-  // Load SOS settings
-  async function loadSOSSettings() {
-    setSosLoading(true);
-    try {
-      const settings = await getEmergencySettings();
-      setSosSettings(settings);
-    } catch (error) {
-      console.error("Error loading SOS settings:", error);
-    } finally {
-      setSosLoading(false);
-    }
-  }
-
-  useEffect(() => { 
-    load();
-    loadSOSSettings();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   async function post() {
     if (!body.trim()) return;
@@ -54,23 +31,31 @@ export default function HomeFeed() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6">
+    <div className="max-w-2xl mx-auto">
       {/* Composer */}
-      <div className="card p-3 mb-4">
+      <div className="card p-4 mb-6 bg-white rounded-xl shadow-sm">
         <textarea
-          className="input"
+          className="input w-full"
           rows={3}
           placeholder="Share something with your friends…"
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
-        <div className="mt-2 flex items-center gap-2">
-          <select className="input w-[150px]" value={privacy} onChange={(e) => setPrivacy(e.target.value as any)}>
+        <div className="mt-3 flex items-center gap-3">
+          <select 
+            className="input w-[150px]" 
+            value={privacy} 
+            onChange={(e) => setPrivacy(e.target.value as any)}
+          >
             <option value="friends">Friends</option>
             <option value="public">Public</option>
             <option value="private">Only me</option>
           </select>
-          <button className="btn btn-brand ml-auto" onClick={post} disabled={saving || !body.trim()}>
+          <button 
+            className="btn btn-brand ml-auto" 
+            onClick={post} 
+            disabled={saving || !body.trim()}
+          >
             {saving ? "Posting…" : "Post"}
           </button>
         </div>
@@ -78,65 +63,40 @@ export default function HomeFeed() {
 
       {/* Feed */}
       {loading ? (
-        <div className="muted">Loading…</div>
+        <div className="text-center py-8 text-gray-500">Loading…</div>
       ) : rows.length ? (
-        <div className="stack gap-3">
+        <div className="space-y-4">
           {rows.map((p) => (
             <PostCard key={p.id} post={p} onChanged={load} />
           ))}
         </div>
       ) : (
-        <div className="card p-4 text-center">
+        <div className="card p-8 text-center bg-white rounded-xl shadow-sm">
           <div className="text-lg font-medium">No posts yet</div>
-          <div className="muted mt-1">Say hello with your first post above.</div>
+          <div className="text-gray-500 mt-1">Say hello with your first post above.</div>
         </div>
       )}
 
-      {/* SOS Section */}
-      <div className="mt-8 mb-4">
-        <div className="card p-6 text-center" style={{
-          background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
-          border: "none",
-          color: "white",
-        }}>
-          <h3 className="text-white font-semibold text-xl mb-3">Emergency SOS</h3>
-          
-          {!sosLoading && (
-            <p className="text-white/90 text-sm mb-4">
-              {sosSettings?.sos_enabled ? (
-                <>✓ Ready • Contact: {sosSettings.emergency_contact_name || "Emergency Contact"}</>
-              ) : (
-                "Set up your emergency contact to enable SOS"
-              )}
-            </p>
-          )}
-
-          {/* The SOS button */}
-          <div className="mb-4">
-            {sosSettings?.sos_enabled ? (
-              <SOSButton variant="hero" label="Send SOS Alert" />
-            ) : (
-              <div className="inline-block px-6 py-3 bg-white/20 rounded-xl text-white">
-                SOS Not Configured
-              </div>
-            )}
-          </div>
-
-          {/* Edit link */}
-          <Link 
-            href="/safety" 
-            className="inline-block text-white underline text-sm hover:text-white/90"
-          >
-            {sosSettings?.sos_enabled ? "Edit Emergency Settings" : "Setup Emergency Contact →"}
-          </Link>
-        </div>
-      </div>
-
-      {/* Bottom buttons */}
-      <div className="mt-4 flex justify-center gap-3 flex-wrap">
-        <a className="btn" href="/contact">Contact</a>
-        <a className="btn" href="/suggestions">Suggestions</a>
-        <a className="btn btn-brand" href="/donate">Donations</a>
+      {/* Bottom buttons - styled nicely without the large SOS */}
+      <div className="mt-8 flex justify-center gap-3 pb-8">
+        <a 
+          className="px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg shadow-sm transition-all hover:shadow-md font-medium"
+          href="/contact"
+        >
+          Contact
+        </a>
+        <a 
+          className="px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg shadow-sm transition-all hover:shadow-md font-medium"
+          href="/suggestions"
+        >
+          Suggestions
+        </a>
+        <a 
+          className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm transition-all hover:shadow-md font-medium"
+          href="/donate"
+        >
+          Donations
+        </a>
       </div>
     </div>
   );
