@@ -38,7 +38,7 @@ export default function SiteHeader() {
   }, []);
 
   const Nav = ({ href, children }: { href: string; children: React.ReactNode }) => {
-    const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
+    const active = pathname === href || (href !== "/dashboard" && href !== "/" && (pathname?.startsWith(href) ?? false));
     return (
       <Link href={href} className={`nav-link ${active ? "active" : ""}`}>
         {children}
@@ -54,7 +54,7 @@ export default function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-inner container-app">
-        <Link href="/" className="brand" aria-label="MyZenTribe Home">
+        <Link href="/dashboard" className="brand" aria-label="MyZenTribe Home">
           <div className="brand-name">
             <span className="brand-zen">My</span>ZenTribe
           </div>
@@ -64,8 +64,8 @@ export default function SiteHeader() {
           <div style={{ height: 38 }} />
         ) : userId ? (
           <>
-            <nav className="main-nav">
-              <Nav href="/">Home</Nav>
+            <nav className="main-nav" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Nav href="/dashboard">Dashboard</Nav>
               <Nav href="/calendar">Calendar</Nav>
               
               {/* Admin Tab - Only visible to admins */}
