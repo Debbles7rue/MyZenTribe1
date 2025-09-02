@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import HomeFeed from "@/components/HomeFeed";
+import SOSFloatingButton from "@/components/SOSFloatingButton";
 
 export default function DashboardPage() {
   const router = useRouter();
