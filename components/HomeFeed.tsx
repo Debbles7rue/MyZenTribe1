@@ -44,6 +44,12 @@ export default function HomeFeed() {
     loadSOSSettings();
   }, []);
 
+  useEffect(() => { 
+  load();
+  loadSOSSettings();
+  console.log("SOS Settings:", sosSettings); // ADD THIS LINE
+}, []);
+  
   async function post() {
     if (!body.trim()) return;
     setSaving(true);
