@@ -1594,44 +1594,6 @@ export default function HomeFeed() {
           background: white;
         }
 
-        .bottom-buttons {
-          margin-top: 3rem;
-          padding: 2rem 1rem;
-          display: flex;
-          justify-content: center;
-          gap: 1rem;
-          border-top: 1px solid rgba(139,92,246,0.2);
-        }
-
-        .nav-btn {
-          padding: 0.75rem 1.5rem;
-          background: rgba(255,255,255,0.8);
-          color: #374151;
-          text-decoration: none;
-          border: 1px solid rgba(139,92,246,0.3);
-          border-radius: 0.5rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          backdrop-filter: blur(10px);
-        }
-
-        .nav-btn:hover {
-          background: rgba(255,255,255,0.95);
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(139,92,246,0.2);
-        }
-
-        .nav-btn-primary {
-          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-          color: white;
-          border-color: #8b5cf6;
-        }
-
-        .nav-btn-primary:hover {
-          background: linear-gradient(135deg, #7c3aed, #6d28d9);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-        }
-
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
