@@ -619,7 +619,7 @@ function CreatePostModal({
       onClose();
       
     } catch (err: any) {
-      setError(err.message || "Failed to create collaborative post");
+      setError(err.message || "Failed to create post");
     } finally {
       setUploading(false);
     }
@@ -638,7 +638,7 @@ function CreatePostModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Create Collaborative Memory</h2>
+          <h2 className="modal-title">Create Post</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -762,7 +762,7 @@ function CreatePostModal({
               Cancel
             </button>
             <button type="submit" disabled={uploading} className="btn-primary">
-              {uploading ? "Creating Collaborative Post..." : "Create Collaborative Memory"}
+              {uploading ? "Creating Post..." : "Create Post"}
             </button>
           </div>
         </form>
@@ -1246,7 +1246,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
   }
 
   async function deletePost(postId: string) {
-    if (!confirm("Are you sure you want to delete this collaborative post? This cannot be undone.")) {
+    if (!confirm("Are you sure you want to delete this post? This cannot be undone.")) {
       return;
     }
 
@@ -1289,14 +1289,14 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
   return (
     <section className="photos-feed">
       <div className="feed-header">
-        <h2 className="feed-title">Collaborative Memories</h2>
+        <h2 className="feed-title">Posts</h2>
         {canPost && (
           <button 
             className="create-post-btn"
             onClick={() => setShowCreateModal(true)}
           >
             <span className="create-icon">🤝</span>
-            Create Collaborative Memory
+            Create Post
           </button>
         )}
       </div>
@@ -1320,13 +1320,13 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
         {loading ? (
           <div className="loading-state">
             <div className="loading-spinner"></div>
-            <span>Loading collaborative memories...</span>
+            <span>Loading posts...</span>
           </div>
         ) : posts.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">🤝</div>
-            <h3>No collaborative memories yet!</h3>
-            <p>Create your first memory and invite friends to collaborate</p>
+            <h3>No posts yet!</h3>
+            <p>Share your first post</p>
           </div>
         ) : (
           posts.map(post => (
