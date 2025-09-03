@@ -60,7 +60,7 @@ export default function TermsOfServicePage() {
             <section>
               <h2 className="text-xl font-semibold mb-3">6. Privacy</h2>
               <p className="text-gray-700">
-                Your use of our service is also governed by our <a href="/privacy-policy" className="text-purple-600 hover:underline">Privacy Policy</a>. 
+                Your use of our service is also governed by our <a href="/privacy" className="text-purple-600 hover:underline">Privacy Policy</a>. 
                 Please review it to understand how we collect and use your information.
               </p>
             </section>
