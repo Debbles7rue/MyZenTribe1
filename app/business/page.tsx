@@ -15,11 +15,22 @@ type CreatorFields = {
   business_location_text: string | null;
   business_location_is_public: boolean | null;
   creator_type: "business" | "event_host" | "both" | null;
+  external_links: ExternalLink[] | null;
+};
+
+type ExternalLink = {
+  id: string;
+  title: string;
+  url: string;
+  image_url?: string;
+  description?: string;
 };
 
 const CreatorProfilePage: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [profileType, setProfileType] = useState<"business" | "event_host" | "both">("event_host");
+  const [externalLinks, setExternalLinks] = useState<ExternalLink[]>([]);
+  const [editingLinks, setEditingLinks] = useState(false);
 
   const [c, setC] = useState<CreatorFields>({
     business_name: "",
@@ -28,6 +39,7 @@ const CreatorProfilePage: React.FC = () => {
     business_location_text: "",
     business_location_is_public: false,
     creator_type: null,
+    external_links: null,
   });
 
   const [detailsLoading, setDetailsLoading] = useState<boolean>(true);
@@ -50,7 +62,7 @@ const CreatorProfilePage: React.FC = () => {
       const { data, error } = await supabase
         .from("profiles")
         .select(
-          "business_name, business_logo_url, business_bio, business_location_text, business_location_is_public"
+          "business_name, business_logo_url, business_bio, business_location_text, business_location_is_public, external_links"
         )
         .eq("id", userId)
         .maybeSingle();
@@ -70,8 +82,10 @@ const CreatorProfilePage: React.FC = () => {
           business_location_text: data.business_location_text ?? "",
           business_location_is_public: !!data.business_location_is_public,
           creator_type: data.creator_type || "event_host",
+          external_links: data.external_links || [],
         });
         setProfileType(data.creator_type || "event_host");
+        setExternalLinks(data.external_links || []);
       }
 
       setDetailsLoading(false);
@@ -99,11 +113,13 @@ const CreatorProfilePage: React.FC = () => {
         business_location_text: c.business_location_text?.trim() || null,
         business_location_is_public: !!c.business_location_is_public,
         creator_type: profileType,
+        external_links: externalLinks,
       };
       const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
       if (error) throw error;
       
       setSaveSuccess(true);
+      setEditingLinks(false);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e: any) {
       setError(e?.message || "Could not save details.");
@@ -128,6 +144,26 @@ const CreatorProfilePage: React.FC = () => {
       case "both": return "Service Provider & Event Host";
       default: return "Creator";
     }
+  };
+
+  const addLink = () => {
+    const newLink: ExternalLink = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
+      title: "",
+      url: "",
+      description: "",
+    };
+    setExternalLinks([...externalLinks, newLink]);
+  };
+
+  const updateLink = (id: string, updates: Partial<ExternalLink>) => {
+    setExternalLinks(links => 
+      links.map(link => link.id === id ? { ...link, ...updates } : link)
+    );
+  };
+
+  const removeLink = (id: string) => {
+    setExternalLinks(links => links.filter(link => link.id !== id));
   };
 
   return (
@@ -197,50 +233,6 @@ const CreatorProfilePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Profile Preview Card */}
-        <section className="preview-card">
-          <div className="preview-header">
-            <h2 className="preview-title">Profile Preview</h2>
-            <span className="preview-badge">{getTypeLabel()}</span>
-          </div>
-          
-          <div className="preview-content">
-            <div className="preview-avatar">
-              {c.business_logo_url ? (
-                <img
-                  src={c.business_logo_url}
-                  alt="Profile"
-                  className="avatar-image"
-                />
-              ) : (
-                <div className="avatar-placeholder">
-                  <span className="placeholder-icon">📸</span>
-                  <span className="placeholder-text">Add your photo</span>
-                </div>
-              )}
-            </div>
-
-            <div className="preview-info">
-              <h3 className="preview-name">{displayName}</h3>
-              {showLoc && (
-                <div className="preview-location">
-                  <span className="location-icon">📍</span>
-                  {c.business_location_text}
-                </div>
-              )}
-              {c.business_bio ? (
-                <p className="preview-bio">{c.business_bio}</p>
-              ) : (
-                <p className="preview-bio placeholder">
-                  {profileType === "event_host" 
-                    ? "Tell people about the events you host..."
-                    : "Describe what you offer..."}
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-
         {/* Two Column Layout */}
         <div className="content-grid">
           {/* LEFT: Profile Editor */}
@@ -262,7 +254,8 @@ const CreatorProfilePage: React.FC = () => {
   ADD COLUMN IF NOT EXISTS business_bio text,
   ADD COLUMN IF NOT EXISTS business_location_text text,
   ADD COLUMN IF NOT EXISTS business_location_is_public boolean DEFAULT false,
-  ADD COLUMN IF NOT EXISTS creator_type text DEFAULT 'event_host';`}
+  ADD COLUMN IF NOT EXISTS creator_type text DEFAULT 'event_host',
+  ADD COLUMN IF NOT EXISTS external_links jsonb DEFAULT '[]'::jsonb;`}
                   </pre>
                 </div>
               ) : detailsLoading ? (
@@ -375,6 +368,117 @@ const CreatorProfilePage: React.FC = () => {
             <section className="offerings-section">
               <BusinessProfilePanel userId={userId} />
             </section>
+
+            {/* Shop My Work Section */}
+            <section className="card shop-card">
+              <div className="card-header">
+                <h2 className="card-title">
+                  <span className="title-icon">🛍️</span>
+                  Shop My Work
+                </h2>
+                <button 
+                  className="btn btn-neutral btn-small"
+                  onClick={() => setEditingLinks(!editingLinks)}
+                >
+                  {editingLinks ? "Done" : "Edit"}
+                </button>
+              </div>
+
+              {editingLinks ? (
+                <div className="links-editor">
+                  {externalLinks.map(link => (
+                    <div key={link.id} className="link-item">
+                      <div className="link-fields">
+                        <input
+                          className="field-input"
+                          placeholder="Product name (e.g., My Book on Amazon)"
+                          value={link.title}
+                          onChange={(e) => updateLink(link.id, { title: e.target.value })}
+                        />
+                        <input
+                          className="field-input"
+                          placeholder="Link URL (e.g., https://amazon.com/...)"
+                          value={link.url}
+                          onChange={(e) => updateLink(link.id, { url: e.target.value })}
+                        />
+                        <input
+                          className="field-input"
+                          placeholder="Image URL (optional)"
+                          value={link.image_url || ""}
+                          onChange={(e) => updateLink(link.id, { image_url: e.target.value })}
+                        />
+                        <textarea
+                          className="field-input textarea-small"
+                          placeholder="Short description (optional)"
+                          rows={2}
+                          value={link.description || ""}
+                          onChange={(e) => updateLink(link.id, { description: e.target.value })}
+                        />
+                      </div>
+                      <button 
+                        className="btn btn-danger btn-small"
+                        onClick={() => removeLink(link.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button 
+                    className="btn btn-primary"
+                    onClick={addLink}
+                  >
+                    <span className="btn-icon">➕</span>
+                    Add Product Link
+                  </button>
+                </div>
+              ) : (
+                <div className="links-display">
+                  {externalLinks.length === 0 ? (
+                    <div className="empty-links">
+                      <p className="empty-text">
+                        Share your books, Etsy store, or other work with external links
+                      </p>
+                      <button 
+                        className="btn btn-primary"
+                        onClick={() => {
+                          setEditingLinks(true);
+                          addLink();
+                        }}
+                      >
+                        Add Your First Link
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="links-grid">
+                      {externalLinks.map(link => (
+                        <a 
+                          key={link.id}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="link-card"
+                        >
+                          {link.image_url && (
+                            <img 
+                              src={link.image_url} 
+                              alt={link.title}
+                              className="link-image"
+                            />
+                          )}
+                          <div className="link-content">
+                            <h4 className="link-title">{link.title}</h4>
+                            {link.description && (
+                              <p className="link-desc">{link.description}</p>
+                            )}
+                            <span className="link-url">🔗 Visit Store</span>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
 
           {/* RIGHT: Quick Actions */}
@@ -386,16 +490,6 @@ const CreatorProfilePage: React.FC = () => {
               <p className="action-desc">Connect with your community</p>
               <Link href="/messages" className="btn btn-primary btn-full">
                 Open Messages
-              </Link>
-            </section>
-
-            {/* Create Event Card */}
-            <section className="card action-card">
-              <div className="action-icon">🎉</div>
-              <h3 className="action-title">Host an Event</h3>
-              <p className="action-desc">Share your next gathering</p>
-              <Link href="/events/create" className="btn btn-primary btn-full">
-                Create Event
               </Link>
             </section>
 
@@ -591,125 +685,6 @@ const CreatorProfilePage: React.FC = () => {
           color: #6b7280;
         }
 
-        .preview-card {
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
-          border-radius: 1rem;
-          padding: 1.5rem;
-          margin-bottom: 2rem;
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(139,92,246,0.2);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-        }
-
-        .preview-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.5rem;
-        }
-
-        .preview-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0;
-        }
-
-        .preview-badge {
-          background: linear-gradient(135deg, #c084fc, #a78bfa);
-          color: white;
-          padding: 0.25rem 0.75rem;
-          border-radius: 1rem;
-          font-size: 0.75rem;
-          font-weight: 500;
-        }
-
-        .preview-content {
-          display: flex;
-          gap: 1.5rem;
-          align-items: flex-start;
-        }
-
-        @media (max-width: 640px) {
-          .preview-content {
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-          }
-        }
-
-        .preview-avatar {
-          flex-shrink: 0;
-        }
-
-        .avatar-image {
-          width: 120px;
-          height: 120px;
-          border-radius: 1rem;
-          object-fit: cover;
-          border: 2px solid rgba(139,92,246,0.2);
-        }
-
-        .avatar-placeholder {
-          width: 120px;
-          height: 120px;
-          border-radius: 1rem;
-          background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
-          border: 2px dashed #d1d5db;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 0.25rem;
-        }
-
-        .placeholder-icon {
-          font-size: 2rem;
-          opacity: 0.5;
-        }
-
-        .placeholder-text {
-          font-size: 0.75rem;
-          color: #9ca3af;
-        }
-
-        .preview-info {
-          flex-grow: 1;
-          min-width: 0;
-        }
-
-        .preview-name {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1f2937;
-          margin: 0 0 0.5rem 0;
-        }
-
-        .preview-location {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-          color: #8b5cf6;
-          font-size: 0.875rem;
-          font-weight: 500;
-          margin-bottom: 0.75rem;
-        }
-
-        .location-icon {
-          font-size: 0.875rem;
-        }
-
-        .preview-bio {
-          color: #4b5563;
-          line-height: 1.6;
-          white-space: pre-wrap;
-        }
-
-        .preview-bio.placeholder {
-          color: #9ca3af;
-          font-style: italic;
-        }
-
         .content-grid {
           display: grid;
           gap: 2rem;
@@ -739,6 +714,13 @@ const CreatorProfilePage: React.FC = () => {
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
+        .card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+
         .edit-card {
           padding: 1.5rem;
         }
@@ -747,7 +729,7 @@ const CreatorProfilePage: React.FC = () => {
           font-size: 1.125rem;
           font-weight: 600;
           color: #1f2937;
-          margin: 0 0 1.5rem 0;
+          margin: 0;
           display: flex;
           align-items: center;
           gap: 0.5rem;
@@ -857,7 +839,7 @@ const CreatorProfilePage: React.FC = () => {
           border-radius: 0.5rem;
           background: #f9fafb;
           transition: all 0.2s ease;
-          font-size: 16px; /* Prevents zoom on iOS */
+          font-size: 16px;
         }
 
         .field-input:focus {
@@ -870,6 +852,10 @@ const CreatorProfilePage: React.FC = () => {
         .field-input.textarea {
           resize: vertical;
           min-height: 6rem;
+        }
+
+        .textarea-small {
+          min-height: 3rem !important;
         }
 
         .location-row {
@@ -910,6 +896,96 @@ const CreatorProfilePage: React.FC = () => {
 
         .save-button {
           min-width: 10rem;
+        }
+
+        /* Shop My Work Section */
+        .shop-card {
+          padding: 1.5rem;
+        }
+
+        .links-editor {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .link-item {
+          background: #f9fafb;
+          padding: 1rem;
+          border-radius: 0.5rem;
+          border: 1px solid #e5e7eb;
+        }
+
+        .link-fields {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .links-display {
+          min-height: 100px;
+        }
+
+        .empty-links {
+          text-align: center;
+          padding: 2rem 1rem;
+        }
+
+        .empty-text {
+          color: #6b7280;
+          margin-bottom: 1rem;
+        }
+
+        .links-grid {
+          display: grid;
+          gap: 1rem;
+          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        }
+
+        .link-card {
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.75rem;
+          overflow: hidden;
+          text-decoration: none;
+          color: inherit;
+          transition: all 0.2s ease;
+          display: block;
+        }
+
+        .link-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          border-color: #8b5cf6;
+        }
+
+        .link-image {
+          width: 100%;
+          height: 150px;
+          object-fit: cover;
+        }
+
+        .link-content {
+          padding: 1rem;
+        }
+
+        .link-title {
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 0.25rem 0;
+        }
+
+        .link-desc {
+          font-size: 0.875rem;
+          color: #6b7280;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .link-url {
+          font-size: 0.75rem;
+          color: #8b5cf6;
+          font-weight: 500;
         }
 
         .action-card {
@@ -970,7 +1046,7 @@ const CreatorProfilePage: React.FC = () => {
           align-items: center;
           justify-content: center;
           gap: 0.5rem;
-          font-size: 16px; /* Prevents zoom on iOS */
+          font-size: 16px;
         }
 
         .btn:hover {
@@ -996,6 +1072,20 @@ const CreatorProfilePage: React.FC = () => {
         .btn-neutral:hover {
           background: #f9fafb;
           border-color: #d1d5db;
+        }
+
+        .btn-danger {
+          background: #ef4444;
+          color: white;
+        }
+
+        .btn-danger:hover {
+          background: #dc2626;
+        }
+
+        .btn-small {
+          padding: 0.5rem 0.75rem;
+          font-size: 0.875rem;
         }
 
         .btn-full {
@@ -1026,6 +1116,10 @@ const CreatorProfilePage: React.FC = () => {
           
           .checkbox-label.location-public {
             margin-top: 0.5rem;
+          }
+          
+          .links-grid {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
