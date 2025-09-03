@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 
 type Tab = "karma" | "good_news" | "challenges";
+type ChallengeTab = "browse" | "create" | "my_challenges";
 
 type PostRow = {
   id: string;
@@ -27,7 +28,13 @@ type ChallengeRow = {
   end_at: string;
   tags: string[];
   participant_count: number;
+  success_count: number;
   is_participating: boolean;
+  is_official: boolean;
+  difficulty_level: "easy" | "medium" | "hard";
+  estimated_time?: string;
+  target_group?: string;
+  created_by?: string;
 };
 
 type ReactionCount = {
@@ -44,6 +51,18 @@ const reactions = {
   inspired: { emoji: "✨", label: "Inspired", description: "This motivates me" }
 };
 
+const difficultyColors = {
+  easy: "#10b981",
+  medium: "#f59e0b", 
+  hard: "#ef4444"
+};
+
+const difficultyLabels = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Challenge"
+};
+
 const pageBg: React.CSSProperties = {
   background: "linear-gradient(135deg, #fef7ff 0%, #fdf4ff 25%, #f3e8ff 50%, #e9d5ff 75%, #ddd6fe 100%)",
   minHeight: "100vh",
@@ -51,6 +70,7 @@ const pageBg: React.CSSProperties = {
 
 export default function KarmaCornerPage() {
   const [tab, setTab] = useState<Tab>("karma");
+  const [challengeTab, setChallengeTab] = useState<ChallengeTab>("browse");
   const [userId, setUserId] = useState<string | null>(null);
   const [myName, setMyName] = useState<string>("You");
 
@@ -63,20 +83,50 @@ export default function KarmaCornerPage() {
   const [showReflection, setShowReflection] = useState(false);
   const [posting, setPosting] = useState(false);
 
+  // Challenge creation states
+  const [newChallenge, setNewChallenge] = useState({
+    title: "",
+    description: "",
+    duration_days: 7,
+    difficulty_level: "medium" as "easy" | "medium" | "hard",
+    estimated_time: "",
+    target_group: "",
+    tags: [] as string[]
+  });
+  const [creatingChallenge, setCreatingChallenge] = useState(false);
+  const [showCreateChallenge, setShowCreateChallenge] = useState(false);
+
+  // Challenge completion states
+  const [showCompleteModal, setShowCompleteModal] = useState<string | null>(null);
+  const [completionStory, setCompletionStory] = useState("");
+  const [shareToGoodNews, setShareToGoodNews] = useState(true);
+
   // Feed states
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [challenges, setChallenges] = useState<ChallengeRow[]>([]);
+  const [myChallenges, setMyChallenges] = useState<ChallengeRow[]>([]);
   const [reactionCounts, setReactionCounts] = useState<Record<string, ReactionCount>>({});
   const [myReactions, setMyReactions] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
 
   const canPost = content.trim().length > 0 && !!userId;
+  const canCreateChallenge = newChallenge.title.trim().length > 0 && newChallenge.description.trim().length > 0;
 
   // Common tags for suggestions
   const commonTags = [
     "#RandomActsOfKindness", "#Community", "#LocalLove", "#PayItForward", 
     "#Gratitude", "#Helping", "#Inspiration", "#Kindness", "#GoodNews"
+  ];
+
+  const challengeTags = [
+    "elderly", "homeless", "community", "environment", "pets", "veterans", 
+    "first-responders", "neighbors", "technology", "food", "education", "health"
+  ];
+
+  const targetGroups = [
+    "community", "elderly", "homeless", "veterans", "first-responders", 
+    "students", "healthcare-workers", "environment", "animals", "neighbors"
   ];
 
   useEffect(() => {
@@ -153,10 +203,13 @@ export default function KarmaCornerPage() {
       const { data: challengesData, error: challengesErr } = await supabase
         .from("kindness_challenges")
         .select(`
-          id,title,description,start_at,end_at,tags,participant_count,
+          id,title,description,start_at,end_at,tags,participant_count,success_count,
+          is_official,difficulty_level,estimated_time,target_group,created_by,
           kindness_challenge_participants!left(user_id)
         `)
         .eq("is_active", true)
+        .eq("status", "approved")
+        .order("is_official", { ascending: false })
         .order("created_at", { ascending: false });
 
       if (challengesErr) throw challengesErr;
@@ -167,6 +220,12 @@ export default function KarmaCornerPage() {
       }));
 
       setChallenges(processedChallenges);
+
+      // Load my challenges (ones I'm participating in or created)
+      const myChallengesList = processedChallenges.filter((c: ChallengeRow) => 
+        c.is_participating || c.created_by === userId
+      );
+      setMyChallenges(myChallengesList);
     } catch (e: any) {
       console.error("Error loading challenges:", e);
     }
@@ -217,6 +276,110 @@ export default function KarmaCornerPage() {
       setError(e?.message || "Posting failed.");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const onCreateChallenge = async () => {
+    if (!canCreateChallenge || !userId) return;
+    setCreatingChallenge(true);
+    
+    try {
+      const challengeData = {
+        title: newChallenge.title.trim(),
+        description: newChallenge.description.trim(),
+        start_at: new Date().toISOString(),
+        end_at: new Date(Date.now() + newChallenge.duration_days * 24 * 60 * 60 * 1000).toISOString(),
+        tags: newChallenge.tags,
+        created_by: userId,
+        difficulty_level: newChallenge.difficulty_level,
+        estimated_time: newChallenge.estimated_time || null,
+        target_group: newChallenge.target_group || null,
+        is_official: false,
+        status: "approved" // For now, auto-approve. Later add moderation queue
+      };
+
+      const { error: err } = await supabase
+        .from("kindness_challenges")
+        .insert(challengeData);
+      
+      if (err) throw err;
+      
+      // Reset form and close modal
+      setNewChallenge({
+        title: "",
+        description: "",
+        duration_days: 7,
+        difficulty_level: "medium",
+        estimated_time: "",
+        target_group: "",
+        tags: []
+      });
+      setShowCreateChallenge(false);
+      
+      // Reload challenges
+      loadChallenges();
+    } catch (e: any) {
+      setError(e?.message || "Failed to create challenge.");
+    } finally {
+      setCreatingChallenge(false);
+    }
+  };
+
+  const onCompleteChallenge = async (challengeId: string) => {
+    if (!userId || !completionStory.trim()) return;
+    
+    try {
+      // Mark challenge as completed in entries
+      const { error: entryErr } = await supabase
+        .from("kindness_entries")
+        .upsert({
+          challenge_id: challengeId,
+          user_id: userId,
+          is_completed: true,
+          completion_story: completionStory.trim(),
+          share_to_good_news: shareToGoodNews,
+          completed_at: new Date().toISOString()
+        });
+      
+      if (entryErr) throw entryErr;
+
+      // If sharing to good news, create that post
+      if (shareToGoodNews) {
+        const challenge = challenges.find(c => c.id === challengeId);
+        const goodNewsContent = `🎯 Challenge Complete: ${challenge?.title}\n\n${completionStory.trim()}`;
+        
+        const { error: goodNewsErr } = await supabase
+          .from("kindness_posts")
+          .insert({
+            created_by: userId,
+            post_type: "good_news",
+            content: goodNewsContent,
+            tags: ["#ChallengeComplete", ...(challenge?.tags.map(t => `#${t}`) || [])],
+            is_anonymous: false,
+            status: "published"
+          });
+        
+        if (goodNewsErr) throw goodNewsErr;
+      }
+
+      // Update success count
+      const { error: updateErr } = await supabase
+        .from("kindness_challenges")
+        .update({ success_count: (challenges.find(c => c.id === challengeId)?.success_count || 0) + 1 })
+        .eq("id", challengeId);
+      
+      if (updateErr) console.error("Failed to update success count:", updateErr);
+
+      // Close modal and refresh
+      setShowCompleteModal(null);
+      setCompletionStory("");
+      setShareToGoodNews(true);
+      loadChallenges();
+      if (shareToGoodNews) loadPosts();
+      
+    } catch (e: any) {
+      console.error("Complete challenge error:", e);
+      setError(e?.message || "Failed to complete challenge");
     }
   };
 
@@ -329,6 +492,22 @@ export default function KarmaCornerPage() {
     setSelectedTags(prev => prev.filter(t => t !== tag));
   };
 
+  const addChallengeTag = (tag: string) => {
+    if (!newChallenge.tags.includes(tag)) {
+      setNewChallenge(prev => ({
+        ...prev,
+        tags: [...prev.tags, tag]
+      }));
+    }
+  };
+
+  const removeChallengeTag = (tag: string) => {
+    setNewChallenge(prev => ({
+      ...prev,
+      tags: prev.tags.filter(t => t !== tag)
+    }));
+  };
+
   const filteredPosts = useMemo(() => {
     if (tab === "challenges") return [];
     return posts.filter(p => p.post_type === tab);
@@ -336,8 +515,9 @@ export default function KarmaCornerPage() {
 
   const filteredChallenges = useMemo(() => {
     if (tab !== "challenges") return [];
+    if (challengeTab === "my_challenges") return myChallenges;
     return challenges;
-  }, [challenges, tab]);
+  }, [challenges, myChallenges, tab, challengeTab]);
 
   return (
     <div className="page-wrap" style={pageBg}>
@@ -367,15 +547,15 @@ export default function KarmaCornerPage() {
             }}
           >
             <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 18 }}>
-              ✨ A place where kindness grows
+              ✨ Where kindness grows and movements begin
             </div>
             <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.6 }}>
-              Share anonymous acts of kindness, discover uplifting stories, and join challenges that spread positivity. 
-              Every post plants a seed of inspiration.
+              Share anonymous acts of kindness, discover uplifting stories, join challenges, and even start your own kindness movements. 
+              Every post plants a seed of inspiration. ✨
             </p>
           </section>
 
-          {/* Tabs */}
+          {/* Main Tabs */}
           <div className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden", borderRadius: 16 }}>
             <div className="controls" style={{ gap: 0, margin: 0 }}>
               {[
@@ -692,108 +872,501 @@ export default function KarmaCornerPage() {
             </>
           ) : (
             /* Challenges Section */
-            <section className="stack" style={{ gap: 16 }}>
-              <div 
-                className="card p-4"
-                style={{
-                  background: "rgba(255, 255, 255, 0.8)",
-                  backdropFilter: "blur(10px)",
-                  borderRadius: 16,
-                  textAlign: "center"
-                }}
-              >
-                <h3 style={{ margin: "0 0 8px 0", color: "#7c3aed" }}>🎯 Kindness Challenges</h3>
-                <p style={{ margin: 0, color: "#6b7280" }}>
-                  Join challenges to spread kindness and connect with others making a difference
-                </p>
+            <>
+              {/* Challenge Sub-tabs */}
+              <div className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden", borderRadius: 16 }}>
+                <div className="controls" style={{ gap: 0, margin: 0 }}>
+                  {[
+                    { id: "browse", label: "🌟 Browse Challenges", desc: "Find inspiration" },
+                    { id: "my_challenges", label: "💪 My Challenges", desc: "Track progress" },
+                    { id: "create", label: "🚀 Create Challenge", desc: "Start a movement" }
+                  ].map(({ id, label, desc }) => (
+                    <button
+                      key={id}
+                      className={`btn ${challengeTab === id ? "btn-brand" : "btn-neutral"}`}
+                      onClick={() => setChallengeTab(id as ChallengeTab)}
+                      style={{
+                        flex: 1,
+                        borderRadius: 0,
+                        padding: "12px 6px",
+                        flexDirection: "column",
+                        gap: 2,
+                        border: "none",
+                        background: challengeTab === id 
+                          ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" 
+                          : "rgba(255, 255, 255, 0.5)",
+                        color: challengeTab === id ? "white" : "#374151"
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+                      <div style={{ fontSize: 11, opacity: 0.8 }}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {challenges.length === 0 ? (
-                <div className="card p-4" style={{ textAlign: "center", color: "#6b7280" }}>
-                  No active challenges right now. Check back soon! 🌟
-                </div>
-              ) : (
-                challenges.map((challenge) => (
-                  <div
-                    key={challenge.id}
-                    className="card p-4"
-                    style={{
-                      background: "rgba(255, 255, 255, 0.8)",
-                      backdropFilter: "blur(10px)",
-                      borderRadius: 16,
-                      border: challenge.is_participating ? "2px solid #7c3aed" : "1px solid rgba(139, 69, 19, 0.1)"
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                      <h4 style={{ margin: 0, color: "#374151", fontSize: 18 }}>{challenge.title}</h4>
-                      {challenge.is_participating && (
-                        <span style={{
-                          padding: "4px 12px",
-                          fontSize: 12,
-                          background: "#7c3aed",
-                          color: "white",
-                          borderRadius: 16,
-                          fontWeight: 600
-                        }}>
-                          Joined ✓
-                        </span>
-                      )}
-                    </div>
-                    
-                    <p style={{ margin: "0 0 12px 0", color: "#6b7280", lineHeight: 1.6 }}>
-                      {challenge.description}
-                    </p>
+              {challengeTab === "create" ? (
+                /* Create Challenge Form */
+                <div 
+                  className="card p-4"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.8)",
+                    backdropFilter: "blur(10px)",
+                    borderRadius: 16,
+                    marginBottom: 20
+                  }}
+                >
+                  <h3 style={{ margin: "0 0 16px 0", color: "#10b981", fontSize: 20 }}>🚀 Create Your Own Challenge</h3>
+                  <p style={{ margin: "0 0 20px 0", color: "#6b7280", lineHeight: 1.6 }}>
+                    Start a movement! Create a challenge that could inspire your community to spread kindness.
+                  </p>
 
-                    <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12 }}>
-                      📅 {format(new Date(challenge.start_at), "MMM d")} - {format(new Date(challenge.end_at), "MMM d")}
-                      <span style={{ marginLeft: 16 }}>
-                        👥 {challenge.participant_count} participants
-                      </span>
+                  <div className="stack" style={{ gap: 16 }}>
+                    <input
+                      type="text"
+                      placeholder="Challenge title (e.g., 'Help 5 Elderly Neighbors This Week')"
+                      value={newChallenge.title}
+                      onChange={(e) => setNewChallenge(prev => ({ ...prev, title: e.target.value }))}
+                      style={{
+                        border: "2px solid #e5e7eb",
+                        borderRadius: 12,
+                        padding: 12,
+                        fontSize: 14,
+                        fontWeight: 600
+                      }}
+                    />
+
+                    <textarea
+                      placeholder="Describe your challenge... What should people do? Why is this important? Any tips or resources?"
+                      rows={4}
+                      value={newChallenge.description}
+                      onChange={(e) => setNewChallenge(prev => ({ ...prev, description: e.target.value }))}
+                      style={{
+                        border: "2px solid #e5e7eb",
+                        borderRadius: 12,
+                        padding: 12,
+                        fontSize: 14,
+                        resize: "vertical"
+                      }}
+                    />
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div>
+                        <label style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, display: "block" }}>Duration:</label>
+                        <select
+                          value={newChallenge.duration_days}
+                          onChange={(e) => setNewChallenge(prev => ({ ...prev, duration_days: Number(e.target.value) }))}
+                          style={{
+                            border: "2px solid #e5e7eb",
+                            borderRadius: 12,
+                            padding: 12,
+                            fontSize: 14,
+                            width: "100%"
+                          }}
+                        >
+                          <option value={1}>1 day</option>
+                          <option value={3}>3 days</option>
+                          <option value={7}>1 week</option>
+                          <option value={14}>2 weeks</option>
+                          <option value={21}>3 weeks</option>
+                          <option value={30}>1 month</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, display: "block" }}>Difficulty:</label>
+                        <select
+                          value={newChallenge.difficulty_level}
+                          onChange={(e) => setNewChallenge(prev => ({ ...prev, difficulty_level: e.target.value as "easy" | "medium" | "hard" }))}
+                          style={{
+                            border: "2px solid #e5e7eb",
+                            borderRadius: 12,
+                            padding: 12,
+                            fontSize: 14,
+                            width: "100%"
+                          }}
+                        >
+                          <option value="easy">Easy (5-15 mins)</option>
+                          <option value="medium">Medium (30 mins - 1 hour)</option>
+                          <option value="hard">Challenge (1+ hours)</option>
+                        </select>
+                      </div>
                     </div>
 
-                    {challenge.tags.length > 0 && (
-                      <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {challenge.tags.map(tag => (
-                          <span
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <input
+                        type="text"
+                        placeholder="Time estimate (e.g., '30 minutes', '2 hours')"
+                        value={newChallenge.estimated_time}
+                        onChange={(e) => setNewChallenge(prev => ({ ...prev, estimated_time: e.target.value }))}
+                        style={{
+                          border: "2px solid #e5e7eb",
+                          borderRadius: 12,
+                          padding: 12,
+                          fontSize: 14
+                        }}
+                      />
+
+                      <select
+                        value={newChallenge.target_group}
+                        onChange={(e) => setNewChallenge(prev => ({ ...prev, target_group: e.target.value }))}
+                        style={{
+                          border: "2px solid #e5e7eb",
+                          borderRadius: 12,
+                          padding: 12,
+                          fontSize: 14
+                        }}
+                      >
+                        <option value="">Who does this help?</option>
+                        {targetGroups.map(group => (
+                          <option key={group} value={group}>{group}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Challenge Tags */}
+                    <div>
+                      <label style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, display: "block" }}>Tags (helps people find your challenge):</label>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                        {challengeTags.map(tag => (
+                          <button
                             key={tag}
+                            onClick={() => addChallengeTag(tag)}
                             style={{
                               padding: "4px 8px",
-                              fontSize: 11,
-                              background: "#f3f4f6",
-                              color: "#6b7280",
-                              borderRadius: 12
+                              fontSize: 12,
+                              border: "1px solid #d1d5db",
+                              borderRadius: 16,
+                              background: newChallenge.tags.includes(tag) ? "#10b981" : "white",
+                              color: newChallenge.tags.includes(tag) ? "white" : "#374151",
+                              cursor: "pointer"
                             }}
                           >
-                            #{tag}
-                          </span>
+                            {tag}
+                          </button>
                         ))}
                       </div>
-                    )}
+                      {newChallenge.tags.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {newChallenge.tags.map(tag => (
+                            <span
+                              key={tag}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: 12,
+                                background: "#10b981",
+                                color: "white",
+                                borderRadius: 16,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4
+                              }}
+                            >
+                              {tag}
+                              <button
+                                onClick={() => removeChallengeTag(tag)}
+                                style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                    {!challenge.is_participating && (
+                    <div className="controls">
                       <button
-                        onClick={() => onJoinChallenge(challenge.id)}
+                        onClick={onCreateChallenge}
+                        disabled={!canCreateChallenge || creatingChallenge}
                         style={{
                           background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                           border: "none",
                           borderRadius: 12,
-                          padding: "10px 20px",
+                          padding: "12px 24px",
                           color: "white",
                           fontWeight: 600,
-                          cursor: "pointer",
-                          fontSize: 14
+                          cursor: "pointer"
                         }}
                       >
-                        🚀 Join Challenge
+                        {creatingChallenge ? "Creating..." : "🚀 Launch Challenge"}
                       </button>
-                    )}
+                    </div>
                   </div>
-                ))
+                </div>
+              ) : (
+                /* Browse/My Challenges */
+                <section className="stack" style={{ gap: 16 }}>
+                  {challengeTab === "browse" && (
+                    <div 
+                      className="card p-4"
+                      style={{
+                        background: "rgba(255, 255, 255, 0.8)",
+                        backdropFilter: "blur(10px)",
+                        borderRadius: 16,
+                        textAlign: "center"
+                      }}
+                    >
+                      <h3 style={{ margin: "0 0 8px 0", color: "#7c3aed" }}>🎯 Kindness Challenges</h3>
+                      <p style={{ margin: 0, color: "#6b7280" }}>
+                        Join challenges to spread kindness and connect with others making a difference.
+                        See something complete? Share your success story in Good News! 🌟
+                      </p>
+                    </div>
+                  )}
+
+                  {challengeTab === "my_challenges" && (
+                    <div 
+                      className="card p-4"
+                      style={{
+                        background: "rgba(255, 255, 255, 0.8)",
+                        backdropFilter: "blur(10px)",
+                        borderRadius: 16,
+                        textAlign: "center"
+                      }}
+                    >
+                      <h3 style={{ margin: "0 0 8px 0", color: "#10b981" }}>💪 Your Kindness Journey</h3>
+                      <p style={{ margin: 0, color: "#6b7280" }}>
+                        Track your challenges and mark them complete. When you finish, share your story to inspire others!
+                      </p>
+                    </div>
+                  )}
+
+                  {filteredChallenges.length === 0 ? (
+                    <div className="card p-4" style={{ textAlign: "center", color: "#6b7280" }}>
+                      {challengeTab === "my_challenges" 
+                        ? "No challenges joined yet. Browse some challenges to get started! 🌟"
+                        : "No active challenges right now. Create your own to get things started! 🚀"
+                      }
+                    </div>
+                  ) : (
+                    filteredChallenges.map((challenge) => (
+                      <div
+                        key={challenge.id}
+                        className="card p-4"
+                        style={{
+                          background: "rgba(255, 255, 255, 0.8)",
+                          backdropFilter: "blur(10px)",
+                          borderRadius: 16,
+                          border: challenge.is_participating ? "2px solid #10b981" : "1px solid rgba(139, 69, 19, 0.1)"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <h4 style={{ margin: 0, color: "#374151", fontSize: 18 }}>{challenge.title}</h4>
+                              {challenge.is_official && (
+                                <span style={{
+                                  padding: "2px 6px",
+                                  fontSize: 10,
+                                  background: "#7c3aed",
+                                  color: "white",
+                                  borderRadius: 8,
+                                  fontWeight: 600
+                                }}>
+                                  OFFICIAL
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {challenge.is_participating && (
+                              <span style={{
+                                padding: "4px 12px",
+                                fontSize: 12,
+                                background: "#10b981",
+                                color: "white",
+                                borderRadius: 16,
+                                fontWeight: 600
+                              }}>
+                                Joined ✓
+                              </span>
+                            )}
+                            
+                            <span style={{
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              background: difficultyColors[challenge.difficulty_level],
+                              color: "white",
+                              borderRadius: 12,
+                              fontWeight: 600
+                            }}>
+                              {difficultyLabels[challenge.difficulty_level]}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <p style={{ margin: "0 0 12px 0", color: "#6b7280", lineHeight: 1.6 }}>
+                          {challenge.description}
+                        </p>
+
+                        <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 16 }}>
+                          <span>📅 {format(new Date(challenge.start_at), "MMM d")} - {format(new Date(challenge.end_at), "MMM d")}</span>
+                          <span>👥 {challenge.participant_count} joined</span>
+                          <span>🎉 {challenge.success_count} completed</span>
+                          {challenge.estimated_time && <span>⏱️ {challenge.estimated_time}</span>}
+                          {challenge.target_group && <span>🎯 {challenge.target_group}</span>}
+                        </div>
+
+                        {challenge.tags.length > 0 && (
+                          <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {challenge.tags.map(tag => (
+                              <span
+                                key={tag}
+                                style={{
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  background: "#f3f4f6",
+                                  color: "#6b7280",
+                                  borderRadius: 12
+                                }}
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                          {!challenge.is_participating ? (
+                            <button
+                              onClick={() => onJoinChallenge(challenge.id)}
+                              style={{
+                                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                border: "none",
+                                borderRadius: 12,
+                                padding: "10px 20px",
+                                color: "white",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontSize: 14
+                              }}
+                            >
+                              🚀 Join Challenge
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setShowCompleteModal(challenge.id)}
+                              style={{
+                                background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+                                border: "none",
+                                borderRadius: 12,
+                                padding: "10px 20px",
+                                color: "white",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontSize: 14
+                              }}
+                            >
+                              ✅ Mark Complete
+                            </button>
+                          )}
+                          
+                          {challenge.created_by === userId && (
+                            <span style={{ fontSize: 12, color: "#10b981", fontWeight: 600 }}>
+                              Your Challenge 🌟
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </section>
               )}
-            </section>
+            </>
           )}
         </div>
       </div>
+
+      {/* Challenge Completion Modal */}
+      {showCompleteModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+          padding: 20
+        }}>
+          <div style={{
+            background: "white",
+            borderRadius: 20,
+            padding: 24,
+            maxWidth: 500,
+            width: "100%",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
+          }}>
+            <h3 style={{ margin: "0 0 16px 0", color: "#10b981" }}>🎉 Challenge Complete!</h3>
+            <p style={{ margin: "0 0 16px 0", color: "#6b7280", lineHeight: 1.6 }}>
+              Amazing work! Tell us how it went and inspire others with your story:
+            </p>
+            <textarea
+              placeholder="Tell your story... How did it go? What did you learn? How did it feel to help?"
+              value={completionStory}
+              onChange={(e) => setCompletionStory(e.target.value)}
+              rows={4}
+              style={{
+                width: "100%",
+                border: "2px solid #e5e7eb",
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 14,
+                resize: "vertical",
+                marginBottom: 16
+              }}
+            />
+            
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={shareToGoodNews}
+                onChange={(e) => setShareToGoodNews(e.target.checked)}
+              />
+              <span style={{ fontSize: 14 }}>✨ Share this success story in Good News to inspire others!</span>
+            </label>
+            
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowCompleteModal(null);
+                  setCompletionStory("");
+                  setShareToGoodNews(true);
+                }}
+                style={{
+                  padding: "10px 20px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: 8,
+                  background: "white",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => onCompleteChallenge(showCompleteModal)}
+                disabled={!completionStory.trim()}
+                style={{
+                  padding: "10px 20px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: completionStory.trim() ? "#10b981" : "#9ca3af",
+                  color: "white",
+                  cursor: completionStory.trim() ? "pointer" : "not-allowed",
+                  fontWeight: 600
+                }}
+              >
+                🎉 Complete Challenge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reflection Modal */}
       {showReflection && (
