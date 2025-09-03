@@ -23,6 +23,7 @@ type Post = {
   media: MediaItem[];
   collaborators: string[];
   tags: string[];
+  comments: Comment[];
 };
 
 type MediaItem = {
@@ -31,6 +32,14 @@ type MediaItem = {
   type: "image" | "video";
   created_by: string;
   url: string;
+};
+
+type Comment = {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+  user_name: string;
 };
 
 type Invite = {
@@ -44,6 +53,281 @@ const VISIBILITY_OPTIONS = [
   { value: "private", label: "Private", icon: "🔒", description: "Only on your profile + tagged friends" },
   { value: "friends", label: "Public", icon: "👥", description: "Shows in friends' feeds" },
 ] as const;
+
+// Comments Section Component
+function CommentsSection({ 
+  postId, 
+  comments, 
+  userId, 
+  onCommentsUpdate 
+}: { 
+  postId: string;
+  comments: Comment[];
+  userId: string | null;
+  onCommentsUpdate: () => void;
+}) {
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId || !newComment.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("post_comments")
+        .insert({
+          post_id: postId,
+          user_id: userId,
+          content: newComment.trim()
+        });
+
+      if (error) throw error;
+
+      setNewComment("");
+      onCommentsUpdate();
+    } catch (err: any) {
+      alert(`Failed to post comment: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatCommentDate = (dateString: string) => {
+    const now = new Date();
+    const commentDate = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - commentDate.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return "just now";
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  return (
+    <div className="comments-section">
+      <div className="comments-header">
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className="comments-toggle"
+        >
+          <span className="comment-icon">💬</span>
+          <span className="comment-count">
+            {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+          </span>
+          <span className="toggle-arrow">{showComments ? '▼' : '▶'}</span>
+        </button>
+      </div>
+
+      {showComments && (
+        <div className="comments-content">
+          {/* Comment Form */}
+          {userId && (
+            <form onSubmit={handleSubmitComment} className="comment-form">
+              <div className="comment-input-container">
+                <input
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Add a comment..."
+                  className="comment-input"
+                  maxLength={500}
+                />
+                <button
+                  type="submit"
+                  disabled={!newComment.trim() || submitting}
+                  className="comment-submit"
+                >
+                  {submitting ? "..." : "Post"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Comments List */}
+          <div className="comments-list">
+            {comments.length === 0 ? (
+              <div className="no-comments">
+                <span className="no-comments-icon">💭</span>
+                <span>No comments yet. Start the conversation!</span>
+              </div>
+            ) : (
+              comments.map(comment => (
+                <div key={comment.id} className="comment-item">
+                  <div className="comment-header">
+                    <span className="comment-author">{comment.user_name}</span>
+                    <span className="comment-date">{formatCommentDate(comment.created_at)}</span>
+                  </div>
+                  <div className="comment-content">{comment.content}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .comments-section {
+          border-top: 1px solid rgba(0, 0, 0, 0.1);
+          padding-top: 0.75rem;
+        }
+
+        .comments-header {
+          margin-bottom: 0.75rem;
+        }
+
+        .comments-toggle {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #6b7280;
+          font-size: 0.875rem;
+          font-weight: 500;
+          padding: 0.5rem;
+          border-radius: 0.375rem;
+          transition: all 0.2s ease;
+          width: 100%;
+          justify-content: flex-start;
+        }
+
+        .comments-toggle:hover {
+          background: rgba(139, 92, 246, 0.1);
+          color: #8b5cf6;
+        }
+
+        .comment-icon {
+          font-size: 1rem;
+        }
+
+        .toggle-arrow {
+          margin-left: auto;
+          font-size: 0.75rem;
+        }
+
+        .comments-content {
+          padding-left: 0.5rem;
+        }
+
+        .comment-form {
+          margin-bottom: 1rem;
+        }
+
+        .comment-input-container {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+
+        .comment-input {
+          flex: 1;
+          padding: 0.5rem 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 1.5rem;
+          background: #f9fafb;
+          font-size: 0.875rem;
+          transition: all 0.2s ease;
+        }
+
+        .comment-input:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          background: white;
+          box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .comment-submit {
+          padding: 0.5rem 1rem;
+          background: #8b5cf6;
+          color: white;
+          border: none;
+          border-radius: 1rem;
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 0.875rem;
+          transition: all 0.2s ease;
+        }
+
+        .comment-submit:hover:not(:disabled) {
+          background: #7c3aed;
+        }
+
+        .comment-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .comments-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .no-comments {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #9ca3af;
+          font-size: 0.875rem;
+          padding: 1rem;
+          text-align: center;
+          justify-content: center;
+        }
+
+        .no-comments-icon {
+          font-size: 1.125rem;
+        }
+
+        .comment-item {
+          background: #f9fafb;
+          border-radius: 0.75rem;
+          padding: 0.75rem;
+          border: 1px solid #f3f4f6;
+        }
+
+        .comment-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.25rem;
+        }
+
+        .comment-author {
+          font-weight: 500;
+          color: #374151;
+          font-size: 0.875rem;
+        }
+
+        .comment-date {
+          color: #9ca3af;
+          font-size: 0.75rem;
+        }
+
+        .comment-content {
+          color: #4b5563;
+          line-height: 1.4;
+          font-size: 0.875rem;
+        }
+
+        @media (max-width: 640px) {
+          .comment-input-container {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .comment-submit {
+            align-self: flex-end;
+            width: fit-content;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 // Collaboration Invites Component
 function CollaborationInvites({ 
@@ -849,11 +1133,12 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
 
       if (postsError) throw postsError;
 
-      // Load media and collaborators for each post
+      // Load media, collaborators, and comments for each post
       const enrichedPosts = await Promise.all((postsData || []).map(async (post) => {
-        const [mediaData, collabData] = await Promise.all([
+        const [mediaData, collabData, commentsData] = await Promise.all([
           listPostMedia(post.id),
-          getPostCollaborators(post.id)
+          getPostCollaborators(post.id),
+          loadPostComments(post.id)
         ]);
 
         // Convert storage paths to public URLs
@@ -877,7 +1162,8 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           created_by: post.created_by,
           media: mediaWithUrls,
           collaborators: collabData,
-          tags: [] // Will be filled with actual tagged user names
+          tags: [], // Will be filled with actual tagged user names
+          comments: commentsData
         };
       }));
 
@@ -886,6 +1172,36 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
       console.error("Error loading posts:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Helper function to load comments for a post
+  async function loadPostComments(postId: string): Promise<Comment[]> {
+    try {
+      const { data, error } = await supabase
+        .from("post_comments")
+        .select(`
+          id,
+          content,
+          created_at,
+          user_id,
+          profiles!inner(full_name)
+        `)
+        .eq("post_id", postId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      return data?.map(comment => ({
+        id: comment.id,
+        content: comment.content,
+        created_at: comment.created_at,
+        user_id: comment.user_id,
+        user_name: (comment.profiles as any)?.full_name || "Unknown User"
+      })) || [];
+    } catch (err) {
+      console.error("Error loading comments:", err);
+      return [];
     }
   }
 
@@ -960,6 +1276,10 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
 
   const handleInviteResponse = () => {
     loadPosts(); // Reload posts after accepting/declining invites
+  };
+
+  const handleCommentsUpdate = () => {
+    loadPosts(); // Reload posts when comments are updated
   };
 
   useEffect(() => { 
@@ -1079,6 +1399,14 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                     <span className="collab-count">{post.collaborators.length} collaborator{post.collaborators.length === 1 ? '' : 's'}</span>
                   )}
                 </div>
+
+                {/* Comments Section */}
+                <CommentsSection
+                  postId={post.id}
+                  comments={post.comments}
+                  userId={userId}
+                  onCommentsUpdate={handleCommentsUpdate}
+                />
               </div>
             </div>
           ))
@@ -1326,6 +1654,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           gap: 1rem;
           font-size: 0.75rem;
           color: #6b7280;
+          margin-bottom: 0.75rem;
         }
 
         .media-count, .collab-count {
