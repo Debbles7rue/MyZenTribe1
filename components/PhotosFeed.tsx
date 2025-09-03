@@ -3,25 +3,221 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { 
+  createPostRPC, 
+  uploadMediaToPost, 
+  listPostMedia,
+  removeMedia,
+  inviteCollaborator,
+  listMyInvites,
+  respondToInvite 
+} from "@/lib/collab-demo";
 
 type Post = {
   id: string;
-  image_path: string;
   caption: string | null;
   description: string | null;
-  visibility: "private" | "public";
+  visibility: "private" | "friends";
   created_at: string;
-  url: string;
+  created_by: string;
+  media: MediaItem[];
+  collaborators: string[];
   tags: string[];
-  user_id: string;
+};
+
+type MediaItem = {
+  id: string;
+  storage_path: string;
+  type: "image" | "video";
+  created_by: string;
+  url: string;
+};
+
+type Invite = {
+  post_id: string;
+  status: string;
+  added_by: string;
+  created_at: string;
 };
 
 const VISIBILITY_OPTIONS = [
   { value: "private", label: "Private", icon: "🔒", description: "Only on your profile + tagged friends" },
-  { value: "public", label: "Public", icon: "👥", description: "Shows in friends' feeds" },
+  { value: "friends", label: "Public", icon: "👥", description: "Shows in friends' feeds" },
 ] as const;
 
-// Create Post Modal Component
+// Collaboration Invites Component
+function CollaborationInvites({ 
+  userId, 
+  onInviteResponded 
+}: { 
+  userId: string | null;
+  onInviteResponded: () => void;
+}) {
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [responding, setResponding] = useState<string | null>(null);
+
+  const loadInvites = async () => {
+    if (!userId) return;
+    try {
+      const inviteData = await listMyInvites();
+      const pendingInvites = inviteData.filter(inv => inv.status === "invited");
+      setInvites(pendingInvites);
+    } catch (err) {
+      console.error("Failed to load invites:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInviteResponse = async (postId: string, accept: boolean) => {
+    setResponding(postId);
+    try {
+      await respondToInvite(postId, accept);
+      await loadInvites();
+      onInviteResponded();
+    } catch (err: any) {
+      alert(`Failed to respond to invite: ${err.message}`);
+    } finally {
+      setResponding(null);
+    }
+  };
+
+  useEffect(() => {
+    loadInvites();
+  }, [userId]);
+
+  if (loading || invites.length === 0) return null;
+
+  return (
+    <div className="collaboration-invites">
+      <h3 className="invites-title">Collaboration Invites</h3>
+      <div className="invites-list">
+        {invites.map(invite => (
+          <div key={invite.post_id} className="invite-card">
+            <div className="invite-content">
+              <div className="invite-text">
+                <span className="invite-icon">🤝</span>
+                Someone invited you to collaborate on their post!
+              </div>
+              <div className="invite-actions">
+                <button
+                  onClick={() => handleInviteResponse(invite.post_id, true)}
+                  disabled={responding === invite.post_id}
+                  className="btn-accept"
+                >
+                  {responding === invite.post_id ? "..." : "Accept & Add Photos"}
+                </button>
+                <button
+                  onClick={() => handleInviteResponse(invite.post_id, false)}
+                  disabled={responding === invite.post_id}
+                  className="btn-decline"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      <style jsx>{`
+        .collaboration-invites {
+          margin-bottom: 2rem;
+        }
+        
+        .invites-title {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #8b5cf6;
+          margin-bottom: 1rem;
+        }
+        
+        .invites-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        
+        .invite-card {
+          background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+          border: 2px solid #8b5cf6;
+          border-radius: 1rem;
+          padding: 1rem;
+        }
+        
+        .invite-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+        }
+        
+        .invite-text {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-weight: 500;
+          color: #374151;
+        }
+        
+        .invite-icon {
+          font-size: 1.25rem;
+        }
+        
+        .invite-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+        
+        .btn-accept, .btn-decline {
+          padding: 0.5rem 1rem;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s ease;
+        }
+        
+        .btn-accept {
+          background: #8b5cf6;
+          color: white;
+        }
+        
+        .btn-accept:hover:not(:disabled) {
+          background: #7c3aed;
+        }
+        
+        .btn-decline {
+          background: #f3f4f6;
+          color: #6b7280;
+        }
+        
+        .btn-decline:hover:not(:disabled) {
+          background: #e5e7eb;
+        }
+        
+        .btn-accept:disabled, .btn-decline:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        @media (max-width: 640px) {
+          .invite-content {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          
+          .invite-actions {
+            justify-content: center;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Create Post Modal Component  
 function CreatePostModal({ 
   isOpen, 
   onClose, 
@@ -37,7 +233,7 @@ function CreatePostModal({
   const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "public">("private");
+  const [visibility, setVisibility] = useState<"private" | "friends">("private");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -104,56 +300,33 @@ function CreatePostModal({
     setError(null);
 
     try {
-      // For Phase 2, we'll upload the first file for now
-      // Later we'll implement multiple file support
-      const file = selectedFiles[0];
-      const filename = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-      const path = `${userId}/${filename}`;
+      // 1. Create the collaborative post
+      const postId = await createPostRPC({
+        caption: caption.trim(),
+        description: description.trim() || null,
+        visibility: visibility,
+      });
 
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from("event-photos")
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
+      // 2. Upload ALL selected files (not just the first!)
+      await uploadMediaToPost(postId, selectedFiles);
 
-      if (uploadError) throw uploadError;
-
-      // Create post record
-      const { data: newPost, error: insertError } = await supabase
-        .from("photo_posts")
-        .insert({
-          user_id: userId,
-          image_path: path,
-          caption: caption.trim(),
-          description: description.trim() || null,
-          visibility: visibility,
-        })
-        .select("id")
-        .single();
-
-      if (insertError) throw insertError;
-
-      // Handle tags
+      // 3. Send collaboration invites to tagged friends
       const tagNames = tags.split(",").map(s => s.trim()).filter(Boolean);
       if (tagNames.length > 0) {
         try {
+          // Find users by name and invite them
           const { data: profiles } = await supabase
             .from("profiles")
             .select("id, full_name")
             .in("full_name", tagNames);
 
           if (profiles?.length) {
-            const tagRows = profiles.map(p => ({
-              post_id: newPost.id,
-              tagged_user_id: p.id
-            }));
-            
-            await supabase.from("photo_tags").insert(tagRows);
+            for (const profile of profiles) {
+              await inviteCollaborator(postId, profile.id);
+            }
           }
         } catch (tagErr) {
-          console.warn("Error processing tags:", tagErr);
+          console.warn("Error sending collaboration invites:", tagErr);
         }
       }
 
@@ -162,7 +335,7 @@ function CreatePostModal({
       onClose();
       
     } catch (err: any) {
-      setError(err.message || "Failed to create post");
+      setError(err.message || "Failed to create collaborative post");
     } finally {
       setUploading(false);
     }
@@ -181,7 +354,7 @@ function CreatePostModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Create New Memory</h2>
+          <h2 className="modal-title">Create Collaborative Memory</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -200,7 +373,7 @@ function CreatePostModal({
                 <div className="upload-placeholder">
                   <div className="upload-icon">📸</div>
                   <div className="upload-text">Click to select photos or videos</div>
-                  <div className="upload-hint">Select as many files as you want</div>
+                  <div className="upload-hint">Select as many files as you want - all will upload!</div>
                 </div>
               ) : (
                 <div className="selected-files">
@@ -260,7 +433,7 @@ function CreatePostModal({
 
           {/* Tags */}
           <div className="form-section">
-            <label className="form-label">Tag Friends</label>
+            <label className="form-label">Tag Friends to Collaborate</label>
             <input
               type="text"
               value={tags}
@@ -268,7 +441,7 @@ function CreatePostModal({
               placeholder="Type names separated by commas"
               className="form-input"
             />
-            <div className="form-hint">Friends you tag can collaborate on this post</div>
+            <div className="form-hint">Tagged friends will get invites to add their own photos and videos!</div>
           </div>
 
           {/* Visibility */}
@@ -305,7 +478,7 @@ function CreatePostModal({
               Cancel
             </button>
             <button type="submit" disabled={uploading} className="btn-primary">
-              {uploading ? "Creating..." : "Create Memory"}
+              {uploading ? "Creating Collaborative Post..." : "Create Collaborative Memory"}
             </button>
           </div>
         </form>
@@ -413,7 +586,8 @@ function CreatePostModal({
 
           .upload-hint {
             font-size: 0.875rem;
-            color: #6b7280;
+            color: #8b5cf6;
+            font-weight: 500;
           }
 
           .selected-files {
@@ -517,6 +691,7 @@ function CreatePostModal({
             font-size: 0.75rem;
             color: #8b5cf6;
             margin-top: 0.25rem;
+            font-weight: 500;
           }
 
           .visibility-grid {
@@ -646,55 +821,67 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingPost, setEditingPost] = useState<string | null>(null);
+  const [inviteCount, setInviteCount] = useState(0);
 
   const canPost = useMemo(() => !!userId, [userId]);
 
-  async function listPosts() {
-    if (!userId) return setPosts([]);
+  async function loadPosts() {
+    if (!userId) {
+      setPosts([]);
+      setLoading(false);
+      return;
+    }
     
     try {
-      const { data: rows, error } = await supabase
-        .from("photo_posts")
-        .select("id, image_path, caption, description, visibility, created_at, user_id")
-        .eq("user_id", userId)
+      // Load collaborative posts where user is owner or collaborator
+      const { data: postsData, error: postsError } = await supabase
+        .from("posts")
+        .select(`
+          id,
+          caption,
+          description, 
+          visibility,
+          created_at,
+          created_by
+        `)
+        .or(`created_by.eq.${userId},id.in.(${await getCollaborativePosts(userId)})`)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (postsError) throw postsError;
 
-      const items = await Promise.all((rows ?? []).map(async (r) => {
-        const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_path);
-        
-        // Get tagged users
-        const { data: tagsRows } = await supabase
-          .from("photo_tags")
-          .select("tagged_user_id")
-          .eq("post_id", r.id);
-        
-        let tagNames: string[] = [];
-        if (tagsRows?.length) {
-          const ids = tagsRows.map(t => t.tagged_user_id);
-          const { data: profs } = await supabase
-            .from("profiles")
-            .select("id, full_name")
-            .in("id", ids);
-          tagNames = (profs ?? []).map(p => p.full_name || "Unknown User");
-        }
+      // Load media and collaborators for each post
+      const enrichedPosts = await Promise.all((postsData || []).map(async (post) => {
+        const [mediaData, collabData] = await Promise.all([
+          listPostMedia(post.id),
+          getPostCollaborators(post.id)
+        ]);
+
+        // Convert storage paths to public URLs
+        const mediaWithUrls = await Promise.all(mediaData.map(async (media) => {
+          const { data: urlData } = supabase.storage
+            .from("post-media")
+            .getPublicUrl(media.storage_path.replace("post-media/", ""));
+          
+          return {
+            ...media,
+            url: urlData.publicUrl
+          };
+        }));
 
         return {
-          id: r.id,
-          image_path: r.image_path,
-          caption: r.caption,
-          description: r.description,
-          visibility: (r.visibility || "private") as Post["visibility"],
-          created_at: r.created_at,
-          url: pub.publicUrl,
-          tags: tagNames,
-          user_id: r.user_id,
+          id: post.id,
+          caption: post.caption,
+          description: post.description,
+          visibility: post.visibility as "private" | "friends",
+          created_at: post.created_at,
+          created_by: post.created_by,
+          media: mediaWithUrls,
+          collaborators: collabData,
+          tags: [] // Will be filled with actual tagged user names
         };
       }));
 
-      setPosts(items);
+      setPosts(enrichedPosts);
     } catch (err: any) {
       console.error("Error loading posts:", err);
     } finally {
@@ -702,26 +889,61 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
     }
   }
 
-  async function deletePost(postId: string, imagePath: string) {
-    if (!confirm("Are you sure you want to delete this post? This cannot be undone.")) {
+  // Helper function to get posts where user is a collaborator
+  async function getCollaborativePosts(userId: string): Promise<string> {
+    try {
+      const { data, error } = await supabase
+        .from("post_collaborators")
+        .select("post_id")
+        .eq("user_id", userId)
+        .eq("status", "accepted");
+      
+      if (error) throw error;
+      
+      const postIds = data?.map(item => item.post_id) || [];
+      return postIds.length > 0 ? postIds.join(",") : "''";
+    } catch (err) {
+      console.error("Error getting collaborative posts:", err);
+      return "''";
+    }
+  }
+
+  // Helper function to get post collaborators
+  async function getPostCollaborators(postId: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from("post_collaborators")
+        .select(`
+          user_id,
+          profiles!inner(full_name)
+        `)
+        .eq("post_id", postId)
+        .eq("status", "accepted");
+      
+      if (error) throw error;
+      
+      return data?.map(item => (item.profiles as any)?.full_name || "Unknown") || [];
+    } catch (err) {
+      console.error("Error getting collaborators:", err);
+      return [];
+    }
+  }
+
+  async function deletePost(postId: string) {
+    if (!confirm("Are you sure you want to delete this collaborative post? This cannot be undone.")) {
       return;
     }
 
     try {
-      const { error: dbError } = await supabase
-        .from("photo_posts")
+      // Delete post (cascading deletes should handle media and collaborators)
+      const { error } = await supabase
+        .from("posts")
         .delete()
         .eq("id", postId);
 
-      if (dbError) throw dbError;
+      if (error) throw error;
 
-      const { error: storageError } = await supabase.storage
-        .from("event-photos")
-        .remove([imagePath]);
-
-      if (storageError) console.warn("Storage delete failed:", storageError);
-
-      await listPosts();
+      await loadPosts();
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`);
     }
@@ -736,31 +958,41 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
     });
   };
 
+  const handleInviteResponse = () => {
+    loadPosts(); // Reload posts after accepting/declining invites
+  };
+
   useEffect(() => { 
-    listPosts(); 
+    loadPosts(); 
   }, [userId]);
 
   return (
     <section className="photos-feed">
       <div className="feed-header">
-        <h2 className="feed-title">Photos & Memories</h2>
+        <h2 className="feed-title">Collaborative Memories</h2>
         {canPost && (
           <button 
             className="create-post-btn"
             onClick={() => setShowCreateModal(true)}
           >
-            <span className="create-icon">📸</span>
-            Create Memory
+            <span className="create-icon">🤝</span>
+            Create Collaborative Memory
           </button>
         )}
       </div>
+
+      {/* Collaboration Invites */}
+      <CollaborationInvites 
+        userId={userId}
+        onInviteResponded={handleInviteResponse}
+      />
 
       {/* Create Post Modal */}
       <CreatePostModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         userId={userId}
-        onSuccess={listPosts}
+        onSuccess={loadPosts}
       />
 
       {/* Posts Feed */}
@@ -768,13 +1000,13 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
         {loading ? (
           <div className="loading-state">
             <div className="loading-spinner"></div>
-            <span>Loading memories...</span>
+            <span>Loading collaborative memories...</span>
           </div>
         ) : posts.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📸</div>
-            <h3>No memories yet!</h3>
-            <p>Click "Create Memory" to share your first moment</p>
+            <div className="empty-icon">🤝</div>
+            <h3>No collaborative memories yet!</h3>
+            <p>Create your first memory and invite friends to collaborate</p>
           </div>
         ) : (
           posts.map(post => (
@@ -786,19 +1018,18 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                     {VISIBILITY_OPTIONS.find(v => v.value === post.visibility)?.label}
                   </div>
                   <div className="post-date">{formatDate(post.created_at)}</div>
+                  {post.collaborators.length > 0 && (
+                    <div className="collaborators">
+                      <span className="collab-icon">🤝</span>
+                      Collaborators: {post.collaborators.join(", ")}
+                    </div>
+                  )}
                 </div>
                 
-                {post.user_id === userId && (
+                {post.created_by === userId && (
                   <div className="post-actions">
                     <button 
-                      onClick={() => setEditingPost(post.id)}
-                      className="action-button edit"
-                      title="Edit post"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      onClick={() => deletePost(post.id, post.image_path)}
+                      onClick={() => deletePost(post.id)}
                       className="action-button delete"
                       title="Delete post"
                     >
@@ -808,22 +1039,46 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                 )}
               </div>
 
-              <div className="post-image">
-                <img src={post.url} alt={post.caption || "Photo"} />
+              {/* Multi-Media Gallery */}
+              <div className="media-gallery">
+                {post.media.length === 1 ? (
+                  <div className="single-media">
+                    {post.media[0].type === "video" ? (
+                      <video src={post.media[0].url} controls className="media-item" />
+                    ) : (
+                      <img src={post.media[0].url} alt={post.caption || "Photo"} className="media-item" />
+                    )}
+                  </div>
+                ) : (
+                  <div className={`multi-media grid-${Math.min(post.media.length, 4)}`}>
+                    {post.media.slice(0, 4).map((media, index) => (
+                      <div key={media.id} className="media-container">
+                        {media.type === "video" ? (
+                          <video src={media.url} muted className="media-item" />
+                        ) : (
+                          <img src={media.url} alt={`Media ${index + 1}`} className="media-item" />
+                        )}
+                        {index === 3 && post.media.length > 4 && (
+                          <div className="media-overlay">
+                            <span>+{post.media.length - 4} more</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="post-content">
                 {post.caption && <div className="post-caption">{post.caption}</div>}
                 {post.description && <div className="post-description">{post.description}</div>}
                 
-                {post.tags.length > 0 && (
-                  <div className="post-tags">
-                    <span className="tags-label">With:</span>
-                    {post.tags.map((tag, i) => (
-                      <span key={i} className="tag">{tag}</span>
-                    ))}
-                  </div>
-                )}
+                <div className="post-meta">
+                  <span className="media-count">{post.media.length} {post.media.length === 1 ? 'item' : 'items'}</span>
+                  {post.collaborators.length > 0 && (
+                    <span className="collab-count">{post.collaborators.length} collaborator{post.collaborators.length === 1 ? '' : 's'}</span>
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -934,7 +1189,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           padding: 1rem;
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           border-bottom: 1px solid rgba(0,0,0,0.1);
         }
 
@@ -953,6 +1208,19 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
         .post-date {
           font-size: 0.75rem;
           color: #6b7280;
+        }
+
+        .collaborators {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 0.75rem;
+          color: #8b5cf6;
+          font-weight: 500;
+        }
+
+        .collab-icon {
+          font-size: 0.875rem;
         }
 
         .post-actions {
@@ -975,16 +1243,66 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           transform: scale(1.05);
         }
 
-        .post-image {
+        .media-gallery {
           position: relative;
           width: 100%;
         }
 
-        .post-image img {
+        .single-media {
           width: 100%;
-          height: auto;
-          display: block;
+        }
+
+        .multi-media {
+          display: grid;
+          gap: 2px;
+        }
+
+        .grid-2 {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .grid-3 {
+          grid-template-columns: 2fr 1fr;
+        }
+
+        .grid-3 .media-container:first-child {
+          grid-row: span 2;
+        }
+
+        .grid-4 {
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr 1fr;
+        }
+
+        .media-container {
+          position: relative;
+          overflow: hidden;
+          aspect-ratio: 1;
+        }
+
+        .single-media .media-item {
+          aspect-ratio: auto;
+        }
+
+        .media-item {
+          width: 100%;
+          height: 100%;
           object-fit: cover;
+          display: block;
+        }
+
+        .media-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 500;
         }
 
         .post-content {
@@ -1003,25 +1321,14 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           margin-bottom: 0.75rem;
         }
 
-        .post-tags {
+        .post-meta {
           display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-        }
-
-        .tags-label {
-          color: #6b7280;
-          font-weight: 500;
-        }
-
-        .tag {
-          background: #8b5cf6;
-          color: white;
-          padding: 0.25rem 0.5rem;
-          border-radius: 0.375rem;
+          gap: 1rem;
           font-size: 0.75rem;
+          color: #6b7280;
+        }
+
+        .media-count, .collab-count {
           font-weight: 500;
         }
 
@@ -1043,6 +1350,15 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           
           .create-post-btn {
             justify-content: center;
+          }
+          
+          .post-header {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          
+          .post-actions {
+            align-self: flex-end;
           }
         }
       `}</style>
