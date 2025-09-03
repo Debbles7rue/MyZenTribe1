@@ -535,6 +535,31 @@ export default function KarmaCornerPage() {
             </div>
           </div>
 
+          {/* Inspirational Quote */}
+          <section 
+            className="card p-4" 
+            style={{ 
+              marginBottom: 16, 
+              background: "linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%)",
+              backdropFilter: "blur(10px)",
+              border: "2px solid rgba(124, 58, 237, 0.2)",
+              borderRadius: 16,
+              textAlign: "center"
+            }}
+          >
+            <div style={{ 
+              fontSize: 20, 
+              fontStyle: "italic", 
+              fontWeight: 500, 
+              background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)", 
+              WebkitBackgroundClip: "text", 
+              WebkitTextFillColor: "transparent",
+              marginBottom: 4
+            }}>
+              "In a world where you can be anything — be kind"
+            </div>
+          </section>
+
           {/* Welcome Section */}
           <section 
             className="card p-4" 
