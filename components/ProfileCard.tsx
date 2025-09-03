@@ -352,27 +352,44 @@ export default function ProfileCard({
   const loadFriendships = async () => {
     if (!userId) return;
     try {
+      // Use correct column names: a and b (not user_id and friend_id)
       const { data, error } = await supabase
         .from("friendships")
         .select(`
-          id,
-          friend_id,
+          a,
+          b,
           relationship_type,
-          status,
           private_notes,
-          how_we_met,
-          profiles!friendships_friend_id_fkey(full_name, avatar_url)
+          how_we_met
         `)
-        .eq("user_id", userId)
-        .eq("status", "accepted")
+        .or(`a.eq.${userId},b.eq.${userId}`)
         .order("relationship_type");
       
       if (error) throw error;
       
-      setFriendships(data.map(f => ({
-        ...f,
-        friend_profile: f.profiles as any
-      })));
+      // Get friend profiles - determine which ID is the friend
+      const friendships: Friendship[] = [];
+      for (const friendship of data || []) {
+        const friendId = friendship.a === userId ? friendship.b : friendship.a;
+        
+        const { data: friendProfile } = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", friendId)
+          .single();
+        
+        friendships.push({
+          id: `${friendship.a}-${friendship.b}`, // Composite ID
+          friend_id: friendId,
+          relationship_type: friendship.relationship_type || "friend",
+          status: "accepted", // Since no status column, assume all are accepted
+          private_notes: friendship.private_notes,
+          how_we_met: friendship.how_we_met,
+          friend_profile: friendProfile || { full_name: null, avatar_url: null }
+        });
+      }
+      
+      setFriendships(friendships);
     } catch (err) {
       console.error("Failed to load friendships:", err);
     }
