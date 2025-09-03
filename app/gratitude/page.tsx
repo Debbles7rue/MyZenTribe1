@@ -4,768 +4,796 @@
 import SiteHeader from "@/components/SiteHeader";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useMemo, useState } from "react";
-
-/** MVP flags (keep simple) */
-const SHOW_PHOTOS_ADDON = false; // turn on later when ready
-
-/** Per-day limit (change to 999 for "unlimited") */
-const MAX_PER_DAY = 3;
+import { useEffect, useMemo, useState, useRef } from "react";
+import { format } from "date-fns";
 
 /** ─── Types ───────────────────────────────────────────── */
-type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose";
-type Plan = "free" | "photos";
+type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose" | "midnight" | "sage";
+type EntryType = "glimmer" | "journal";
+type MoodLevel = 1 | 2 | 3 | 4 | 5;
 
 type Settings = {
   user_id: string;
   activated: boolean;
   recap_frequency: "weekly" | "monthly" | "yearly";
   theme: ThemeKey;
+  daily_reminder?: string | null;
+  streak_count?: number;
+  last_entry_date?: string;
 };
 
 type Entry = {
   id: string;
   content: string;
-  created_at: string; // ISO
-  entry_date: string; // YYYY-MM-DD
+  created_at: string;
+  entry_date: string;
+  entry_type: EntryType;
+  mood?: MoodLevel;
+  tags?: string[];
+  is_favorite?: boolean;
 };
 
-type MediaItem = {
-  id: string;
-  file_path: string;
-  url: string;
-  favorite: boolean;
-  caption: string | null;
-  taken_at: string;
-};
-
-/** Themes */
-const THEMES: Record<
-  ThemeKey,
-  { leftBg: string; rightBg: string; border: string; accent: string }
-> = {
+/** Enhanced Themes */
+const THEMES: Record<ThemeKey, {
+  name: string;
+  gradient: string;
+  cardBg: string;
+  border: string;
+  accent: string;
+  glow: string;
+}> = {
   lavender: {
-    leftBg: "linear-gradient(180deg,#faf5ff 0%, #ffffff 60%)",
-    rightBg: "linear-gradient(180deg,#ffffff 0%, #fafafa 60%)",
-    border: "#ede9fe",
-    accent: "#7c3aed",
+    name: "Lavender Dreams",
+    gradient: "linear-gradient(135deg, #E9D5FF 0%, #F3E8FF 50%, #FDF4FF 100%)",
+    cardBg: "rgba(233, 213, 255, 0.1)",
+    border: "#E9D5FF",
+    accent: "#9333EA",
+    glow: "0 0 40px rgba(147, 51, 234, 0.15)"
   },
   sunset: {
-    leftBg: "linear-gradient(180deg,#ffe4d6 0%, #fff7ed 60%)",
-    rightBg: "linear-gradient(180deg,#fff7ed 0%, #fff 60%)",
-    border: "#fed7aa",
-    accent: "#ea580c",
+    name: "Golden Hour",
+    gradient: "linear-gradient(135deg, #FED7AA 0%, #FDBA74 50%, #FB923C 100%)",
+    cardBg: "rgba(254, 215, 170, 0.1)",
+    border: "#FED7AA",
+    accent: "#EA580C",
+    glow: "0 0 40px rgba(234, 88, 12, 0.15)"
   },
   forest: {
-    leftBg: "linear-gradient(180deg,#ecfdf5 0%, #ffffff 60%)",
-    rightBg: "linear-gradient(180deg,#ffffff 0%, #f0fdf4 60%)",
-    border: "#bbf7d0",
-    accent: "#047857",
+    name: "Forest Sanctuary",
+    gradient: "linear-gradient(135deg, #BBF7D0 0%, #86EFAC 50%, #4ADE80 100%)",
+    cardBg: "rgba(187, 247, 208, 0.1)",
+    border: "#BBF7D0",
+    accent: "#16A34A",
+    glow: "0 0 40px rgba(22, 163, 74, 0.15)"
   },
   ocean: {
-    leftBg: "linear-gradient(180deg,#eff6ff 0%, #ffffff 60%)",
-    rightBg: "linear-gradient(180deg,#ffffff 0%, #eef2ff 60%)",
-    border: "#bfdbfe",
-    accent: "#2563eb",
+    name: "Ocean Depths",
+    gradient: "linear-gradient(135deg, #BFDBFE 0%, #93C5FD 50%, #60A5FA 100%)",
+    cardBg: "rgba(191, 219, 254, 0.1)",
+    border: "#BFDBFE",
+    accent: "#2563EB",
+    glow: "0 0 40px rgba(37, 99, 235, 0.15)"
   },
   rose: {
-    leftBg: "linear-gradient(180deg,#fff1f2 0%, #ffffff 60%)",
-    rightBg: "linear-gradient(180deg,#ffffff 0%, #fff1f2 60%)",
-    border: "#fecdd3",
-    accent: "#e11d48",
+    name: "Rose Garden",
+    gradient: "linear-gradient(135deg, #FECDD3 0%, #FCA5A5 50%, #F87171 100%)",
+    cardBg: "rgba(254, 205, 211, 0.1)",
+    border: "#FECDD3",
+    accent: "#E11D48",
+    glow: "0 0 40px rgba(225, 29, 72, 0.15)"
   },
+  midnight: {
+    name: "Midnight Sky",
+    gradient: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A78BFA 100%)",
+    cardBg: "rgba(99, 102, 241, 0.1)",
+    border: "#A78BFA",
+    accent: "#7C3AED",
+    glow: "0 0 40px rgba(124, 58, 237, 0.15)"
+  },
+  sage: {
+    name: "Sage Wisdom",
+    gradient: "linear-gradient(135deg, #D9F99D 0%, #BEF264 50%, #A3E635 100%)",
+    cardBg: "rgba(217, 249, 157, 0.1)",
+    border: "#D9F99D",
+    accent: "#65A30D",
+    glow: "0 0 40px rgba(101, 163, 13, 0.15)"
+  }
 };
 
-/** Curated daily gratitude quotes (local, no API) */
-const QUOTES: { text: string; author: string }[] = [
-  { text: "Gratitude turns what we have into enough.", author: "Anonymous" },
-  { text: "Wear gratitude like a cloak and it will feed every corner of your life.", author: "Rumi" },
-  { text: "Acknowledging the good that you already have in your life is the foundation for all abundance.", author: "Eckhart Tolle" },
-  { text: "It is not joy that makes us grateful; it is gratitude that makes us joyful.", author: "David Steindl-Rast" },
-  { text: "The more grateful I am, the more beauty I see.", author: "Mary Davis" },
-  { text: "Enjoy the little things, for one day you may look back and realize they were the big things.", author: "Robert Brault" },
-  { text: "Gratitude is the fairest blossom which springs from the soul.", author: "Henry Ward Beecher" },
-  { text: "Appreciation can change a day, even change a life.", author: "Margaret Cousins" },
-  { text: "When we focus on our gratitude, the tide of disappointment goes out.", author: "Kristin Armstrong" },
-  { text: "Silent gratitude isn’t much use to anyone.", author: "Gertrude Stein" },
-  { text: "Act with kindness, but do not expect gratitude.", author: "Confucius" },
-  { text: "Gratitude unlocks the fullness of life.", author: "Melody Beattie" },
-  { text: "This is a wonderful day; I have never seen this one before.", author: "Maya Angelou" },
-  { text: "The roots of all goodness lie in the soil of appreciation.", author: "Dalai Lama" },
-  { text: "He is a wise man who does not grieve for the things which he has not, but rejoices for those which he has.", author: "Epictetus" },
-  { text: "What we focus on expands. Choose gratitude.", author: "Unknown" },
-  { text: "An attitude of gratitude brings great things.", author: "Yogi Bhajan" },
-  { text: "Gratitude bestows reverence.", author: "John Milton" },
-  { text: "Let us be grateful to people who make us happy.", author: "Marcel Proust" },
-  { text: "The way to develop the best that is in a person is by appreciation and encouragement.", author: "Charles Schwab" },
+/** Mood emojis */
+const MOOD_EMOJIS = {
+  1: { emoji: "😔", label: "Struggling" },
+  2: { emoji: "😕", label: "Challenging" },
+  3: { emoji: "😌", label: "Neutral" },
+  4: { emoji: "😊", label: "Good" },
+  5: { emoji: "🥰", label: "Amazing" }
+};
+
+/** Tags */
+const TAGS = [
+  "gratitude", "family", "friends", "nature", "work", 
+  "health", "creativity", "growth", "peace", "joy",
+  "love", "achievement", "kindness", "beauty", "abundance"
 ];
 
-/** Get a quote index based on the calendar day; allows cycling with an offset */
-function quoteIndexFor(date: Date, offset = 0) {
-  const dayNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
-  const idx = (dayNumber + offset) % QUOTES.length;
-  return idx < 0 ? idx + QUOTES.length : idx;
-}
+/** Enhanced Quotes */
+const QUOTES = [
+  { text: "Gratitude turns what we have into enough.", author: "Anonymous" },
+  { text: "The soul that gives thanks can find comfort in everything; the soul that complains can find comfort in nothing.", author: "Hannah Whitall Smith" },
+  { text: "Gratitude is not only the greatest of virtues, but the parent of all the others.", author: "Marcus Tullius Cicero" },
+  { text: "When we focus on our gratitude, the tide of disappointment goes out and the tide of love rushes in.", author: "Kristin Armstrong" },
+  { text: "Gratitude makes sense of our past, brings peace for today, and creates a vision for tomorrow.", author: "Melody Beattie" },
+  { text: "The more grateful I am, the more beauty I see.", author: "Mary Davis" },
+  { text: "Gratitude is the fairest blossom which springs from the soul.", author: "Henry Ward Beecher" },
+  { text: "Joy is the simplest form of gratitude.", author: "Karl Barth" },
+  { text: "Gratitude unlocks the fullness of life. It turns what we have into enough, and more.", author: "Melody Beattie" },
+  { text: "In ordinary life, we hardly realize that we receive a great deal more than we give.", author: "Dietrich Bonhoeffer" },
+  { text: "The way to develop the best that is in a person is by appreciation and encouragement.", author: "Charles Schwab" },
+  { text: "Be thankful for what you have; you'll end up having more.", author: "Oprah Winfrey" },
+  { text: "This is a wonderful day. I have never seen this one before.", author: "Maya Angelou" },
+  { text: "When you are grateful, fear disappears and abundance appears.", author: "Tony Robbins" },
+  { text: "Gratitude is the wine for the soul. Go on. Get drunk.", author: "Rumi" },
+  { text: "The roots of all goodness lie in the soil of appreciation.", author: "Dalai Lama" },
+  { text: "Wear gratitude like a cloak and it will feed every corner of your life.", author: "Rumi" },
+  { text: "Acknowledging the good that you already have in your life is the foundation for all abundance.", author: "Eckhart Tolle" },
+  { text: "Gratitude is the healthiest of all human emotions.", author: "Zig Ziglar" }
+];
 
-/** ─── Page ────────────────────────────────────────────── */
+/** ─── Main Component ─────────────────────────────────── */
 export default function GratitudePage() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Settings & Theme
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeKey>("lavender");
+  
+  // Entries
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [draft, setDraft] = useState("");
+  const [entryType, setEntryType] = useState<EntryType>("glimmer");
+  const [selectedMood, setSelectedMood] = useState<MoodLevel>(3);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
+  // UI State
+  const [showTimer, setShowTimer] = useState(false);
+  const [showPrompts, setShowPrompts] = useState(false);
+  const [quoteIndex, setQuoteIndex] = useState(0);
+  const [stage, setStage] = useState<"loading" | "welcome" | "journal">("loading");
+  
+  // Timer
+  const [timerSeconds, setTimerSeconds] = useState(600); // 10 minutes
+  const [timerActive, setTimerActive] = useState(false);
+  const timerInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  const todayEntries = entries.filter(e => e.entry_date === today);
+  const glimmersToday = todayEntries.filter(e => e.entry_type === "glimmer").length;
+  const canAddGlimmer = glimmersToday < 10; // Allow up to 10 glimmers per day
+
+  // Load user data
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  type Stage = "loading" | "cover" | "book_intro" | "theme" | "journal";
-  const [stage, setStage] = useState<Stage>("loading");
-
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [pickedTheme, setPickedTheme] = useState<ThemeKey>("lavender");
-  const [selectedPlan, setSelectedPlan] = useState<Plan>("free");
-
-  const [hasCandle, setHasCandle] = useState(false);
-  const [photosEnabled, setPhotosEnabled] = useState(false);
-
-  const [draft, setDraft] = useState("");
-  const [todayList, setTodayList] = useState<Entry[]>([]);
-  const [recent, setRecent] = useState<Entry[]>([]);
-
-  // Daily quote cycling
-  const [quoteOffset, setQuoteOffset] = useState(0);
-
-  const [media, setMedia] = useState<MediaItem[]>([]);
-  const [mediaLoading, setMediaLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  /** Today string */
-  const today = useMemo(() => {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }, []);
-
-  /** Load settings + entries (+ optional flags) */
+  // Load settings and entries
   useEffect(() => {
     if (!userId) return;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // settings
-        const { data: s } = await supabase
-          .from("gratitude_settings")
-          .select("user_id, activated, recap_frequency, theme")
-          .eq("user_id", userId)
-          .maybeSingle();
+    loadData();
+  }, [userId]);
 
-        if (s) {
-          const themeName = (s.theme || "lavender") as ThemeKey;
-          const rec = (s.recap_frequency || "weekly") as Settings["recap_frequency"];
-          setSettings({ user_id: s.user_id, activated: !!s.activated, recap_frequency: rec, theme: themeName });
-          setPickedTheme(themeName);
-          setStage(s.activated ? "journal" : "cover");
-        } else {
-          setSettings({
-            user_id: userId,
-            activated: false,
-            recap_frequency: "weekly",
-            theme: "lavender",
-          });
-          setPickedTheme("lavender");
-          setStage("cover");
+  async function loadData() {
+    if (!userId) return;
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Load settings
+      const { data: settingsData } = await supabase
+        .from("gratitude_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (settingsData) {
+        setSettings(settingsData as Settings);
+        setSelectedTheme(settingsData.theme as ThemeKey);
+        setStage("journal");
+        
+        // Check and update streak
+        if (settingsData.last_entry_date !== today) {
+          const yesterday = format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
+          const newStreak = settingsData.last_entry_date === yesterday 
+            ? (settingsData.streak_count || 0) + 1 
+            : 1;
+          
+          await supabase
+            .from("gratitude_settings")
+            .update({ streak_count: newStreak, last_entry_date: today })
+            .eq("user_id", userId);
         }
-
-        // entries
-        const { data: e } = await supabase
-          .from("gratitude_entries")
-          .select("id, content, created_at, entry_date")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(150);
-
-        const all = (e ?? []) as Entry[];
-        setTodayList(all.filter((x) => x.entry_date === today));
-        setRecent(all.filter((x) => x.entry_date !== today));
-
-        // optional flags
-        if (SHOW_PHOTOS_ADDON) {
-          const { data: addons } = await supabase
-            .from("user_addons")
-            .select("photos_enabled")
-            .eq("user_id", userId)
-            .maybeSingle();
-          setPhotosEnabled(!!addons?.photos_enabled);
-        }
-
-        try {
-          const { data: candles } = await supabase
-            .from("meditation_candles")
-            .select("id")
-            .eq("user_id", userId)
-            .limit(1);
-          setHasCandle(!!candles?.length);
-        } catch {
-          setHasCandle(false);
-        }
-      } catch (e: any) {
-        setError(e?.message || "Could not load your journal.");
-        setStage("cover");
-      } finally {
-        setLoading(false);
+      } else {
+        setStage("welcome");
       }
-    })();
-  }, [userId, today]);
 
-  /** Activate with theme and plan */
-  async function activateWithTheme(themeKey: ThemeKey) {
+      // Load entries
+      const { data: entriesData } = await supabase
+        .from("gratitude_entries")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      setEntries(entriesData as Entry[] || []);
+    } catch (e: any) {
+      setError(e?.message || "Could not load your journal");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Start journal
+  async function startJournal() {
     if (!userId) return;
     setSaving(true);
-    setError(null);
+    
     try {
-      const payload = { user_id: userId, activated: true, recap_frequency: "weekly", theme: themeKey };
-      const { error: upErr } = await supabase
+      const newSettings: Settings = {
+        user_id: userId,
+        activated: true,
+        recap_frequency: "weekly",
+        theme: selectedTheme,
+        streak_count: 0,
+        last_entry_date: today
+      };
+      
+      const { error } = await supabase
         .from("gratitude_settings")
-        .upsert(payload, { onConflict: "user_id" });
-      if (upErr) throw upErr;
-
-      if (SHOW_PHOTOS_ADDON && selectedPlan === "photos") {
-        await supabase
-          .from("user_addons")
-          .upsert(
-            { user_id: userId, photos_enabled: true, purchased_at: new Date().toISOString() },
-            { onConflict: "user_id" }
-          );
-        setPhotosEnabled(true);
-      }
-
-      setSettings({ user_id: userId, activated: true, recap_frequency: "weekly", theme: themeKey });
+        .upsert(newSettings, { onConflict: "user_id" });
+      
+      if (error) throw error;
+      
+      setSettings(newSettings);
       setStage("journal");
     } catch (e: any) {
-      setError(e?.message || "Activation failed.");
+      setError(e?.message || "Could not start journal");
     } finally {
       setSaving(false);
     }
   }
 
-  /** Recap prefs */
-  async function saveRecapFrequency(freq: Settings["recap_frequency"]) {
-    if (!userId || !settings) return;
-    setSaving(true);
-    try {
-      const { error: upErr } = await supabase
-        .from("gratitude_settings")
-        .upsert(
-          { user_id: userId, activated: true, recap_frequency: freq, theme: settings.theme },
-          { onConflict: "user_id" }
-        );
-      if (upErr) throw upErr;
-      setSettings({ ...settings, recap_frequency: freq });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /** Entries (MAX_PER_DAY/day) */
-  const todayCount = todayList.length;
-  const canAdd = todayCount < MAX_PER_DAY && !!userId && !saving;
-
+  // Add entry
   async function addEntry() {
-    const content = draft.trim();
-    if (!content || !userId || !settings?.activated) return;
-    if (todayList.length >= MAX_PER_DAY) {
-      setError(`You’ve reached ${MAX_PER_DAY} entries for today. Beautiful work!`);
+    if (!userId || !draft.trim()) return;
+    
+    if (entryType === "glimmer" && !canAddGlimmer) {
+      setError("You've reached 10 glimmers for today! Amazing work! 🌟");
       return;
     }
+    
     setSaving(true);
     setError(null);
+    
     try {
+      const newEntry = {
+        user_id: userId,
+        content: draft,
+        entry_date: today,
+        entry_type: entryType,
+        mood: selectedMood,
+        tags: selectedTags.length > 0 ? selectedTags : null,
+        is_favorite: false
+      };
+      
       const { data, error } = await supabase
         .from("gratitude_entries")
-        .insert([{ user_id: userId, content, entry_date: today }])
-        .select("id, content, created_at, entry_date")
+        .insert([newEntry])
+        .select()
         .single();
+      
       if (error) throw error;
-      setTodayList([data as Entry, ...todayList]);
+      
+      setEntries([data as Entry, ...entries]);
       setDraft("");
+      setSelectedTags([]);
+      setSelectedMood(3);
+      
+      // Update streak
+      if (settings && settings.last_entry_date !== today) {
+        await supabase
+          .from("gratitude_settings")
+          .update({ last_entry_date: today, streak_count: (settings.streak_count || 0) + 1 })
+          .eq("user_id", userId);
+      }
     } catch (e: any) {
-      setError(e?.message || "Save failed.");
+      setError(e?.message || "Could not save entry");
     } finally {
       setSaving(false);
     }
   }
 
-  async function removeEntry(id: string) {
+  // Delete entry
+  async function deleteEntry(id: string) {
     if (!userId) return;
     setSaving(true);
+    
     try {
-      await supabase.from("gratitude_entries").delete().eq("id", id).eq("user_id", userId);
-      setTodayList(todayList.filter((e) => e.id !== id));
-      setRecent(recent.filter((e) => e.id !== id));
+      await supabase
+        .from("gratitude_entries")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      
+      setEntries(entries.filter(e => e.id !== id));
+    } catch (e: any) {
+      setError(e?.message || "Could not delete entry");
     } finally {
       setSaving(false);
     }
   }
 
-  /** Local recap summary */
-  function summarizeText(t: string): string {
-    const clean = t.replace(/\s+/g, " ").trim();
-    if (clean.length <= 40) return clean;
-    const sentences = clean.split(/(?<=[.!?])\s+/);
-    const firstTwo = sentences.slice(0, 2).join(" ");
-    return firstTwo.length > 180 ? firstTwo.slice(0, 180) + "…" : firstTwo;
-  }
-  function rangeStart(freq: Settings["recap_frequency"]): Date {
-    const d = new Date();
-    if (freq === "weekly") d.setDate(d.getDate() - 7);
-    if (freq === "monthly") d.setMonth(d.getMonth() - 1);
-    if (freq === "yearly") d.setFullYear(d.getFullYear() - 1);
-    return d;
-  }
-  const recapItems = useMemo(() => {
-    if (!settings?.activated) return [];
-    const start = rangeStart(settings.recap_frequency).getTime();
-    const all = [...todayList, ...recent];
-    const filtered = all.filter((e) => new Date(e.created_at).getTime() >= start);
-    return filtered.map((e) => ({ id: e.id, summary: summarizeText(e.content), when: new Date(e.created_at) }));
-  }, [settings?.activated, settings?.recap_frequency, todayList, recent]);
-
-  /** Photos add-on (disabled in MVP unless SHOW_PHOTOS_ADDON) */
-  const thisYear = new Date().getFullYear();
-  async function loadMedia() {
-    if (!userId || !photosEnabled || !SHOW_PHOTOS_ADDON) return;
-    setMediaLoading(true);
+  // Toggle favorite
+  async function toggleFavorite(id: string, current: boolean) {
+    if (!userId) return;
+    
     try {
-      const start = new Date(`${thisYear}-01-01T00:00:00Z`).toISOString();
-      const end = new Date(`${thisYear + 1}-01-01T00:00:00Z`).toISOString();
-      const { data } = await supabase
-        .from("gratitude_media")
-        .select("id,file_path,favorite,caption,taken_at")
-        .eq("user_id", userId)
-        .gte("taken_at", start)
-        .lt("taken_at", end)
-        .order("favorite", { ascending: false })
-        .order("taken_at", { ascending: false });
-
-      const paths = (data ?? []).map((d) => d.file_path);
-      if (!paths.length) {
-        setMedia([]);
-      } else {
-        const { data: signed } = await supabase.storage.from("gratitude-media").createSignedUrls(paths, 3600);
-        const map = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
-        setMedia(
-          (data ?? []).map((d) => ({
-            id: d.id,
-            url: map.get(d.file_path) || "",
-            favorite: !!d.favorite,
-            caption: d.caption,
-            taken_at: d.taken_at,
-            file_path: d.file_path,
-          }))
-        );
-      }
-    } finally {
-      setMediaLoading(false);
+      await supabase
+        .from("gratitude_entries")
+        .update({ is_favorite: !current })
+        .eq("id", id)
+        .eq("user_id", userId);
+      
+      setEntries(entries.map(e => 
+        e.id === id ? { ...e, is_favorite: !current } : e
+      ));
+    } catch (e: any) {
+      setError(e?.message || "Could not update favorite");
     }
   }
-  useEffect(() => {
-    loadMedia();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, photosEnabled]);
 
-  async function onMediaFiles(_e: React.ChangeEvent<HTMLInputElement>) {/* disabled in MVP */ }
-  async function toggleFavorite(_id: string, _v: boolean) {/* disabled in MVP */ }
-  async function deleteMedia(_id: string, _p: string) {/* disabled in MVP */ }
+  // Share quote to feed
+  async function shareQuote() {
+    const quote = QUOTES[quoteIndex];
+    const message = `"${quote.text}" — ${quote.author}\n\n#gratitude #inspiration`;
+    
+    // This would integrate with your feed system
+    alert(`Quote ready to share:\n\n${message}\n\n(Integration with feed coming soon!)`);
+  }
 
-  /** Theme palette (avoid name collision) */
-  const palette = settings ? THEMES[settings.theme] : THEMES[pickedTheme];
+  // Timer functions
+  function startTimer() {
+    setShowTimer(true);
+    setTimerActive(true);
+    setTimerSeconds(600);
+    
+    timerInterval.current = setInterval(() => {
+      setTimerSeconds(prev => {
+        if (prev <= 1) {
+          stopTimer();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
 
-  /** Quote of the day (with cycle button) */
-  const quote = useMemo(() => {
-    const baseIdx = quoteIndexFor(new Date(), quoteOffset);
-    return QUOTES[baseIdx];
-  }, [quoteOffset]);
+  function stopTimer() {
+    setTimerActive(false);
+    if (timerInterval.current) {
+      clearInterval(timerInterval.current);
+      timerInterval.current = null;
+    }
+  }
 
-  /** ─── UI blocks ─────────────────────────────────────── */
+  const timerMinutes = Math.floor(timerSeconds / 60);
+  const timerSecs = timerSeconds % 60;
 
-  const [coverError, setCoverError] = useState(false);
-  const cover = (
-    <div className="rounded-2xl p-6" style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}>
-      <div className="max-w-4xl mx-auto">
-        <div
-          className="relative mx-auto overflow-hidden"
-          style={{
-            borderRadius: 18,
-            boxShadow: "0 18px 40px rgba(0,0,0,.18)",
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {!coverError ? (
-            <img
-              src="/images/gratitude-cover.png"
-              alt="Gratitude Journal cover"
-              className="w-full h-auto block"
-              onError={() => setCoverError(true)}
-            />
-          ) : (
-            <div
-              className="w-full"
-              style={{
-                aspectRatio: "16/6",
-                background: "linear-gradient(120deg,#5B2A86,#FF6A3D)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div style={{ color: "#fff", fontSize: 36, fontWeight: 700, letterSpacing: 1 }}>
-                Gratitude Journal
-              </div>
-            </div>
-          )}
-          <button
-            onClick={() => setStage("book_intro")}
-            className="absolute bottom-4 left-4 btn btn-brand"
-            aria-label="Open the journal"
-          >
-            Open
-          </button>
+  // Current theme
+  const theme = THEMES[settings?.theme || selectedTheme];
+
+  // Current quote
+  const currentQuote = QUOTES[quoteIndex % QUOTES.length];
+
+  // Prompts
+  const PROMPTS = [
+    "What made you smile today?",
+    "Who or what are you grateful for right now?",
+    "What small moment brought you peace today?",
+    "What's something beautiful you noticed?",
+    "What made today better than yesterday?",
+    "What kindness did you witness or receive?",
+    "What simple pleasure did you enjoy?",
+    "What challenge taught you something?",
+    "What made you feel alive today?",
+    "What are you looking forward to?"
+  ];
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-full mx-auto mb-4 animate-pulse" 
+               style={{ background: THEMES.lavender.gradient }} />
+          <p className="text-gray-600">Opening your journal...</p>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  const bookIntro = (
-    <div className="rounded-2xl p-4 md:p-6" style={{ background: "#f6efe6", border: "1px solid #eadfd1" }}>
-      <div className="max-w-5xl mx-auto relative">
-        {/* book shell */}
-        <div
-          className="relative grid md:grid-cols-2 gap-0 rounded-[20px] overflow-hidden"
-          style={{
-            boxShadow: "0 18px 40px rgba(0,0,0,.18)",
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          {/* spine */}
-          <div
-            className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[6px]"
-            style={{
-              background: "linear-gradient(180deg,#d3c4af,#e8dccb)",
-              boxShadow: "inset 0 0 6px rgba(0,0,0,.12)",
-              zIndex: 2,
-            }}
-          />
-          {/* left page */}
-          <div className="p-5 sm:p-7" style={{ background: "#fffdf8", borderRight: "1px solid #eadfd1" }}>
-            <h2 className="section-title" style={{ marginTop: 0 }}>Gratitude Journal</h2>
-            <p style={{ whiteSpace: "pre-wrap" }}>
-{`Your brain is naturally wired to notice the negative—it’s part of how it keeps you safe. But with just a little practice, you can retrain your mind to see the positives all around you. This gratitude journal is designed to help you do exactly that.
-
-Each day, you’ll be guided to write down three things you’re thankful for. They can be as simple as a smile from a stranger, a moment of peace, or as detailed as a story that brought you joy. Over time, these small daily shifts rewire your brain, helping you create a more positive outlook and a deeper sense of well-being.
-
-To keep you on track, you’ll receive daily reminders, plus weekly, monthly, and yearly recaps—so you can look back and see how much beauty and goodness has filled your life. At no cost, you’ll have a growing collection of meaningful memories you can return to whenever you need encouragement.`}
-            </p>
-
-            {/* NEW: clear, feel-first instructions */}
-            <div
-              className="rounded-xl border p-3 mt-3"
-              style={{ background: "#ffffff", borderColor: "#eadfd1" }}
-            >
-              <h4 style={{ margin: 0, fontWeight: 700 }}>How to practice (2 min)</h4>
-              <ol className="mt-2" style={{ paddingLeft: 18, lineHeight: 1.6 }}>
-                <li>Close your eyes. Take a slow breath in for 4, out for 6.</li>
-                <li><strong>Feel</strong> for a tiny lift in your body—a softening, warmth, ease. That’s a <em>glimmer</em>.</li>
-                <li>Open your eyes and write from that sensation. A word, a sentence, or a page—anything is enough.</li>
-                <li>Repeat up to <strong>{MAX_PER_DAY}</strong> times today. Small is powerful.</li>
-              </ol>
-              <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                Tip: If you only have a word—write the word and breathe with it for one more slow breath.
+  // Welcome screen
+  if (stage === "welcome") {
+    return (
+      <div className="min-h-screen" style={{ background: THEMES.lavender.gradient }}>
+        <SiteHeader />
+        <div className="container mx-auto max-w-4xl px-4 py-12">
+          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            <div className="p-8 md:p-12">
+              <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Your Gratitude Journey Begins
+              </h1>
+              
+              <p className="text-lg text-gray-700 mb-8 leading-relaxed">
+                Welcome to your private sanctuary of gratitude. This is your space to capture life's 
+                glimmers—those tiny moments of beauty, joy, and peace that often go unnoticed. 
+                No performance, no audience, just you and your thoughts.
               </p>
+
+              <div className="bg-purple-50 rounded-2xl p-6 mb-8">
+                <h3 className="font-semibold text-purple-900 mb-3">✨ What are Glimmers?</h3>
+                <p className="text-purple-800">
+                  Glimmers are micro-moments of joy—the opposite of triggers. They're the tiny things 
+                  that make you feel calm, connected, or content. A warm cup of coffee, a text from a 
+                  friend, sunlight through the window. Small, but powerful.
+                </p>
+              </div>
+
+              <div className="mb-8">
+                <h3 className="font-semibold mb-4">Choose Your Theme</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {(Object.keys(THEMES) as ThemeKey[]).map(key => (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedTheme(key)}
+                      className={`p-3 rounded-xl border-2 transition-all ${
+                        selectedTheme === key 
+                          ? 'border-purple-500 shadow-lg scale-105' 
+                          : 'border-gray-200 hover:border-purple-300'
+                      }`}
+                    >
+                      <div className="h-16 rounded-lg mb-2" style={{ background: THEMES[key].gradient }} />
+                      <p className="text-sm font-medium">{THEMES[key].name}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={startJournal}
+                disabled={saving}
+                className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all disabled:opacity-50"
+              >
+                {saving ? "Starting..." : "Begin Your Journey"}
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          {/* right page */}
-          <div className="p-5 sm:p-7" style={{ background: "#fffdf8" }}>
-            <h3 className="section-title" style={{ marginTop: 0 }}>Choose how you’d like to start</h3>
+  // Main journal
+  return (
+    <div className="min-h-screen" style={{ background: theme.gradient }}>
+      <SiteHeader />
+      
+      <div className="container mx-auto max-w-7xl px-4 py-8">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+              Gratitude Journal
+            </h1>
+            <p className="text-gray-600">
+              {settings?.streak_count ? `🔥 ${settings.streak_count} day streak!` : 'Start your gratitude practice'}
+            </p>
+          </div>
+          <Link href="/profile" className="btn btn-neutral mt-4 md:mt-0">
+            Back to Profile
+          </Link>
+        </div>
 
-            <div className="grid gap-3">
-              <label className="rounded-2xl border p-3 cursor-pointer">
-                <div className="flex items-start gap-3">
-                  <input type="radio" name="plan" checked={true} readOnly style={{ marginTop: 4 }} />
-                  <div>
-                    <div className="font-medium">Free journal</div>
-                    <div className="muted text-sm">
-                      Daily entries, reminders, and weekly/monthly/yearly recaps.
-                    </div>
-                  </div>
+        {/* Timer Modal */}
+        {showTimer && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 max-w-md w-full">
+              <h2 className="text-2xl font-bold mb-4">Screen-Free Meditation</h2>
+              <p className="text-gray-600 mb-6">
+                Take a moment to disconnect and breathe. Notice the sensations in your body, 
+                the sounds around you, the feeling of being present.
+              </p>
+              
+              <div className="text-6xl font-bold text-center mb-6" style={{ color: theme.accent }}>
+                {timerMinutes}:{timerSecs.toString().padStart(2, '0')}
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={timerActive ? stopTimer : startTimer}
+                  className="flex-1 py-3 rounded-xl font-semibold text-white"
+                  style={{ background: theme.accent }}
+                >
+                  {timerActive ? "Pause" : "Start"}
+                </button>
+                <button
+                  onClick={() => setShowTimer(false)}
+                  className="flex-1 py-3 rounded-xl font-semibold border-2 border-gray-300"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left Column - Quote & Tools */}
+          <div className="space-y-6">
+            {/* Daily Quote Card */}
+            <div className="bg-white rounded-2xl p-6 shadow-lg" style={{ boxShadow: theme.glow }}>
+              <h3 className="font-semibold text-gray-800 mb-4">Today's Inspiration</h3>
+              <blockquote className="text-lg italic text-gray-700 mb-2">
+                "{currentQuote.text}"
+              </blockquote>
+              <p className="text-gray-600 mb-4">— {currentQuote.author}</p>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setQuoteIndex(prev => prev + 1)}
+                  className="flex-1 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Next Quote
+                </button>
+                <button
+                  onClick={shareQuote}
+                  className="py-2 px-4 rounded-lg text-white"
+                  style={{ background: theme.accent }}
+                >
+                  Share
+                </button>
+              </div>
+            </div>
+
+            {/* Mindfulness Tools */}
+            <div className="bg-white rounded-2xl p-6 shadow-lg">
+              <h3 className="font-semibold text-gray-800 mb-4">Mindfulness Tools</h3>
+              
+              <button
+                onClick={() => setShowTimer(true)}
+                className="w-full py-3 rounded-xl mb-3 text-white font-medium"
+                style={{ background: theme.accent }}
+              >
+                🧘 10-Minute Meditation
+              </button>
+              
+              <button
+                onClick={() => setShowPrompts(!showPrompts)}
+                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+              >
+                💭 Show Prompts
+              </button>
+              
+              {showPrompts && (
+                <div className="mt-4 space-y-2">
+                  {PROMPTS.slice(0, 5).map((prompt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setDraft(prompt)}
+                      className="w-full text-left p-3 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm transition-colors"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
-              </label>
-
-              {SHOW_PHOTOS_ADDON && (
-                <label className="rounded-2xl border p-3 cursor-pointer">
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="plan"
-                      checked={selectedPlan === "photos"}
-                      onChange={() => setSelectedPlan("photos")}
-                      style={{ marginTop: 4 }}
-                    />
-                    <div>
-                      <div className="font-medium">
-                        Photos + Slideshow <span className="opacity-70">($2.99 one-time)</span>
-                      </div>
-                      <div className="muted text-sm">
-                        Attach photos to entries, star favorites, and enjoy a year-end slideshow.
-                      </div>
-                    </div>
-                  </div>
-                </label>
               )}
             </div>
 
-            <div className="mt-4">
-              <div className="muted text-sm mb-1">Pick a page theme</div>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(THEMES) as ThemeKey[]).map((t) => {
-                  const th = THEMES[t]; const active = pickedTheme === t;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => setPickedTheme(t)}
-                      className="rounded-xl border px-3 py-2 capitalize"
-                      style={{
-                        borderColor: active ? th.accent : "#e5e7eb",
-                        boxShadow: active ? `0 0 0 3px ${th.accent}33` : "none",
-                      }}
-                    >
-                      {t}
-                    </button>
-                  );
-                })}
+            {/* Stats */}
+            <div className="bg-white rounded-2xl p-6 shadow-lg">
+              <h3 className="font-semibold text-gray-800 mb-4">Your Progress</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Today's Glimmers</span>
+                  <span className="font-semibold">{glimmersToday}/10</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Entries</span>
+                  <span className="font-semibold">{entries.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Favorites</span>
+                  <span className="font-semibold">{entries.filter(e => e.is_favorite).length}</span>
+                </div>
               </div>
-            </div>
-
-            <div className="controls mt-4">
-              <button className="btn btn-brand" onClick={() => setStage("theme")}>Continue</button>
-              <button className="btn btn-neutral" onClick={() => setStage("cover")}>Back</button>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  );
 
-  const themeConfirm = (
-    <section className="card p-3" style={{ borderRadius: 20 }}>
-      <h2 className="section-title" style={{ marginTop: 0 }}>Confirm your theme</h2>
-      <p className="muted">You can change this later in the journal.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {(Object.keys(THEMES) as ThemeKey[]).map((t) => {
-          const th = THEMES[t]; const active = pickedTheme === t;
-          return (
-            <button
-              key={t}
-              onClick={() => setPickedTheme(t)}
-              className="rounded-2xl border p-3 text-left"
-              style={{
-                borderColor: active ? th.accent : "#e5e7eb",
-                boxShadow: active ? `0 0 0 3px ${th.accent}33` : "none",
-              }}
-            >
-              <div className="rounded-xl overflow-hidden border" style={{ borderColor: "#e5e7eb" }}>
-                <div style={{ height: 46, background: th.leftBg }} />
-                <div style={{ height: 46, background: th.rightBg }} />
-              </div>
-              <div className="mt-1 font-medium capitalize">{t}</div>
-            </button>
-          );
-        })}
-      </div>
-      <div className="controls" style={{ marginTop: 10 }}>
-        <button className="btn btn-brand" onClick={() => activateWithTheme(pickedTheme)} disabled={saving}>
-          {saving ? "Activating…" : "Activate journal"}
-        </button>
-        <button className="btn btn-neutral" onClick={() => setStage("book_intro")}>Back</button>
-      </div>
-    </section>
-  );
-
-  const book = (
-    <section
-      className="card p-3"
-      style={{
-        border: `1px solid ${palette.border}`,
-        background: "#fff",
-        borderRadius: 20,
-        position: "relative",
-      }}
-    >
-      {hasCandle && (
-        <div title="Meditation candle" style={{ position: "absolute", top: 8, right: 10, fontSize: 22, opacity: 0.9 }}>
-          🕯️
-        </div>
-      )}
-
-      <div className="grid md:grid-cols-2 gap-6 items-start">
-        {/* Left: recap + prefs */}
-        <div className="rounded-xl border p-4" style={{ background: palette.leftBg, borderColor: palette.border }}>
-          <h2 className="section-title" style={{ marginTop: 0 }}>Feel your glimmers</h2>
-          <p>Pause, notice a small lift in your body or mood—then write from that feeling.</p>
-
-          <div className="stack" style={{ marginTop: 10 }}>
-            <h3 className="section-title" style={{ fontSize: 16 }}>Recap preference</h3>
-            <div className="controls" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {(["weekly", "monthly", "yearly"] as const).map((f) => (
+          {/* Middle Column - Entry Creator */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Entry Creator */}
+            <div className="bg-white rounded-2xl p-6 shadow-lg">
+              <h3 className="font-semibold text-gray-800 mb-4">Capture Your Gratitude</h3>
+              
+              {/* Entry Type Toggle */}
+              <div className="flex gap-2 mb-4">
                 <button
-                  key={f}
-                  className={`btn ${settings?.recap_frequency === f ? "btn-brand" : "btn-neutral"}`}
-                  onClick={() => saveRecapFrequency(f)}
-                  disabled={saving}
+                  onClick={() => setEntryType("glimmer")}
+                  className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                    entryType === "glimmer" 
+                      ? "text-white shadow-lg" 
+                      : "bg-gray-100 hover:bg-gray-200"
+                  }`}
+                  style={entryType === "glimmer" ? { background: theme.accent } : {}}
                 >
-                  {f[0].toUpperCase() + f.slice(1)}
+                  ✨ Glimmer (Quick)
                 </button>
-              ))}
-            </div>
-            <p className="muted" style={{ fontSize: 12 }}>Weekly is recommended; monthly/yearly are available too.</p>
-          </div>
+                <button
+                  onClick={() => setEntryType("journal")}
+                  className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                    entryType === "journal" 
+                      ? "text-white shadow-lg" 
+                      : "bg-gray-100 hover:bg-gray-200"
+                  }`}
+                  style={entryType === "journal" ? { background: theme.accent } : {}}
+                >
+                  📝 Journal Entry
+                </button>
+              </div>
 
-          <div className="stack" style={{ marginTop: 14 }}>
-            <h3 className="section-title" style={{ fontSize: 16, margin: 0 }}>
-              {settings?.recap_frequency === "weekly" ? "This week’s"
-                : settings?.recap_frequency === "monthly" ? "This month’s" : "This year’s"} recap
-            </h3>
-            {recapItems.length === 0 ? (
-              <p className="muted">Your recap will appear as you add entries.</p>
-            ) : (
-              <ul className="stack" style={{ gap: 6 }}>
-                {recapItems.map((r) => (
-                  <li key={r.id} className="rounded-xl border px-3 py-2" style={{ borderColor: "#e5e7eb", background: "#fff" }}>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {r.when.toLocaleDateString([], { month: "short", day: "numeric" })}
+              {/* Entry Input */}
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={
+                  entryType === "glimmer" 
+                    ? "A tiny moment of joy, peace, or beauty..." 
+                    : "Take your time. Reflect deeply on what you're grateful for today..."
+                }
+                rows={entryType === "glimmer" ? 3 : 6}
+                className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-purple-400 focus:outline-none resize-none"
+                style={{ borderColor: draft ? theme.border : undefined }}
+              />
+
+              {/* Mood Selector */}
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">How are you feeling?</p>
+                <div className="flex gap-3">
+                  {([1, 2, 3, 4, 5] as MoodLevel[]).map(mood => (
+                    <button
+                      key={mood}
+                      onClick={() => setSelectedMood(mood)}
+                      className={`p-3 rounded-xl transition-all ${
+                        selectedMood === mood 
+                          ? "scale-110 shadow-lg" 
+                          : "hover:scale-105"
+                      }`}
+                      style={selectedMood === mood ? { background: theme.cardBg } : {}}
+                    >
+                      <span className="text-2xl">{MOOD_EMOJIS[mood].emoji}</span>
+                      <p className="text-xs mt-1">{MOOD_EMOJIS[mood].label}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">Add tags (optional)</p>
+                <div className="flex flex-wrap gap-2">
+                  {TAGS.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        if (selectedTags.includes(tag)) {
+                          setSelectedTags(selectedTags.filter(t => t !== tag));
+                        } else {
+                          setSelectedTags([...selectedTags, tag]);
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-full text-sm transition-all ${
+                        selectedTags.includes(tag)
+                          ? "text-white shadow"
+                          : "bg-gray-100 hover:bg-gray-200"
+                      }`}
+                      style={selectedTags.includes(tag) ? { background: theme.accent } : {}}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                onClick={addEntry}
+                disabled={!draft.trim() || saving || (entryType === "glimmer" && !canAddGlimmer)}
+                className="w-full mt-6 py-3 rounded-xl text-white font-semibold disabled:opacity-50 transition-all hover:shadow-lg"
+                style={{ background: theme.accent }}
+              >
+                {saving ? "Saving..." : `Add ${entryType === "glimmer" ? "Glimmer" : "Entry"}`}
+              </button>
+
+              {error && (
+                <div className="mt-4 p-4 rounded-xl bg-red-50 text-red-700">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            {/* Today's Entries */}
+            {todayEntries.length > 0 && (
+              <div className="bg-white rounded-2xl p-6 shadow-lg">
+                <h3 className="font-semibold text-gray-800 mb-4">Today's Gratitude</h3>
+                <div className="space-y-3">
+                  {todayEntries.map(entry => (
+                    <div
+                      key={entry.id}
+                      className="p-4 rounded-xl transition-all hover:shadow-md"
+                      style={{ background: theme.cardBg }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium text-gray-600">
+                              {entry.entry_type === "glimmer" ? "✨" : "📝"} 
+                              {entry.entry_type}
+                            </span>
+                            {entry.mood && (
+                              <span className="text-lg">{MOOD_EMOJIS[entry.mood].emoji}</span>
+                            )}
+                            <span className="text-sm text-gray-500">
+                              {format(new Date(entry.created_at), "h:mm a")}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 whitespace-pre-wrap">{entry.content}</p>
+                          {entry.tags && entry.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {entry.tags.map(tag => (
+                                <span
+                                  key={tag}
+                                  className="px-2 py-1 rounded-full text-xs"
+                                  style={{ background: theme.cardBg }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleFavorite(entry.id, !!entry.is_favorite)}
+                            className="text-2xl transition-transform hover:scale-110"
+                          >
+                            {entry.is_favorite ? "⭐" : "☆"}
+                          </button>
+                          <button
+                            onClick={() => deleteEntry(entry.id)}
+                            disabled={saving}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div>{r.summary}</div>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-        </div>
-
-        {/* Right: Quote + today */}
-        <div className="rounded-xl border p-4" style={{ background: palette.rightBg, borderColor: "#e5e7eb" }}>
-          <div className="section-row" style={{ marginBottom: 8 }}>
-            <h2 className="section-title" style={{ margin: 0 }}>Today</h2>
-            <div className="muted">Glimmers: {todayList.length}/{MAX_PER_DAY}</div>
-          </div>
-
-          {/* Daily quote */}
-          <figure className="rounded-xl border px-3 py-2 mb-3" style={{ borderColor: "#e5e7eb", background: "#fff" }}>
-            <blockquote style={{ fontStyle: "italic", lineHeight: 1.5 }}>
-              “{quote.text}”
-            </blockquote>
-            <figcaption className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              — {quote.author}
-            </figcaption>
-            <div className="right">
-              <button
-                className="btn btn-neutral"
-                onClick={() => setQuoteOffset((n) => n + 1)}
-                aria-label="Show another quote"
-              >
-                Show another
-              </button>
-            </div>
-          </figure>
-
-          {/* Entry input */}
-          <label className="text-sm muted" style={{ display: "block", marginBottom: 6 }}>
-            Write one glimmer and click “Add glimmer”; repeat up to {MAX_PER_DAY} times today.
-          </label>
-          <textarea
-            className="input"
-            rows={4}
-            placeholder="Add a glimmer… (a word, a sentence, or a page)"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <div className="right" style={{ marginTop: 10 }}>
-            <button className="btn btn-brand" onClick={addEntry} disabled={!draft.trim() || !canAdd}>
-              {saving ? "Saving…" : "Add glimmer"}
-            </button>
-          </div>
-
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" style={{ marginTop: 10 }}>
-              {error}
-            </div>
-          )}
-
-          {/* Today's entries */}
-          {todayList.length > 0 && (
-            <div className="stack" style={{ marginTop: 12 }}>
-              {todayList.map((e) => (
-                <div key={e.id} className="rounded-xl border px-3 py-2" style={{ borderColor: "#e5e7eb", background: "#fff" }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div style={{ whiteSpace: "pre-wrap" }}>{e.content}</div>
-                    <button className="btn btn-neutral" onClick={() => removeEntry(e.id)} disabled={saving}>Delete</button>
-                  </div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                    {new Date(e.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Photos area — hidden in MVP */}
-      {SHOW_PHOTOS_ADDON && (
-        <div className="stack" style={{ marginTop: 16 }}>
-          {!photosEnabled ? (
-            <section className="card p-3">
-              <div className="section-row">
-                <h2 className="section-title">Photos & Slideshow</h2>
-                <button className="btn btn-brand" onClick={() => alert("Coming soon!")}>
-                  Enable for $2.99
-                </button>
-              </div>
-              <p className="muted">Attach photos, star favorites, and watch your year-end slideshow.</p>
-            </section>
-          ) : (
-            <section className="card p-3">
-              <h2 className="section-title">Photos</h2>
-              <p className="muted">Uploads enabled (feature flagged off in MVP).</p>
-            </section>
-          )}
-        </div>
-      )}
-    </section>
-  );
-
-  return (
-    <div className="page-wrap">
-      <SiteHeader />
-      <div className="page">
-        <div className="container-app mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="header-bar">
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Gratitude Journal</h1>
-            <div className="controls">
-              <Link className="btn btn-neutral" href="/profile">Back to profile</Link>
-            </div>
-          </div>
-          <div className="h-px" style={{ background: "rgba(196,181,253,.6)", margin: "12px 0 16px" }} />
-
-          {loading && <p className="muted">Loading…</p>}
-          {!loading && stage === "cover" && cover}
-          {!loading && stage === "book_intro" && bookIntro}
-          {!loading && stage === "theme" && themeConfirm}
-          {!loading && stage === "journal" && book}
         </div>
       </div>
     </div>
