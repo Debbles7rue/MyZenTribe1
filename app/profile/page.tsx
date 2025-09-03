@@ -763,7 +763,7 @@ export default function ProfilePage() {
         }
 
         .btn.btn-special {
-          background: linear-gradient(135deg, #f59e0b, #d97706);
+          background: linear-gradient(135deg, #c084fc, #a78bfa);
           color: white;
           border: none;
           transition: all 0.2s ease;
@@ -776,9 +776,9 @@ export default function ProfilePage() {
         }
 
         .btn.btn-special:hover {
-          background: linear-gradient(135deg, #d97706, #b45309);
+          background: linear-gradient(135deg, #a78bfa, #9333ea);
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(245,158,11,0.4);
+          box-shadow: 0 4px 12px rgba(196,132,252,0.4);
         }
 
         .invite-arrow {
