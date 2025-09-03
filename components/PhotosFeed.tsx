@@ -381,7 +381,7 @@ function CollaborationInvites({
           <div key={invite.post_id} className="invite-card">
             <div className="invite-content">
               <div className="invite-text">
-                <span className="invite-icon">🤝</span>
+                <span className="invite-icon">✨</span>
                 Someone invited you to collaborate on their post!
               </div>
               <div className="invite-actions">
@@ -1295,7 +1295,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
             className="create-post-btn"
             onClick={() => setShowCreateModal(true)}
           >
-            <span className="create-icon">🤝</span>
+            <span className="create-icon">✨</span>
             Create Post
           </button>
         )}
@@ -1324,7 +1324,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
           </div>
         ) : posts.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🤝</div>
+            <div className="empty-icon">✨</div>
             <h3>No posts yet!</h3>
             <p>Share your first post</p>
           </div>
@@ -1340,7 +1340,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                   <div className="post-date">{formatDate(post.created_at)}</div>
                   {post.collaborators.length > 0 && (
                     <div className="collaborators">
-                      <span className="collab-icon">🤝</span>
+                      <span className="collab-icon">✨</span>
                       Collaborators: {post.collaborators.join(", ")}
                     </div>
                   )}
