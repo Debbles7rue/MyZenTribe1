@@ -65,7 +65,6 @@ function AnimatedCounter({ value, label, icon }: { value: number; label: string;
 
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [sessionExp, setSessionExp] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tableMissing, setTableMissing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,32 +88,10 @@ export default function ProfilePage() {
   // Mobile-safe avatar upload state
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
-  // Mobile-safe session refresh
-  async function refreshSession() {
-    const { data } = await supabase.auth.refreshSession();
-    if (data?.session) {
-      setUserId(data.session.user?.id ?? null);
-      setSessionExp(
-        data.session.expires_at 
-          ? new Date(data.session.expires_at * 1000).toISOString() 
-          : null
-      );
-    }
-  }
-
   useEffect(() => { 
     supabase.auth.getUser().then(({ data }) => {
       const user = data.user;
       setUserId(user?.id ?? null);
-    });
-    
-    // Also get session expiry for mobile debugging
-    supabase.auth.getSession().then(({ data }) => {
-      setSessionExp(
-        data.session?.expires_at 
-          ? new Date(data.session.expires_at * 1000).toISOString()
-          : null
-      );
     });
   }, []);
 
@@ -236,16 +213,6 @@ export default function ProfilePage() {
           >
             {editPersonal ? "✓ Done" : "✏️ Edit"}
           </button>
-          {/* Mobile debug info - remove in production */}
-          {!isDesktop && (
-            <button 
-              className="btn btn-neutral text-xs"
-              onClick={refreshSession}
-              title="Refresh session"
-            >
-              🔄
-            </button>
-          )}
         </div>
       </div>
 
@@ -253,22 +220,6 @@ export default function ProfilePage() {
       {status && (
         <div className={`status-message ${status.includes('failed') || status.includes('ERROR') ? 'error' : 'success'}`}>
           {status}
-        </div>
-      )}
-
-      {/* Session Debug Info (Mobile) */}
-      {!isDesktop && userId && (
-        <div className="mobile-debug">
-          <div className="debug-row">
-            <span>User ID:</span> 
-            <code>{userId.substring(0, 8)}...</code>
-          </div>
-          {sessionExp && (
-            <div className="debug-row">
-              <span>Session expires:</span>
-              <code>{new Date(sessionExp).toLocaleTimeString()}</code>
-            </div>
-          )}
         </div>
       )}
 
@@ -557,28 +508,6 @@ export default function ProfilePage() {
           background: #fef2f2;
           color: #dc2626;
           border: 1px solid #fecaca;
-        }
-
-        .mobile-debug {
-          background: rgba(255,255,255,0.8);
-          border-radius: 0.5rem;
-          padding: 0.75rem;
-          margin-bottom: 1rem;
-          font-size: 0.75rem;
-        }
-
-        .debug-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 0.25rem;
-        }
-
-        .debug-row code {
-          font-family: monospace;
-          background: rgba(0,0,0,0.1);
-          padding: 0.125rem 0.25rem;
-          border-radius: 0.25rem;
         }
 
         .error-banner {
