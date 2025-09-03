@@ -249,10 +249,10 @@ function InviteGenerator({ userId }: { userId: string }) {
   };
 
   return (
-    <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+    <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
       <button
         onClick={() => setInviteExpanded(!inviteExpanded)}
-        className="w-full flex justify-between items-center text-sm font-medium text-purple-700"
+        className="w-full flex justify-between items-center text-sm font-medium text-blue-700"
       >
         <span>Invite Friends</span>
         <span>{inviteExpanded ? "▼" : "▶"}</span>
@@ -264,13 +264,13 @@ function InviteGenerator({ userId }: { userId: string }) {
             <button
               onClick={generateInvite}
               disabled={generating}
-              className="w-full p-2 bg-purple-500 text-white rounded text-sm font-medium hover:bg-purple-600 disabled:opacity-50"
+              className="w-full p-2 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
             >
               {generating ? "Generating..." : "Generate Friend Invite"}
             </button>
           ) : (
             <div>
-              <p className="text-xs text-purple-600 mb-3 text-center">
+              <p className="text-xs text-blue-600 mb-3 text-center">
                 Expires: {new Date(invite.expires_at).toLocaleDateString()}
                 <br />
                 Uses remaining: {invite.uses_remaining}
@@ -285,7 +285,7 @@ function InviteGenerator({ userId }: { userId: string }) {
                 </button>
                 <button 
                   onClick={generateQRCode} 
-                  className="p-2 bg-yellow-500 text-white rounded text-xs font-medium hover:bg-yellow-600"
+                  className="p-2 bg-purple-500 text-white rounded text-xs font-medium hover:bg-purple-600"
                 >
                   📱 QR Code
                 </button>
