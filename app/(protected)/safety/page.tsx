@@ -336,10 +336,12 @@ export default function SafetyPage() {
 
           {/* Links to Terms and Privacy */}
           <div className="text-center mt-6">
-            <Link href="/legal/terms" className="text-purple-600 underline mx-3">
-              Terms of Service
-            </Link>
-            <Link href="/legal/privacy" className="text-purple-600 underline mx-3">
+           <Link href="/terms-of-service" className="text-purple-600 underline mx-3">
+  Terms of Service
+</Link>
+<Link href="/privacy" className="text-purple-600 underline mx-3">
+  Privacy Policy
+</Link>
               Privacy Policy
             </Link>
           </div>
