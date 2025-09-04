@@ -1,40 +1,217 @@
 /* app/gratitude/page.tsx */
 "use client";
 
-import SiteHeader from "@/components/SiteHeader";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useMemo, useState, useRef } from "react";
-import { format } from "date-fns";
 
-/** ─── Types ───────────────────────────────────────────── */
-type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose" | "midnight" | "sage";
-type EntryType = "glimmer" | "journal";
-type MoodLevel = 1 | 2 | 3 | 4 | 5;
+export default function GratitudePage() {
+  const [userId, setUserId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, []);
 
-type Settings = {
-  user_id: string;
-  activated: boolean;
-  recap_frequency: "weekly" | "monthly" | "yearly";
-  theme: ThemeKey;
-  daily_reminder?: string | null;
-  streak_count?: number;
-  last_entry_date?: string;
-};
+  // Use URL hash to control what screen shows (bypasses React state issues)
+  const showJournal = typeof window !== 'undefined' && window.location.hash === '#journal';
 
-type Entry = {
-  id: string;
-  content: string;
-  created_at: string;
-  entry_date: string;
-  entry_type: EntryType;
-  mood?: MoodLevel;
-  tags?: string[];
-  is_favorite?: boolean;
-};
+  const goToJournal = () => {
+    window.location.hash = '#journal';
+    window.location.reload(); // Force reload to ensure it works
+  };
 
-/** Enhanced Themes */
-const THEMES: Record<ThemeKey, {
+  const goToWelcome = () => {
+    window.location.hash = '';
+    window.location.reload();
+  };
+
+  // Journal content (always rendered, just hidden/shown with CSS)
+  const journalContent = (
+    <div style={{ 
+      display: showJournal ? 'block' : 'none',
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #E9D5FF 0%, #F3E8FF 50%, #FDF4FF 100%)',
+      padding: '40px'
+    }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', background: 'white', padding: '40px', borderRadius: '20px' }}>
+        <h1>Your Gratitude Journal</h1>
+        
+        <div style={{ marginBottom: '30px' }}>
+          <h3>Daily Reminder:</h3>
+          <p>Feel it, don't just think it. Take a breath in for 4, out for 6.</p>
+        </div>
+
+        <div style={{ marginBottom: '30px' }}>
+          <h3>What are you grateful for today?</h3>
+          <textarea
+            style={{
+              width: '100%',
+              height: '150px',
+              padding: '15px',
+              fontSize: '16px',
+              border: '2px solid #E9D5FF',
+              borderRadius: '10px'
+            }}
+            placeholder="Write from the feeling in your body..."
+            defaultValue=""
+          />
+        </div>
+
+        <button
+          onClick={() => alert('Entry saved locally! (Database not connected)')}
+          style={{
+            padding: '15px 30px',
+            background: 'purple',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            marginRight: '10px'
+          }}
+        >
+          Save Entry
+        </button>
+
+        <button
+          onClick={goToWelcome}
+          style={{
+            padding: '15px 30px',
+            background: 'gray',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            cursor: 'pointer'
+          }}
+        >
+          Back to Welcome
+        </button>
+      </div>
+    </div>
+  );
+
+  // Welcome content
+  const welcomeContent = (
+    <div style={{ 
+      display: showJournal ? 'none' : 'block',
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #E9D5FF 0%, #F3E8FF 50%, #FDF4FF 100%)',
+      padding: '40px'
+    }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', background: 'white', padding: '40px', borderRadius: '20px' }}>
+        <h1>Gratitude Journal</h1>
+        
+        <div style={{ marginBottom: '30px' }}>
+          <h2>The Science</h2>
+          <p><strong>Your brain is naturally wired to notice the negative</strong>—it's part of how it keeps you safe. 
+          But with just a little practice, you can retrain your mind to see the positives all around you.</p>
+          
+          <p>Each day, write down <strong>three things you're thankful for</strong>. Over time, these small daily 
+          shifts rewire your brain, helping you create a more positive outlook and a deeper sense of well-being.</p>
+        </div>
+
+        <div style={{ 
+          background: '#F3E8FF', 
+          padding: '20px', 
+          borderRadius: '10px',
+          marginBottom: '30px'
+        }}>
+          <h3>🧠 The Key: Feel It, Don't Just Think It</h3>
+          <p>Research shows that feeling gratitude activates your parasympathetic nervous system. 
+          Simply listing things isn't enough—you need to pause and feel the sensation of appreciation in your body.</p>
+        </div>
+
+        <div style={{ marginBottom: '30px' }}>
+          <h3>How to Practice:</h3>
+          <ol>
+            <li>Close your eyes. Take a slow breath in for 4, out for 6.</li>
+            <li><strong>Feel</strong> for a tiny lift in your body—a softening, warmth, or ease.</li>
+            <li>Open your eyes and write from that sensation.</li>
+            <li>Repeat up to 3 times daily.</li>
+          </ol>
+        </div>
+
+        <div style={{ 
+          background: userId ? '#10B981' : '#FCA5A5',
+          padding: '15px',
+          borderRadius: '10px',
+          marginBottom: '20px',
+          color: 'white'
+        }}>
+          <strong>Status:</strong> {userId ? '✅ Logged in - Ready to start' : '❌ Not logged in - Please login first'}
+          {!userId && (
+            <div style={{ marginTop: '10px' }}>
+              <a href="/auth" style={{ color: 'white', textDecoration: 'underline' }}>
+                Click here to login
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Multiple ways to navigate */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            onClick={goToJournal}
+            style={{
+              padding: '15px',
+              background: 'purple',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              cursor: 'pointer'
+            }}
+          >
+            Begin Your Practice (Page Reload)
+          </button>
+
+          <a
+            href="#journal"
+            onClick={(e) => {
+              e.preventDefault();
+              goToJournal();
+            }}
+            style={{
+              padding: '15px',
+              background: 'blue',
+              color: 'white',
+              borderRadius: '10px',
+              textAlign: 'center',
+              textDecoration: 'none',
+              display: 'block'
+            }}
+          >
+            Begin Your Practice (Link Version)
+          </a>
+
+          <div
+            onClick={goToJournal}
+            style={{
+              padding: '15px',
+              background: 'green',
+              color: 'white',
+              borderRadius: '10px',
+              textAlign: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            Begin Your Practice (Div Click)
+          </div>
+        </div>
+
+        <div style={{ marginTop: '20px', fontSize: '12px', color: 'gray' }}>
+          Debug: If buttons don't work, manually add #journal to the URL and refresh
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {welcomeContent}
+      {journalContent}
+    </>
+  );
+}const THEMES: Record<ThemeKey, {
   name: string;
   gradient: string;
   cardBg: string;
