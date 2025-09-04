@@ -1478,7 +1478,7 @@ export default function KarmaCornerPage() {
                       borderRadius: 16
                     }}
                   >
-                    No good news yet. Be the first to share something uplifting! 🌈
+                                          No good news yet. Be the first to share something uplifting! 🌻
                   </div>
                 )}
 
