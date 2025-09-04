@@ -573,7 +573,7 @@ export default function KarmaCornerPage() {
               ✨ Where kindness grows and movements begin
             </div>
             <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.6 }}>
-              Join kindness challenges, share your acts anonymously, discover uplifting stories, and start your own movements. 
+              Share anonymous acts of kindness, discover uplifting stories, join challenges, and start your own movements. 
               Every action plants a seed of inspiration. ✨
             </p>
           </section>
