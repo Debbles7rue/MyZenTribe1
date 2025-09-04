@@ -539,7 +539,16 @@ export default function GratitudePage() {
                   {(Object.keys(THEMES) as ThemeKey[]).map(key => (
                     <button
                       key={key}
-                      onClick={() => setSelectedTheme(key)}
+                      onClick={() => {
+                        setSelectedTheme(key);
+                        // Update settings if they exist
+                        if (settings && userId) {
+                          supabase
+                            .from("gratitude_settings")
+                            .update({ theme: key })
+                            .eq("user_id", userId);
+                        }
+                      }}
                       className={`p-3 rounded-xl border-2 transition-all ${
                         selectedTheme === key 
                           ? 'border-purple-500 shadow-lg scale-105' 
@@ -552,13 +561,33 @@ export default function GratitudePage() {
                   ))}
                 </div>
 
-                <button
-                  onClick={startJournal}
-                  disabled={saving}
-                  className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all disabled:opacity-50"
-                >
-                  {saving ? "Starting..." : "Begin Your Practice"}
-                </button>
+                <div className="flex gap-4">
+                  {settings ? (
+                    <button
+                      onClick={() => setStage("journal")}
+                      className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+                    >
+                      Continue to Journal
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startJournal}
+                      disabled={saving || !userId}
+                      className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all disabled:opacity-50"
+                    >
+                      {saving ? "Starting..." : "Begin Your Practice"}
+                    </button>
+                  )}
+                  
+                  {settings && (
+                    <button
+                      onClick={() => window.location.href = "/profile"}
+                      className="px-8 py-4 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-all"
+                    >
+                      Back to Profile
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
