@@ -18,6 +18,7 @@ type Msg = {
   id: number;
   event_id: string;
   user_id: string;
+  user_name?: string; // Added to store username
   body: string;
   created_at: string;
 };
@@ -30,6 +31,7 @@ export default function CirclePage({ params }: { params: { code: string } }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // load session
@@ -96,6 +98,25 @@ export default function CirclePage({ params }: { params: { code: string } }) {
     };
   }, [me?.id, code]);
 
+  // Helper function to fetch usernames
+  const fetchUserNames = async (userIds: string[]) => {
+    const uniqueIds = [...new Set(userIds)].filter(id => !userNames[id]);
+    if (uniqueIds.length === 0) return;
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", uniqueIds);
+
+    if (profiles) {
+      const newNames: { [key: string]: string } = {};
+      profiles.forEach(p => {
+        newNames[p.id] = p.full_name || "Anonymous";
+      });
+      setUserNames(prev => ({ ...prev, ...newNames }));
+    }
+  };
+
   // load messages + realtime
   useEffect(() => {
     if (!evt || !allowed) return;
@@ -108,8 +129,15 @@ export default function CirclePage({ params }: { params: { code: string } }) {
         .eq("event_id", evt.id)
         .order("created_at", { ascending: true })
         .limit(300);
+      
       if (!mounted) return;
-      setMsgs(data || []);
+      
+      if (data) {
+        setMsgs(data || []);
+        // Fetch usernames for all messages
+        await fetchUserNames(data.map(m => m.user_id));
+      }
+      
       setTimeout(() => scrollerRef.current?.scrollTo({ top: 9e6 }), 50);
     })();
 
@@ -123,8 +151,12 @@ export default function CirclePage({ params }: { params: { code: string } }) {
           table: "circle_messages",
           filter: `event_id=eq.${evt.id}`,
         },
-        (payload) => {
-          setMsgs((cur) => [...cur, payload.new as Msg]);
+        async (payload) => {
+          const newMsg = payload.new as Msg;
+          setMsgs((cur) => [...cur, newMsg]);
+          // Fetch username for new message
+          await fetchUserNames([newMsg.user_id]);
+          
           const el = scrollerRef.current;
           if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) {
             setTimeout(() => el.scrollTo({ top: 9e6, behavior: "smooth" }), 0);
@@ -155,7 +187,6 @@ export default function CirclePage({ params }: { params: { code: string } }) {
     const s = new Date(evt.start_time);
     const e = new Date(evt.end_time);
     return `${s.toLocaleString()} – ${e.toLocaleTimeString()}`;
-    // (You already format nicely in EventDetails; keeping this simple here.)
   }, [evt?.start_time, evt?.end_time]);
 
   if (loading) return <div className="container-app py-8">Loading…</div>;
@@ -164,7 +195,7 @@ export default function CirclePage({ params }: { params: { code: string } }) {
     return (
       <div className="container-app py-8">
         <h1 className="page-title">Invite not found</h1>
-        <p className="muted">This invite code doesn’t match any event.</p>
+        <p className="muted">This invite code doesn't match any event.</p>
         <p className="mt-3">
           <Link className="link" href="/calendar">
             ← Back to calendar
@@ -178,14 +209,9 @@ export default function CirclePage({ params }: { params: { code: string } }) {
       <div className="container-app py-8">
         <h1 className="page-title">Join this circle</h1>
         <p className="muted mb-4">
-          You aren’t on the attendee list for <b>{evt.title || "Meditation"}</b>.
+          You aren't on the attendee list for <b>{evt.title || "Meditation"}</b>.
         </p>
-        <Link
-          className="btn btn-brand"
-          href={`/meditation/schedule/group?code=${encodeURIComponent(code)}`}
-        >
-          RSVP to join
-        </Link>
+        <p className="muted">Ask the host to add you, then refresh this page.</p>
         <p className="mt-3">
           <Link className="link" href="/calendar">
             ← Back to calendar
@@ -195,59 +221,121 @@ export default function CirclePage({ params }: { params: { code: string } }) {
     );
 
   return (
-    <div className="page">
-      <div className="container-app">
-        <div className="flex items-center justify-between gap-3 mt-3 mb-2">
-          <h1 className="page-title">{evt.title || "Group Meditation"}</h1>
-          <Link className="btn btn-neutral" href="/calendar">
-            ← Back to calendar
-          </Link>
+    <div className="container-app py-8">
+      <div className="max-w-3xl mx-auto">
+        {/* Event header */}
+        <div className="card p-4 mb-4 bg-gradient-to-br from-purple-50 to-pink-50">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {evt.title || "Circle Chat"}
+          </h1>
+          {evt.description && (
+            <p className="text-gray-700 mb-3">{evt.description}</p>
+          )}
+          <div className="text-sm text-gray-600">
+            <div>📅 {when}</div>
+            <div className="mt-1">
+              🔗 Invite code: <code className="bg-white px-2 py-0.5 rounded">{code}</code>
+            </div>
+          </div>
         </div>
 
-        <div className="muted mb-3">{when}</div>
-
-        <div className="card overflow-hidden">
+        {/* Messages area */}
+        <div className="card p-4">
+          <h2 className="text-lg font-semibold mb-3">Messages</h2>
+          
           <div
             ref={scrollerRef}
-            style={{ height: "60vh", overflow: "auto", background: "#fffdf8", padding: 12 }}
+            className="border rounded-lg bg-gray-50 p-3 mb-4 overflow-y-auto"
+            style={{ height: 400 }}
           >
             {msgs.length === 0 ? (
-              <div className="muted text-center py-8">No messages yet. Say hello 👋</div>
+              <div className="text-center text-gray-500 py-8">
+                No messages yet. Start the conversation!
+              </div>
             ) : (
-              msgs.map((m) => (
-                <div key={m.id} className="mb-3">
-                  <div className="text-sm">{m.body}</div>
-                  <div className="text-xs muted">
-                    {new Date(m.created_at).toLocaleString()}
-                  </div>
-                </div>
-              ))
+              <div className="space-y-3">
+                {msgs.map((msg) => {
+                  const isMe = msg.user_id === me?.id;
+                  const userName = userNames[msg.user_id] || (isMe ? me.name : "Loading...");
+                  
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
+                          isMe
+                            ? "bg-purple-600 text-white"
+                            : "bg-white border border-gray-200"
+                        }`}
+                      >
+                        {/* Username with profile link */}
+                        {!isMe && (
+                          <Link
+                            href={`/profile/${msg.user_id}`}
+                            className="text-xs font-medium text-purple-600 hover:text-purple-700 hover:underline block mb-1"
+                          >
+                            {userName}
+                          </Link>
+                        )}
+                        {isMe && (
+                          <div className="text-xs opacity-80 mb-1">You</div>
+                        )}
+                        
+                        <div className={isMe ? "text-white" : "text-gray-800"}>
+                          {msg.body}
+                        </div>
+                        
+                        <div
+                          className={`text-xs mt-1 ${
+                            isMe ? "text-purple-200" : "text-gray-500"
+                          }`}
+                        >
+                          {new Date(msg.created_at).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <div className="border-t p-2 bg-[#fbf6ec] flex gap-2">
+          {/* Input area */}
+          <div className="flex gap-2">
             <input
-              className="input flex-1"
+              type="text"
+              className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              placeholder="Type a message..."
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
+              onKeyPress={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   send();
                 }
               }}
-              placeholder="Write a message…"
-              maxLength={1000}
             />
-            <button className="btn btn-brand" onClick={send}>
+            <button
+              onClick={send}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+              disabled={!text.trim()}
+            >
               Send
             </button>
           </div>
         </div>
 
-        <p className="mt-3 text-xs muted">
-          Only the organizer and attendees of this event can read/post here.
-        </p>
+        {/* Back to calendar link */}
+        <div className="mt-4">
+          <Link 
+            href="/calendar"
+            className="text-purple-600 hover:text-purple-700 hover:underline"
+          >
+            ← Back to calendar
+          </Link>
+        </div>
       </div>
     </div>
   );
