@@ -26,18 +26,6 @@ const MapExplorerClient = dynamic(
   }
 );
 
-// Popular categories for quick filtering
-const CATEGORIES = [
-  { value: "all", label: "All", emoji: "🌟" },
-  { value: "drum circle", label: "Drum Circles", emoji: "🥁" },
-  { value: "meditation", label: "Meditation", emoji: "🧘" },
-  { value: "yoga", label: "Yoga", emoji: "🧘‍♀️" },
-  { value: "sound bath", label: "Sound Baths", emoji: "🔔" },
-  { value: "breathwork", label: "Breathwork", emoji: "💨" },
-  { value: "wellness", label: "Wellness", emoji: "💚" },
-  { value: "nature", label: "Nature", emoji: "🌿" },
-];
-
 export default function MapPage() {
   const [pins, setPins] = useState<MapPin[]>([]);
   const [communities, setCommunities] = useState<MapCommunity[]>([]);
@@ -45,7 +33,7 @@ export default function MapPage() {
   const [showAddPin, setShowAddPin] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number]>([32.7767, -96.7970]); // Default to Dallas
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [categorySearch, setCategorySearch] = useState("");
 
   useEffect(() => {
     loadMapData();
@@ -136,16 +124,17 @@ export default function MapPage() {
 
   // Filter pins based on search and category
   const filteredPins = pins.filter(pin => {
-    // Category filter
-    if (selectedCategory !== "all") {
+    // Category filter (type-in search)
+    if (categorySearch) {
+      const categoryQuery = categorySearch.toLowerCase();
       const hasCategory = pin.categories?.some(cat => 
-        cat.toLowerCase().includes(selectedCategory.toLowerCase())
-      ) || pin.name?.toLowerCase().includes(selectedCategory.toLowerCase());
+        cat.toLowerCase().includes(categoryQuery)
+      ) || pin.name?.toLowerCase().includes(categoryQuery);
       
       if (!hasCategory) return false;
     }
 
-    // Search filter
+    // Location/Zip search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -164,89 +153,101 @@ export default function MapPage() {
     return acc;
   }, {} as Record<string, MapCommunity>);
 
-  // Handle category button click
-  const handleCategoryClick = (category: string) => {
-    if (selectedCategory === category && category !== "all") {
-      // If clicking the same category, toggle it off (show all)
-      setSelectedCategory("all");
-    } else {
-      setSelectedCategory(category);
-    }
-    setSearchQuery(""); // Clear search when using category filters
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
       <div className="container-app py-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Community Map</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Communities Map</h1>
           <p className="text-gray-600">
             Discover meditation circles, drum circles, wellness events, and more in your area
           </p>
         </div>
 
-        {/* Category Filter Buttons */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => handleCategoryClick(cat.value)}
-                className={`px-4 py-2 rounded-full transition-all ${
-                  selectedCategory === cat.value
-                    ? "bg-purple-600 text-white shadow-md transform scale-105"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                }`}
-              >
-                <span className="mr-1">{cat.emoji}</span>
-                {cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Search and Controls */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <input
-              type="text"
-              placeholder="Search by zip, location, or activity..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setSelectedCategory("all"); // Clear category filter when searching
-              }}
-              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            
-            {/* Add Pin Button */}
-            <button
-              onClick={() => setShowAddPin(true)}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-            >
-              + Add Location
-            </button>
-          </div>
-
-          {/* Stats and Active Filter */}
-          <div className="flex justify-between items-center mt-4">
-            <div className="flex gap-6 text-sm text-gray-600">
-              <span>{filteredPins.length} of {pins.length} locations</span>
-              <span>{communities.length} communities</span>
+          <div className="flex flex-col gap-4">
+            {/* Top Row: Search fields */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Location/Zip Search */}
+              <input
+                type="text"
+                placeholder="Search by zip, location, or address..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              
+              {/* Category Search with Datalist */}
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  list="category-suggestions"
+                  placeholder="Type category (e.g., drum circle, yoga...)"
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <datalist id="category-suggestions">
+                  <option value="Drum Circles" />
+                  <option value="Meditation" />
+                  <option value="Yoga" />
+                  <option value="Sound Baths" />
+                  <option value="Breathwork" />
+                  <option value="Wellness" />
+                  <option value="Nature" />
+                  <option value="Healing" />
+                  <option value="Ecstatic Dance" />
+                  <option value="Reiki" />
+                  <option value="Qi Gong" />
+                  <option value="Support Groups" />
+                  <option value="Kirtan" />
+                  <option value="Sacred Ceremony" />
+                </datalist>
+              </div>
             </div>
-            {(selectedCategory !== "all" || searchQuery) && (
-              <button
-                onClick={() => {
-                  setSelectedCategory("all");
-                  setSearchQuery("");
-                }}
-                className="text-sm text-purple-600 hover:text-purple-700"
-              >
-                Clear filters ✕
-              </button>
-            )}
+
+            {/* Bottom Row: Buttons and Stats */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddPin(true)}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                >
+                  + Add Pin
+                </button>
+                <a
+                  href="/communities"
+                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                >
+                  Browse Communities
+                </a>
+              </div>
+
+              {/* Stats and Clear Filters */}
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">
+                  {filteredPins.length} of {pins.length} locations
+                </span>
+                {categorySearch && (
+                  <button
+                    onClick={() => setCategorySearch("")}
+                    className="text-sm text-purple-600 hover:text-purple-700"
+                  >
+                    Clear category ✕
+                  </button>
+                )}
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="text-sm text-purple-600 hover:text-purple-700"
+                  >
+                    Clear search ✕
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -264,13 +265,13 @@ export default function MapPage() {
                 <div className="text-6xl mb-4">📍</div>
                 <div className="text-xl font-semibold mb-2">No locations found</div>
                 <div className="text-sm mb-4">
-                  {(selectedCategory !== "all" && selectedCategory !== "")
-                    ? `No ${selectedCategory.toLowerCase()} locations in this area`
+                  {categorySearch
+                    ? `No ${categorySearch.toLowerCase()} locations in this area`
                     : "Try adjusting your search"}
                 </div>
                 <button
                   onClick={() => {
-                    setSelectedCategory("all");
+                    setCategorySearch("");
                     setSearchQuery("");
                   }}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
@@ -290,16 +291,16 @@ export default function MapPage() {
         </div>
 
         {/* Active Filter Notice */}
-        {selectedCategory !== "all" && (
+        {categorySearch && (
           <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-purple-700">
-                Showing: <strong>{CATEGORIES.find(c => c.value === selectedCategory)?.label}</strong>
+                Filtering by category: <strong>{categorySearch}</strong>
               </span>
               <span className="text-purple-600">({filteredPins.length} locations)</span>
             </div>
             <button
-              onClick={() => setSelectedCategory("all")}
+              onClick={() => setCategorySearch("")}
               className="text-sm text-purple-600 hover:text-purple-700 font-medium"
             >
               Show all →
@@ -307,13 +308,13 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* Legend */}
+        {/* Quick Tips */}
         <div className="mt-6 bg-white rounded-xl shadow-sm p-4">
           <h3 className="font-semibold mb-3">Quick Tips</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
             <div>🔍 Click any pin to see details and contact info</div>
-            <div>🎯 Use category buttons for quick filtering</div>
-            <div>📍 Zoom in/out to explore different areas</div>
+            <div>📍 Use search to find locations by zip or city</div>
+            <div>🎯 Type any category to filter (drum, yoga, etc.)</div>
             <div>➕ Add your own wellness location to help others</div>
           </div>
         </div>
