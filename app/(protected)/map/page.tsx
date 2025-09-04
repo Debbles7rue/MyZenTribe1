@@ -212,7 +212,7 @@ export default function MapPage() {
             {/* Search */}
             <input
               type="text"
-              placeholder="Search by name or location..."
+              placeholder="Search by zip, location, or activity..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
