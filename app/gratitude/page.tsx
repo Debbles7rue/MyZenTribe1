@@ -12,7 +12,8 @@ type ThemeKey = "lavender" | "sunset" | "forest" | "ocean" | "rose" | "midnight"
 interface Entry {
   id: string;
   user_id: string;
-  content: string;
+  body?: string;  // Your database uses 'body'
+  content?: string;  // For backwards compatibility
   entry_date: string;
   entry_type: EntryType;
   mood?: MoodLevel;
@@ -199,7 +200,7 @@ export default function GratitudePage() {
   const today = formatDate(new Date(), "yyyy-MM-dd");
   const todayEntries = entries.filter(e => e.entry_date === today);
   const glimmersToday = todayEntries.filter(e => e.entry_type === "glimmer").length;
-  const canAddGlimmer = glimmersToday < 10; // Allow up to 10 glimmers per day
+  const canAddGlimmer = glimmersToday < 10;
 
   // Load user data
   useEffect(() => {
@@ -250,7 +251,8 @@ export default function GratitudePage() {
       setEntries(entriesData as Entry[] || []);
     } catch (e: any) {
       console.error("Load error:", e);
-      setError(e?.message || "Could not load your journal");
+      // Don't show error for loading issues
+      setStage(settings ? "journal" : "science");
     } finally {
       setLoading(false);
     }
@@ -258,33 +260,90 @@ export default function GratitudePage() {
 
   // Start journal
   async function startJournal() {
+    console.log("Starting journal... userId:", userId);
+    
     if (!userId) {
+      alert("Please sign in first!");
       window.location.href = "/auth";
       return;
     }
+    
     setSaving(true);
+    setError(null);
     
     try {
-      const newSettings: Settings = {
+      const settingsToSave = {
         user_id: userId,
         activated: true,
-        recap_frequency: "weekly",
         theme: selectedTheme,
+        recap_frequency: "weekly",
         streak_count: 0,
         last_entry_date: today
       };
       
-      const { error } = await supabase
+      console.log("Attempting to save settings:", settingsToSave);
+      
+      // Check if settings exist
+      const { data: existing } = await supabase
         .from("gratitude_settings")
-        .upsert(newSettings, { onConflict: "user_id" });
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
       
-      if (error) throw error;
+      console.log("Existing settings:", existing);
       
-      setSettings(newSettings);
+      let result;
+      if (existing) {
+        // Update existing settings
+        console.log("Updating existing settings...");
+        result = await supabase
+          .from("gratitude_settings")
+          .update({
+            activated: true,
+            theme: selectedTheme,
+            updated_at: new Date().toISOString()
+          })
+          .eq("user_id", userId)
+          .select()
+          .single();
+      } else {
+        // Insert new settings
+        console.log("Inserting new settings...");
+        result = await supabase
+          .from("gratitude_settings")
+          .insert(settingsToSave)
+          .select()
+          .single();
+      }
+      
+      console.log("Save result:", result);
+      
+      if (result.error) {
+        throw result.error;
+      }
+      
+      setSettings(result.data as Settings);
       setStage("journal");
+      console.log("Successfully started journal!");
+      
     } catch (e: any) {
-      console.error("Start error:", e);
-      setError(e?.message || "Could not start journal");
+      console.error("Full error object:", e);
+      
+      let errorMessage = "Could not start journal. ";
+      
+      if (e?.code === '42P01') {
+        errorMessage += "The gratitude_settings table doesn't exist.";
+      } else if (e?.code === '42501') {
+        errorMessage += "Permission denied. Check RLS policies.";
+      } else if (e?.code === '23502') {
+        errorMessage += "User ID is missing. Please sign in again.";
+      } else {
+        errorMessage += e?.message || "Unknown error";
+      }
+      
+      setError(errorMessage);
+      alert(errorMessage);
+      
     } finally {
       setSaving(false);
     }
@@ -295,7 +354,7 @@ export default function GratitudePage() {
     if (!userId || !draft.trim()) return;
     
     if (entryType === "glimmer" && !canAddGlimmer) {
-      setError("You've reached 10 glimmers for today! Amazing work! 🌟");
+      setError("You've reached 10 glimmers for today! Amazing work!");
       setTimeout(() => setError(null), 3000);
       return;
     }
@@ -306,7 +365,7 @@ export default function GratitudePage() {
     try {
       const newEntry = {
         user_id: userId,
-        content: draft.trim(),
+        body: draft.trim(),  // Using 'body' for your database
         entry_date: today,
         entry_type: entryType,
         mood: selectedMood,
@@ -326,7 +385,7 @@ export default function GratitudePage() {
       setDraft("");
       setSelectedTags([]);
       setSelectedMood(3);
-      setSuccessMessage(entryType === "glimmer" ? "✨ Glimmer captured!" : "📝 Entry saved!");
+      setSuccessMessage(entryType === "glimmer" ? "Glimmer captured!" : "Entry saved!");
       setTimeout(() => setSuccessMessage(null), 3000);
       
       // Update streak if needed
@@ -410,9 +469,11 @@ export default function GratitudePage() {
       setTimerSeconds(prev => {
         if (prev <= 1) {
           stopTimer();
-          // Play a gentle sound or notification
-          setSuccessMessage("🧘 Beautiful! You're ready to journal.");
+          // Alert when timer completes
+          alert("⏰ Time's up! Your 10 minutes of screen-free time is complete. You're ready to journal!");
+          setSuccessMessage("Beautiful! You're centered and ready to capture your gratitude.");
           setTimeout(() => setSuccessMessage(null), 5000);
+          setShowTimer(false);
           return 0;
         }
         return prev - 1;
@@ -462,7 +523,7 @@ export default function GratitudePage() {
               </h1>
               
               <p className="text-lg text-gray-700 mb-8">
-                Transform your mindset with the power of gratitude. Please sign in to begin your journey.
+                Transform your mindset with the power of gratitude. Please sign in to begin.
               </p>
               
               <Link 
@@ -478,7 +539,7 @@ export default function GratitudePage() {
     );
   }
 
-  // Science screen
+  // Science/Instructions screen
   if (stage === "science") {
     return (
       <div className="min-h-screen" style={{ background: theme.gradient }}>
@@ -499,16 +560,15 @@ export default function GratitudePage() {
                   </p>
                   <p className="text-purple-800">
                     <strong>Just 3 gratitude thoughts daily</strong> can measurably rewire your neural pathways 
-                    in as little as 21 days, helping reduce depression and anxiety while boosting happiness and resilience.
+                    in as little as 21 days, helping reduce depression and anxiety while boosting happiness.
                   </p>
                 </div>
 
                 <div className="bg-green-50 rounded-2xl p-6">
                   <h3 className="font-semibold text-green-900 mb-3">💚 The Key: Feel It, Don't Just Think It</h3>
                   <p className="text-green-800">
-                    Research from UC Berkeley and Harvard shows that <strong>feeling gratitude</strong>—not just 
-                    thinking about it—activates your parasympathetic nervous system, reducing stress hormones 
-                    and increasing dopamine and serotonin production.
+                    Research shows that <strong>feeling gratitude</strong>—not just thinking about it—activates 
+                    your parasympathetic nervous system, reducing stress hormones and increasing dopamine.
                   </p>
                 </div>
 
@@ -517,7 +577,7 @@ export default function GratitudePage() {
                   <ol className="space-y-2 text-blue-800">
                     <li><strong>1.</strong> Take 10 minutes with no screens before journaling</li>
                     <li><strong>2.</strong> Breathe deeply (4 counts in, 6 counts out)</li>
-                    <li><strong>3.</strong> Feel for a sensation of warmth or lightness in your body</li>
+                    <li><strong>3.</strong> Feel for a sensation of warmth in your body</li>
                     <li><strong>4.</strong> Write from that feeling, not just your thoughts</li>
                     <li><strong>5.</strong> Capture 3 things you're genuinely grateful for</li>
                   </ol>
@@ -527,8 +587,7 @@ export default function GratitudePage() {
                   <h3 className="font-semibold text-amber-900 mb-3">🌟 What Are Glimmers?</h3>
                   <p className="text-amber-800">
                     Glimmers are micro-moments of joy—the opposite of triggers. They're tiny experiences that 
-                    make you feel calm, connected, or content. A warm cup of coffee, sunlight through the window, 
-                    a kind text. Small moments, powerful impact.
+                    make you feel calm or content. A warm cup of coffee, sunlight, a kind text. Small but powerful.
                   </p>
                 </div>
               </div>
@@ -589,6 +648,13 @@ export default function GratitudePage() {
                   )}
                 </div>
               </div>
+              
+              {/* Error display */}
+              {error && (
+                <div className="mt-4 p-4 rounded-xl bg-red-100 text-red-700">
+                  {error}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -634,10 +700,10 @@ export default function GratitudePage() {
         {showTimer && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl p-8 max-w-md w-full animate-scale-in">
-              <h2 className="text-2xl font-bold mb-4">Screen-Free Meditation</h2>
+              <h2 className="text-2xl font-bold mb-4">Screen-Free Time</h2>
               <p className="text-gray-600 mb-6">
-                Take a moment to disconnect and breathe. Notice the sensations in your body, 
-                the sounds around you, the feeling of being present.
+                Step away from all screens. Breathe deeply. Notice the sensations in your body, 
+                the sounds around you. Let your mind settle. An alert will sound when time is up.
               </p>
               
               <div className="text-6xl font-bold text-center mb-6" style={{ color: theme.accent }}>
@@ -694,14 +760,21 @@ export default function GratitudePage() {
                 className="w-full py-3 rounded-xl mb-3 text-white font-medium transition-all hover:shadow-lg"
                 style={{ background: theme.accent }}
               >
-                🧘 10-Minute Meditation
+                ⏱️ Screen-Free Timer (10 min)
               </button>
               
               <button
                 onClick={() => setShowPrompts(!showPrompts)}
-                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+                className="w-full py-3 rounded-xl mb-3 border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
               >
                 💭 {showPrompts ? 'Hide' : 'Show'} Prompts
+              </button>
+              
+              <button
+                onClick={() => setStage("science")}
+                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+              >
+                📖 Instructions & Theme
               </button>
               
               {showPrompts && (
@@ -879,7 +952,9 @@ export default function GratitudePage() {
                               {formatDate(new Date(entry.created_at), "h:mm a")}
                             </span>
                           </div>
-                          <p className="text-gray-700 whitespace-pre-wrap">{entry.content}</p>
+                          <p className="text-gray-700 whitespace-pre-wrap">
+                            {entry.body || entry.content}
+                          </p>
                           {entry.tags && entry.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               {entry.tags.map(tag => (
