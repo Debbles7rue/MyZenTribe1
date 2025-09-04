@@ -5,8 +5,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 
-type Tab = "karma" | "good_news" | "challenges";
-type ChallengeTab = "browse" | "create" | "my_challenges";
+type Tab = "karma" | "good_news";
+type KarmaTab = "browse_challenges" | "my_challenges" | "create_challenge" | "all_acts";
 
 type PostRow = {
   id: string;
@@ -70,11 +70,11 @@ const pageBg: React.CSSProperties = {
 
 export default function KarmaCornerPage() {
   const [tab, setTab] = useState<Tab>("karma");
-  const [challengeTab, setChallengeTab] = useState<ChallengeTab>("browse");
+  const [karmaTab, setKarmaTab] = useState<KarmaTab>("browse_challenges");
   const [userId, setUserId] = useState<string | null>(null);
   const [myName, setMyName] = useState<string>("You");
 
-  // Composer states
+  // Composer states (always visible in Karma Corner)
   const [content, setContent] = useState("");
   const [isAnonymous, setIsAnonymous] = useState<boolean>(true);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -94,7 +94,6 @@ export default function KarmaCornerPage() {
     tags: [] as string[]
   });
   const [creatingChallenge, setCreatingChallenge] = useState(false);
-  const [showCreateChallenge, setShowCreateChallenge] = useState(false);
 
   // Challenge completion states
   const [showCompleteModal, setShowCompleteModal] = useState<string | null>(null);
@@ -116,7 +115,7 @@ export default function KarmaCornerPage() {
   // Common tags for suggestions
   const commonTags = [
     "#RandomActsOfKindness", "#Community", "#LocalLove", "#PayItForward", 
-    "#Gratitude", "#Helping", "#Inspiration", "#Kindness", "#GoodNews"
+    "#Gratitude", "#Helping", "#Inspiration", "#Kindness"
   ];
 
   const challengeTags = [
@@ -144,11 +143,13 @@ export default function KarmaCornerPage() {
     setLoading(true);
     setError(null);
     try {
-      // Load posts
+      // Load posts based on current tab
+      const postType = tab === "karma" ? "karma" : "good_news";
       const { data: postsData, error: postsErr } = await supabase
         .from("kindness_posts")
         .select("id,created_by,post_type,content,photo_url,tags,region,is_anonymous,created_at")
         .eq("status", "published")
+        .eq("post_type", postType)
         .order("created_at", { ascending: false })
         .limit(200);
       
@@ -195,7 +196,7 @@ export default function KarmaCornerPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, tab]);
 
   const loadChallenges = useCallback(async () => {
     if (!userId) return;
@@ -233,8 +234,10 @@ export default function KarmaCornerPage() {
 
   useEffect(() => {
     loadPosts();
-    loadChallenges();
-  }, [loadPosts, loadChallenges]);
+    if (tab === "karma") {
+      loadChallenges();
+    }
+  }, [loadPosts, loadChallenges, tab]);
 
   const onPost = async () => {
     if (!canPost) return;
@@ -295,7 +298,7 @@ export default function KarmaCornerPage() {
         estimated_time: newChallenge.estimated_time || null,
         target_group: newChallenge.target_group || null,
         is_official: false,
-        status: "approved" // For now, auto-approve. Later add moderation queue
+        status: "approved"
       };
 
       const { error: err } = await supabase
@@ -304,7 +307,7 @@ export default function KarmaCornerPage() {
       
       if (err) throw err;
       
-      // Reset form and close modal
+      // Reset form
       setNewChallenge({
         title: "",
         description: "",
@@ -314,7 +317,9 @@ export default function KarmaCornerPage() {
         target_group: "",
         tags: []
       });
-      setShowCreateChallenge(false);
+      
+      // Switch to browse challenges to see the new one
+      setKarmaTab("browse_challenges");
       
       // Reload challenges
       loadChallenges();
@@ -375,7 +380,6 @@ export default function KarmaCornerPage() {
       setCompletionStory("");
       setShareToGoodNews(true);
       loadChallenges();
-      if (shareToGoodNews) loadPosts();
       
     } catch (e: any) {
       console.error("Complete challenge error:", e);
@@ -508,16 +512,10 @@ export default function KarmaCornerPage() {
     }));
   };
 
-  const filteredPosts = useMemo(() => {
-    if (tab === "challenges") return [];
-    return posts.filter(p => p.post_type === tab);
-  }, [posts, tab]);
-
   const filteredChallenges = useMemo(() => {
-    if (tab !== "challenges") return [];
-    if (challengeTab === "my_challenges") return myChallenges;
+    if (karmaTab === "my_challenges") return myChallenges;
     return challenges;
-  }, [challenges, myChallenges, tab, challengeTab]);
+  }, [challenges, myChallenges, karmaTab]);
 
   return (
     <div className="page-wrap" style={pageBg}>
@@ -575,8 +573,8 @@ export default function KarmaCornerPage() {
               ✨ Where kindness grows and movements begin
             </div>
             <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.6 }}>
-              Share anonymous acts of kindness, discover uplifting stories, join challenges, and even start your own kindness movements. 
-              Every post plants a seed of inspiration. ✨
+              Join kindness challenges, share your acts anonymously, discover uplifting stories, and start your own movements. 
+              Every action plants a seed of inspiration. ✨
             </p>
           </section>
 
@@ -584,9 +582,8 @@ export default function KarmaCornerPage() {
           <div className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden", borderRadius: 16 }}>
             <div className="controls" style={{ gap: 0, margin: 0 }}>
               {[
-                { id: "karma", label: "💫 Karma Acts", desc: "Anonymous kindness" },
-                { id: "good_news", label: "🌈 Good News", desc: "Uplifting stories" },
-                { id: "challenges", label: "🎯 Challenges", desc: "Join the movement" }
+                { id: "karma", label: "💫 Karma Corner", desc: "Challenges & kindness acts" },
+                { id: "good_news", label: "🌈 Good News", desc: "Uplifting stories" }
               ].map(({ id, label, desc }) => (
                 <button
                   key={id}
@@ -612,28 +609,72 @@ export default function KarmaCornerPage() {
             </div>
           </div>
 
-          {/* Content Based on Tab */}
-          {tab !== "challenges" ? (
+          {/* Tab Content */}
+          {tab === "karma" ? (
             <>
-              {/* Composer */}
+              {/* Karma Sub-tabs */}
+              <div className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden", borderRadius: 16 }}>
+                <div className="controls" style={{ gap: 0, margin: 0 }}>
+                  {[
+                    { id: "browse_challenges", label: "🚀 Browse Challenges", desc: "Join the movement" },
+                    { id: "my_challenges", label: "💪 My Challenges", desc: "Track progress" },
+                    { id: "create_challenge", label: "✨ Create Challenge", desc: "Start a movement" },
+                    { id: "all_acts", label: "💫 All Acts", desc: "See all kindness" }
+                  ].map(({ id, label, desc }) => (
+                    <button
+                      key={id}
+                      className={`btn ${karmaTab === id ? "btn-brand" : "btn-neutral"}`}
+                      onClick={() => setKarmaTab(id as KarmaTab)}
+                      style={{
+                        flex: 1,
+                        borderRadius: 0,
+                        padding: "12px 4px",
+                        flexDirection: "column",
+                        gap: 2,
+                        border: "none",
+                        background: karmaTab === id 
+                          ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" 
+                          : "rgba(255, 255, 255, 0.5)",
+                        color: karmaTab === id ? "white" : "#374151",
+                        fontSize: 13
+                      }}
+                    >
+                      <div style={{ fontWeight: 600 }}>{label}</div>
+                      <div style={{ fontSize: 11, opacity: 0.8 }}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Always-Present Kindness Sharing Box */}
               <div 
                 className="card p-4" 
                 style={{ 
                   marginBottom: 20,
-                  background: "rgba(255, 255, 255, 0.8)",
+                  background: "rgba(124, 58, 237, 0.1)",
                   backdropFilter: "blur(10px)",
+                  border: "2px solid rgba(124, 58, 237, 0.2)",
                   borderRadius: 16
                 }}
               >
+                <div style={{ 
+                  fontSize: 16, 
+                  fontWeight: 600, 
+                  color: "#7c3aed",
+                  marginBottom: 8
+                }}>
+                  💫 Share an Act of Kindness
+                </div>
+                <p style={{ margin: "0 0 16px 0", color: "#6b7280", fontSize: 14 }}>
+                  Did a challenge, helped someone spontaneously, or just spread some kindness? Share it here! 
+                  All acts are posted anonymously to keep the focus on kindness, not recognition.
+                </p>
+
                 <div className="stack" style={{ gap: 16 }}>
                   <textarea
                     className="input"
-                    rows={4}
-                    placeholder={
-                      tab === "karma"
-                        ? "What act of kindness did you do today? Share anonymously to inspire others..."
-                        : "Share an uplifting story or positive news that brightened your day..."
-                    }
+                    rows={3}
+                    placeholder="What act of kindness did you do? Could be from a challenge or just something spontaneous..."
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     style={{
@@ -711,24 +752,6 @@ export default function KarmaCornerPage() {
                     }}
                   />
 
-                  {/* Anonymous toggle for Good News */}
-                  {tab === "good_news" && (
-                    <label className="checkbox" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={isAnonymous}
-                        onChange={(e) => setIsAnonymous(e.target.checked)}
-                      />
-                      <span>Post anonymously</span>
-                    </label>
-                  )}
-
-                  {tab === "karma" && (
-                    <div style={{ fontSize: 14, color: "#6b7280", fontStyle: "italic" }}>
-                      💫 All karma posts are anonymous to keep the focus on kindness, not recognition
-                    </div>
-                  )}
-
                   {error && (
                     <div style={{ 
                       padding: 12, 
@@ -755,193 +778,26 @@ export default function KarmaCornerPage() {
                         fontWeight: 600
                       }}
                     >
-                      {posting ? "Sharing..." : `✨ Share ${tab === "karma" ? "Kindness" : "Good News"}`}
+                      {posting ? "Sharing..." : "✨ Share Kindness Anonymously"}
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Posts Feed */}
-              <section className="stack" style={{ gap: 16 }}>
-                {loading && <p style={{ textAlign: "center", color: "#6b7280" }}>Loading inspiring moments...</p>}
-                {!loading && filteredPosts.length === 0 && (
-                  <div 
-                    className="card p-4" 
-                    style={{ 
-                      textAlign: "center", 
-                      color: "#6b7280",
-                      background: "rgba(255, 255, 255, 0.6)",
-                      borderRadius: 16
-                    }}
-                  >
-                    No posts yet. Be the first to share some {tab === "karma" ? "kindness" : "good news"}! ✨
-                  </div>
-                )}
-
-                {filteredPosts.map((post) => {
-                  const when = format(new Date(post.created_at), "MMM d");
-                  const who = post.is_anonymous ? "Anonymous" : myName;
-                  const postReactions = reactionCounts[post.id] || { uplift: 0, warmth: 0, grateful: 0, inspired: 0 };
-                  const myPostReactions = myReactions[post.id] || [];
-                  
-                  return (
-                    <article 
-                      key={post.id} 
-                      className="card p-4"
-                      style={{
-                        background: "rgba(255, 255, 255, 0.8)",
-                        backdropFilter: "blur(10px)",
-                        borderRadius: 16,
-                        border: "1px solid rgba(139, 69, 19, 0.1)"
-                      }}
-                    >
-                      <div style={{ 
-                        fontSize: 13, 
-                        color: "#9ca3af", 
-                        marginBottom: 8,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center"
-                      }}>
-                        <span>
-                          {post.post_type === "karma" ? "💫" : "🌈"} {when} • {who}
-                        </span>
-                        {userId === post.created_by && (
-                          <button 
-                            onClick={() => onDeletePost(post.id, post.created_by)}
-                            style={{ 
-                              background: "none", 
-                              border: "none", 
-                              color: "#9ca3af", 
-                              cursor: "pointer",
-                              fontSize: 12
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div style={{ 
-                        whiteSpace: "pre-wrap", 
-                        marginBottom: 12, 
-                        lineHeight: 1.6,
-                        color: "#374151"
-                      }}>
-                        {post.content}
-                      </div>
-
-                      {/* Tags */}
-                      {post.tags.length > 0 && (
-                        <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                          {post.tags.map(tag => (
-                            <span
-                              key={tag}
-                              style={{
-                                padding: "2px 8px",
-                                fontSize: 11,
-                                background: "#f3f4f6",
-                                color: "#6b7280",
-                                borderRadius: 12
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Region */}
-                      {post.region && (
-                        <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>
-                          📍 {post.region}
-                        </div>
-                      )}
-
-                      {/* Reactions */}
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {Object.entries(reactions).map(([key, reaction]) => {
-                          const count = postReactions[key as keyof ReactionCount];
-                          const hasReacted = myPostReactions.includes(key);
-                          
-                          return (
-                            <button
-                              key={key}
-                              onClick={() => onReaction(post.id, key as keyof typeof reactions)}
-                              style={{
-                                padding: "6px 12px",
-                                fontSize: 12,
-                                border: hasReacted ? "2px solid #7c3aed" : "1px solid #e5e7eb",
-                                borderRadius: 20,
-                                background: hasReacted ? "#f3f4f6" : "white",
-                                color: "#374151",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                                transition: "all 0.2s ease"
-                              }}
-                              title={reaction.description}
-                            >
-                              <span>{reaction.emoji}</span>
-                              <span>{reaction.label}</span>
-                              {count > 0 && <span>({count})</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </article>
-                  );
-                })}
-              </section>
-            </>
-          ) : (
-            /* Challenges Section */
-            <>
-              {/* Challenge Sub-tabs */}
-              <div className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden", borderRadius: 16 }}>
-                <div className="controls" style={{ gap: 0, margin: 0 }}>
-                  {[
-                    { id: "browse", label: "🌟 Browse Challenges", desc: "Find inspiration" },
-                    { id: "my_challenges", label: "💪 My Challenges", desc: "Track progress" },
-                    { id: "create", label: "🚀 Create Challenge", desc: "Start a movement" }
-                  ].map(({ id, label, desc }) => (
-                    <button
-                      key={id}
-                      className={`btn ${challengeTab === id ? "btn-brand" : "btn-neutral"}`}
-                      onClick={() => setChallengeTab(id as ChallengeTab)}
-                      style={{
-                        flex: 1,
-                        borderRadius: 0,
-                        padding: "12px 6px",
-                        flexDirection: "column",
-                        gap: 2,
-                        border: "none",
-                        background: challengeTab === id 
-                          ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" 
-                          : "rgba(255, 255, 255, 0.5)",
-                        color: challengeTab === id ? "white" : "#374151"
-                      }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-                      <div style={{ fontSize: 11, opacity: 0.8 }}>{desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {challengeTab === "create" ? (
+              {/* Karma Tab Content */}
+              {karmaTab === "create_challenge" ? (
                 /* Create Challenge Form */
                 <div 
                   className="card p-4"
                   style={{
-                    background: "rgba(255, 255, 255, 0.8)",
+                    background: "rgba(16, 185, 129, 0.1)",
                     backdropFilter: "blur(10px)",
                     borderRadius: 16,
-                    marginBottom: 20
+                    marginBottom: 20,
+                    border: "2px solid rgba(16, 185, 129, 0.2)"
                   }}
                 >
-                  <h3 style={{ margin: "0 0 16px 0", color: "#10b981", fontSize: 20 }}>🚀 Create Your Own Challenge</h3>
+                  <h3 style={{ margin: "0 0 16px 0", color: "#059669", fontSize: 20 }}>🚀 Create Your Own Challenge</h3>
                   <p style={{ margin: "0 0 20px 0", color: "#6b7280", lineHeight: 1.6 }}>
                     Start a movement! Create a challenge that could inspire your community to spread kindness.
                   </p>
@@ -1119,47 +975,195 @@ export default function KarmaCornerPage() {
                     </div>
                   </div>
                 </div>
-              ) : (
-                /* Browse/My Challenges */
+              ) : karmaTab === "all_acts" ? (
+                /* All Kindness Acts Feed */
                 <section className="stack" style={{ gap: 16 }}>
-                  {challengeTab === "browse" && (
+                  <div 
+                    className="card p-4"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.8)",
+                      backdropFilter: "blur(10px)",
+                      borderRadius: 16,
+                      textAlign: "center"
+                    }}
+                  >
+                    <h3 style={{ margin: "0 0 8px 0", color: "#7c3aed" }}>💫 All Acts of Kindness</h3>
+                    <p style={{ margin: 0, color: "#6b7280" }}>
+                      Every anonymous act of kindness shared by our community. Let these stories inspire your next good deed!
+                    </p>
+                  </div>
+
+                  {loading && <p style={{ textAlign: "center", color: "#6b7280" }}>Loading inspiring moments...</p>}
+                  {!loading && posts.length === 0 && (
+                    <div 
+                      className="card p-4" 
+                      style={{ 
+                        textAlign: "center", 
+                        color: "#6b7280",
+                        background: "rgba(255, 255, 255, 0.6)",
+                        borderRadius: 16
+                      }}
+                    >
+                      No acts of kindness shared yet. Be the first to inspire others! ✨
+                    </div>
+                  )}
+
+                  {posts.map((post) => {
+                    const when = format(new Date(post.created_at), "MMM d");
+                    const postReactions = reactionCounts[post.id] || { uplift: 0, warmth: 0, grateful: 0, inspired: 0 };
+                    const myPostReactions = myReactions[post.id] || [];
+                    
+                    return (
+                      <article 
+                        key={post.id} 
+                        className="card p-4"
+                        style={{
+                          background: "rgba(255, 255, 255, 0.8)",
+                          backdropFilter: "blur(10px)",
+                          borderRadius: 16,
+                          border: "1px solid rgba(139, 69, 19, 0.1)"
+                        }}
+                      >
+                        <div style={{ 
+                          fontSize: 13, 
+                          color: "#9ca3af", 
+                          marginBottom: 8,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center"
+                        }}>
+                          <span>💫 {when} • Anonymous</span>
+                          {userId === post.created_by && (
+                            <button 
+                              onClick={() => onDeletePost(post.id, post.created_by)}
+                              style={{ 
+                                background: "none", 
+                                border: "none", 
+                                color: "#9ca3af", 
+                                cursor: "pointer",
+                                fontSize: 12
+                              }}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                        
+                        <div style={{ 
+                          whiteSpace: "pre-wrap", 
+                          marginBottom: 12, 
+                          lineHeight: 1.6,
+                          color: "#374151"
+                        }}>
+                          {post.content}
+                        </div>
+
+                        {/* Tags */}
+                        {post.tags.length > 0 && (
+                          <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {post.tags.map(tag => (
+                              <span
+                                key={tag}
+                                style={{
+                                  padding: "2px 8px",
+                                  fontSize: 11,
+                                  background: "#f3f4f6",
+                                  color: "#6b7280",
+                                  borderRadius: 12
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Region */}
+                        {post.region && (
+                          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>
+                            📍 {post.region}
+                          </div>
+                        )}
+
+                        {/* Reactions */}
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {Object.entries(reactions).map(([key, reaction]) => {
+                            const count = postReactions[key as keyof ReactionCount];
+                            const hasReacted = myPostReactions.includes(key);
+                            
+                            return (
+                              <button
+                                key={key}
+                                onClick={() => onReaction(post.id, key as keyof typeof reactions)}
+                                style={{
+                                  padding: "6px 12px",
+                                  fontSize: 12,
+                                  border: hasReacted ? "2px solid #7c3aed" : "1px solid #e5e7eb",
+                                  borderRadius: 20,
+                                  background: hasReacted ? "#f3f4f6" : "white",
+                                  color: "#374151",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  transition: "all 0.2s ease"
+                                }}
+                                title={reaction.description}
+                              >
+                                <span>{reaction.emoji}</span>
+                                <span>{reaction.label}</span>
+                                {count > 0 && <span>({count})</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </section>
+              ) : (
+                /* Challenges Section */
+                <section className="stack" style={{ gap: 16 }}>
+                  {karmaTab === "browse_challenges" && (
                     <div 
                       className="card p-4"
                       style={{
-                        background: "rgba(255, 255, 255, 0.8)",
+                        background: "rgba(16, 185, 129, 0.1)",
                         backdropFilter: "blur(10px)",
                         borderRadius: 16,
-                        textAlign: "center"
+                        textAlign: "center",
+                        border: "1px solid rgba(16, 185, 129, 0.2)"
                       }}
                     >
-                      <h3 style={{ margin: "0 0 8px 0", color: "#7c3aed" }}>🎯 Kindness Challenges</h3>
-                      <p style={{ margin: 0, color: "#6b7280" }}>
-                        Join challenges to spread kindness and connect with others making a difference.
-                        See something complete? Share your success story in Good News! 🌟
+                      <h3 style={{ margin: "0 0 8px 0", color: "#059669", fontSize: 18 }}>🚀 Ready to join a kindness challenge?</h3>
+                      <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.6 }}>
+                        Join structured challenges, make a difference, and share your success in the box above! 
+                        Every completed challenge can inspire others. 🌟
                       </p>
                     </div>
                   )}
 
-                  {challengeTab === "my_challenges" && (
+                  {karmaTab === "my_challenges" && (
                     <div 
                       className="card p-4"
                       style={{
-                        background: "rgba(255, 255, 255, 0.8)",
+                        background: "rgba(124, 58, 237, 0.1)",
                         backdropFilter: "blur(10px)",
                         borderRadius: 16,
-                        textAlign: "center"
+                        textAlign: "center",
+                        border: "1px solid rgba(124, 58, 237, 0.2)"
                       }}
                     >
-                      <h3 style={{ margin: "0 0 8px 0", color: "#10b981" }}>💪 Your Kindness Journey</h3>
-                      <p style={{ margin: 0, color: "#6b7280" }}>
-                        Track your challenges and mark them complete. When you finish, share your story to inspire others!
+                      <h3 style={{ margin: "0 0 8px 0", color: "#7c3aed", fontSize: 18 }}>💪 Your Kindness Journey</h3>
+                      <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.6 }}>
+                        Track challenges you've joined. When you complete one, share your story in the kindness box above to inspire the community!
                       </p>
                     </div>
                   )}
 
                   {filteredChallenges.length === 0 ? (
                     <div className="card p-4" style={{ textAlign: "center", color: "#6b7280" }}>
-                      {challengeTab === "my_challenges" 
+                      {karmaTab === "my_challenges" 
                         ? "No challenges joined yet. Browse some challenges to get started! 🌟"
                         : "No active challenges right now. Create your own to get things started! 🚀"
                       }
@@ -1299,6 +1303,299 @@ export default function KarmaCornerPage() {
                   )}
                 </section>
               )}
+            </>
+          ) : (
+            /* Good News Tab */
+            <>
+              {/* Good News guidance */}
+              <div 
+                className="card p-3" 
+                style={{ 
+                  marginBottom: 16,
+                  background: "rgba(16, 185, 129, 0.1)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(16, 185, 129, 0.2)",
+                  borderRadius: 12
+                }}
+              >
+                <div style={{ 
+                  fontSize: 15, 
+                  fontWeight: 600, 
+                  color: "#059669",
+                  marginBottom: 4
+                }}>
+                  🌈 Got some uplifting news to brighten everyone's day?
+                </div>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+                  Share positive stories, good news, and uplifting moments that made you smile.
+                </p>
+              </div>
+
+              {/* Good News Composer */}
+              <div 
+                className="card p-4" 
+                style={{ 
+                  marginBottom: 20,
+                  background: "rgba(255, 255, 255, 0.8)",
+                  backdropFilter: "blur(10px)",
+                  borderRadius: 16
+                }}
+              >
+                <div className="stack" style={{ gap: 16 }}>
+                  <textarea
+                    className="input"
+                    rows={4}
+                    placeholder="Share an uplifting story or positive news that brightened your day..."
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    style={{
+                      border: "2px solid #e5e7eb",
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 14,
+                      resize: "vertical"
+                    }}
+                  />
+
+                  {/* Tags */}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Add tags (optional):</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                      {["#GoodNews", "#Uplifting", "#Inspiring", "#Community", "#Hope", "#Joy"].map(tag => (
+                        <button
+                          key={tag}
+                          onClick={() => addTag(tag)}
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: 12,
+                            border: "1px solid #d1d5db",
+                            borderRadius: 16,
+                            background: selectedTags.includes(tag) ? "#10b981" : "white",
+                            color: selectedTags.includes(tag) ? "white" : "#374151",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedTags.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {selectedTags.map(tag => (
+                          <span
+                            key={tag}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: 12,
+                              background: "#10b981",
+                              color: "white",
+                              borderRadius: 16,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4
+                            }}
+                          >
+                            {tag}
+                            <button
+                              onClick={() => removeTag(tag)}
+                              style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Region */}
+                  <input
+                    type="text"
+                    placeholder="Location/Region (optional)"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                    className="input"
+                    style={{
+                      border: "2px solid #e5e7eb",
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 14
+                    }}
+                  />
+
+                  {/* Anonymous toggle for Good News */}
+                  <label className="checkbox" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={isAnonymous}
+                      onChange={(e) => setIsAnonymous(e.target.checked)}
+                    />
+                    <span>Post anonymously</span>
+                  </label>
+
+                  {error && (
+                    <div style={{ 
+                      padding: 12, 
+                      background: "#fef2f2", 
+                      border: "1px solid #fecaca", 
+                      borderRadius: 8, 
+                      color: "#dc2626", 
+                      fontSize: 14 
+                    }}>
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="controls">
+                    <button
+                      className="btn btn-brand"
+                      onClick={onPost}
+                      disabled={!canPost || posting}
+                      style={{
+                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                        border: "none",
+                        borderRadius: 12,
+                        padding: "12px 24px",
+                        fontWeight: 600
+                      }}
+                    >
+                      {posting ? "Sharing..." : "🌈 Share Good News"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Good News Feed */}
+              <section className="stack" style={{ gap: 16 }}>
+                {loading && <p style={{ textAlign: "center", color: "#6b7280" }}>Loading uplifting stories...</p>}
+                {!loading && posts.length === 0 && (
+                  <div 
+                    className="card p-4" 
+                    style={{ 
+                      textAlign: "center", 
+                      color: "#6b7280",
+                      background: "rgba(255, 255, 255, 0.6)",
+                      borderRadius: 16
+                    }}
+                  >
+                    No good news yet. Be the first to share something uplifting! 🌈
+                  </div>
+                )}
+
+                {posts.map((post) => {
+                  const when = format(new Date(post.created_at), "MMM d");
+                  const who = post.is_anonymous ? "Anonymous" : myName;
+                  const postReactions = reactionCounts[post.id] || { uplift: 0, warmth: 0, grateful: 0, inspired: 0 };
+                  const myPostReactions = myReactions[post.id] || [];
+                  
+                  return (
+                    <article 
+                      key={post.id} 
+                      className="card p-4"
+                      style={{
+                        background: "rgba(255, 255, 255, 0.8)",
+                        backdropFilter: "blur(10px)",
+                        borderRadius: 16,
+                        border: "1px solid rgba(139, 69, 19, 0.1)"
+                      }}
+                    >
+                      <div style={{ 
+                        fontSize: 13, 
+                        color: "#9ca3af", 
+                        marginBottom: 8,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      }}>
+                        <span>🌈 {when} • {who}</span>
+                        {userId === post.created_by && (
+                          <button 
+                            onClick={() => onDeletePost(post.id, post.created_by)}
+                            style={{ 
+                              background: "none", 
+                              border: "none", 
+                              color: "#9ca3af", 
+                              cursor: "pointer",
+                              fontSize: 12
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div style={{ 
+                        whiteSpace: "pre-wrap", 
+                        marginBottom: 12, 
+                        lineHeight: 1.6,
+                        color: "#374151"
+                      }}>
+                        {post.content}
+                      </div>
+
+                      {/* Tags */}
+                      {post.tags.length > 0 && (
+                        <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          {post.tags.map(tag => (
+                            <span
+                              key={tag}
+                              style={{
+                                padding: "2px 8px",
+                                fontSize: 11,
+                                background: "#f3f4f6",
+                                color: "#6b7280",
+                                borderRadius: 12
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Region */}
+                      {post.region && (
+                        <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>
+                          📍 {post.region}
+                        </div>
+                      )}
+
+                      {/* Reactions */}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {Object.entries(reactions).map(([key, reaction]) => {
+                          const count = postReactions[key as keyof ReactionCount];
+                          const hasReacted = myPostReactions.includes(key);
+                          
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => onReaction(post.id, key as keyof typeof reactions)}
+                              style={{
+                                padding: "6px 12px",
+                                fontSize: 12,
+                                border: hasReacted ? "2px solid #7c3aed" : "1px solid #e5e7eb",
+                                borderRadius: 20,
+                                background: hasReacted ? "#f3f4f6" : "white",
+                                color: "#374151",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.2s ease"
+                              }}
+                              title={reaction.description}
+                            >
+                              <span>{reaction.emoji}</span>
+                              <span>{reaction.label}</span>
+                              {count > 0 && <span>({count})</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </article>
+                  );
+                })}
+              </section>
             </>
           )}
         </div>
