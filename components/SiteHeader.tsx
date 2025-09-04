@@ -55,35 +55,37 @@ export default function SiteHeader() {
           <div style={{ height: 38 }} />
         ) : userId ? (
           <>
-            <nav className="main-nav">
-              <Nav href="/">Home</Nav>
-              <Nav href="/calendar">Calendar</Nav>
-              <Nav href="/map">Communities</Nav>
+            <nav className="main-nav flex-1 flex justify-center">
+              <div className="flex gap-4">
+                <Nav href="/">Home</Nav>
+                <Nav href="/calendar">Calendar</Nav>
+                <Nav href="/map">Communities</Nav>
 
-              {/* Profile + Business under dropdown */}
-              <div className="relative inline-flex">
-                <Nav href="/profile">Profile</Nav>
-                <button
-                  aria-label="Profile menu"
-                  className="nav-caret"
-                  onClick={() => setOpenProfileMenu((v) => !v)}
-                >
-                  ▾
-                </button>
-                {openProfileMenu && (
-                  <div className="menu" role="menu">
-                    <Link href="/profile" className="menu-item" role="menuitem">
-                      Personal profile
-                    </Link>
-                    <Link href="/business" className="menu-item" role="menuitem">
-                      Business profile
-                    </Link>
-                  </div>
-                )}
+                {/* Profile + Business under dropdown */}
+                <div className="relative inline-flex">
+                  <Nav href="/profile">Profile</Nav>
+                  <button
+                    aria-label="Profile menu"
+                    className="nav-caret"
+                    onClick={() => setOpenProfileMenu((v) => !v)}
+                  >
+                    ▾
+                  </button>
+                  {openProfileMenu && (
+                    <div className="menu" role="menu">
+                      <Link href="/profile" className="menu-item" role="menuitem">
+                        Personal profile
+                      </Link>
+                      <Link href="/business" className="menu-item" role="menuitem">
+                        Business profile
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                <Nav href="/meditation">Meditation</Nav>
+                <Nav href="/karma">Karma Corner</Nav>
               </div>
-
-              <Nav href="/meditation">Meditation</Nav>
-              <Nav href="/karma">Karma Corner</Nav>
             </nav>
 
             <div className="auth-area">
