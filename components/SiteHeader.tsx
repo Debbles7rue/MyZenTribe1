@@ -6,26 +6,17 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import NotificationBell from "@/components/NotificationBell";
-import { checkIsAdmin } from "@/lib/admin-utils";
 
 export default function SiteHeader() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null | "loading">("loading");
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
     });
   }, []);
-
-  // Check if user is admin
-  useEffect(() => {
-    if (userId && userId !== "loading") {
-      checkIsAdmin().then(setIsAdmin);
-    }
-  }, [userId]);
 
   // close dropdown if clicking elsewhere
   useEffect(() => {
@@ -38,7 +29,7 @@ export default function SiteHeader() {
   }, []);
 
   const Nav = ({ href, children }: { href: string; children: React.ReactNode }) => {
-    const active = pathname === href || (href !== "/dashboard" && href !== "/" && (pathname?.startsWith(href) ?? false));
+    const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
     return (
       <Link href={href} className={`nav-link ${active ? "active" : ""}`}>
         {children}
@@ -54,7 +45,7 @@ export default function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-inner container-app">
-        <Link href="/dashboard" className="brand" aria-label="MyZenTribe Home">
+        <Link href="/" className="brand" aria-label="MyZenTribe Home">
           <div className="brand-name">
             <span className="brand-zen">My</span>ZenTribe
           </div>
@@ -65,19 +56,9 @@ export default function SiteHeader() {
         ) : userId ? (
           <>
             <nav className="main-nav">
-              <Nav href="/dashboard">Dashboard</Nav>
+              <Nav href="/">Home</Nav>
               <Nav href="/calendar">Calendar</Nav>
-              
-              {/* Admin Tab - Only visible to admins */}
-              {isAdmin && (
-                <Nav href="/admin">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    🛠️ Admin
-                  </span>
-                </Nav>
-              )}
-              
-              <Nav href="/communities">Communities</Nav>
+              <Nav href="/map">Communities</Nav>
 
               {/* Profile + Business under dropdown */}
               <div className="relative inline-flex">
@@ -102,7 +83,6 @@ export default function SiteHeader() {
               </div>
 
               <Nav href="/meditation">Meditation</Nav>
-              <Nav href="/safety">Safety</Nav>
               <Nav href="/karma">Karma Corner</Nav>
             </nav>
 
@@ -123,27 +103,6 @@ export default function SiteHeader() {
       </div>
 
       <style jsx global>{`
-        .main-nav {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          flex: 1;
-        }
-        .nav-link {
-          padding: 6px 12px;
-          border-radius: 8px;
-          text-decoration: none;
-          color: inherit;
-          transition: background 0.2s;
-        }
-        .nav-link:hover {
-          background: rgba(124, 58, 237, 0.1);
-        }
-        .nav-link.active {
-          background: rgba(124, 58, 237, 0.15);
-          color: #7c3aed;
-          font-weight: 500;
-        }
         .nav-caret {
           margin-left: -6px;
           background: transparent;
