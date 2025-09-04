@@ -840,9 +840,16 @@ export default function GratitudePage() {
               
               <button
                 onClick={() => setStage("science")}
-                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+                className="w-full py-3 rounded-xl mb-3 border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
               >
                 📖 Instructions & Theme
+              </button>
+              
+              <button
+                onClick={() => window.location.href = '/gratitude/photos'}
+                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+              >
+                🖼️ Photo Library
               </button>
               
               {showPrompts && (
