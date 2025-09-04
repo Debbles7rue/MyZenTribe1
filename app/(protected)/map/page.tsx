@@ -4,7 +4,12 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 import type { MapPin, MapCommunity } from "@/components/community/MapExplorerClient";
-import AddPinModal from "@/components/community/AddPinModal";
+
+// Dynamically import the modal to avoid SSR issues
+const AddPinModal = dynamic(
+  () => import("@/components/community/AddPinModal"),
+  { ssr: false }
+);
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapExplorerClient = dynamic(
@@ -21,6 +26,18 @@ const MapExplorerClient = dynamic(
   }
 );
 
+// Popular categories for quick filtering
+const CATEGORIES = [
+  { value: "all", label: "All", emoji: "🌟" },
+  { value: "drum circle", label: "Drum Circles", emoji: "🥁" },
+  { value: "meditation", label: "Meditation", emoji: "🧘" },
+  { value: "yoga", label: "Yoga", emoji: "🧘‍♀️" },
+  { value: "sound bath", label: "Sound Baths", emoji: "🔔" },
+  { value: "breathwork", label: "Breathwork", emoji: "💨" },
+  { value: "wellness", label: "Wellness", emoji: "💚" },
+  { value: "nature", label: "Nature", emoji: "🌿" },
+];
+
 export default function MapPage() {
   const [pins, setPins] = useState<MapPin[]>([]);
   const [communities, setCommunities] = useState<MapCommunity[]>([]);
@@ -28,24 +45,30 @@ export default function MapPage() {
   const [showAddPin, setShowAddPin] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number]>([32.7767, -96.7970]); // Default to Dallas
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   useEffect(() => {
     loadMapData();
-    getUserLocation();
+    // Only try to get location on the client side
+    if (typeof window !== "undefined") {
+      getUserLocation();
+    }
   }, []);
 
   async function getUserLocation() {
-    // Try to get user's location
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation([position.coords.latitude, position.coords.longitude]);
-        },
-        (error) => {
-          console.log("Location access denied, using default");
-        }
-      );
+    // Double-check we're on client side
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      return;
     }
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation([position.coords.latitude, position.coords.longitude]);
+      },
+      (error) => {
+        console.log("Location access denied, using default");
+      }
+    );
   }
 
   async function loadMapData() {
@@ -111,15 +134,28 @@ export default function MapPage() {
     }
   }
 
-  // Filter pins based on search
+  // Filter pins based on search and category
   const filteredPins = pins.filter(pin => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      pin.name?.toLowerCase().includes(query) ||
-      pin.address?.toLowerCase().includes(query) ||
-      pin.categories?.some(cat => cat.toLowerCase().includes(query))
-    );
+    // Category filter
+    if (selectedCategory !== "all") {
+      const hasCategory = pin.categories?.some(cat => 
+        cat.toLowerCase().includes(selectedCategory.toLowerCase())
+      ) || pin.name?.toLowerCase().includes(selectedCategory.toLowerCase());
+      
+      if (!hasCategory) return false;
+    }
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        pin.name?.toLowerCase().includes(query) ||
+        pin.address?.toLowerCase().includes(query) ||
+        pin.categories?.some(cat => cat.toLowerCase().includes(query))
+      );
+    }
+
+    return true;
   });
 
   // Convert communities array to object for MapExplorerClient
@@ -127,6 +163,17 @@ export default function MapPage() {
     acc[comm.id] = comm;
     return acc;
   }, {} as Record<string, MapCommunity>);
+
+  // Handle category button click
+  const handleCategoryClick = (category: string) => {
+    if (selectedCategory === category && category !== "all") {
+      // If clicking the same category, toggle it off (show all)
+      setSelectedCategory("all");
+    } else {
+      setSelectedCategory(category);
+    }
+    setSearchQuery(""); // Clear search when using category filters
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
@@ -139,15 +186,38 @@ export default function MapPage() {
           </p>
         </div>
 
-        {/* Controls */}
+        {/* Category Filter Buttons */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.value}
+                onClick={() => handleCategoryClick(cat.value)}
+                className={`px-4 py-2 rounded-full transition-all ${
+                  selectedCategory === cat.value
+                    ? "bg-purple-600 text-white shadow-md transform scale-105"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                }`}
+              >
+                <span className="mr-1">{cat.emoji}</span>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search and Controls */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search */}
             <input
               type="text"
-              placeholder="Search by name, location, or activity..."
+              placeholder="Search by name or location..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSelectedCategory("all"); // Clear category filter when searching
+              }}
               className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             
@@ -160,10 +230,23 @@ export default function MapPage() {
             </button>
           </div>
 
-          {/* Stats */}
-          <div className="flex gap-6 mt-4 text-sm text-gray-600">
-            <span>{filteredPins.length} locations</span>
-            <span>{communities.length} communities</span>
+          {/* Stats and Active Filter */}
+          <div className="flex justify-between items-center mt-4">
+            <div className="flex gap-6 text-sm text-gray-600">
+              <span>{filteredPins.length} of {pins.length} locations</span>
+              <span>{communities.length} communities</span>
+            </div>
+            {(selectedCategory !== "all" || searchQuery) && (
+              <button
+                onClick={() => {
+                  setSelectedCategory("all");
+                  setSearchQuery("");
+                }}
+                className="text-sm text-purple-600 hover:text-purple-700"
+              >
+                Clear filters ✕
+              </button>
+            )}
           </div>
         </div>
 
@@ -173,6 +256,27 @@ export default function MapPage() {
             <div className="bg-gray-100 rounded-xl animate-pulse" style={{ height: 560 }}>
               <div className="flex items-center justify-center h-full">
                 <div className="text-gray-500">Loading map data...</div>
+              </div>
+            </div>
+          ) : filteredPins.length === 0 ? (
+            <div className="bg-gray-50 rounded-xl" style={{ height: 560 }}>
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <div className="text-6xl mb-4">📍</div>
+                <div className="text-xl font-semibold mb-2">No locations found</div>
+                <div className="text-sm mb-4">
+                  {selectedCategory !== "all" 
+                    ? `No ${CATEGORIES.find(c => c.value === selectedCategory)?.label.toLowerCase()} in this area`
+                    : "Try adjusting your search"}
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedCategory("all");
+                    setSearchQuery("");
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  Show all locations
+                </button>
               </div>
             </div>
           ) : (
@@ -185,42 +289,37 @@ export default function MapPage() {
           )}
         </div>
 
+        {/* Active Filter Notice */}
+        {selectedCategory !== "all" && (
+          <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-purple-700">
+                Showing: <strong>{CATEGORIES.find(c => c.value === selectedCategory)?.label}</strong>
+              </span>
+              <span className="text-purple-600">({filteredPins.length} locations)</span>
+            </div>
+            <button
+              onClick={() => setSelectedCategory("all")}
+              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+            >
+              Show all →
+            </button>
+          </div>
+        )}
+
         {/* Legend */}
         <div className="mt-6 bg-white rounded-xl shadow-sm p-4">
-          <h3 className="font-semibold mb-3">Map Legend</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-purple-600 rounded-full"></div>
-              <span>Community Events</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-600 rounded-full"></div>
-              <span>Wellness Centers</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
-              <span>Meditation Spaces</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-orange-600 rounded-full"></div>
-              <span>Drum Circles</span>
-            </div>
+          <h3 className="font-semibold mb-3">Quick Tips</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
+            <div>🔍 Click any pin to see details and contact info</div>
+            <div>🎯 Use category buttons for quick filtering</div>
+            <div>📍 Zoom in/out to explore different areas</div>
+            <div>➕ Add your own wellness location to help others</div>
           </div>
-        </div>
-
-        {/* Info Box */}
-        <div className="mt-6 bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <h3 className="font-semibold text-purple-900 mb-2">How to Use the Map</h3>
-          <ul className="space-y-1 text-sm text-purple-700">
-            <li>• Click on any pin to see details and contact information</li>
-            <li>• Use the search bar to find specific activities or locations</li>
-            <li>• Click "Add Location" to add your own meditation or wellness space</li>
-            <li>• Zoom in to see locations in your specific area</li>
-          </ul>
         </div>
       </div>
 
-      {/* Add Pin Modal */}
+      {/* Add Pin Modal - only render on client */}
       {showAddPin && (
         <AddPinModal
           communities={communities}
