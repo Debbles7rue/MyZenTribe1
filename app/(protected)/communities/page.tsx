@@ -1,197 +1,149 @@
-// app/(protected)/communities/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
-type Community = {
+interface Community {
   id: string;
   name: string;
   description: string | null;
+  owner_id: string;
   is_private: boolean;
   region: string | null;
-  tags: string[];
-  member_count?: number;
-  creator_id: string;
+  tags: string[] | null;
   created_at: string;
-};
-
-const SUGGESTED_TAGS = [
-  "Drum Circle", "Sound Bath", "Qi Gong", "Yoga", "Zen Tangle",
-  "Meditation", "Wellness", "Healing", "Nature", "Art",
-  "Music", "Dance", "Mindfulness", "Breathwork", "Energy Work"
-];
-
-const REGIONS = [
-  "North America", "South America", "Europe", "Asia", 
-  "Africa", "Australia", "Middle East", "Online Only"
-];
+  member_count?: number;
+  owner?: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}
 
 export default function CommunitiesPage() {
   const router = useRouter();
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [filteredCommunities, setFilteredCommunities] = useState<Community[]>([]);
-  const [myCommunities, setMyCommunities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterTag, setFilterTag] = useState("");
+  const [filterRegion, setFilterRegion] = useState("");
+  const [showPrivate, setShowPrivate] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  
-  // Filters
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTag, setSelectedTag] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState("");
-  const [showPrivateOnly, setShowPrivateOnly] = useState(false);
+  const [userMemberships, setUserMemberships] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    loadUser();
     loadCommunities();
   }, []);
 
-  useEffect(() => {
-    filterCommunities();
-  }, [communities, searchQuery, selectedTag, selectedRegion, showPrivateOnly]);
-
-  async function loadCommunities() {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-
-      // Load all communities with member counts
-      const { data: communitiesData, error: communitiesError } = await supabase
-        .from("communities")
-        .select(`
-          *,
-          community_members(count)
-        `)
-        .order("created_at", { ascending: false });
-
-      if (communitiesError) throw communitiesError;
-
-      // Get user's community memberships
-      if (user?.id) {
-        const { data: membershipData } = await supabase
-          .from("community_members")
-          .select("community_id")
-          .eq("user_id", user.id);
-
-        const memberCommunityIds = membershipData?.map(m => m.community_id) || [];
-        setMyCommunities(memberCommunityIds);
+  async function loadUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserId(user.id);
+      
+      // Load user's community memberships
+      const { data: memberships } = await supabase
+        .from("community_members")
+        .select("community_id")
+        .eq("user_id", user.id);
+      
+      if (memberships) {
+        setUserMemberships(new Set(memberships.map(m => m.community_id)));
       }
-
-      // Process communities with member count
-      const processedCommunities = communitiesData?.map((c: any) => ({
-        ...c,
-        member_count: c.community_members?.[0]?.count || 0,
-        tags: c.tags || []
-      })) || [];
-
-      setCommunities(processedCommunities);
-      setFilteredCommunities(processedCommunities);
-    } catch (error) {
-      console.error("Error loading communities:", error);
-    } finally {
-      setLoading(false);
     }
   }
 
-  function filterCommunities() {
-    let filtered = [...communities];
+  async function loadCommunities() {
+    setLoading(true);
+    
+    // Get communities with member counts
+    const { data: communitiesData, error } = await supabase
+      .from("communities")
+      .select(`
+        *,
+        owner:profiles!owner_id (
+          full_name,
+          avatar_url
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    if (error) {
+      console.error("Error loading communities:", error);
+      setLoading(false);
+      return;
     }
 
-    // Tag filter
-    if (selectedTag) {
-      filtered = filtered.filter(c =>
-        c.tags?.includes(selectedTag)
-      );
-    }
+    // Get member counts for each community
+    const communitiesWithCounts = await Promise.all(
+      (communitiesData || []).map(async (community) => {
+        const { count } = await supabase
+          .from("community_members")
+          .select("*", { count: "exact", head: true })
+          .eq("community_id", community.id);
+        
+        return {
+          ...community,
+          member_count: count || 0
+        };
+      })
+    );
 
-    // Region filter
-    if (selectedRegion) {
-      filtered = filtered.filter(c =>
-        c.region === selectedRegion
-      );
-    }
-
-    // Private filter
-    if (showPrivateOnly) {
-      filtered = filtered.filter(c => c.is_private);
-    }
-
-    setFilteredCommunities(filtered);
+    setCommunities(communitiesWithCounts);
+    setLoading(false);
   }
 
   async function joinCommunity(communityId: string, isPrivate: boolean) {
     if (!userId) {
-      alert("Please sign in to join communities");
+      router.push("/signin");
       return;
     }
 
-    try {
+    const { error } = await supabase
+      .from("community_members")
+      .insert({
+        community_id: communityId,
+        user_id: userId,
+        role: "member",
+        status: isPrivate ? "pending" : "approved"
+      });
+
+    if (!error) {
+      setUserMemberships(prev => new Set(prev).add(communityId));
       if (isPrivate) {
-        // For private communities, create a join request (pending status)
-        const { error } = await supabase
-          .from("community_join_requests")
-          .insert({
-            community_id: communityId,
-            user_id: userId,
-            status: "pending"
-          });
-
-        if (error) throw error;
-        alert("Join request sent! The community moderators will review your request.");
+        alert("Join request sent! The community owner will review your request.");
       } else {
-        // For public communities, join immediately
-        const { error } = await supabase
-          .from("community_members")
-          .insert({
-            community_id: communityId,
-            user_id: userId,
-            role: "member"
-          });
-
-        if (error) throw error;
-        setMyCommunities([...myCommunities, communityId]);
+        alert("Successfully joined the community!");
       }
-    } catch (error) {
-      console.error("Error joining community:", error);
-      alert("Failed to join community");
+      loadCommunities(); // Refresh counts
     }
   }
 
-  async function leaveCommunity(communityId: string) {
-    if (!userId) return;
+  const filteredCommunities = communities.filter(c => {
+    if (!showPrivate && c.is_private) return false;
+    if (searchTerm && !c.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !(c.description || "").toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (filterTag && !c.tags?.includes(filterTag)) return false;
+    if (filterRegion && filterRegion !== "all" && c.region !== filterRegion) return false;
+    return true;
+  });
 
-    try {
-      const { error } = await supabase
-        .from("community_members")
-        .delete()
-        .eq("community_id", communityId)
-        .eq("user_id", userId);
-
-      if (error) throw error;
-      setMyCommunities(myCommunities.filter(id => id !== communityId));
-    } catch (error) {
-      console.error("Error leaving community:", error);
-      alert("Failed to leave community");
-    }
-  }
+  // Get unique tags and regions for filters
+  const allTags = Array.from(new Set(communities.flatMap(c => c.tags || [])));
+  const allRegions = Array.from(new Set(communities.map(c => c.region).filter(Boolean)));
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="container-app py-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
+      <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-48 bg-gray-200 rounded-xl"></div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -199,188 +151,170 @@ export default function CommunitiesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="container-app py-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Communities
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Find your tribe and connect with like-minded souls
-              </p>
-            </div>
-            <Link
-              href="/communities/create"
-              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:opacity-90 transition"
-            >
-              Create Community
-            </Link>
-          </div>
+    <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">Discover Communities</h1>
+          <Link
+            href="/communities/create"
+            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+          >
+            Create Community
+          </Link>
+        </div>
 
-          {/* Search and Filters */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+        {/* Filters */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
               placeholder="Search communities..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
+            
+            <select
+              value={filterTag}
+              onChange={(e) => setFilterTag(e.target.value)}
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">All Tags</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
 
-            <div className="flex flex-wrap gap-4">
-              <select
-                value={selectedTag}
-                onChange={(e) => setSelectedTag(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">All Tags</option>
-                {SUGGESTED_TAGS.map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
+            <select
+              value={filterRegion}
+              onChange={(e) => setFilterRegion(e.target.value)}
+              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="all">All Regions</option>
+              <option value="Online Only">Online Only</option>
+              {allRegions.filter(r => r !== "Online Only").map(region => (
+                <option key={region} value={region}>{region}</option>
+              ))}
+            </select>
 
-              <select
-                value={selectedRegion}
-                onChange={(e) => setSelectedRegion(e.target.value)}
-                className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">All Regions</option>
-                {REGIONS.map(region => (
-                  <option key={region} value={region}>{region}</option>
-                ))}
-              </select>
-
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={showPrivateOnly}
-                  onChange={(e) => setShowPrivateOnly(e.target.checked)}
-                  className="mr-2"
-                />
-                <span className="text-gray-700">Private Communities Only</span>
-              </label>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              Found {filteredCommunities.length} communities
-            </div>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={showPrivate}
+                onChange={(e) => setShowPrivate(e.target.checked)}
+                className="rounded text-purple-600"
+              />
+              <span className="text-gray-700">Show Private</span>
+            </label>
           </div>
         </div>
-      </div>
 
-      {/* Communities Grid */}
-      <div className="container-app py-8">
+        {/* Communities Grid */}
         {filteredCommunities.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-4">No communities found</p>
+            <p className="text-gray-500 text-lg mb-4">No communities found matching your criteria.</p>
             <Link
               href="/communities/create"
-              className="text-purple-600 hover:underline"
+              className="text-purple-600 hover:text-purple-700 font-medium"
             >
-              Create the first one!
+              Be the first to create one!
             </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCommunities.map(community => {
-              const isMember = myCommunities.includes(community.id);
-              const isOwner = community.creator_id === userId;
-
-              return (
-                <div
-                  key={community.id}
-                  className="bg-white rounded-xl shadow-sm border hover:shadow-lg transition-shadow overflow-hidden"
-                >
-                  {/* Community Header */}
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        {community.name}
-                      </h3>
-                      {community.is_private && (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                          🔒 Private
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                      {community.description || "No description yet"}
-                    </p>
-
-                    {/* Tags */}
-                    {community.tags?.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {community.tags.slice(0, 3).map(tag => (
-                          <span
-                            key={tag}
-                            className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                        {community.tags.length > 3 && (
-                          <span className="text-xs text-gray-500">
-                            +{community.tags.length - 3} more
-                          </span>
-                        )}
-                      </div>
+            {filteredCommunities.map(community => (
+              <div
+                key={community.id}
+                className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow p-6"
+              >
+                {/* Community Header */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <Link
+                      href={`/communities/${community.id}`}
+                      className="text-xl font-semibold text-gray-800 hover:text-purple-600 transition"
+                    >
+                      {community.name}
+                    </Link>
+                    {community.is_private && (
+                      <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                        Private
+                      </span>
                     )}
-
-                    {/* Meta Info */}
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                      <span>{community.member_count || 0} members</span>
-                      {community.region && <span>{community.region}</span>}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      {isOwner ? (
-                        <Link
-                          href={`/communities/${community.id}/settings`}
-                          className="flex-1 px-4 py-2 bg-purple-600 text-white text-center rounded-lg hover:bg-purple-700 transition"
-                        >
-                          Manage
-                        </Link>
-                      ) : isMember ? (
-                        <>
-                          <Link
-                            href={`/communities/${community.id}`}
-                            className="flex-1 px-4 py-2 bg-purple-600 text-white text-center rounded-lg hover:bg-purple-700 transition"
-                          >
-                            View
-                          </Link>
-                          <button
-                            onClick={() => leaveCommunity(community.id)}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-                          >
-                            Leave
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <Link
-                            href={`/communities/${community.id}`}
-                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 text-center rounded-lg hover:bg-gray-300 transition"
-                          >
-                            View
-                          </Link>
-                          <button
-                            onClick={() => joinCommunity(community.id, community.is_private)}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-                          >
-                            {community.is_private ? "Request" : "Join"}
-                          </button>
-                        </>
-                      )}
-                    </div>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Description */}
+                {community.description && (
+                  <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                    {community.description}
+                  </p>
+                )}
+
+                {/* Tags */}
+                {community.tags && community.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {community.tags.slice(0, 3).map(tag => (
+                      <span
+                        key={tag}
+                        className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    {community.tags.length > 3 && (
+                      <span className="text-xs text-gray-500">
+                        +{community.tags.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Meta Info */}
+                <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                  <span>{community.member_count || 0} members</span>
+                  {community.region && (
+                    <span className="text-xs">{community.region}</span>
+                  )}
+                </div>
+
+                {/* Owner */}
+                {community.owner && (
+                  <div className="flex items-center gap-2 mb-4">
+                    {community.owner.avatar_url && (
+                      <img
+                        src={community.owner.avatar_url}
+                        alt=""
+                        className="w-6 h-6 rounded-full"
+                      />
+                    )}
+                    <span className="text-xs text-gray-500">
+                      by {community.owner.full_name || "Anonymous"}
+                    </span>
+                  </div>
+                )}
+
+                {/* Action Button */}
+                <div>
+                  {userMemberships.has(community.id) ? (
+                    <Link
+                      href={`/communities/${community.id}`}
+                      className="block w-full text-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                    >
+                      View Community
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => joinCommunity(community.id, community.is_private)}
+                      className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                    >
+                      {community.is_private ? "Request to Join" : "Join Community"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
