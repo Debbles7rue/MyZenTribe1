@@ -264,8 +264,8 @@ export default function MapPage() {
                 <div className="text-6xl mb-4">📍</div>
                 <div className="text-xl font-semibold mb-2">No locations found</div>
                 <div className="text-sm mb-4">
-                  {selectedCategory !== "all" 
-                    ? `No ${CATEGORIES.find(c => c.value === selectedCategory)?.label.toLowerCase()} in this area`
+                  {(selectedCategory !== "all" && selectedCategory !== "")
+                    ? `No ${selectedCategory.toLowerCase()} locations in this area`
                     : "Try adjusting your search"}
                 </div>
                 <button
@@ -275,7 +275,7 @@ export default function MapPage() {
                   }}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                 >
-                  Show all locations
+                  Clear all filters
                 </button>
               </div>
             </div>
