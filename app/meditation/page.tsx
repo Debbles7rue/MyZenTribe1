@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { usePresenceCount } from "@/hooks/usePresenceCount"; // keep using your hook
 import "./meditation.css";
@@ -71,6 +72,10 @@ export default function MeditationPage() {
   const [dayCount, setDayCount] = useState(0);
   const [coveragePct, setCoveragePct] = useState(0); // 0–100
 
+  // Calendar integration
+  const searchParams = useSearchParams();
+  const eventId = searchParams.get('eventId');
+
   const current = useMemo(
     () => ALL_ENVS.find((e) => e.id === selected),
     [selected]
@@ -78,6 +83,7 @@ export default function MeditationPage() {
 
   // active session id so we can end it on close/leave
   const activeSessionId = useRef<string | null>(null);
+  const activeSessionStartTime = useRef<string | null>(null);
 
   function choose(id: EnvId) {
     setSelected(id);
@@ -89,12 +95,35 @@ export default function MeditationPage() {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user?.id;
       if (!uid) return; // middleware should have gated this, but be safe
+      
+      const startTime = new Date().toISOString();
+      activeSessionStartTime.current = startTime;
+      
       const { data, error } = await supabase
         .from("meditation_sessions")
-        .insert([{ user_id: uid, env }])
+        .insert([{ 
+          user_id: uid, 
+          env,
+          event_id: eventId, // Link to calendar event if present
+          started_at: startTime
+        }])
         .select("id")
         .single();
-      if (!error && data) activeSessionId.current = data.id as unknown as string;
+        
+      if (!error && data) {
+        activeSessionId.current = data.id as unknown as string;
+        
+        // Update calendar event to "in progress" if linked
+        if (eventId) {
+          await supabase
+            .from("events")
+            .update({ 
+              status: 'in_progress',
+              metadata: { meditation_started: startTime }
+            })
+            .eq("id", eventId);
+        }
+      }
     } catch (e) {
       console.warn("startSession failed", e);
     }
@@ -102,16 +131,41 @@ export default function MeditationPage() {
 
   async function endSession() {
     const id = activeSessionId.current;
+    const startTime = activeSessionStartTime.current;
     if (!id) return;
+    
     try {
+      const endTime = new Date().toISOString();
+      
+      // Update meditation session
       await supabase
         .from("meditation_sessions")
-        .update({ ended_at: new Date().toISOString() })
+        .update({ ended_at: endTime })
         .eq("id", id);
+      
+      // Update linked calendar event if exists
+      if (eventId && startTime) {
+        const duration = Math.floor(
+          (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000
+        );
+        
+        await supabase
+          .from("events")
+          .update({ 
+            completed: true,
+            status: 'completed',
+            metadata: { 
+              meditation_ended: endTime,
+              actual_duration_minutes: duration 
+            }
+          })
+          .eq("id", eventId);
+      }
     } catch (e) {
       console.warn("endSession failed", e);
     } finally {
       activeSessionId.current = null;
+      activeSessionStartTime.current = null;
     }
   }
 
@@ -219,6 +273,14 @@ export default function MeditationPage() {
               Learn more about collective meditation
             </Link>
           </section>
+
+          {/* Calendar link indicator - shows when entering from a scheduled event */}
+          {eventId && (
+            <div className="mz-calendar-link">
+              <span className="mz-calendar-icon">📅</span>
+              <span>Linked to your scheduled meditation session</span>
+            </div>
+          )}
 
           {/* Main grid: choices — doors — choices */}
           <section className="mz-grid">
