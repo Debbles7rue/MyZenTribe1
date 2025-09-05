@@ -238,3 +238,35 @@ body {
   .mz-grid { grid-template-columns: 1fr; }
   .mz-side { grid-template-columns: 1fr 1fr; }
 }
+/* Calendar link indicator */
+.mz-calendar-link {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.05));
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin: 16px auto;
+  max-width: 400px;
+  text-align: center;
+  color: #8b5cf6;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  animation: pulse 3s infinite;
+}
+
+.mz-calendar-icon {
+  font-size: 1.1rem;
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
