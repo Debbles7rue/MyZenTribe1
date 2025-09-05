@@ -1,9 +1,9 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
-import { View } from "react-big-calendar";
+import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import CalendarThemeSelector from "@/components/CalendarThemeSelector";
@@ -12,137 +12,179 @@ import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 
-// Lazy load heavy components
-const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
+// Client-only calendar grid - completely prevent SSR
+const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
   ssr: false,
-  loading: () => <CalendarSkeleton />
+  loading: () => (
+    <div className="card p-3">
+      <div style={{ height: "680px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-32 mb-4"></div>
+          <div className="space-y-3">
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="h-8 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="h-16 bg-gray-100 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 });
 
-// Types
-type FeedEvent = DBEvent & {
+type FeedEvent = DBEvent & { 
   _dismissed?: boolean;
   _eventSource?: 'business' | 'community' | 'friend_invite';
   _userRelation?: 'following' | 'member' | 'invited';
 };
 
-type CalendarMode = "my" | "whats";
-type QuickItemType = "none" | "reminder" | "todo";
+type Mode = "my" | "whats";
+type QuickType = "none" | "reminder" | "todo";
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
-// Beautiful skeleton loader
-function CalendarSkeleton() {
-  return (
-    <div className="relative h-[680px] overflow-hidden rounded-xl bg-white/80 backdrop-blur-sm">
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-50 via-white to-pink-50">
-        <div className="p-4 space-y-4 animate-pulse">
-          <div className="h-12 bg-gradient-to-r from-gray-200 to-gray-100 rounded-xl" />
-          <div className="grid grid-cols-7 gap-2">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="h-8 bg-gray-200 rounded-lg animate-shimmer"
-                   style={{ animationDelay: `${i * 100}ms` }} />
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-2">
-            {Array.from({ length: 35 }).map((_, i) => (
-              <div key={i} className="h-20 bg-gray-100 rounded-lg animate-shimmer"
-                   style={{ animationDelay: `${i * 50}ms` }} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+interface TodoReminder {
+  id: string;
+  title: string;
+  type: 'reminder' | 'todo';
+  completed: boolean;
+  created_at: string;
+  due_date?: string;
 }
 
 export default function CalendarPage() {
+  // ===== TOAST SYSTEM =====
   const { showToast } = useToast();
-  const moonEvents = useMoon();
 
-  // Core State
-  const [userId, setUserId] = useState<string | null>(null);
-  const [mode, setMode] = useState<CalendarMode>("my");
+  // ===== ALL HOOKS DECLARED AT TOP - NEVER CONDITIONAL =====
+  const [me, setMe] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
-  const [theme, setTheme] = useState<CalendarTheme>("default");
+  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
-  // Events State
-  const [events, setEvents] = useState<DBEvent[]>([]);
-  const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([]);
+  // Event data
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  // UI State
-  const [selectedEvent, setSelectedEvent] = useState<DBEvent | null>(null);
+  // Feed (What's Happening) - Enhanced
+  const [feed, setFeed] = useState<FeedEvent[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [selectedFeedEvent, setSelectedFeedEvent] = useState<FeedEvent | null>(null);
+
+  // UI toggles
+  const [openCreate, setOpenCreate] = useState(false);
+  const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [quickType, setQuickType] = useState<QuickItemType>("none");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showQuickModal, setShowQuickModal] = useState(false);
-  const [quickModalType, setQuickModalType] = useState<"reminder" | "todo">("reminder");
-  const [quickTitle, setQuickTitle] = useState("");
-
-  // Features State
-  const [showMoon, setShowMoon] = useState(true);
+  const [quickType, setQuickType] = useState<QuickType>("none");
+  const [externalTitle, setExternalTitle] = useState<string>("");
+  const [showMoon, setShowMoon] = useState(false);
   const [showWeather, setShowWeather] = useState(false);
-  const [showReminders, setShowReminders] = useState(false);
+  const [showRemindersList, setShowRemindersList] = useState(false);
+  const [showTodosList, setShowTodosList] = useState(false);
 
-  // Refs for smooth interactions
-  const calendarRef = useRef<HTMLDivElement>(null);
+  // Todo/Reminder lists
+  const [reminders, setReminders] = useState<TodoReminder[]>([]);
+  const [todos, setTodos] = useState<TodoReminder[]>([]);
+  const [quickModalOpen, setQuickModalOpen] = useState(false);
+  const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
+  const [quickModalTitle, setQuickModalTitle] = useState('');
+
+  // Form for create modal
+  const [form, setForm] = useState<{
+    title: string;
+    description: string;
+    location: string;
+    start: string;
+    end: string;
+    visibility: Visibility;
+    event_type: string;
+    community_id: string;
+    source: "personal" | "business";
+    image_path: string;
+  }>({
+    title: "",
+    description: "",
+    location: "",
+    start: "",
+    end: "",
+    visibility: "private",
+    event_type: "",
+    community_id: "",
+    source: "personal",
+    image_path: "",
+  });
+
+  // Touch refs for mobile swipe
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
 
-  // Mobile detection
-  const isMobile = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth < 768;
-  }, []);
+  // Get moon events
+  const moonEvents = useMoon();
 
-  // Initialize user
+  // ===== AUTH CHECK =====
   useEffect(() => {
-    const initUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
-    };
-    initUser();
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
-  // Load theme from localStorage
+  // ===== THEME PERSISTENCE =====
   useEffect(() => {
-    const savedTheme = localStorage.getItem('mzt-calendar-theme');
-    if (savedTheme) setTheme(savedTheme as CalendarTheme);
+    const saved = localStorage.getItem("mzt-calendar-theme");
+    if (saved) setCalendarTheme(saved as CalendarTheme);
   }, []);
 
-  // Save theme to localStorage
-  const updateTheme = useCallback((newTheme: CalendarTheme) => {
-    setTheme(newTheme);
-    localStorage.setItem('mzt-calendar-theme', newTheme);
-    showToast({
-      type: 'success',
-      message: `Theme changed to ${newTheme}`,
-      duration: 2000
-    });
-  }, [showToast]);
-
-  // Load calendar events
-  const loadCalendar = useCallback(async () => {
-    if (!userId) return;
-
+  // ===== LOAD CALENDAR EVENTS =====
+  async function loadCalendar() {
+    if (!me) return;
     setLoading(true);
-    setError(null);
+    setErr(null);
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('events')
-        .select('*')
-        .or(`creator_id.eq.${userId},visibility.in.(public,friends)`)
-        .order('start_time', { ascending: true });
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .or(`created_by.eq.${me},visibility.in.(public,friends)`)
+        .order("start_time", { ascending: true });
 
-      if (fetchError) throw fetchError;
+      if (error) throw error;
 
-      setEvents(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load events');
+      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time);
+      setEvents(safe);
+
+      // Filter reminders and todos for the lists
+      const userReminders = safe.filter((e: any) => 
+        e.created_by === me && e.event_type === 'reminder'
+      ).map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        type: 'reminder' as const,
+        completed: e.completed || false,
+        created_at: e.created_at,
+        due_date: e.start_time
+      }));
+      
+      const userTodos = safe.filter((e: any) => 
+        e.created_by === me && e.event_type === 'todo'
+      ).map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        type: 'todo' as const,
+        completed: e.completed || false,
+        created_at: e.created_at,
+        due_date: e.start_time
+      }));
+
+      setReminders(userReminders);
+      setTodos(userTodos);
+    } catch (error: any) {
+      console.error("Load calendar error:", error);
+      setErr(error.message || "Failed to load events");
       showToast({
         type: 'error',
         message: 'Failed to load calendar',
@@ -154,313 +196,366 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId, showToast]);
+  }
 
-  // Load feed events
-  const loadFeed = useCallback(async () => {
-    if (!userId || mode !== 'whats') return;
-
-    setLoading(true);
+  // ===== LOAD FEED (What's Happening) =====
+  async function loadFeed() {
+    if (!me) return;
+    setFeedLoading(true);
 
     try {
-      // Load friends' public events
+      // Get all public events from friends, businesses, and communities
       const { data: friendEvents } = await supabase
-        .from('events')
-        .select('*, profiles!creator_id(username, avatar_url)')
-        .eq('visibility', 'public')
-        .neq('creator_id', userId)
-        .gte('start_time', new Date().toISOString())
-        .order('start_time', { ascending: true })
-        .limit(20);
+        .from("events")
+        .select("*")
+        .eq("visibility", "public")
+        .neq("created_by", me)
+        .gte("start_time", new Date().toISOString())
+        .order("start_time", { ascending: true });
 
-      // Load community events
+      // Get community events
       const { data: communityEvents } = await supabase
-        .from('events')
-        .select('*, communities(name, avatar_url)')
-        .eq('source', 'community')
-        .gte('start_time', new Date().toISOString())
-        .order('start_time', { ascending: true })
-        .limit(10);
+        .from("events")
+        .select("*")
+        .eq("source", "community")
+        .gte("start_time", new Date().toISOString())
+        .order("start_time", { ascending: true });
+
+      // Get business events
+      const { data: businessEvents } = await supabase
+        .from("events")
+        .select("*")
+        .eq("source", "business")
+        .gte("start_time", new Date().toISOString())
+        .order("start_time", { ascending: true });
 
       const allFeedEvents = [
-        ...(friendEvents || []).map(e => ({
-          ...e,
-          _eventSource: 'friend_invite' as const
-        })),
-        ...(communityEvents || []).map(e => ({
-          ...e,
-          _eventSource: 'community' as const
-        }))
-      ].sort((a, b) =>
+        ...(friendEvents || []).map(e => ({ ...e, _eventSource: 'friend_invite' as const })),
+        ...(communityEvents || []).map(e => ({ ...e, _eventSource: 'community' as const })),
+        ...(businessEvents || []).map(e => ({ ...e, _eventSource: 'business' as const }))
+      ];
+
+      // Remove duplicates and sort
+      const uniqueEvents = allFeedEvents.filter((event, index, self) => 
+        index === self.findIndex(e => e.id === event.id)
+      );
+
+      uniqueEvents.sort((a, b) => 
         new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
       );
 
-      setFeedEvents(allFeedEvents);
-    } catch (err) {
-      console.error('Failed to load feed:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, mode]);
-
-  // Initial load
-  useEffect(() => {
-    if (userId) {
-      if (mode === 'my') {
-        loadCalendar();
-      } else {
-        loadFeed();
-      }
-    }
-  }, [userId, mode, loadCalendar, loadFeed]);
-
-  // Real-time subscriptions
-  useEffect(() => {
-    if (!userId) return;
-
-    const subscription = supabase
-      .channel('calendar-events')
-      .on('postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'events',
-          filter: `creator_id=eq.${userId}`
-        },
-        () => {
-          loadCalendar();
-          showToast({
-            type: 'info',
-            message: 'Calendar updated',
-            duration: 1500
-          });
+      setFeed(uniqueEvents);
+    } catch (error) {
+      console.error("Load feed error:", error);
+      showToast({
+        type: 'error',
+        message: 'Failed to load feed',
+        action: {
+          label: 'Retry',
+          onClick: loadFeed
         }
-      )
+      });
+    } finally {
+      setFeedLoading(false);
+    }
+  }
+
+  // ===== INITIAL LOAD & MODE SWITCHING =====
+  useEffect(() => {
+    if (!me) return;
+    if (mode === "my") {
+      loadCalendar();
+    } else {
+      loadFeed();
+    }
+  }, [me, mode]);
+
+  // ===== REALTIME SUBSCRIPTIONS =====
+  useEffect(() => {
+    if (!me) return;
+
+    const ch = supabase
+      .channel("cal-events")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
+        if (mode === "my") loadCalendar();
+        else loadFeed();
+      })
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      supabase.removeChannel(ch);
     };
-  }, [userId, loadCalendar, showToast]);
+  }, [me, mode]);
 
-  // Touch handlers for mobile swipe
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
+  // ===== CALENDAR NAVIGATION HANDLERS =====
+  const onSelectSlot = useCallback((slotInfo: any) => {
+    // If in month view and clicking a day, go to day view
+    if (view === 'month' && slotInfo.action === 'click') {
+      setDate(slotInfo.start);
+      setView('day');
+      return;
+    }
+
+    // If in day/week view and clicking a time slot, open create event
+    if ((view === 'day' || view === 'week') && slotInfo.action === 'click') {
+      // If quick type is active, create a quick item
+      if (quickType !== 'none') {
+        createQuickItem(quickType as 'reminder' | 'todo', slotInfo.start, slotInfo.end);
+        return;
+      }
+
+      // Otherwise open create event modal with pre-filled times
+      const start = slotInfo.start || new Date();
+      const end = slotInfo.end || new Date(start.getTime() + 3600000);
+      
+      setForm(prev => ({
+        ...prev,
+        start: toLocalInput(start),
+        end: toLocalInput(end)
+      }));
+      setOpenCreate(true);
+    }
+  }, [view, quickType]);
+
+  const onSelectEvent = useCallback((evt: any) => {
+    const r = evt.resource as any;
+    if (r?.moonPhase) return; // Ignore moon markers
+    setSelected(r as DBEvent);
+    setDetailsOpen(true);
   }, []);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
-
-    const deltaX = touchEndX - touchStartX.current;
-    const deltaY = touchEndY - touchStartY.current;
-
-    // Horizontal swipe detection
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-      const newDate = new Date(date);
-
-      if (deltaX > 0) {
-        // Swipe right - go back
-        if (view === 'month') {
-          newDate.setMonth(newDate.getMonth() - 1);
-        } else if (view === 'week') {
-          newDate.setDate(newDate.getDate() - 7);
-        } else {
-          newDate.setDate(newDate.getDate() - 1);
-        }
-      } else {
-        // Swipe left - go forward
-        if (view === 'month') {
-          newDate.setMonth(newDate.getMonth() + 1);
-        } else if (view === 'week') {
-          newDate.setDate(newDate.getDate() + 7);
-        } else {
-          newDate.setDate(newDate.getDate() + 1);
-        }
-      }
-
-      setDate(newDate);
-
-      // Haptic feedback if available
-      if ('vibrate' in navigator) {
-        navigator.vibrate(5);
-      }
+  // ===== DRAG & DROP HANDLERS =====
+  const onDrop = async ({ event, start, end }: any) => {
+    const r = (event.resource || {}) as DBEvent;
+    if (!me || r.created_by !== me) {
+      showToast({
+        type: 'error',
+        message: 'You can only move your own events'
+      });
+      return;
     }
-  }, [date, view]);
 
-  // Quick create functions
-  const createQuickItem = useCallback(async (
-    type: 'reminder' | 'todo',
-    start: Date,
-    end: Date,
-    title?: string
-  ) => {
-    if (!userId) return;
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+      .eq("id", r.id);
+    
+    if (error) {
+      showToast({
+        type: 'error',
+        message: 'Failed to move event'
+      });
+    } else {
+      showToast({
+        type: 'success',
+        message: 'Event moved successfully'
+      });
+      loadCalendar();
+    }
+  };
 
-    const itemTitle = title || (type === 'reminder' ? 'Reminder' : 'To-do');
+  const onResize = async ({ event, start, end }: any) => {
+    const r = (event.resource || {}) as DBEvent;
+    if (!me || r.created_by !== me) {
+      showToast({
+        type: 'error',
+        message: 'You can only resize your own events'
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+      .eq("id", r.id);
+    
+    if (error) {
+      showToast({
+        type: 'error',
+        message: 'Failed to resize event'
+      });
+    } else {
+      showToast({
+        type: 'success',
+        message: 'Event resized successfully'
+      });
+      loadCalendar();
+    }
+  };
+
+  // ===== QUICK ITEMS (TODOS & REMINDERS) =====
+  async function createQuickItem(type: 'reminder' | 'todo', start: Date, end: Date, title?: string) {
+    if (!me) return;
+
+    const itemTitle = title || (type === 'reminder' ? 'New Reminder' : 'New To-do');
 
     try {
       const { error } = await supabase
-        .from('events')
+        .from("events")
         .insert({
           title: itemTitle,
           description: '',
+          location: '',
           start_time: start.toISOString(),
           end_time: end.toISOString(),
-          creator_id: userId,
-          event_type: type,
           visibility: 'private' as Visibility,
-          location: '',
-          source: 'personal'
+          created_by: me,
+          event_type: type,
+          rsvp_public: false,
+          community_id: null,
+          image_path: null,
+          source: 'personal',
+          status: 'scheduled'
         });
 
       if (error) throw error;
 
       showToast({
         type: 'success',
-        message: `${type === 'reminder' ? 'Reminder' : 'To-do'} created`,
-        duration: 2000
+        message: `${type === 'reminder' ? 'Reminder' : 'To-do'} created`
       });
 
       loadCalendar();
       setQuickType('none');
-    } catch (err) {
+    } catch (error: any) {
+      console.error("Create quick error:", error);
       showToast({
         type: 'error',
-        message: `Failed to create ${type}`,
-        duration: 3000
+        message: `Failed to create ${type}`
       });
     }
-  }, [userId, loadCalendar, showToast]);
+  }
 
-  // Handle slot selection
-  const handleSelectSlot = useCallback((slotInfo: any) => {
-    if (quickType !== 'none') {
-      createQuickItem(quickType as 'reminder' | 'todo', slotInfo.start, slotInfo.end);
-    } else {
-      setCreateModalOpen(true);
+  async function toggleComplete(itemId: string, currentStatus: boolean) {
+    const { error } = await supabase
+      .from("events")
+      .update({ completed: !currentStatus })
+      .eq("id", itemId);
+
+    if (!error) {
+      showToast({
+        type: 'success',
+        message: currentStatus ? 'Marked as incomplete' : 'Marked as complete!'
+      });
+      loadCalendar();
     }
-  }, [quickType, createQuickItem]);
+  }
 
-  // Handle event selection
-  const handleSelectEvent = useCallback((event: any) => {
-    setSelectedEvent(event.resource);
-    setDetailsOpen(true);
-  }, []);
-
-  // Handle event drop
-  const handleEventDrop = useCallback(async ({
-    event,
-    start,
-    end
-  }: {
-    event: any;
-    start: Date;
-    end: Date;
-  }) => {
-    const eventData = event.resource as DBEvent;
-
-    // Only allow moving own events
-    if (eventData.creator_id !== userId) {
+  // ===== CREATE EVENT HANDLER =====
+  const createEvent = async () => {
+    if (!me) {
       showToast({
         type: 'error',
-        message: 'You can only move your own events',
-        duration: 2000
+        message: 'Please log in first'
       });
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({
-          start_time: start.toISOString(),
-          end_time: end.toISOString()
-        })
-        .eq('id', eventData.id);
-
-      if (error) throw error;
-
-      showToast({
-        type: 'success',
-        message: 'Event moved',
-        duration: 1500
-      });
-
-      loadCalendar();
-    } catch (err) {
+    if (!form.title || !form.start || !form.end) {
       showToast({
         type: 'error',
-        message: 'Failed to move event',
-        duration: 3000
+        message: 'Please fill in required fields'
       });
+      return;
     }
-  }, [userId, loadCalendar, showToast]);
 
-  // Filter events based on search
-  const filteredEvents = useMemo(() => {
-    if (!searchQuery) return events;
+    const payload: any = {
+      title: form.title,
+      description: form.description || null,
+      location: form.location || null,
+      start_time: new Date(form.start).toISOString(),
+      end_time: new Date(form.end).toISOString(),
+      visibility: form.visibility,
+      created_by: me,
+      event_type: form.event_type || null,
+      rsvp_public: true,
+      community_id: form.community_id || null,
+      image_path: form.image_path || null,
+      source: form.source,
+    };
 
-    const query = searchQuery.toLowerCase();
-    return events.filter(e =>
-      e.title.toLowerCase().includes(query) ||
-      e.description?.toLowerCase().includes(query) ||
-      e.location?.toLowerCase().includes(query)
-    );
-  }, [events, searchQuery]);
+    const { error } = await supabase.from("events").insert(payload);
+    if (error) {
+      showToast({
+        type: 'error',
+        message: error.message
+      });
+      return;
+    }
 
-  // Render quick modal
-  const renderQuickModal = () => (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${showQuickModal ? '' : 'hidden'}`}>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-           onClick={() => setShowQuickModal(false)} />
-      <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
-        <h3 className="text-xl font-bold mb-4">
-          Create {quickModalType === 'reminder' ? 'Reminder' : 'To-do'}
-        </h3>
-        <input
-          type="text"
-          value={quickTitle}
-          onChange={(e) => setQuickTitle(e.target.value)}
-          placeholder={`Enter ${quickModalType} title...`}
-          className="w-full px-4 py-2 border border-purple-200 rounded-lg
-                   focus:outline-none focus:ring-2 focus:ring-purple-500"
-          autoFocus
-        />
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={() => {
-              if (quickTitle.trim()) {
-                const now = new Date();
-                const later = new Date(now.getTime() + 3600000);
-                createQuickItem(quickModalType, now, later, quickTitle);
-                setQuickTitle('');
-                setShowQuickModal(false);
-              }
-            }}
-            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg
-                     hover:bg-purple-700 transition-colors"
-          >
-            Create
-          </button>
-          <button
-            onClick={() => {
-              setShowQuickModal(false);
-              setQuickTitle('');
-            }}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
-                     hover:bg-gray-300 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    setOpenCreate(false);
+    setForm({
+      title: "",
+      description: "",
+      location: "",
+      start: "",
+      end: "",
+      visibility: "private",
+      event_type: "",
+      community_id: "",
+      source: "personal",
+      image_path: "",
+    });
+    
+    showToast({
+      type: 'success',
+      message: '✨ Event created successfully!'
+    });
+    
+    loadCalendar();
+  };
+
+  // ===== TOUCH HANDLERS FOR MOBILE SWIPE =====
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const touchEndX = e.changedTouches[0].clientX;
+    const deltaX = touchEndX - touchStartX.current;
+    
+    if (Math.abs(deltaX) > 50) {
+      const newDate = new Date(date);
+      if (deltaX > 0) {
+        // Swipe right - go back
+        if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+        else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+        else newDate.setDate(newDate.getDate() - 1);
+      } else {
+        // Swipe left - go forward
+        if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+        else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+        else newDate.setDate(newDate.getDate() + 1);
+      }
+      setDate(newDate);
+    }
+  };
+
+  // ===== HELPER FUNCTIONS =====
+  const toLocalInput = (d: Date) =>
+    new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+  const handleThemeChange = (newTheme: CalendarTheme) => {
+    setCalendarTheme(newTheme);
+    localStorage.setItem("mzt-calendar-theme", newTheme);
+    showToast({
+      type: 'success',
+      message: `Theme changed to ${newTheme}`
+    });
+  };
+
+  // Get events for the calendar based on mode
+  const calendarEvents = useMemo(() => {
+    if (mode === 'whats') {
+      // In "What's Happening" mode, show feed events on calendar
+      return feed;
+    }
+    return events;
+  }, [mode, events, feed]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 relative">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
       {/* Animated Background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 left-20 w-96 h-96 bg-purple-200 rounded-full
@@ -471,7 +566,7 @@ export default function CalendarPage() {
                       mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
       </div>
 
-      {/* Main Content */}
+      {/* Main Container */}
       <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
         <div className="mb-6 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg p-4">
@@ -509,25 +604,7 @@ export default function CalendarPage() {
 
             {/* Controls */}
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Search */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search events..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 rounded-full border border-purple-200
-                           focus:outline-none focus:ring-2 focus:ring-purple-500
-                           bg-white/80 backdrop-blur-sm w-48 lg:w-64"
-                />
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-
-              {/* Feature Toggles */}
+              {/* Moon Toggle */}
               <button
                 onClick={() => setShowMoon(!showMoon)}
                 className={`p-2 rounded-full transition-all duration-300 ${
@@ -542,13 +619,13 @@ export default function CalendarPage() {
 
               {/* Theme Selector */}
               <CalendarThemeSelector
-                value={theme}
-                onChange={updateTheme}
+                value={calendarTheme}
+                onChange={handleThemeChange}
               />
 
               {/* Create Button */}
               <button
-                onClick={() => setCreateModalOpen(true)}
+                onClick={() => setOpenCreate(true)}
                 className="px-4 lg:px-6 py-2 rounded-full font-medium text-white
                          bg-gradient-to-r from-purple-600 to-pink-600
                          hover:from-purple-700 hover:to-pink-700
@@ -562,73 +639,16 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Main Calendar/Feed Area */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-purple-100">
-          {mode === 'whats' ? (
-            // Feed View
-            <div className="p-6">
-              <h2 className="text-xl font-bold mb-4">What's Happening</h2>
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-                </div>
-              ) : feedEvents.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <p className="text-lg mb-2">No upcoming events</p>
-                  <p className="text-sm">Check back later for new events from friends and communities</p>
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {feedEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="p-4 rounded-xl border border-purple-100 hover:shadow-lg
-                               transition-all duration-300 cursor-pointer bg-white"
-                      onClick={() => {
-                        setSelectedEvent(event);
-                        setDetailsOpen(true);
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-gray-800">{event.title}</h3>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          event._eventSource === 'community'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {event._eventSource === 'community' ? 'Community' : 'Friend'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {new Date(event.start_time).toLocaleDateString()} at{' '}
-                        {new Date(event.start_time).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                      {event.location && (
-                        <p className="text-sm text-gray-500">📍 {event.location}</p>
-                      )}
-                      {event.description && (
-                        <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                          {event.description}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            // Calendar View
-            <div className="relative">
-              {/* Quick Items Sidebar */}
-              <div className={`absolute left-0 top-0 h-full w-64 bg-white/95 backdrop-blur-sm
-                            shadow-lg rounded-l-2xl p-4 transition-transform duration-300 z-20
-                            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        {/* Main Content Area */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
+          <div className="flex gap-4 p-4">
+            {/* Sidebar - Quick Items */}
+            <div className="w-64 shrink-0 hidden lg:block">
+              <div className="bg-white rounded-lg p-4 shadow-md">
                 <h3 className="font-semibold text-gray-700 mb-3">Quick Items</h3>
-
-                <div className="space-y-2">
+                
+                {/* Reminder Section */}
+                <div className="mb-4">
                   <div
                     className={`p-3 rounded-lg cursor-pointer transition-all duration-200
                               hover:scale-105 hover:shadow-md ${
@@ -641,13 +661,15 @@ export default function CalendarPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-amber-700">Reminder</div>
-                        <div className="text-xs text-amber-600">Click to activate</div>
+                        <div className="text-xs text-amber-600">
+                          {quickType === 'reminder' ? 'Click calendar to place' : 'Click to activate'}
+                        </div>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setQuickModalType('reminder');
-                          setShowQuickModal(true);
+                          setQuickModalOpen(true);
                         }}
                         className="text-xs px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600"
                       >
@@ -656,6 +678,50 @@ export default function CalendarPage() {
                     </div>
                   </div>
 
+                  {/* Reminders List */}
+                  {reminders.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <button
+                        onClick={() => setShowRemindersList(!showRemindersList)}
+                        className="text-xs text-amber-600 hover:underline"
+                      >
+                        {showRemindersList ? 'Hide' : 'Show'} Reminders ({reminders.length})
+                      </button>
+                      {showRemindersList && (
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {reminders.map(r => (
+                            <div
+                              key={r.id}
+                              className={`text-xs p-2 bg-amber-50 rounded flex items-center justify-between
+                                        ${r.completed ? 'opacity-50 line-through' : ''}`}
+                            >
+                              <span
+                                className="cursor-move"
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('text/plain', r.title);
+                                  setQuickType('reminder');
+                                  setExternalTitle(r.title);
+                                }}
+                              >
+                                {r.title}
+                              </span>
+                              <button
+                                onClick={() => toggleComplete(r.id, r.completed)}
+                                className="ml-2 text-amber-600 hover:text-amber-800"
+                              >
+                                {r.completed ? '↺' : '✓'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* To-do Section */}
+                <div>
                   <div
                     className={`p-3 rounded-lg cursor-pointer transition-all duration-200
                               hover:scale-105 hover:shadow-md ${
@@ -668,13 +734,15 @@ export default function CalendarPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-green-700">To-do</div>
-                        <div className="text-xs text-green-600">Click to activate</div>
+                        <div className="text-xs text-green-600">
+                          {quickType === 'todo' ? 'Click calendar to place' : 'Click to activate'}
+                        </div>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setQuickModalType('todo');
-                          setShowQuickModal(true);
+                          setQuickModalOpen(true);
                         }}
                         className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600"
                       >
@@ -682,129 +750,167 @@ export default function CalendarPage() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Todos List */}
+                  {todos.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <button
+                        onClick={() => setShowTodosList(!showTodosList)}
+                        className="text-xs text-green-600 hover:underline"
+                      >
+                        {showTodosList ? 'Hide' : 'Show'} To-dos ({todos.length})
+                      </button>
+                      {showTodosList && (
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {todos.map(t => (
+                            <div
+                              key={t.id}
+                              className={`text-xs p-2 bg-green-50 rounded flex items-center justify-between
+                                        ${t.completed ? 'opacity-50 line-through' : ''}`}
+                            >
+                              <span
+                                className="cursor-move"
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('text/plain', t.title);
+                                  setQuickType('todo');
+                                  setExternalTitle(t.title);
+                                }}
+                              >
+                                {t.title}
+                              </span>
+                              <button
+                                onClick={() => toggleComplete(t.id, t.completed)}
+                                className="ml-2 text-green-600 hover:text-green-800"
+                              >
+                                {t.completed ? '↺' : '✓'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {quickType !== 'none' && (
                   <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-                    <p className="text-xs text-purple-700">
-                      <strong>Active:</strong> Click a calendar slot to place your {quickType}
+                    <p className="text-xs text-purple-700 font-medium">
+                      Placement Mode Active
+                    </p>
+                    <p className="text-xs text-purple-600 mt-1">
+                      Click a time slot to place your {quickType}
                     </p>
                     <button
                       onClick={() => setQuickType('none')}
-                      className="text-xs text-purple-600 underline mt-1"
+                      className="text-xs text-purple-500 underline mt-2"
                     >
                       Cancel
                     </button>
                   </div>
                 )}
-
-                {/* Reminders List */}
-                {showReminders && (
-                  <div className="mt-6">
-                    <h4 className="font-medium text-gray-700 mb-2">Your Reminders</h4>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {events
-                        .filter(e => e.event_type === 'reminder')
-                        .map(reminder => (
-                          <div key={reminder.id}
-                               className="text-sm p-2 bg-amber-50 rounded cursor-pointer hover:bg-amber-100"
-                               onClick={() => {
-                                 setSelectedEvent(reminder);
-                                 setDetailsOpen(true);
-                               }}>
-                            {reminder.title}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle Sidebar Button (Mobile) */}
-              {isMobile && (
-                <button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="absolute left-2 top-2 z-30 p-2 bg-white rounded-full shadow-lg lg:hidden"
-                >
-                  {sidebarOpen ? '✕' : '☰'}
-                </button>
-              )}
-
-              {/* Calendar Grid */}
-              <div
-                ref={calendarRef}
-                className="p-4 lg:ml-64"
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
-              >
-                {loading ? (
-                  <CalendarSkeleton />
-                ) : (
-                  <CalendarGrid
-                    dbEvents={filteredEvents}
-                    moonEvents={showMoon ? moonEvents : []}
-                    showMoon={showMoon}
-                    showWeather={showWeather}
-                    theme={theme}
-                    date={date}
-                    setDate={setDate}
-                    view={view}
-                    setView={setView}
-                    onSelectSlot={handleSelectSlot}
-                    onSelectEvent={handleSelectEvent}
-                    onDrop={handleEventDrop}
-                    onResize={handleEventDrop}
-                    externalDragType={quickType}
-                  />
-                )}
               </div>
             </div>
-          )}
+
+            {/* Calendar Grid */}
+            <div 
+              className="flex-1"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              <CalendarGrid
+                dbEvents={calendarEvents as any}
+                moonEvents={showMoon ? moonEvents : []}
+                showMoon={showMoon}
+                showWeather={showWeather}
+                theme={calendarTheme}
+                date={date}
+                setDate={setDate}
+                view={view}
+                setView={setView}
+                onSelectSlot={onSelectSlot}
+                onSelectEvent={onSelectEvent}
+                onDrop={onDrop}
+                onResize={onResize}
+                externalDragType={quickType}
+                externalDragTitle={externalTitle}
+                onExternalDrop={(info, kind) => {
+                  createQuickItem(kind, info.start, info.end, externalTitle);
+                  setExternalTitle('');
+                }}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Quick Modal */}
-        {renderQuickModal()}
+        {/* Quick Modal for Custom Reminders/Todos */}
+        {quickModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setQuickModalOpen(false)} />
+            <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-semibold mb-4">
+                Create {quickModalType === 'reminder' ? 'Reminder' : 'To-do'}
+              </h3>
+              <input
+                type="text"
+                value={quickModalTitle}
+                onChange={(e) => setQuickModalTitle(e.target.value)}
+                placeholder={`Enter ${quickModalType} title...`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                         focus:outline-none focus:ring-2 focus:ring-purple-500"
+                autoFocus
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    if (quickModalTitle.trim()) {
+                      const now = new Date();
+                      const later = new Date(now.getTime() + 3600000);
+                      createQuickItem(quickModalType, now, later, quickModalTitle);
+                      setQuickModalTitle('');
+                      setQuickModalOpen(false);
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg
+                           hover:bg-purple-700 transition-colors"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => {
+                    setQuickModalOpen(false);
+                    setQuickModalTitle('');
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
+                           hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Event Details Modal */}
-        <EventDetails
-          event={selectedEvent}
+        <EventDetails 
+          event={detailsOpen ? (selectedFeedEvent || selected) : null} 
           onClose={() => {
             setDetailsOpen(false);
-            setSelectedEvent(null);
-          }}
+            setSelectedFeedEvent(null);
+          }} 
         />
 
         {/* Create Event Modal */}
         <CreateEventModal
-          open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
-          sessionUser={userId}
-          value={{
-            title: '',
-            description: '',
-            location: '',
-            start: date.toISOString(),
-            end: new Date(date.getTime() + 3600000).toISOString(),
-            visibility: 'private',
-            event_type: '',
-            community_id: '',
-            source: 'personal',
-            image_path: ''
-          }}
-          onChange={() => {}}
-          onSave={() => {
-            loadCalendar();
-            setCreateModalOpen(false);
-            showToast({
-              type: 'success',
-              message: '✨ Event created successfully!',
-              duration: 3000
-            });
-          }}
+          open={openCreate}
+          onClose={() => setOpenCreate(false)}
+          sessionUser={me}
+          value={form}
+          onChange={(updates) => setForm(prev => ({ ...prev, ...updates }))}
+          onSave={createEvent}
         />
       </div>
 
-      {/* CSS Animations */}
       <style jsx>{`
         @keyframes blob {
           0%, 100% { transform: translate(0, 0) scale(1); }
@@ -812,39 +918,14 @@ export default function CalendarPage() {
           50% { transform: translate(-20px, 20px) scale(1); }
           75% { transform: translate(30px, 10px) scale(0.9); }
         }
-
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-
         .animate-blob {
           animation: blob 10s infinite;
         }
-
         .animation-delay-2000 {
           animation-delay: 2s;
         }
-
         .animation-delay-4000 {
           animation-delay: 4s;
-        }
-
-        .animate-shimmer {
-          background: linear-gradient(90deg,
-            transparent 0%,
-            rgba(255,255,255,0.4) 50%,
-            transparent 100%
-          );
-          background-size: 200% 100%;
-          animation: shimmer 2s infinite;
-        }
-
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
         }
       `}</style>
     </div>
