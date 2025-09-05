@@ -2,8 +2,9 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import Link from "next/link"; // Added for profile links
+import Link from "next/link";
 import { Dialog } from "@headlessui/react";
+import { supabase } from "@/lib/supabaseClient";
 import type { Visibility } from "@/lib/types";
 
 interface EventForm {
@@ -58,21 +59,49 @@ export default function ModernCreateEventModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = async (file: File) => {
+    if (!sessionUser) {
+      alert("Please sign in to upload images.");
+      return;
+    }
+
     setIsUploading(true);
     try {
-      // Replace with your actual image upload logic
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      // Mock upload - replace with actual implementation
-      const imageUrl = URL.createObjectURL(file);
-      setImagePreview(imageUrl);
-      onChange({ image_path: imageUrl });
-    } catch (error) {
+      // Create unique filename
+      const ext = file.name.split(".").pop();
+      const path = `${sessionUser}/${Date.now()}.${ext}`;
+
+      // Upload to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from("event-photos")
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data } = supabase.storage
+        .from("event-photos")
+        .getPublicUrl(path);
+
+      const publicUrl = data.publicUrl;
+
+      // Update preview and form
+      setImagePreview(publicUrl);
+      onChange({ image_path: publicUrl });
+
+    } catch (error: any) {
       console.error('Upload failed:', error);
+      alert(error.message || "Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const removeImage = () => {
+    setImagePreview(null);
+    onChange({ image_path: '' });
   };
 
   const generateGoogleMapsUrl = (location: string) => {
@@ -194,25 +223,48 @@ export default function ModernCreateEventModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Event Image
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Image (Optional)
                   </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                    {imagePreview ? (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-violet-400 transition-colors">
+                    {imagePreview || value.image_path ? (
                       <div className="relative">
-                        <img src={imagePreview} alt="Event" className="w-full h-48 object-cover rounded" />
+                        <img 
+                          src={imagePreview || value.image_path} 
+                          alt="Event preview" 
+                          className="w-full h-48 object-cover rounded-lg shadow-md"
+                        />
                         <button
-                          onClick={() => {
-                            setImagePreview(null);
-                            onChange({ image_path: '' });
-                          }}
-                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                          onClick={removeImage}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-lg hover:bg-red-600 transition-colors shadow-lg"
+                          title="Remove image"
                         >
-                          ✕
+                          ×
                         </button>
                       </div>
                     ) : (
-                      <div className="text-center">
+                      <div className="text-center py-8">
+                        <div className="text-4xl text-gray-400 mb-3">📸</div>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploading || !sessionUser}
+                          className="px-6 py-3 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-lg hover:from-violet-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                        >
+                          {isUploading ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Uploading...
+                            </span>
+                          ) : !sessionUser ? (
+                            'Sign in to upload photos'
+                          ) : (
+                            '📷 Upload Event Photo'
+                          )}
+                        </button>
                         <input
                           ref={fileInputRef}
                           type="file"
@@ -223,13 +275,9 @@ export default function ModernCreateEventModal({
                           }}
                           className="hidden"
                         />
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                          disabled={isUploading}
-                        >
-                          {isUploading ? 'Uploading...' : '📷 Upload Image'}
-                        </button>
+                        <p className="text-sm text-gray-500 mt-2">
+                          JPG, PNG, or GIF up to 10MB
+                        </p>
                       </div>
                     )}
                   </div>
@@ -386,11 +434,10 @@ export default function ModernCreateEventModal({
                                     />
                                     <span className="text-sm">{friend.name}</span>
                                   </label>
-                                  {/* Added profile link for friends */}
                                   <Link
                                     href={`/profile/${friend.friend_id}`}
                                     className="text-xs text-purple-600 hover:text-purple-700 hover:underline ml-2"
-                                    onClick={(e) => e.stopPropagation()} // Prevent checkbox toggle when clicking link
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     View Profile
                                   </Link>
