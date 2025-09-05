@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { Phone, AlertTriangle, Settings, X, Shield, Bell, AlertCircle } from "lucide-react";
+import { Phone, AlertTriangle, Settings, X } from "lucide-react";
 
 interface SOSContact {
   sos_enabled: boolean;
@@ -13,65 +13,21 @@ interface SOSContact {
   emergency_contact_value: string | null;
   emergency_message: string | null;
   user_phone: string | null;
-  // Second contact (optional)
-  second_contact_name: string | null;
-  second_contact_method: 'sms' | 'email' | null;
-  second_contact_value: string | null;
-  // Alert levels
-  alert_level: 'low' | 'medium' | 'high' | 'critical' | null;
-  custom_message: string | null;
 }
-
-const ALERT_LEVELS = {
-  low: {
-    label: "Check In",
-    color: "bg-yellow-500 hover:bg-yellow-600",
-    icon: Bell,
-    message: "Just checking in - please call me when you can."
-  },
-  medium: {
-    label: "Need Help",
-    color: "bg-orange-500 hover:bg-orange-600",
-    icon: AlertCircle,
-    message: "I need some help. Please contact me soon."
-  },
-  high: {
-    label: "Urgent",
-    color: "bg-red-500 hover:bg-red-600",
-    icon: AlertTriangle,
-    message: "This is urgent. I need help. Please contact me immediately."
-  },
-  critical: {
-    label: "Emergency",
-    color: "bg-red-700 hover:bg-red-800",
-    icon: Shield,
-    message: "EMERGENCY! I need immediate help. Please call 911 and come to my location."
-  }
-};
 
 export default function SOSFloatingButton() {
   const router = useRouter();
-  const pathname = usePathname();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  const [showLevelSelect, setShowLevelSelect] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<keyof typeof ALERT_LEVELS>('high');
-  const [customMessage, setCustomMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [contact, setContact] = useState<SOSContact | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [sendToSecond, setSendToSecond] = useState(false);
-
-  // Only show on dashboard and safety pages
-  const shouldShowButton = pathname === '/dashboard' || pathname === '/safety' || pathname === '/';
 
   useEffect(() => {
-    if (shouldShowButton) {
-      loadSOSContact();
-    }
-  }, [shouldShowButton]);
+    loadSOSContact();
+  }, []);
 
   useEffect(() => {
     if (countdown !== null && countdown > 0) {
@@ -100,9 +56,6 @@ export default function SOSFloatingButton() {
 
       if (data) {
         setContact(data);
-        if (data.alert_level) {
-          setSelectedLevel(data.alert_level);
-        }
       }
     } catch (error) {
       console.error("Error loading SOS contact:", error);
@@ -120,24 +73,14 @@ export default function SOSFloatingButton() {
     if (!contact?.sos_enabled || !contact?.emergency_contact_value) {
       setShowSetup(true);
     } else {
-      setShowLevelSelect(true);
+      setShowConfirm(true);
+      setCountdown(5); // 5 second countdown
     }
-  };
-
-  const proceedWithLevel = () => {
-    setShowLevelSelect(false);
-    setShowConfirm(true);
-    // Different countdown based on level
-    const countdownTime = selectedLevel === 'critical' ? 3 : 5;
-    setCountdown(countdownTime);
   };
 
   const cancelSOS = () => {
     setShowConfirm(false);
-    setShowLevelSelect(false);
     setCountdown(null);
-    setSendToSecond(false);
-    setCustomMessage("");
   };
 
   const sendSOS = async () => {
@@ -167,17 +110,11 @@ export default function SOSFloatingButton() {
       }
 
       // Build the message
-      const levelInfo = ALERT_LEVELS[selectedLevel];
-      const alertEmoji = selectedLevel === 'critical' ? '🆘🚨' : selectedLevel === 'high' ? '⚠️' : '📍';
-      
       const locationText = lat && lng 
-        ? `📍 My location: ${lat.toFixed(6)}, ${lng.toFixed(6)}\n🗺️ https://maps.google.com/?q=${lat},${lng}`
-        : "📍 Location unavailable";
+        ? `My location: ${lat.toFixed(6)}, ${lng.toFixed(6)}\nhttps://maps.google.com/?q=${lat},${lng}`
+        : "Location unavailable";
 
-      // Use custom message if provided, otherwise use level default or saved message
-      const userMessage = customMessage.trim() || contact.custom_message || contact.emergency_message || levelInfo.message;
-
-      const message = `${alertEmoji} ${levelInfo.label.toUpperCase()} ALERT ${alertEmoji}\n\n${userMessage}\n\n${locationText}\n\n- Sent from MyZenTribe`;
+      const message = `🆘 EMERGENCY SOS ALERT 🆘\n\n${contact.emergency_message || "I need help. Please contact me immediately."}\n\n${locationText}\n\n- Sent from MyZenTribe`;
       
       // Add user's phone if available
       const finalMessage = contact.user_phone 
@@ -187,147 +124,50 @@ export default function SOSFloatingButton() {
       // Log the incident
       await supabase.from("sos_incidents").insert({
         user_id: user.id,
-        kind: selectedLevel,
-        message: userMessage,
+        kind: "sos",
+        message: contact.emergency_message,
         lat,
         lon: lng,
         status: "open"
       });
 
-      // Send to primary contact
-      const contacts = [contact.emergency_contact_value];
-      
-      // Add second contact if requested and available
-      if (sendToSecond && contact.second_contact_value) {
-        contacts.push(contact.second_contact_value);
-      }
-
       // Send based on method
       if (contact.emergency_contact_method === "sms") {
-        const recipients = sendToSecond && contact.second_contact_value 
-          ? `${contact.emergency_contact_value};${contact.second_contact_value}`
-          : contact.emergency_contact_value;
-        
-        const smsUrl = `sms:${recipients}?body=${encodeURIComponent(finalMessage)}`;
+        // Open SMS app with pre-filled message
+        const smsUrl = `sms:${contact.emergency_contact_value}?body=${encodeURIComponent(finalMessage)}`;
         window.location.href = smsUrl;
       } else if (contact.emergency_contact_method === "email") {
-        const recipients = sendToSecond && contact.second_contact_value 
-          ? `${contact.emergency_contact_value},${contact.second_contact_value}`
-          : contact.emergency_contact_value;
-        
-        const subject = encodeURIComponent(`${alertEmoji} ${levelInfo.label.toUpperCase()} ALERT`);
+        // Open email app with pre-filled message
+        const subject = encodeURIComponent("EMERGENCY SOS ALERT");
         const body = encodeURIComponent(finalMessage);
-        const mailtoUrl = `mailto:${recipients}?subject=${subject}&body=${body}`;
+        const mailtoUrl = `mailto:${contact.emergency_contact_value}?subject=${subject}&body=${body}`;
         window.location.href = mailtoUrl;
       }
 
       setShowConfirm(false);
       
       // Show success message
-      alert(`${levelInfo.label} alert prepared. Please complete sending in your ${contact.emergency_contact_method === 'sms' ? 'SMS' : 'email'} app.`);
+      alert("Emergency message prepared. Please complete sending in your email/SMS app.");
       
     } catch (error: any) {
       alert(`Error: ${error.message}`);
     } finally {
       setSending(false);
-      setCustomMessage("");
     }
   };
 
-  if (!shouldShowButton || loading || !user) return null;
-
-  const currentLevel = ALERT_LEVELS[selectedLevel];
-  const IconComponent = currentLevel.icon;
+  if (loading) return null;
 
   return (
     <>
-      {/* SOS Floating Button */}
+      {/* SOS Floating Button - Always Visible */}
       <button
         onClick={handleSOSClick}
-        className={`fixed bottom-6 right-6 px-4 py-3 ${currentLevel.color} text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center gap-2 z-50`}
+        className="fixed bottom-6 right-6 w-16 h-16 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200 flex items-center justify-center z-50 pulse-animation"
         aria-label="Emergency SOS"
       >
-        <IconComponent className="w-5 h-5" />
-        <span className="text-sm font-bold">SOS</span>
+        <span className="text-2xl font-bold">SOS</span>
       </button>
-
-      {/* Alert Level Selection */}
-      {showLevelSelect && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Select Alert Level</h2>
-              <button
-                onClick={cancelSOS}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2 mb-4">
-              {Object.entries(ALERT_LEVELS).map(([key, level]) => {
-                const LevelIcon = level.icon;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setSelectedLevel(key as keyof typeof ALERT_LEVELS)}
-                    className={`w-full p-3 rounded-lg border-2 transition-all ${
-                      selectedLevel === key 
-                        ? 'border-red-500 bg-red-50' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <LevelIcon className="w-5 h-5 mr-3" />
-                      <div className="text-left flex-1">
-                        <div className="font-medium">{level.label}</div>
-                        <div className="text-xs text-gray-600">{level.message}</div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Custom Message Option */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">
-                Custom Message (Optional)
-              </label>
-              <textarea
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="Add a custom message or use the default..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                rows={2}
-              />
-            </div>
-
-            {/* Second Contact Option */}
-            {contact?.second_contact_value && (
-              <label className="flex items-center mb-4">
-                <input
-                  type="checkbox"
-                  checked={sendToSecond}
-                  onChange={(e) => setSendToSecond(e.target.checked)}
-                  className="mr-2"
-                />
-                <span className="text-sm">
-                  Also send to {contact.second_contact_name || 'second contact'}
-                </span>
-              </label>
-            )}
-
-            <button
-              onClick={proceedWithLevel}
-              className={`w-full px-4 py-3 ${currentLevel.color} text-white rounded-lg font-semibold`}
-            >
-              Send {currentLevel.label} Alert
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Confirmation Dialog with Countdown */}
       {showConfirm && (
@@ -335,8 +175,8 @@ export default function SOSFloatingButton() {
           <div className="bg-white rounded-lg max-w-sm w-full p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-red-600 flex items-center gap-2">
-                <IconComponent className="w-6 h-6" />
-                {currentLevel.label} Alert
+                <AlertTriangle className="w-6 h-6" />
+                Emergency SOS
               </h2>
               <button
                 onClick={cancelSOS}
@@ -347,10 +187,8 @@ export default function SOSFloatingButton() {
             </div>
             
             <p className="text-gray-700 mb-4">
-              Sending to: <strong>{contact?.emergency_contact_name}</strong>
-              {sendToSecond && contact?.second_contact_name && (
-                <span> and <strong>{contact.second_contact_name}</strong></span>
-              )}
+              Sending emergency message to <strong>{contact?.emergency_contact_name}</strong> 
+              {contact?.emergency_contact_method === 'sms' ? ' via SMS' : ' via Email'}
             </p>
 
             {countdown !== null && (
@@ -370,7 +208,7 @@ export default function SOSFloatingButton() {
               </button>
               <button
                 onClick={sendSOS}
-                className={`flex-1 px-4 py-3 ${currentLevel.color} text-white rounded-lg font-semibold`}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold"
                 disabled={sending}
               >
                 {sending ? "Preparing..." : "Send Now"}
@@ -425,6 +263,20 @@ export default function SOSFloatingButton() {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+          }
+          50% {
+            box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+          }
+        }
+        .pulse-animation {
+          animation: pulse 2s infinite;
+        }
+      `}</style>
     </>
   );
 }
