@@ -940,6 +940,9 @@ export default function HomeFeed() {
       // Combine and enrich posts and events
       const allFeedItems: FeedPost[] = [];
 
+      console.log("Posts data:", postsData); // Debug log
+      console.log("Events data:", eventsData); // Debug log
+
       // Process posts
       if (!filter || filter === "all" || filter === "posts") {
         for (const post of postsData || []) {
@@ -996,9 +999,12 @@ export default function HomeFeed() {
       // Sort by created_at
       allFeedItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
+      console.log("All feed items:", allFeedItems); // Debug log
       setPosts(allFeedItems);
     } catch (err: any) {
       console.error("Error loading feed:", err);
+      // Set empty posts array on error so UI doesn't hang
+      setPosts([]);
     } finally {
       setLoading(false);
     }
