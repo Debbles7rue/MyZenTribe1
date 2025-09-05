@@ -178,6 +178,26 @@ export default function CalendarPage() {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
+  // ===== REQUEST BROWSER NOTIFICATION PERMISSION =====
+  useEffect(() => {
+    // Request notification permission on mount (one-time)
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          showToast({
+            type: 'success',
+            message: '🔔 Notifications enabled! You\'ll be notified about reminders.'
+          });
+        } else if (permission === 'denied') {
+          showToast({
+            type: 'info',
+            message: 'Notifications blocked. You can enable them in browser settings if needed.'
+          });
+        }
+      });
+    }
+  }, []); // Empty dependency array ensures this runs only once on mount
+
   // ===== THEME PERSISTENCE =====
   useEffect(() => {
     const saved = localStorage.getItem("mzt-calendar-theme");
@@ -429,7 +449,7 @@ export default function CalendarPage() {
                 message: `Reminder: ${reminder.title} in ${minutesDiff} minutes!`
               });
 
-              // Request browser notification permission
+              // Request browser notification permission and show notification
               if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification('Reminder', {
                   body: `${reminder.title} in ${minutesDiff} minutes`,
