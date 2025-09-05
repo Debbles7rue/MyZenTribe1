@@ -154,8 +154,11 @@ export default function CalendarPage() {
     if (saved) setCalendarTheme(saved as CalendarTheme);
   }, []);
 
+  // Save theme whenever it changes
   useEffect(() => {
-    localStorage.setItem("mzt-calendar-theme", calendarTheme);
+    if (calendarTheme) {
+      localStorage.setItem("mzt-calendar-theme", calendarTheme);
+    }
   }, [calendarTheme]);
 
   // ===== LOAD CALENDAR EVENTS =====
