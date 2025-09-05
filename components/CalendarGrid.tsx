@@ -1,126 +1,133 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useMemo, useEffect, useState } from "react";
-import { Calendar, View, Event as RBCEvent } from "react-big-calendar";
-import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import { TouchBackend } from "react-dnd-touch-backend";
-import { localizer } from "@/lib/localizer";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Calendar as BigCalendar,
+  View,
+  momentLocalizer,
+  Event,
+  SlotInfo,
+  EventProps,
+} from "react-big-calendar";
+import moment from "moment";
+import withDragAndDrop, {
+  EventInteractionArgs,
+} from "react-big-calendar/lib/addons/dragAndDrop";
+import "react-big-calendar/lib/css/react-big-calendar.css";
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import type { DBEvent } from "@/lib/types";
 
-const DnDCalendar = withDragAndDrop<UiEvent, object>(Calendar as any);
-export type UiEvent = RBCEvent & { resource: any };
+// Initialize localizer
+const localizer = momentLocalizer(moment);
 
-type CalendarTheme =
-  | "default"
-  | "spring"
-  | "summer"
-  | "autumn"
-  | "winter"
-  | "nature"
-  | "ocean";
+// Create DnD calendar
+const DnDCalendar = withDragAndDrop(BigCalendar);
 
-type Props = {
+type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
+
+export type UiEvent = Event & {
+  resource?: any;
+};
+
+interface MoonEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  resource: {
+    moonPhase: 'moon-new' | 'moon-first' | 'moon-full' | 'moon-last';
+  };
+}
+
+interface Props {
   dbEvents: DBEvent[];
-  moonEvents: UiEvent[];
+  moonEvents: MoonEvent[];
   showMoon: boolean;
   showWeather?: boolean;
-  temperatureUnit?: "celsius" | "fahrenheit";
   theme?: CalendarTheme;
-
   date: Date;
   setDate: (d: Date) => void;
   view: View;
   setView: (v: View) => void;
-
-  onSelectSlot: (arg: {
-    start: Date;
-    end: Date;
-    action?: string;
-    slots?: Date[];
-  }) => void;
-  onSelectEvent: (evt: UiEvent) => void;
-  onDrop: ({
-    event,
-    start,
-    end,
-  }: {
-    event: UiEvent;
-    start: Date;
-    end: Date;
-  }) => void;
-  onResize: ({
-    event,
-    start,
-    end,
-  }: {
-    event: UiEvent;
-    start: Date;
-    end: Date;
-  }) => void;
-
-  externalDragType?: "none" | "reminder" | "todo";
+  onSelectSlot: (slotInfo: SlotInfo) => void;
+  onSelectEvent: (event: UiEvent) => void;
+  onDrop: (args: EventInteractionArgs<UiEvent>) => void;
+  onResize: (args: EventInteractionArgs<UiEvent>) => void;
+  externalDragType?: 'none' | 'reminder' | 'todo';
   externalDragTitle?: string;
   onExternalDrop?: (
     info: { start: Date; end: Date; allDay?: boolean },
-    kind: Exclude<NonNullable<Props["externalDragType"]>, "none">
+    kind: 'reminder' | 'todo'
   ) => void;
-};
-
-function isTouchDevice() {
-  if (typeof window === "undefined") return false;
-  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
 }
 
-// Simple, dependency-free theme map
-const getTheme = (theme: CalendarTheme = "default") => {
+// Theme configurations
+const getThemeStyles = (theme: CalendarTheme) => {
   const themes = {
     default: {
       bg: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
       headerBg: "#f1f5f9",
       todayBg: "rgba(124,58,237,0.1)",
       accent: "#7c3aed",
+      text: "#374151",
     },
     spring: {
       bg: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #bbf7d0 100%)",
       headerBg: "#dcfce7",
       todayBg: "rgba(34,197,94,0.15)",
       accent: "#22c55e",
+      text: "#064e3b",
     },
     summer: {
       bg: "linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fbbf24 100%)",
       headerBg: "#fed7aa",
       todayBg: "rgba(245,158,11,0.15)",
       accent: "#f59e0b",
+      text: "#451a03",
     },
     autumn: {
       bg: "linear-gradient(135deg, #fff1f2 0%, #fecaca 50%, #fed7aa 100%)",
       headerBg: "#fecaca",
       todayBg: "rgba(239,68,68,0.15)",
       accent: "#ef4444",
+      text: "#450a0a",
     },
     winter: {
       bg: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #ddd6fe 100%)",
       headerBg: "#ede9fe",
       todayBg: "rgba(99,102,241,0.15)",
       accent: "#6366f1",
+      text: "#1e1b4b",
     },
     nature: {
       bg: "linear-gradient(135deg, #f7fee7 0%, #ecfdf5 50%, #d1fae5 100%)",
       headerBg: "#ecfdf5",
       todayBg: "rgba(132,204,22,0.15)",
       accent: "#84cc16",
+      text: "#14532d",
     },
     ocean: {
       bg: "linear-gradient(135deg, #f0f9ff 0%, #ecfeff 50%, #bae6fd 100%)",
       headerBg: "#e0f2fe",
       todayBg: "rgba(14,165,233,0.15)",
       accent: "#0ea5e9",
+      text: "#082f49",
     },
   };
   return themes[theme];
+};
+
+// Moon phase emoji mapper
+const getMoonEmoji = (phase: string) => {
+  switch (phase) {
+    case 'moon-new': return '🌑';
+    case 'moon-first': return '🌓';
+    case 'moon-full': return '🌕';
+    case 'moon-last': return '🌗';
+    default: return '🌙';
+  }
 };
 
 export default function CalendarGrid({
@@ -128,7 +135,6 @@ export default function CalendarGrid({
   moonEvents,
   showMoon,
   showWeather = false,
-  temperatureUnit = "celsius",
   theme = "default",
   date,
   setDate,
@@ -138,286 +144,267 @@ export default function CalendarGrid({
   onSelectEvent,
   onDrop,
   onResize,
-  externalDragType = "none",
+  externalDragType = 'none',
   externalDragTitle,
   onExternalDrop,
 }: Props) {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const themeStyles = getThemeStyles(theme);
 
-  const dbUiEvents = useMemo<UiEvent[]>(
-    () =>
-      (dbEvents || []).map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        start: new Date(e.start_time),
-        end: new Date(e.end_time),
-        allDay: false,
-        resource: e,
-      })),
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Convert DB events to UI events
+  const dbUiEvents = useMemo<UiEvent[]>(() => 
+    (dbEvents || []).map((e: DBEvent) => ({
+      id: e.id,
+      title: e.title,
+      start: new Date(e.start_time),
+      end: new Date(e.end_time),
+      allDay: false,
+      resource: e,
+    })),
     [dbEvents]
   );
 
-  const mergedEvents = useMemo(
-    () => [...dbUiEvents, ...(showMoon ? moonEvents : [])],
-    [dbUiEvents, moonEvents, showMoon]
-  );
+  // Merge regular events with moon events
+  const allEvents = useMemo(() => {
+    const events = [...dbUiEvents];
+    if (showMoon) {
+      events.push(...moonEvents);
+    }
+    return events;
+  }, [dbUiEvents, moonEvents, showMoon]);
 
-  const themeConfig = getTheme(theme);
+  // Event styling based on type
+  const eventStyleGetter = (event: UiEvent): any => {
+    const resource = event.resource as any;
 
-  const eventPropGetter = (event: UiEvent) => {
-    const r: any = event.resource || {};
-    if (r?.event_type === "reminder") {
+    // Moon phase events
+    if (resource?.moonPhase) {
       return {
         style: {
-          background: "#fbbf24",
-          border: "1px solid #f59e0b",
-          borderRadius: "6px",
-          color: "#92400e",
-          cursor: "pointer",
-          fontWeight: 600,
-          fontSize: "11px",
+          backgroundColor: 'transparent',
+          border: 'none',
+          color: themeStyles.text,
+          fontSize: '20px',
+          textAlign: 'center',
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         },
       };
     }
-    if (r?.event_type === "todo") {
+
+    // Reminder events
+    if (resource?.event_type === 'reminder') {
       return {
         style: {
-          background: "#34d399",
-          border: "1px solid #10b981",
-          borderRadius: "6px",
-          color: "#064e3b",
-          cursor: "pointer",
-          fontWeight: 600,
-          fontSize: "11px",
+          backgroundColor: '#fbbf24',
+          borderLeft: '4px solid #f59e0b',
+          borderRadius: '6px',
+          color: '#92400e',
+          fontWeight: '600',
         },
       };
     }
-    if (r?.source === "business") {
+
+    // Todo events
+    if (resource?.event_type === 'todo') {
       return {
         style: {
-          background: "#e5e7eb",
-          border: "2px solid #7c3aed",
-          borderRadius: "6px",
-          color: "#374151",
-          cursor: "pointer",
-          fontWeight: 700,
-          fontSize: "11px",
+          backgroundColor: '#34d399',
+          borderLeft: '4px solid #10b981',
+          borderRadius: '6px',
+          color: '#064e3b',
+          fontWeight: '600',
         },
       };
     }
-    if (r?.by_friend) {
+
+    // Business events
+    if (resource?.source === 'business') {
       return {
         style: {
-          background: "#c7d2fe",
-          border: "1px solid #8b5cf6",
-          borderRadius: "6px",
-          color: "#5b21b6",
-          cursor: "pointer",
-          fontWeight: r?.rsvp_me ? 700 : 500,
-          fontSize: "11px",
+          backgroundColor: '#1f2937',
+          border: '2px solid #7c3aed',
+          borderRadius: '6px',
+          color: '#ffffff',
+          fontWeight: '700',
         },
       };
     }
+
+    // Friend events
+    if (resource?.created_by && resource.created_by !== resource.current_user_id) {
+      return {
+        style: {
+          backgroundColor: '#dbeafe',
+          borderLeft: '4px solid #3b82f6',
+          borderRadius: '6px',
+          color: '#1e40af',
+        },
+      };
+    }
+
+    // Default (user's own events)
     return {
       style: {
-        background: "#93c5fd",
-        border: "1px solid #3b82f6",
-        borderRadius: "6px",
-        color: "#1e40af",
-        cursor: "pointer",
-        fontWeight: r?.rsvp_me ? 700 : 500,
-        fontSize: "11px",
+        backgroundColor: themeStyles.accent,
+        borderRadius: '6px',
+        color: '#ffffff',
+        fontWeight: '500',
       },
     };
   };
 
-  const Backend = isTouchDevice() ? TouchBackend : HTML5Backend;
+  // Custom event component for moon phases
+  const EventComponent = ({ event }: EventProps<UiEvent>) => {
+    const resource = event.resource as any;
+    if (resource?.moonPhase) {
+      return <div>{getMoonEmoji(resource.moonPhase)}</div>;
+    }
+    return <div>{event.title}</div>;
+  };
+
+  // Handle external drop (from sidebar)
+  const handleDropFromOutside = ({ start, end, allDay }: any) => {
+    if (onExternalDrop && externalDragType !== 'none') {
+      onExternalDrop(
+        { start, end, allDay },
+        externalDragType as 'reminder' | 'todo'
+      );
+    }
+  };
 
   if (!mounted) {
     return (
-      <div className="card p-3">
-        <div
-          style={{
-            height: "680px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div>Loading calendar...</div>
-        </div>
+      <div className="flex items-center justify-center h-[650px]">
+        <div className="animate-pulse text-gray-500">Loading calendar...</div>
       </div>
     );
   }
 
   return (
-    <div
-      className="themed-calendar-wrapper"
+    <div 
+      className="calendar-wrapper rounded-xl overflow-hidden shadow-lg"
       style={{
-        background: themeConfig.bg,
-        borderRadius: "16px",
-        padding: "16px",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-        position: "relative",
+        background: themeStyles.bg,
+        padding: '1rem',
       }}
     >
-      {/* Optional overlays – display only, never affect hooks */}
-      {showWeather && view === "month" && (
-        <div
-          style={{
-            position: "absolute",
-            top: "24px",
-            right: "24px",
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(8px)",
-            borderRadius: "12px",
-            padding: "8px 12px",
-            fontSize: "12px",
-            fontWeight: 600,
-            color: "#374151",
-            border: "1px solid rgba(255,255,255,0.5)",
-            zIndex: 10,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          }}
-        >
-          ☀️ 22°{temperatureUnit === "celsius" ? "C" : "F"}
-        </div>
-      )}
-
-      {showMoon && view === "month" && (
-        <div
-          style={{
-            position: "absolute",
-            top: "24px",
-            left: "24px",
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(8px)",
-            borderRadius: "12px",
-            padding: "8px 12px",
-            fontSize: "14px",
-            border: "1px solid rgba(255,255,255,0.5)",
-            zIndex: 10,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          }}
-        >
-          🌕
-        </div>
-      )}
-
-      <DndProvider
-        backend={Backend as any}
-        options={isTouchDevice() ? { enableMouseEvents: true } : undefined}
-      >
-        <DnDCalendar
-          localizer={localizer}
-          events={mergedEvents}
-          startAccessor="start"
-          endAccessor="end"
-          selectable
-          resizable
-          popup
-          style={{
-            height: 650,
-            background: "rgba(255,255,255,0.8)",
-            borderRadius: "12px",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-          }}
-          view={view}
-          onView={setView}
-          date={date}
-          onNavigate={setDate}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
-          onDoubleClickEvent={onSelectEvent}
-          onEventDrop={onDrop}
-          onEventResize={onResize}
-          step={30}
-          timeslots={2}
-          longPressThreshold={100}
-          scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
-          eventPropGetter={eventPropGetter}
-          dragFromOutsideItem={
-            externalDragType !== "none"
-              ? () => ({
-                  title:
-                    externalDragTitle ||
-                    (externalDragType === "reminder" ? "Reminder" : "To-do"),
-                })
-              : undefined
-          }
-          onDropFromOutside={
-            externalDragType !== "none" && onExternalDrop
-              ? ({ start, end, allDay }) =>
-                  onExternalDrop(
-                    { start, end, allDay },
-                    externalDragType as Exclude<
-                      NonNullable<Props["externalDragType"]>,
-                      "none"
-                    >
-                  )
-              : undefined
-          }
-          onDragOver={(e: any) => {
-            e.preventDefault();
-          }}
-        />
-      </DndProvider>
+      <DnDCalendar
+        localizer={localizer}
+        events={allEvents}
+        view={view}
+        date={date}
+        onView={setView}
+        onNavigate={setDate}
+        onSelectSlot={onSelectSlot}
+        onSelectEvent={onSelectEvent}
+        onEventDrop={onDrop}
+        onEventResize={onResize}
+        onDropFromOutside={handleDropFromOutside}
+        eventPropGetter={eventStyleGetter}
+        components={{
+          event: EventComponent,
+        }}
+        selectable
+        resizable
+        popup
+        dragFromOutsideItem={
+          externalDragType !== 'none'
+            ? () => ({ title: externalDragTitle || `New ${externalDragType}` })
+            : undefined
+        }
+        style={{ 
+          height: 650,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: '12px',
+        }}
+        views={['month', 'week', 'day']}
+        step={30}
+        timeslots={2}
+        scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
+      />
 
       <style jsx global>{`
-        .themed-calendar-wrapper .rbc-header {
-          background: ${themeConfig.headerBg} !important;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+        .calendar-wrapper .rbc-header {
+          background: ${themeStyles.headerBg} !important;
           padding: 12px 8px !important;
           font-weight: 600 !important;
-          color: #374151 !important;
-          font-size: 13px !important;
+          color: ${themeStyles.text} !important;
         }
-        .themed-calendar-wrapper .rbc-today {
-          background: ${themeConfig.todayBg} !important;
+
+        .calendar-wrapper .rbc-today {
+          background: ${themeStyles.todayBg} !important;
         }
-        .themed-calendar-wrapper .rbc-toolbar {
+
+        .calendar-wrapper .rbc-toolbar {
           margin-bottom: 16px !important;
-          padding: 0 8px !important;
-        }
-        .themed-calendar-wrapper .rbc-toolbar button {
-          border: 1px solid rgba(0, 0, 0, 0.1) !important;
+          padding: 12px !important;
           background: rgba(255, 255, 255, 0.9) !important;
-          color: #374151 !important;
           border-radius: 8px !important;
-          padding: 8px 12px !important;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+        }
+
+        .calendar-wrapper .rbc-toolbar button {
+          background: white !important;
+          border: 1px solid #e5e7eb !important;
+          border-radius: 6px !important;
+          padding: 6px 12px !important;
+          color: ${themeStyles.text} !important;
           font-weight: 500 !important;
           transition: all 0.2s ease !important;
-          margin: 0 2px !important;
         }
-        .themed-calendar-wrapper .rbc-toolbar button:hover {
-          background: rgba(255, 255, 255, 1) !important;
-          transform: translateY(-1px) !important;
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
-        }
-        .themed-calendar-wrapper .rbc-toolbar button.rbc-active {
-          background: ${themeConfig.accent} !important;
+
+        .calendar-wrapper .rbc-toolbar button:hover {
+          background: ${themeStyles.accent} !important;
           color: white !important;
-          border-color: ${themeConfig.accent} !important;
+          border-color: ${themeStyles.accent} !important;
+          transform: translateY(-1px) !important;
         }
-        .themed-calendar-wrapper .rbc-day-bg:hover {
-          background: rgba(255, 255, 255, 0.5) !important;
-          transition: background 0.2s ease !important;
+
+        .calendar-wrapper .rbc-toolbar button.rbc-active {
+          background: ${themeStyles.accent} !important;
+          color: white !important;
+          border-color: ${themeStyles.accent} !important;
         }
-        .themed-calendar-wrapper .rbc-slot-selection {
-          background: rgba(124, 58, 237, 0.15) !important;
-          border: 2px dashed #7c3aed !important;
-          border-radius: 4px !important;
+
+        .calendar-wrapper .rbc-event {
+          padding: 3px 5px !important;
+          font-size: 12px !important;
         }
-        @media (max-width: 768px) {
-          .themed-calendar-wrapper .rbc-toolbar {
+
+        .calendar-wrapper .rbc-day-bg:hover {
+          background: rgba(0, 0, 0, 0.03) !important;
+        }
+
+        .calendar-wrapper .rbc-slot-selection {
+          background: ${themeStyles.accent}33 !important;
+          border: 2px dashed ${themeStyles.accent} !important;
+        }
+
+        .calendar-wrapper .rbc-off-range-bg {
+          background: #f9fafb !important;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 640px) {
+          .calendar-wrapper .rbc-toolbar {
             flex-direction: column !important;
             gap: 8px !important;
           }
-          .themed-calendar-wrapper .rbc-toolbar .rbc-btn-group {
-            display: flex !important;
-            justify-content: center !important;
-            gap: 4px !important;
+
+          .calendar-wrapper .rbc-toolbar-label {
+            margin: 8px 0 !important;
+          }
+
+          .calendar-wrapper .rbc-event {
+            font-size: 10px !important;
+            padding: 2px 3px !important;
           }
         }
       `}</style>
