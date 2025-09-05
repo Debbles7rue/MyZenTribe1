@@ -1,141 +1,191 @@
-// app/meditation/page.tsx - Meditation Lobby
+// app/meditation/room/page.tsx
 "use client";
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-// Brand Blessing - Hidden blessing embedded in code
-/**
- * MyZenTribe — Brand Blessing (v1)
- * Embedded in code and optionally displayed in the UI.
- * Safe to import anywhere in the app.
- */
-export const BLESSING_ID = "mzt-blessing-v1";
-export const BLESSING_TEXT = `
-My intention for this site is to bring people together for community, love, support, and fun.
-I draw in light from above to dedicate this work for the collective spread of healing, love,
-and new opportunities that will enrich the lives of many. I send light, love, and protection
-to every user who joins. May this bring hope and inspiration to thousands, if not millions,
-around the world. And so it is done, and so it is done.
-`.trim();
-
-// Background options with proper image paths
+// Background options
 const MEDITATION_BACKGROUNDS = [
   { 
     id: 'sunset', 
     name: 'Golden Sunset', 
     image: '/mz/sunset.jpg', 
-    description: 'Peaceful golden hour',
-    overlay: 'linear-gradient(rgba(245,158,11,0.1), rgba(217,119,6,0.2))'
+    audio: '/audio/sunset-meditation.mp3',
+    description: 'Peaceful golden hour'
   },
   { 
     id: 'river', 
     name: 'Flowing River', 
     image: '/mz/forest-creek.gif', 
-    description: 'Gentle flowing water',
-    overlay: 'linear-gradient(rgba(34,197,94,0.1), rgba(21,128,61,0.2))'
+    audio: '/audio/water-flow.mp3',
+    description: 'Gentle flowing water'
   },
   { 
     id: 'mandala', 
     name: 'Sacred Mandala', 
     image: '/mz/patterns.jpg', 
-    description: 'Swirling sacred geometry',
-    overlay: 'linear-gradient(rgba(147,51,234,0.1), rgba(126,34,206,0.2))'
+    audio: '/audio/sacred-tones.mp3',
+    description: 'Swirling sacred geometry'
   },
   { 
     id: 'beach', 
     name: 'Ocean Waves', 
     image: '/mz/beach.jpg', 
-    description: 'Peaceful shoreline',
-    overlay: 'linear-gradient(rgba(14,165,233,0.1), rgba(3,105,161,0.2))'
+    audio: '/audio/ocean-waves.mp3',
+    description: 'Peaceful shoreline'
   },
   { 
     id: 'forest', 
     name: 'Forest Creek', 
     image: '/mz/forest-creek.gif', 
-    description: 'Tranquil forest stream',
-    overlay: 'linear-gradient(rgba(34,197,94,0.1), rgba(21,128,61,0.2))'
+    audio: '/audio/forest-sounds.mp3',
+    description: 'Tranquil forest stream'
   },
   { 
     id: 'candle', 
     name: 'Candlelight', 
     image: '/mz/candle-room.jpg', 
-    description: 'Warm candlelit space',
-    overlay: 'linear-gradient(rgba(245,158,11,0.1), rgba(217,119,6,0.2))'
+    audio: '/audio/meditation-bells.mp3',
+    description: 'Warm candlelit space'
   },
 ];
 
-function MeditationContent() {
+// Healing frequencies in Hz
+const HEALING_FREQUENCIES = [
+  { name: 'Silent', freq: 0, description: 'Pure silence' },
+  { name: '396 Hz', freq: 396, description: 'Liberation from fear' },
+  { name: '417 Hz', freq: 417, description: 'Undoing situations' },
+  { name: '528 Hz', freq: 528, description: 'DNA repair, love frequency' },
+  { name: '639 Hz', freq: 639, description: 'Connecting relationships' },
+  { name: '741 Hz', freq: 741, description: 'Awakening intuition' },
+  { name: '852 Hz', freq: 852, description: 'Returning to spiritual order' },
+  { name: '963 Hz', freq: 963, description: 'Crown chakra activation' },
+];
+
+function MeditationRoomContent() {
   const searchParams = useSearchParams();
+  const backgroundId = searchParams.get('bg') || 'sunset';
   const eventId = searchParams.get('eventId');
-  const [isLoading, setIsLoading] = useState(true);
+  
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedBackground, setSelectedBackground] = useState('sunset');
-  const [isJoined, setIsJoined] = useState(false);
-  const [showAnonymous, setShowAnonymous] = useState(false);
-  const [tribePulse, setTribePulse] = useState(0);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [sessionDuration, setSessionDuration] = useState(0);
+  const [isActive, setIsActive] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [selectedFrequency, setSelectedFrequency] = useState(528);
+  const [volume, setVolume] = useState(0.3);
+  const [collectiveTime, setCollectiveTime] = useState(0);
+  const [dailyGoal, setDailyGoal] = useState(24 * 60); // 24 hours in minutes
+  const [todaysProgress, setTodaysProgress] = useState(0);
   const [activeParticipants, setActiveParticipants] = useState(0);
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorRef = useRef<OscillatorNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const currentBg = MEDITATION_BACKGROUNDS.find(bg => bg.id === backgroundId) || MEDITATION_BACKGROUNDS[0];
 
   useEffect(() => {
-    initializeMeditation();
+    initializeSession();
+    setupAudioContext();
+    
+    return () => {
+      cleanupSession();
+      cleanupAudio();
+    };
   }, []);
 
-  const initializeMeditation = async () => {
+  // Update session timer
+  useEffect(() => {
+    if (isActive && sessionStartTime) {
+      intervalRef.current = setInterval(() => {
+        const now = new Date();
+        const duration = Math.floor((now.getTime() - sessionStartTime.getTime()) / 1000);
+        setSessionDuration(duration);
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isActive, sessionStartTime]);
+
+  // Auto-hide controls
+  useEffect(() => {
+    const resetHideTimer = () => {
+      if (hideControlsTimeoutRef.current) {
+        clearTimeout(hideControlsTimeoutRef.current);
+      }
+      setShowControls(true);
+      hideControlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 5000);
+    };
+
+    const handleMouseMove = () => resetHideTimer();
+    const handleKeyPress = () => resetHideTimer();
+
+    if (isActive) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('keydown', handleKeyPress);
+      resetHideTimer();
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('keydown', handleKeyPress);
+      if (hideControlsTimeoutRef.current) {
+        clearTimeout(hideControlsTimeoutRef.current);
+      }
+    };
+  }, [isActive]);
+
+  const initializeSession = async () => {
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-
-      // Load user's preferred background
-      if (user) {
-        const { data: settings } = await supabase
-          .from('meditation_settings')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (settings?.bg_key) {
-          setSelectedBackground(settings.bg_key);
-        }
-      }
-
-      // Calculate tribe pulse (24h meditation coverage)
-      await calculateTribePulse();
       
-      // Get current active participants
+      await loadCollectiveStats();
       await getActiveParticipants();
-
-      // Load recent lobby chat messages
-      await loadChatMessages();
-
     } catch (error) {
-      console.error('Meditation initialization error:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Session initialization error:', error);
     }
   };
 
-  const calculateTribePulse = async () => {
+  const loadCollectiveStats = async () => {
     try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      const { data: sessions } = await supabase
+      const { data: todaySessions } = await supabase
         .from('meditation_presence')
         .select('joined_at, left_at')
-        .gte('joined_at', twentyFourHoursAgo);
+        .gte('joined_at', today.toISOString());
 
-      if (sessions) {
-        // Calculate coverage percentage (simplified)
-        const totalMinutes = 24 * 60;
-        const coveredMinutes = sessions.length * 15; // Assume average 15 min sessions
-        const coverage = Math.min((coveredMinutes / totalMinutes) * 100, 100);
-        setTribePulse(Math.round(coverage));
+      if (todaySessions) {
+        const totalMinutes = todaySessions.reduce((total, session) => {
+          if (session.left_at) {
+            const duration = new Date(session.left_at).getTime() - new Date(session.joined_at).getTime();
+            return total + (duration / (1000 * 60));
+          }
+          return total;
+        }, 0);
+        
+        setTodaysProgress(Math.round(totalMinutes));
+        setCollectiveTime(Math.round(totalMinutes));
       }
     } catch (error) {
-      console.error('Pulse calculation error:', error);
+      console.error('Collective stats error:', error);
     }
   };
 
@@ -155,394 +205,306 @@ function MeditationContent() {
     }
   };
 
-  const loadChatMessages = async () => {
-    try {
-      const { data: messages } = await supabase
-        .from('lobby_chat')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      setChatMessages(messages || []);
-    } catch (error) {
-      console.error('Chat messages error:', error);
+  const setupAudioContext = () => {
+    if (typeof window !== 'undefined') {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+      gainNodeRef.current.gain.value = volume;
     }
   };
 
-  const sendChatMessage = async () => {
-    if (!chatMessage.trim() || !currentUser) return;
+  const startFrequency = () => {
+    if (!audioContextRef.current || selectedFrequency === 0) return;
+    
+    stopFrequency();
+    
+    oscillatorRef.current = audioContextRef.current.createOscillator();
+    oscillatorRef.current.type = 'sine';
+    oscillatorRef.current.frequency.setValueAtTime(selectedFrequency, audioContextRef.current.currentTime);
+    oscillatorRef.current.connect(gainNodeRef.current!);
+    oscillatorRef.current.start();
+  };
 
-    try {
-      const { error } = await supabase
-        .from('lobby_chat')
-        .insert({
-          user_id: showAnonymous ? null : currentUser.id,
-          message: chatMessage.trim(),
-          is_anonymous: showAnonymous
-        });
-
-      if (!error) {
-        setChatMessage('');
-        await loadChatMessages();
-      }
-    } catch (error) {
-      console.error('Send message error:', error);
+  const stopFrequency = () => {
+    if (oscillatorRef.current) {
+      oscillatorRef.current.stop();
+      oscillatorRef.current.disconnect();
+      oscillatorRef.current = null;
     }
   };
 
-  const joinMeditation = async () => {
-    if (!currentUser || !selectedBackground) {
-      alert('Please select a sacred environment first');
-      return;
-    }
+  const startMeditation = async () => {
+    if (!currentUser) return;
 
     try {
-      const { error } = await supabase
+      setSessionStartTime(new Date());
+      setIsActive(true);
+
+      // Record session start
+      await supabase
         .from('meditation_presence')
         .insert({
-          user_id: showAnonymous ? null : currentUser.id,
-          is_anonymous: showAnonymous,
-          joined_at: new Date().toISOString(),
-          session_id: eventId || 'general',
-          background_choice: selectedBackground
-        });
-
-      if (!error) {
-        setIsJoined(true);
-        await getActiveParticipants();
-        // Redirect to actual meditation room
-        window.location.href = `/meditation/room?bg=${selectedBackground}&eventId=${eventId || ''}`;
-      }
-    } catch (error) {
-      console.error('Join meditation error:', error);
-    }
-  };
-
-  const updateBackground = async (backgroundId: string) => {
-    setSelectedBackground(backgroundId);
-    
-    if (currentUser) {
-      // Save preference
-      await supabase
-        .from('meditation_settings')
-        .upsert({
           user_id: currentUser.id,
-          bg_key: backgroundId
+          session_id: eventId || 'general',
+          background_choice: backgroundId,
+          joined_at: new Date().toISOString()
         });
+
+      if (audioEnabled && selectedFrequency > 0) {
+        if (audioContextRef.current?.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+        startFrequency();
+      }
+
+      await getActiveParticipants();
+    } catch (error) {
+      console.error('Start meditation error:', error);
     }
   };
 
-  const currentBg = MEDITATION_BACKGROUNDS.find(bg => bg.id === selectedBackground) || MEDITATION_BACKGROUNDS[0];
+  const endMeditation = async () => {
+    if (!currentUser || !sessionStartTime) return;
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
-        <div className="text-amber-800 text-center">
-          <div className="relative mb-6">
-            <div className="animate-pulse w-16 h-16 bg-gradient-to-r from-amber-400 to-orange-400 rounded-full mx-auto"></div>
-            <div className="absolute inset-0 w-16 h-16 bg-gradient-to-r from-amber-400 to-orange-400 rounded-full mx-auto animate-ping opacity-20"></div>
-          </div>
-          <p className="text-lg">Opening the sacred lobby...</p>
-        </div>
-      </div>
-    );
-  }
+    try {
+      setIsActive(false);
+      stopFrequency();
+
+      // Record session end
+      await supabase
+        .from('meditation_presence')
+        .update({ left_at: new Date().toISOString() })
+        .eq('user_id', currentUser.id)
+        .is('left_at', null);
+
+      await loadCollectiveStats();
+      await getActiveParticipants();
+    } catch (error) {
+      console.error('End meditation error:', error);
+    }
+  };
+
+  const toggleAudio = async () => {
+    setAudioEnabled(!audioEnabled);
+    
+    if (!audioEnabled && selectedFrequency > 0) {
+      if (audioContextRef.current?.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      startFrequency();
+    } else {
+      stopFrequency();
+    }
+  };
+
+  const changeFrequency = (freq: number) => {
+    setSelectedFrequency(freq);
+    if (audioEnabled && freq > 0) {
+      stopFrequency();
+      setTimeout(startFrequency, 100);
+    } else if (freq === 0) {
+      stopFrequency();
+    }
+  };
+
+  const changeVolume = (newVolume: number) => {
+    setVolume(newVolume);
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = newVolume;
+    }
+  };
+
+  const cleanupSession = async () => {
+    if (isActive && currentUser) {
+      await endMeditation();
+    }
+  };
+
+  const cleanupAudio = () => {
+    stopFrequency();
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const progressPercentage = Math.min((todaysProgress / dailyGoal) * 100, 100);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 relative overflow-hidden">
-      
-      {/* Hidden protective shield background */}
+    <div 
+      className="fixed inset-0 overflow-hidden"
+      style={{
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.3)), url(${currentBg.image})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      {/* Hidden protective shield */}
       <div 
-        className="absolute inset-0 opacity-5 bg-center bg-no-repeat bg-contain pointer-events-none"
+        className="absolute inset-0 opacity-3 bg-center bg-no-repeat bg-contain pointer-events-none"
         style={{
           backgroundImage: 'url(/mz/shield.png)',
-          backgroundSize: '800px',
+          backgroundSize: '1200px',
           filter: 'sepia(100%) saturate(200%) hue-rotate(25deg)'
         }}
       />
-      
-      {/* Header with Tribe Pulse */}
-      <div className="relative z-10 p-4 md:p-6">
-        <div className="max-w-6xl mx-auto flex justify-between items-start">
-          <div className="text-amber-900">
-            <h1 className="text-2xl md:text-4xl font-bold mb-2 flex items-center gap-3">
-              <div className="relative">
-                <span className="text-3xl md:text-4xl">🧘</span>
-                <div className="absolute inset-0 animate-pulse bg-amber-300/30 rounded-full scale-150"></div>
-              </div>
-              Meditation Lobby
-            </h1>
-            <p className="text-amber-700 text-sm md:text-base">
-              Creating a continuous flow of healing energy into the world
-            </p>
-          </div>
 
-          {/* Tribe Pulse Display */}
-          <div className="text-center text-amber-900">
-            <div className="relative">
-              <svg className="w-16 h-16 md:w-20 md:h-20 transform -rotate-90">
-                <circle
-                  cx="50%"
-                  cy="50%"
-                  r="30"
-                  stroke="rgba(180,83,9,0.2)"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <circle
-                  cx="50%"
-                  cy="50%"
-                  r="30"
-                  stroke="url(#pulseGradient)"
-                  strokeWidth="4"
-                  fill="none"
-                  strokeDasharray={`${tribePulse * 1.88} 188`}
-                  className="transition-all duration-1000"
-                />
-                <defs>
-                  <linearGradient id="pulseGradient">
-                    <stop offset="0%" stopColor="#F59E0B" />
-                    <stop offset="100%" stopColor="#EA580C" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold">{tribePulse}%</span>
+      {/* Controls overlay */}
+      <div className={`absolute inset-0 z-10 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        
+        {/* Top Stats Bar */}
+        <div className="absolute top-0 left-0 right-0 bg-black/20 backdrop-blur-sm text-white p-4">
+          <div className="flex justify-between items-center max-w-6xl mx-auto">
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-sm opacity-75">Session Time</div>
+                <div className="text-xl font-bold">{formatTime(sessionDuration)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm opacity-75">Active Souls</div>
+                <div className="text-xl font-bold">{activeParticipants}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm opacity-75">Today's Collective</div>
+                <div className="text-xl font-bold">{Math.floor(collectiveTime)}m</div>
               </div>
             </div>
-            <p className="text-xs mt-1 opacity-75">24h Tribe Pulse</p>
+            
+            {/* Daily Goal Progress */}
+            <div className="text-center">
+              <div className="text-sm opacity-75 mb-1">24hr Goal Progress</div>
+              <div className="w-32 h-2 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-400 to-pink-400 transition-all duration-1000"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+              <div className="text-xs opacity-75 mt-1">{progressPercentage.toFixed(1)}%</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex flex-col lg:flex-row max-w-6xl mx-auto w-full p-4 gap-6">
-        
-        {/* Left Panel - Sacred Environment Selection */}
-        <div className="lg:w-80 space-y-6">
-          
-          {/* Background Selector - Must Choose First */}
-          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
-            <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
-              🌅 Choose Your Sacred Environment
-            </h3>
-            <p className="text-amber-700 text-sm mb-4">
-              Select your meditation backdrop before entering
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {MEDITATION_BACKGROUNDS.map((bg) => (
+        {/* Center Controls */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center text-white">
+            {!isActive ? (
+              <div className="space-y-6">
+                <h1 className="text-4xl font-bold mb-2">{currentBg.name}</h1>
+                <p className="text-xl opacity-90 mb-8">{currentBg.description}</p>
                 <button
-                  key={bg.id}
-                  onClick={() => updateBackground(bg.id)}
-                  className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedBackground === bg.id 
-                      ? 'border-amber-500 ring-2 ring-amber-400/50 shadow-lg' 
-                      : 'border-amber-200 hover:border-amber-300'
-                  }`}
+                  onClick={startMeditation}
+                  disabled={!currentUser}
+                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl hover:from-purple-700 hover:to-pink-700 transition-all font-medium text-lg transform hover:scale-105 disabled:opacity-50"
                 >
-                  <img
-                    src={bg.image}
-                    alt={bg.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Fallback for missing images
-                      e.currentTarget.style.display = 'none';
-                      e.currentTarget.nextElementSibling!.textContent = bg.name;
-                    }}
-                  />
-                  <div 
-                    className="absolute inset-0 flex items-end p-2"
-                    style={{ background: bg.overlay }}
-                  >
-                    <span className="text-white text-xs font-medium drop-shadow-sm">{bg.name}</span>
-                  </div>
-                  {selectedBackground === bg.id && (
-                    <div className="absolute top-1 right-1">
-                      <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-xs">✓</span>
-                      </div>
-                    </div>
-                  )}
+                  {currentUser ? 'Begin Sacred Practice' : 'Sign in to Meditate'}
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="w-32 h-32 mx-auto bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-4xl animate-pulse">
+                  ✨
+                </div>
+                <div className="text-2xl font-bold">In Meditation</div>
+                <div className="text-lg opacity-90">Breathe deeply. Feel the collective energy.</div>
+                <button
+                  onClick={endMeditation}
+                  className="px-6 py-3 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all font-medium"
+                >
+                  Complete Practice
+                </button>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Join Controls */}
-          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
-            <h3 className="text-amber-900 font-semibold mb-4">Enter Sacred Space</h3>
-            
-            <div className="space-y-4">
-              <label className="flex items-center text-amber-800 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showAnonymous}
-                  onChange={(e) => setShowAnonymous(e.target.checked)}
-                  className="mr-2 rounded accent-amber-500"
-                />
-                Join anonymously
-              </label>
-              
+        {/* Audio Controls - Bottom Left */}
+        <div className="absolute bottom-4 left-4 bg-black/20 backdrop-blur-sm rounded-2xl p-4 text-white">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm">🎵</span>
               <button
-                onClick={joinMeditation}
-                disabled={!currentUser || !selectedBackground}
-                className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={toggleAudio}
+                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                  audioEnabled ? 'bg-purple-600' : 'bg-white/20'
+                }`}
               >
-                {!currentUser 
-                  ? 'Sign in to Join' 
-                  : !selectedBackground 
-                  ? 'Choose Environment First'
-                  : 'Begin Meditation'
-                }
+                {audioEnabled ? 'Audio On' : 'Audio Off'}
               </button>
             </div>
             
-            <div className="mt-4 pt-4 border-t border-amber-200">
-              <p className="text-amber-700 text-sm">
-                {activeParticipants} {activeParticipants === 1 ? 'soul' : 'souls'} currently meditating
-              </p>
-            </div>
-          </div>
-
-          {/* Light a Candle Link */}
-          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
-            <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
-              🕯️ Light a Candle
-            </h3>
-            <p className="text-amber-700 text-sm mb-4">
-              Send healing light for a loved one
-            </p>
-            <a
-              href="/candles"
-              className="block w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium text-center"
-            >
-              Visit Candle Room
-            </a>
-          </div>
-        </div>
-
-        {/* Center - Preview */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-amber-900 max-w-md">
-            {eventId && (
-              <div className="mb-8 p-4 bg-white/60 rounded-lg backdrop-blur-sm border border-amber-200">
-                <p className="text-lg font-semibold">Group Meditation Session</p>
-                <p className="text-sm opacity-75">Event ID: {eventId}</p>
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {/* Preview of selected background */}
-              <div className="relative">
-                <div 
-                  className="w-48 h-32 mx-auto rounded-2xl overflow-hidden border-4 border-amber-300 shadow-xl"
-                  style={{
-                    backgroundImage: `${currentBg.overlay}, url(${currentBg.image})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  }}
-                >
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-white text-2xl drop-shadow-lg">🧘</div>
-                  </div>
-                </div>
-                <div className="absolute -inset-2 border-2 border-amber-400 rounded-2xl animate-pulse opacity-30"></div>
-              </div>
-              
-              <div>
-                <h2 className="text-2xl font-bold mb-2">
-                  {selectedBackground ? `${currentBg.name} Selected` : 'Choose Your Environment'}
-                </h2>
-                <p className="text-amber-700">
-                  {selectedBackground 
-                    ? 'Ready to begin your meditation journey'
-                    : 'Select a sacred environment to start'
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Panel - Lobby Chat */}
-        <div className="lg:w-80">
-          <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-amber-200 shadow-lg h-96 flex flex-col">
-            <div className="p-4 border-b border-amber-200">
-              <h3 className="text-amber-900 font-semibold flex items-center gap-2">
-                💝 Share What's On Your Heart
-              </h3>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {chatMessages.length === 0 ? (
-                <div className="text-amber-600 text-sm text-center py-8">
-                  Be the first to share what's on your heart...
-                </div>
-              ) : (
-                chatMessages.slice().reverse().map((msg, index) => (
-                  <div key={index} className="text-sm">
-                    <div className="font-medium text-amber-800">
-                      {msg.is_anonymous ? 'Anonymous Soul' : (msg.user_name || 'Friend')}
-                    </div>
-                    <div className="text-amber-700">{msg.message}</div>
-                    <div className="text-xs text-amber-600 opacity-75">
-                      {new Date(msg.created_at).toLocaleTimeString()}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            
-            {currentUser && (
-              <div className="p-4 border-t border-amber-200">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
-                    placeholder="Share your heart..."
-                    className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    maxLength={200}
-                  />
-                  <button
-                    onClick={sendChatMessage}
-                    disabled={!chatMessage.trim()}
-                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+            {audioEnabled && (
+              <>
+                <div>
+                  <div className="text-xs opacity-75 mb-2">Healing Frequency</div>
+                  <select
+                    value={selectedFrequency}
+                    onChange={(e) => changeFrequency(Number(e.target.value))}
+                    className="bg-black/40 border border-white/20 rounded px-2 py-1 text-sm w-full"
                   >
-                    💝
-                  </button>
+                    {HEALING_FREQUENCIES.map(freq => (
+                      <option key={freq.freq} value={freq.freq}>
+                        {freq.name} - {freq.description}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
+                
+                <div>
+                  <div className="text-xs opacity-75 mb-2">Volume</div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={volume}
+                    onChange={(e) => changeVolume(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
+
+        {/* Exit Button - Bottom Right */}
+        <div className="absolute bottom-4 right-4">
+          <a
+            href="/meditation"
+            className="px-4 py-2 bg-black/20 backdrop-blur-sm text-white rounded-lg hover:bg-black/30 transition-colors"
+          >
+            ← Exit to Lobby
+          </a>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="relative z-10 p-4 text-center">
-        <a 
-          href="/calendar"
-          className="inline-flex items-center gap-2 text-amber-700 hover:text-amber-900 transition-colors"
-        >
-          ← Back to Calendar
-        </a>
-      </div>
+      {/* Invisible click area to show controls */}
+      <div 
+        className="absolute inset-0 z-0"
+        onMouseMove={() => setShowControls(true)}
+        onClick={() => setShowControls(true)}
+      />
     </div>
   );
 }
 
-export default function MeditationLobbyPage() {
+export default function MeditationRoomPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
-        <div className="text-amber-800 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
-          <p>Opening sacred lobby...</p>
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Entering sacred space...</p>
         </div>
       </div>
     }>
-      <MeditationContent />
+      <MeditationRoomContent />
     </Suspense>
   );
 }
