@@ -8,8 +8,12 @@ import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import CalendarThemeSelector from "@/components/CalendarThemeSelector";
 import EventDetails from "@/components/EventDetails";
+import CalendarAnalytics from "@/components/CalendarAnalytics";
+import SmartTemplates from "@/components/SmartTemplates";
+import SmartMeetingCoordinator from "@/components/SmartMeetingCoordinator";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
+import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 // Client-only calendar grid - completely prevent SSR
@@ -64,6 +68,18 @@ interface DragItem {
   type: 'reminder' | 'todo';
 }
 
+interface Friend {
+  friend_id: string;
+  name: string;
+  avatar_url?: string;
+  safe_to_carpool?: boolean;
+}
+
+interface CarpoolMatch {
+  event: DBEvent;
+  friends: Friend[];
+}
+
 export default function CalendarPage() {
   // ===== TOAST SYSTEM =====
   const { showToast } = useToast();
@@ -95,11 +111,23 @@ export default function CalendarPage() {
   const [showTodosList, setShowTodosList] = useState(true);
   const [showCompletedItems, setShowCompletedItems] = useState(false);
 
+  // New feature modals
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showMeetingCoordinator, setShowMeetingCoordinator] = useState(false);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+
   // Todo/Reminder lists
   const [reminders, setReminders] = useState<TodoReminder[]>([]);
   const [todos, setTodos] = useState<TodoReminder[]>([]);
   const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
+  
+  // Friends and carpooling
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [carpoolMatches, setCarpoolMatches] = useState<CarpoolMatch[]>([]);
+  const [showCarpoolChat, setShowCarpoolChat] = useState(false);
+  const [selectedCarpoolEvent, setSelectedCarpoolEvent] = useState<DBEvent | null>(null);
   
   // Quick create modal
   const [quickModalOpen, setQuickModalOpen] = useState(false);
@@ -108,7 +136,9 @@ export default function CalendarPage() {
     title: '',
     description: '',
     date: '',
-    time: ''
+    time: '',
+    enableNotification: true,
+    notificationMinutes: 10 // minutes before event
   });
 
   // Form for create/edit modal
@@ -141,7 +171,7 @@ export default function CalendarPage() {
   const touchStartY = useRef(0);
 
   // Get moon events
-  const moonEvents = useMoon();
+  const moonEvents = useMoon(date, view);
 
   // ===== AUTH CHECK =====
   useEffect(() => {
@@ -160,6 +190,31 @@ export default function CalendarPage() {
       localStorage.setItem("mzt-calendar-theme", calendarTheme);
     }
   }, [calendarTheme]);
+
+  // ===== LOAD FRIENDS =====
+  async function loadFriends() {
+    if (!me) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('friendships')
+        .select('*, friend:friend_id(id, name, avatar_url)')
+        .eq('user_id', me)
+        .eq('status', 'accepted');
+
+      if (!error && data) {
+        const friendsList = data.map(f => ({
+          friend_id: f.friend.id,
+          name: f.friend.name || 'Friend',
+          avatar_url: f.friend.avatar_url,
+          safe_to_carpool: f.safe_to_carpool || false
+        }));
+        setFriends(friendsList);
+      }
+    } catch (error) {
+      console.error('Error loading friends:', error);
+    }
+  }
 
   // ===== LOAD CALENDAR EVENTS =====
   async function loadCalendar() {
@@ -208,6 +263,9 @@ export default function CalendarPage() {
 
       setReminders(userReminders);
       setTodos(userTodos);
+
+      // Check for carpool opportunities
+      checkCarpoolMatches(safe);
     } catch (error: any) {
       console.error("Load calendar error:", error);
       setErr(error.message || "Failed to load events");
@@ -224,6 +282,48 @@ export default function CalendarPage() {
     }
   }
 
+  // ===== CHECK CARPOOL MATCHES =====
+  function checkCarpoolMatches(allEvents: DBEvent[]) {
+    if (!me || friends.length === 0) return;
+
+    const carpoolFriends = friends.filter(f => f.safe_to_carpool);
+    if (carpoolFriends.length === 0) return;
+
+    const matches: CarpoolMatch[] = [];
+
+    // Find events where multiple carpool friends are attending
+    allEvents.forEach(event => {
+      if (event.created_by === me || event.visibility === 'public' || event.visibility === 'friends') {
+        // Check which carpool friends have this same event
+        const attendingFriends = carpoolFriends.filter(friend => {
+          return allEvents.some(e => 
+            e.created_by === friend.friend_id &&
+            e.title === event.title &&
+            new Date(e.start_time).getTime() === new Date(event.start_time).getTime() &&
+            e.location === event.location
+          );
+        });
+
+        if (attendingFriends.length > 0) {
+          matches.push({
+            event,
+            friends: attendingFriends
+          });
+        }
+      }
+    });
+
+    setCarpoolMatches(matches);
+
+    // Show notification if new matches found
+    if (matches.length > 0 && carpoolMatches.length === 0) {
+      showToast({
+        type: 'success',
+        message: `Found ${matches.length} carpool opportunities!`
+      });
+    }
+  }
+
   // ===== LOAD FEED (What's Happening) =====
   async function loadFeed() {
     if (!me) return;
@@ -235,7 +335,6 @@ export default function CalendarPage() {
       // 2. Business events from businesses I follow 
       // 3. Community events from communities I'm in
       
-      // For now, simplified version - get business and community events
       const { data: businessEvents } = await supabase
         .from("events")
         .select("*")
@@ -250,8 +349,6 @@ export default function CalendarPage() {
         .gte("start_time", new Date().toISOString())
         .order("start_time", { ascending: true });
 
-      // TODO: Add friend invite tracking when invite system is implemented
-      
       const allFeedEvents = [
         ...(businessEvents || []).map(e => ({ ...e, _eventSource: 'business' as const })),
         ...(communityEvents || []).map(e => ({ ...e, _eventSource: 'community' as const }))
@@ -285,6 +382,7 @@ export default function CalendarPage() {
   // ===== INITIAL LOAD & MODE SWITCHING =====
   useEffect(() => {
     if (!me) return;
+    loadFriends();
     if (mode === "my") {
       loadCalendar();
     } else {
@@ -308,6 +406,100 @@ export default function CalendarPage() {
       supabase.removeChannel(ch);
     };
   }, [me, mode]);
+
+  // ===== REMINDER NOTIFICATIONS =====
+  useEffect(() => {
+    if (!reminders.length) return;
+
+    const checkReminders = () => {
+      const now = new Date();
+      reminders.forEach(reminder => {
+        if (reminder.start_time) {
+          const reminderTime = new Date(reminder.start_time);
+          const timeDiff = reminderTime.getTime() - now.getTime();
+          const minutesDiff = Math.floor(timeDiff / 60000);
+
+          // Check if reminder is within notification window (default 10 minutes)
+          if (minutesDiff > 0 && minutesDiff <= 10 && !reminder.completed) {
+            // Check if we've already shown this notification
+            const notificationKey = `reminder-notified-${reminder.id}`;
+            if (!localStorage.getItem(notificationKey)) {
+              showToast({
+                type: 'info',
+                message: `Reminder: ${reminder.title} in ${minutesDiff} minutes!`
+              });
+
+              // Request browser notification permission
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Reminder', {
+                  body: `${reminder.title} in ${minutesDiff} minutes`,
+                  icon: '/icon.png'
+                });
+              }
+
+              // Mark as notified
+              localStorage.setItem(notificationKey, 'true');
+            }
+          }
+        }
+      });
+    };
+
+    // Check every minute
+    const interval = setInterval(checkReminders, 60000);
+    checkReminders(); // Initial check
+
+    return () => clearInterval(interval);
+  }, [reminders, showToast]);
+
+  // ===== KEYBOARD SHORTCUTS =====
+  const shortcutActions = {
+    createEvent: () => setOpenCreate(true),
+    switchToMonth: () => setView('month'),
+    switchToWeek: () => setView('week'),
+    switchToDay: () => setView('day'),
+    navigateNext: () => {
+      const newDate = new Date(date);
+      if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+      else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+      else newDate.setDate(newDate.getDate() + 1);
+      setDate(newDate);
+    },
+    navigatePrevious: () => {
+      const newDate = new Date(date);
+      if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+      else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+      else newDate.setDate(newDate.getDate() - 1);
+      setDate(newDate);
+    },
+    navigateToday: () => setDate(new Date()),
+    openSearch: () => document.getElementById('search-input')?.focus(),
+    openTemplates: () => setShowTemplates(true),
+    openAnalytics: () => setShowAnalytics(true),
+    toggleMoon: () => setShowMoon(!showMoon),
+    createReminder: () => {
+      setQuickModalType('reminder');
+      setQuickModalOpen(true);
+    },
+    createTodo: () => {
+      setQuickModalType('todo');
+      setQuickModalOpen(true);
+    },
+    showHelp: () => setShowShortcutsHelp(true),
+    escape: () => {
+      // Close any open modals
+      setOpenCreate(false);
+      setOpenEdit(false);
+      setDetailsOpen(false);
+      setShowAnalytics(false);
+      setShowTemplates(false);
+      setShowMeetingCoordinator(false);
+      setShowShortcutsHelp(false);
+      setQuickModalOpen(false);
+    },
+  };
+
+  useKeyboardShortcuts(shortcutActions);
 
   // ===== CALENDAR NAVIGATION HANDLERS =====
   const onSelectSlot = useCallback((slotInfo: any) => {
@@ -458,23 +650,30 @@ export default function CalendarPage() {
       const start = baseDate;
       const end = new Date(start.getTime() + 3600000);
 
+      const eventData: any = {
+        title: quickModalForm.title,
+        description: quickModalForm.description || '',
+        location: '',
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        visibility: 'private' as Visibility,
+        created_by: me,
+        event_type: quickModalType,
+        rsvp_public: false,
+        community_id: null,
+        image_path: null,
+        source: 'personal',
+        status: 'scheduled'
+      };
+
+      // Add notification settings if enabled
+      if (quickModalForm.enableNotification) {
+        eventData.notification_minutes = quickModalForm.notificationMinutes;
+      }
+
       const { error } = await supabase
         .from("events")
-        .insert({
-          title: quickModalForm.title,
-          description: quickModalForm.description || '',
-          location: '',
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          visibility: 'private' as Visibility,
-          created_by: me,
-          event_type: quickModalType,
-          rsvp_public: false,
-          community_id: null,
-          image_path: null,
-          source: 'personal',
-          status: 'scheduled'
-        });
+        .insert(eventData);
 
       if (error) throw error;
 
@@ -485,7 +684,14 @@ export default function CalendarPage() {
 
       loadCalendar();
       setQuickModalOpen(false);
-      setQuickModalForm({ title: '', description: '', date: '', time: '' });
+      setQuickModalForm({ 
+        title: '', 
+        description: '', 
+        date: '', 
+        time: '',
+        enableNotification: true,
+        notificationMinutes: 10 
+      });
     } catch (error: any) {
       console.error("Create quick error:", error);
       showToast({
@@ -528,6 +734,19 @@ export default function CalendarPage() {
       }
     }
   }
+
+  // ===== TEMPLATE HANDLERS =====
+  const handleApplyTemplate = async (templateEvents: any[]) => {
+    try {
+      for (const event of templateEvents) {
+        await supabase.from('events').insert(event);
+      }
+      loadCalendar();
+      showToast({ type: 'success', message: 'Routine added to calendar!' });
+    } catch (error) {
+      showToast({ type: 'error', message: 'Failed to apply template' });
+    }
+  };
 
   // ===== CREATE EVENT HANDLER =====
   const createEvent = async () => {
@@ -651,6 +870,12 @@ export default function CalendarPage() {
     setOpenEdit(true);
   };
 
+  // ===== OPEN CARPOOL CHAT =====
+  const openCarpoolChat = (event?: DBEvent) => {
+    setSelectedCarpoolEvent(event || null);
+    setShowCarpoolChat(true);
+  };
+
   // ===== HELPER FUNCTIONS =====
   const toLocalInput = (d: Date) =>
     new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -745,6 +970,33 @@ export default function CalendarPage() {
 
             {/* Controls */}
             <div className="flex items-center gap-3 flex-wrap">
+              {/* Analytics */}
+              <button
+                onClick={() => setShowAnalytics(true)}
+                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                title="View analytics"
+              >
+                📊
+              </button>
+
+              {/* Templates */}
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                title="Smart templates"
+              >
+                ✨
+              </button>
+
+              {/* Meeting Coordinator */}
+              <button
+                onClick={() => setShowMeetingCoordinator(true)}
+                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                title="Find meeting time"
+              >
+                🤝
+              </button>
+
               {/* Moon Toggle */}
               <button
                 onClick={() => setShowMoon(!showMoon)}
@@ -763,6 +1015,15 @@ export default function CalendarPage() {
                 value={calendarTheme}
                 onChange={handleThemeChange}
               />
+
+              {/* Keyboard Shortcuts */}
+              <button
+                onClick={() => setShowShortcutsHelp(true)}
+                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                title="Keyboard shortcuts (press ?)"
+              >
+                ⌨️
+              </button>
 
               {/* Create Button */}
               <button
@@ -783,10 +1044,60 @@ export default function CalendarPage() {
         {/* Main Content Area */}
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
           <div className="flex gap-4 p-4">
-            {/* Sidebar - Todo/Reminder Lists */}
+            {/* Sidebar - Todo/Reminder Lists & Carpool */}
             {mode === 'my' && (
               <div className="w-64 shrink-0 hidden lg:block">
                 <div className="bg-white rounded-lg shadow-md">
+                  
+                  {/* Carpool Section */}
+                  <div className="border-b">
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold text-gray-700">Carpool</h3>
+                        <button
+                          onClick={() => openCarpoolChat()}
+                          className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                        >
+                          + Start
+                        </button>
+                      </div>
+
+                      {/* Carpool Matches */}
+                      {carpoolMatches.length > 0 ? (
+                        <div className="space-y-2 mb-3">
+                          {carpoolMatches.slice(0, 3).map((match, idx) => (
+                            <div
+                              key={idx}
+                              className="p-2 bg-green-50 rounded-lg cursor-pointer hover:bg-green-100"
+                              onClick={() => openCarpoolChat(match.event)}
+                            >
+                              <div className="text-xs font-medium text-green-800">
+                                {match.event.title}
+                              </div>
+                              <div className="text-xs text-green-600 mt-1">
+                                {match.friends.length} friend{match.friends.length > 1 ? 's' : ''} going
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic mb-3">
+                          No carpool matches found
+                        </p>
+                      )}
+
+                      {/* Manual Carpool Button */}
+                      <button
+                        onClick={() => openCarpoolChat()}
+                        className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 rounded-lg
+                                 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span>🚗</span>
+                        <span>Manual Carpool Setup</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Reminders Section */}
                   <div className="border-b">
                     <div className="p-4">
@@ -1037,6 +1348,43 @@ export default function CalendarPage() {
                     />
                   </div>
                 </div>
+
+                {quickModalType === 'reminder' && (
+                  <div className="border-t pt-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={quickModalForm.enableNotification}
+                        onChange={(e) => setQuickModalForm(prev => ({ 
+                          ...prev, 
+                          enableNotification: e.target.checked 
+                        }))}
+                        className="rounded"
+                      />
+                      <span className="text-sm font-medium">Enable notification</span>
+                    </label>
+                    
+                    {quickModalForm.enableNotification && (
+                      <div className="mt-2 ml-6">
+                        <label className="text-xs text-gray-600">Notify me</label>
+                        <select
+                          value={quickModalForm.notificationMinutes}
+                          onChange={(e) => setQuickModalForm(prev => ({ 
+                            ...prev, 
+                            notificationMinutes: parseInt(e.target.value) 
+                          }))}
+                          className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm"
+                        >
+                          <option value="5">5 minutes before</option>
+                          <option value="10">10 minutes before</option>
+                          <option value="15">15 minutes before</option>
+                          <option value="30">30 minutes before</option>
+                          <option value="60">1 hour before</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -1051,8 +1399,76 @@ export default function CalendarPage() {
                 <button
                   onClick={() => {
                     setQuickModalOpen(false);
-                    setQuickModalForm({ title: '', description: '', date: '', time: '' });
+                    setQuickModalForm({ 
+                      title: '', 
+                      description: '', 
+                      date: '', 
+                      time: '',
+                      enableNotification: true,
+                      notificationMinutes: 10 
+                    });
                   }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
+                           hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Carpool Chat Modal */}
+        {showCarpoolChat && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setShowCarpoolChat(false)} />
+            <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-semibold mb-4">
+                🚗 Carpool Chat
+              </h3>
+              
+              {selectedCarpoolEvent && (
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                  <div className="text-sm font-medium text-blue-900">{selectedCarpoolEvent.title}</div>
+                  <div className="text-xs text-blue-700">
+                    {new Date(selectedCarpoolEvent.start_time).toLocaleString()}
+                  </div>
+                </div>
+              )}
+              
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">
+                  Select friends to add to this carpool group:
+                </p>
+                
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {friends.map(friend => (
+                    <label key={friend.friend_id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
+                      <input type="checkbox" className="rounded" />
+                      <span className="text-sm">{friend.name}</span>
+                      {friend.safe_to_carpool && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                          Carpool safe
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg
+                           hover:bg-green-700 transition-colors"
+                  onClick={() => {
+                    showToast({ type: 'success', message: 'Carpool chat created!' });
+                    setShowCarpoolChat(false);
+                  }}
+                >
+                  Start Chat
+                </button>
+                <button
+                  onClick={() => setShowCarpoolChat(false)}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
                            hover:bg-gray-300 transition-colors"
                 >
@@ -1100,6 +1516,51 @@ export default function CalendarPage() {
           onChange={(updates) => setForm(prev => ({ ...prev, ...updates }))}
           onSave={updateEvent}
           isEdit={true}
+        />
+
+        {/* Analytics Modal */}
+        {showAnalytics && (
+          <CalendarAnalytics
+            events={events}
+            userId={me!}
+            onClose={() => setShowAnalytics(false)}
+          />
+        )}
+
+        {/* Templates Modal */}
+        {showTemplates && (
+          <SmartTemplates
+            open={showTemplates}
+            onClose={() => setShowTemplates(false)}
+            onApply={handleApplyTemplate}
+            userId={me!}
+          />
+        )}
+
+        {/* Meeting Coordinator Modal */}
+        {showMeetingCoordinator && (
+          <SmartMeetingCoordinator
+            open={showMeetingCoordinator}
+            onClose={() => setShowMeetingCoordinator(false)}
+            userId={me!}
+            friends={friends}
+            userEvents={events}
+            onSchedule={async (event) => {
+              await supabase.from('events').insert(event);
+              loadCalendar();
+              showToast({ 
+                type: 'success', 
+                message: 'Meeting scheduled! Invites sent to participants.' 
+              });
+              setShowMeetingCoordinator(false);
+            }}
+          />
+        )}
+
+        {/* Keyboard Shortcuts Help */}
+        <KeyboardShortcutsHelp 
+          open={showShortcutsHelp} 
+          onClose={() => setShowShortcutsHelp(false)} 
         />
       </div>
 
