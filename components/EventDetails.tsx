@@ -70,6 +70,13 @@ export default function EventDetails({ event, onClose, onEdit, isOwner = false }
           label: 'To-do',
           icon: '✓',
         };
+      case 'meditation':
+        return {
+          bg: 'bg-indigo-100',
+          text: 'text-indigo-800',
+          label: 'Meditation',
+          icon: '🧘',
+        };
       default:
         return {
           bg: 'bg-purple-100',
@@ -217,7 +224,20 @@ export default function EventDetails({ event, onClose, onEdit, isOwner = false }
 
         {/* Footer Actions */}
         <div className="border-t p-4 bg-gray-50 flex justify-between items-center">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* Meditation Room Button - Available to everyone if it's a meditation event */}
+            {event?.event_type === 'meditation' && (
+              <a
+                href={`/meditation?eventId=${event.id}`}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 
+                         text-white rounded-lg hover:from-indigo-700 hover:to-purple-700
+                         font-medium transition-all duration-200 transform hover:scale-105
+                         flex items-center gap-2"
+              >
+                🧘 Enter Meditation Room
+              </a>
+            )}
+
             {/* Owner Actions */}
             {isOwner && (
               <>
