@@ -1,27 +1,14 @@
+// app/candles/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 
-/** DB shape (for reference)
-create table if not exists public.candle_offerings (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  color text not null default 'white',
-  message text,
-  created_at timestamptz not null default now(),
-  expires_at timestamptz
-);
--- Recommended index for sorting/filters:
--- create index if not exists candle_offerings_created_at_idx on public.candle_offerings(created_at desc);
--- create index if not exists candle_offerings_expires_at_idx on public.candle_offerings(expires_at);
-**/
-
 type Candle = {
   id: string;
   name: string;
-  color: string;        // 'white' | 'gold' | 'rose' | 'azure' | 'violet' | 'emerald'
+  color: string;
   message: string | null;
   created_at: string;
   expires_at: string | null;
@@ -51,7 +38,6 @@ export default function CandleRoomPage() {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    // Filter out expired on the server:
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("candle_offerings")
@@ -83,13 +69,10 @@ export default function CandleRoomPage() {
     loadCandles();
   }
 
-  // Initial load
   useEffect(() => {
     loadCandles({ reset: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Realtime: listen for inserts and prepend if within current filters
   useEffect(() => {
     const channel = supabase
       .channel("candle_offerings_rt")
@@ -98,10 +81,8 @@ export default function CandleRoomPage() {
         { event: "INSERT", schema: "public", table: "candle_offerings" },
         (payload) => {
           const row = payload.new as Candle;
-          // If new candle is not expired, show it on top
           if (!row.expires_at || new Date(row.expires_at) > new Date()) {
             setCandles((cur) => {
-              // Avoid duplicates if the poster’s UI already added it
               if (cur.some((c) => c.id === row.id)) return cur;
               return [row, ...cur];
             });
@@ -116,54 +97,68 @@ export default function CandleRoomPage() {
   }, []);
 
   return (
-    <div className="candle-page-wrap">
-      <div className="candle-page">
-        <header className="candle-header">
-          <div className="title">
-            <h1 className="h1">Light a Candle for Loved Ones</h1>
-            <p className="muted">
-              Offer a name and intention. Candles gently flicker on this wall.
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <header className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-amber-900 mb-2">Memorial Candle Room</h1>
+            <p className="text-amber-700 max-w-2xl">
+              Light a candle in loving memory of a lost loved one, or send healing light to someone who needs support. 
+              Each flame represents love, hope, and the eternal connection we share.
             </p>
           </div>
-          <div className="actions">
-            <Link href="/meditation" className="btn">← Back to Meditation</Link>
-            <button className="btn" onClick={() => loadCandles({ reset: true })}>
+          <div className="flex gap-3">
+            <Link href="/meditation" className="px-4 py-2 bg-white/60 text-amber-800 rounded-lg hover:bg-white/80 transition-colors border border-amber-200">
+              ← Back to Meditation
+            </Link>
+            <button 
+              onClick={() => loadCandles({ reset: true })}
+              className="px-4 py-2 bg-white/60 text-amber-800 rounded-lg hover:bg-white/80 transition-colors border border-amber-200"
+            >
               Refresh
             </button>
-            <button className="btn btn-brand" onClick={() => setShowAdd(true)}>
-              + Add a candle
+            <button 
+              onClick={() => setShowAdd(true)}
+              className="px-6 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium"
+            >
+              + Light a Candle
             </button>
           </div>
         </header>
 
-        <section className="candle-wall card" aria-live="polite">
+        <section className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 border border-amber-200 shadow-lg min-h-96">
           {loading && candles.length === 0 ? (
-            <div className="center muted">Loading candles…</div>
+            <div className="text-center text-amber-700 py-16">
+              <div className="animate-pulse text-4xl mb-4">🕯️</div>
+              Loading candles...
+            </div>
           ) : candles.length === 0 ? (
-            <div className="center muted">Be the first to light a candle.</div>
+            <div className="text-center text-amber-700 py-16">
+              <div className="text-4xl mb-4">🕯️</div>
+              <p>Be the first to light a candle in memory or for healing.</p>
+            </div>
           ) : (
             <>
-              <ul className="wall-grid">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-8 mb-8">
                 {candles.map((c) => (
-                  <li key={c.id} className="wall-item">
+                  <div key={c.id} className="text-center">
                     <CandleVisual name={c.name} colorKey={c.color} message={c.message} />
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
 
-              <div className="load-more">
+              <div className="text-center">
                 {hasMore ? (
                   <button
-                    className="btn"
                     onClick={handleLoadMore}
                     disabled={loading}
-                    aria-label="Load more candles"
+                    className="px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
                   >
-                    {loading ? "Loading…" : "Load More"}
+                    {loading ? "Loading..." : "Load More Candles"}
                   </button>
                 ) : (
-                  <div className="muted center" style={{ paddingTop: 8 }}>
-                    You’ve reached the end.
+                  <div className="text-amber-600 py-4">
+                    All candles are shown
                   </div>
                 )}
               </div>
@@ -177,122 +172,14 @@ export default function CandleRoomPage() {
           onClose={() => setShowAdd(false)}
           onCreated={(newCandle) => {
             setShowAdd(false);
-            // Prepend immediately; realtime will de-dupe if necessary
             setCandles((cur) => [newCandle, ...cur]);
           }}
         />
       )}
-
-      <style jsx global>{`
-        .candle-page-wrap { padding: 24px; }
-        .candle-page { max-width: 1100px; margin: 0 auto; }
-        .h1 { font-size: 28px; letter-spacing: 0.02em; }
-        .muted { opacity: 0.72; }
-        .card {
-          background: #faf7f1;
-          border: 1px solid #e7e0d2;
-          border-radius: 16px;
-          padding: 20px;
-          box-shadow: 0 10px 30px rgba(60, 40, 10, 0.06) inset;
-        }
-        .candle-header {
-          display: flex; gap: 16px; align-items: center; justify-content: space-between;
-          margin-bottom: 16px;
-        }
-        .candle-header .title { display: grid; gap: 4px; }
-        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .btn {
-          appearance: none;
-          border: 1px solid #dfd6c4;
-          background: linear-gradient(#fff, #f5efe6);
-          border-radius: 10px;
-          padding: 8px 12px;
-          font-size: 14px;
-          cursor: pointer;
-        }
-        .btn:hover { filter: brightness(0.98); }
-        .btn-brand {
-          border-color: #d8c49b;
-          background: linear-gradient(#ffe9be, #f7dca6);
-          box-shadow: 0 2px 6px rgba(150, 110, 20, 0.15);
-        }
-        .center { text-align: center; padding: 28px 0; }
-        .candle-wall { min-height: 280px; }
-        .wall-grid {
-          list-style: none; padding: 0; margin: 0;
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 20px;
-        }
-        .wall-item { display: grid; place-items: center; padding: 8px 4px 16px; }
-
-        /* Candle rendering */
-        .candle {
-          position: relative; width: 70px; height: 150px; border-radius: 14px;
-          box-shadow: inset 0 4px 18px rgba(0,0,0,.15), 0 6px 18px rgba(60,40,10,.08);
-          display: grid; place-items: center;
-        }
-        .wick {
-          position: absolute; top: 14px; width: 3px; height: 10px; border-radius: 2px; background: #43342a;
-        }
-        .flame {
-          position: absolute; top: -6px; width: 18px; height: 28px;
-          border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-          background: radial-gradient(ellipse at 50% 40%,
-            #fff7ad 0%, #ffd166 42%, #ff8c3b 75%, rgba(255,140,59,0) 80%);
-          filter: blur(0.3px) drop-shadow(0 0 6px #ffcc66);
-          animation: flicker 1.8s infinite ease-in-out;
-          transform-origin: 50% 100%;
-        }
-        @keyframes flicker {
-          0%   { transform: translateY(0) scale(1);   opacity: 0.96; }
-          25%  { transform: translateY(-1px) scale(1.03) rotate(-1.5deg); opacity: 0.92; }
-          50%  { transform: translateY(0) scale(0.98) rotate(1deg); opacity: 1; }
-          75%  { transform: translateY(-1px) scale(1.04) rotate(-0.5deg); opacity: 0.94; }
-          100% { transform: translateY(0) scale(1);   opacity: 0.97; }
-        }
-        .candle-label { margin-top: 10px; text-align: center; max-width: 160px; }
-        .candle-name { font-weight: 600; font-size: 13px; }
-        .candle-message { font-size: 12px; opacity: 0.7; margin-top: 2px; white-space: pre-wrap; }
-
-        .load-more { display: grid; place-items: center; padding-top: 10px; }
-
-        /* Modal */
-        .overlay { position: fixed; inset: 0; background: rgba(20,12,4,0.4);
-          display: grid; place-items: center; z-index: 40; }
-        .panel {
-          width: min(720px, 92vw); background: #fffdf8; border: 1px solid #eadfca;
-          border-radius: 16px; box-shadow: 0 20px 60px rgba(20,10,0,.25); overflow: hidden;
-        }
-        .panel-head {
-          padding: 14px 16px; border-bottom: 1px solid #eadfca;
-          display: flex; align-items: center; justify-content: space-between;
-        }
-        .panel-body { padding: 16px; }
-        .panel-foot {
-          display: flex; gap: 8px; justify-content: flex-end;
-          padding: 12px 16px; border-top: 1px solid #eadfca; background: #fbf6ec;
-        }
-        .form-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
-        @media (min-width: 720px) {
-          .form-grid { grid-template-columns: 1fr 1fr; }
-          .span-2 { grid-column: span 2; }
-        }
-        .label { font-size: 12px; opacity: .7; margin-bottom: 4px; }
-        .input, .textarea, .select {
-          width: 100%; padding: 10px 12px; background: #fff;
-          border: 1px solid #e6dcc6; border-radius: 10px; font-size: 14px;
-        }
-        .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-        .color-chip { border: 2px solid transparent; height: 34px; border-radius: 10px; cursor: pointer; }
-        .color-chip.sel { border-color: #b89b62; }
-        .help { font-size: 12px; opacity: .7; }
-      `}</style>
     </div>
   );
 }
 
-/** Candle visual — uses preset colors and a gentle flame animation */
 function CandleVisual({
   name,
   colorKey,
@@ -308,20 +195,42 @@ function CandleVisual({
   }, [colorKey]);
 
   return (
-    <div className="candle-wrap" aria-label={`${name} candle`}>
-      <div className="candle" style={{ background: wax }}>
-        <div className="wick" />
-        <div className="flame" />
+    <div className="relative group">
+      <div 
+        className="w-16 h-32 mx-auto rounded-t-full relative shadow-lg"
+        style={{ background: wax }}
+      >
+        {/* Wick */}
+        <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-1 h-2 bg-amber-900 rounded-full" />
+        
+        {/* Flame */}
+        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 w-4 h-6 rounded-full opacity-95"
+             style={{
+               background: 'radial-gradient(ellipse at center, #ffd27a 0%, #ff9900 60%, transparent 70%)',
+               filter: 'blur(0.6px)',
+               animation: 'flicker 2.6s infinite ease-in-out',
+               boxShadow: '0 0 18px 8px rgba(255, 170, 60, 0.35)'
+             }} />
       </div>
-      <div className="candle-label">
-        <div className="candle-name">{name}</div>
-        {message ? <div className="candle-message">{message}</div> : null}
+      
+      <div className="mt-3 max-w-32">
+        <div className="font-medium text-sm text-amber-900 mb-1">{name}</div>
+        {message && (
+          <div className="text-xs text-amber-700 opacity-75 line-clamp-2">{message}</div>
+        )}
       </div>
+
+      <style jsx>{`
+        @keyframes flicker {
+          0%, 100% { transform: translateX(-50%) scale(1) translateY(0); opacity: 0.95; }
+          30% { transform: translateX(-52%) scale(1.06) translateY(-1px); opacity: 1; }
+          60% { transform: translateX(-49%) scale(0.96) translateY(1px); opacity: 0.9; }
+        }
+      `}</style>
     </div>
   );
 }
 
-/** Add Candle Modal */
 function AddCandleModal({
   onClose,
   onCreated,
@@ -335,7 +244,6 @@ function AddCandleModal({
   const [expires, setExpires] = useState<"forever" | "7d" | "30d">("forever");
   const [saving, setSaving] = useState(false);
 
-  // Close on Esc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -358,15 +266,7 @@ function AddCandleModal({
     const nm = sanitize(name, 60);
     const msg = sanitize(message, 240);
     if (!nm) {
-      alert("Please enter a name.");
-      return;
-    }
-
-    // simple per-tab spam guard: minimum 8s between posts
-    const last = Number(localStorage.getItem("mz_last_candle_ts") || "0");
-    const now = Date.now();
-    if (now - last < 8000) {
-      alert("Thanks! Please wait a few seconds before adding another candle.");
+      alert("Please enter a name or dedication.");
       return;
     }
 
@@ -385,84 +285,97 @@ function AddCandleModal({
       return;
     }
 
-    localStorage.setItem("mz_last_candle_ts", String(now));
     onCreated(data as Candle);
   }
 
   return (
-    <div className="overlay" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="panel" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <div style={{ fontWeight: 600 }}>Add a Candle</div>
-          <button className="btn" onClick={onClose} aria-label="Close">Close</button>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-amber-900">Light a Memorial Candle</h3>
+          <button onClick={onClose} className="text-amber-600 hover:text-amber-800 text-xl">×</button>
         </div>
 
-        <div className="panel-body">
-          <div className="form-grid">
-            <div className="span-2">
-              <div className="label">Name to appear under the candle</div>
-              <input
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., In loving memory of…"
-                maxLength={60}
-              />
-              <div className="help">{name.length}/60</div>
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-amber-800 mb-2">
+              In memory of / For healing
+            </label>
+            <input
+              className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., In loving memory of Mom, For healing of..."
+              maxLength={60}
+            />
+            <div className="text-xs text-amber-600 mt-1">{name.length}/60</div>
+          </div>
 
-            <div className="span-2">
-              <div className="label">Message (optional)</div>
-              <textarea
-                className="textarea"
-                rows={3}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="A short blessing or intention"
-                maxLength={240}
-              />
-              <div className="help">{message.length}/240</div>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-amber-800 mb-2">
+              Message or prayer (optional)
+            </label>
+            <textarea
+              className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              rows={3}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="A loving message, prayer, or intention..."
+              maxLength={240}
+            />
+            <div className="text-xs text-amber-600 mt-1">{message.length}/240</div>
+          </div>
 
-            <div>
-              <div className="label">Candle color</div>
-              <div className="color-grid">
-                {COLOR_PRESETS.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    aria-label={c.label}
-                    title={c.label}
-                    className={`color-chip ${color === c.key ? "sel" : ""}`}
-                    style={{ background: c.wax }}
-                    onClick={() => setColor(c.key)}
-                  />
-                ))}
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-amber-800 mb-2">
+              Candle color
+            </label>
+            <div className="grid grid-cols-6 gap-2">
+              {COLOR_PRESETS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  title={c.label}
+                  className={`h-10 rounded-lg border-2 transition-all ${
+                    color === c.key ? "border-amber-500 ring-2 ring-amber-400/50" : "border-amber-200 hover:border-amber-300"
+                  }`}
+                  style={{ background: c.wax }}
+                  onClick={() => setColor(c.key)}
+                />
+              ))}
             </div>
+          </div>
 
-            <div>
-              <div className="label">Expiration</div>
-              <select
-                className="select"
-                value={expires}
-                onChange={(e) => setExpires(e.target.value as "forever" | "7d" | "30d")}
-              >
-                <option value="forever">Forever</option>
-                <option value="7d">7 days</option>
-                <option value="30d">30 days</option>
-              </select>
-              <div className="help">You can change the strategy later in RLS/admin.</div>
-            </div>
-
-            <div className="span-2" />
+          <div>
+            <label className="block text-sm font-medium text-amber-800 mb-2">
+              Duration
+            </label>
+            <select
+              className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              value={expires}
+              onChange={(e) => setExpires(e.target.value as "forever" | "7d" | "30d")}
+            >
+              <option value="forever">Eternal flame</option>
+              <option value="30d">30 days</option>
+              <option value="7d">7 days</option>
+            </select>
           </div>
         </div>
 
-        <div className="panel-foot">
-          <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn-brand" onClick={submit} disabled={saving}>
-            {saving ? "Lighting…" : "Light Candle"}
+        <div className="flex gap-3 mt-6">
+          <button 
+            onClick={onClose} 
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={submit} 
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium"
+          >
+            {saving ? "Lighting..." : "Light Candle ($0.99)"}
           </button>
         </div>
       </div>
