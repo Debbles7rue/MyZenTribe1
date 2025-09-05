@@ -684,7 +684,8 @@ export default function CalendarPage() {
         community_id: null,
         image_path: null,
         source: 'personal',
-        status: 'scheduled'
+        status: 'scheduled',
+        completed: false  // Explicitly set to false initially
       };
 
       // Add notification settings if enabled
@@ -722,49 +723,93 @@ export default function CalendarPage() {
     }
   }
 
-  // ===== TOGGLE COMPLETE STATUS (FIXED) =====
+  // ===== TOGGLE COMPLETE STATUS (ENHANCED WITH BETTER ERROR HANDLING) =====
   async function toggleComplete(itemId: string, currentStatus: boolean, itemType: 'reminder' | 'todo') {
-    if (!me) return;
+    if (!me) {
+      showToast({
+        type: 'error',
+        message: 'Please log in to update items'
+      });
+      return;
+    }
     
+    // Optimistic update - immediately update UI
+    const updateList = itemType === 'reminder' ? setReminders : setTodos;
+    updateList(prev => prev.map(item => 
+      item.id === itemId ? { ...item, completed: !currentStatus } : item
+    ));
+
     try {
-      const { error } = await supabase
+      // Debug logging
+      console.log('Toggling complete status:', {
+        itemId,
+        userId: me,
+        currentStatus,
+        newStatus: !currentStatus,
+        itemType
+      });
+
+      const { data, error } = await supabase
         .from("events")
-        .update({ completed: !currentStatus })
+        .update({ 
+          completed: !currentStatus,
+          updated_at: new Date().toISOString() // Add timestamp to force update
+        })
         .eq("id", itemId)
-        .eq("created_by", me); // Ensure user owns the item
+        .eq("created_by", me) // Ensure user owns the item
+        .select(); // Return the updated record
       
       if (error) {
-        console.error('Toggle complete error:', error);
-        showToast({
-          type: 'error',
-          message: 'Failed to update item. Please try again.'
-        });
+        console.error('Supabase update error:', error);
+        
+        // Revert optimistic update on error
+        updateList(prev => prev.map(item => 
+          item.id === itemId ? { ...item, completed: currentStatus } : item
+        ));
+        
+        // More helpful error messages
+        if (error.message?.includes('permission') || error.message?.includes('policy')) {
+          showToast({
+            type: 'error',
+            message: 'Permission denied. Check if you own this item.',
+            action: {
+              label: 'Refresh',
+              onClick: loadCalendar
+            }
+          });
+        } else {
+          showToast({
+            type: 'error',
+            message: 'Failed to update. Please try again.'
+          });
+        }
         return;
       }
       
-      showToast({
-        type: 'success',
-        message: currentStatus ? 'Marked as incomplete' : 'Marked as complete!'
-      });
-      
-      // Immediately update local state for responsive UI
-      if (itemType === 'reminder') {
-        setReminders(prev => prev.map(r => 
-          r.id === itemId ? { ...r, completed: !currentStatus } : r
-        ));
+      // Success feedback
+      if (data && data.length > 0) {
+        console.log('Update successful:', data[0]);
+        showToast({
+          type: 'success',
+          message: currentStatus ? '✨ Marked as incomplete' : '✅ Marked as complete!'
+        });
       } else {
-        setTodos(prev => prev.map(t => 
-          t.id === itemId ? { ...t, completed: !currentStatus } : t
-        ));
+        console.warn('No data returned from update');
+        // Still reload to ensure sync
+        await loadCalendar();
       }
       
-      // Then reload from database to ensure sync
-      loadCalendar();
     } catch (error: any) {
-      console.error('Toggle complete error:', error);
+      console.error('Toggle complete exception:', error);
+      
+      // Revert optimistic update
+      updateList(prev => prev.map(item => 
+        item.id === itemId ? { ...item, completed: currentStatus } : item
+      ));
+      
       showToast({
         type: 'error',
-        message: 'Failed to update item'
+        message: 'Network error. Please check your connection.'
       });
     }
   }
@@ -775,14 +820,20 @@ export default function CalendarPage() {
       const { error } = await supabase
         .from("events")
         .delete()
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .eq("created_by", me); // Ensure user owns the item
 
       if (!error) {
         showToast({
           type: 'success',
-          message: 'Item deleted'
+          message: '🗑️ Item deleted'
         });
         loadCalendar();
+      } else {
+        showToast({
+          type: 'error',
+          message: 'Failed to delete item'
+        });
       }
     }
   }
@@ -794,7 +845,7 @@ export default function CalendarPage() {
         await supabase.from('events').insert(event);
       }
       loadCalendar();
-      showToast({ type: 'success', message: 'Routine added to calendar!' });
+      showToast({ type: 'success', message: '✨ Routine added to calendar!' });
     } catch (error) {
       showToast({ type: 'error', message: 'Failed to apply template' });
     }
@@ -831,6 +882,7 @@ export default function CalendarPage() {
       community_id: form.community_id || null,
       image_path: form.image_path || null,
       source: form.source,
+      completed: false
     };
 
     const { error } = await supabase.from("events").insert(payload);
@@ -881,7 +933,8 @@ export default function CalendarPage() {
     const { error } = await supabase
       .from("events")
       .update(payload)
-      .eq("id", selected.id);
+      .eq("id", selected.id)
+      .eq("created_by", me); // Ensure user owns the event
       
     if (error) {
       showToast({
@@ -979,13 +1032,13 @@ export default function CalendarPage() {
       ) : null}
 
       {/* Main Container */}
-      <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
-        {/* Header */}
-        <div className="mb-6 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg p-4">
-          <div className="flex flex-col gap-4">
+      <div className="relative z-10 container mx-auto px-2 sm:px-4 py-4 sm:py-6 max-w-7xl">
+        {/* Header - Enhanced Mobile Responsiveness */}
+        <div className="mb-4 sm:mb-6 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:gap-4">
             {/* Title & Mode Toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600
                            bg-clip-text text-transparent">
                 Calendar
               </h1>
@@ -993,20 +1046,20 @@ export default function CalendarPage() {
               <div className="flex rounded-full bg-white/90 shadow-md p-1">
                 <button
                   onClick={() => setMode('my')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 transform ${
                     mode === 'my'
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg scale-105'
+                      : 'text-gray-600 hover:text-gray-900 hover:scale-105'
                   }`}
                 >
                   My Calendar
                 </button>
                 <button
                   onClick={() => setMode('whats')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 transform ${
                     mode === 'whats'
-                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg scale-105'
+                      : 'text-gray-600 hover:text-gray-900 hover:scale-105'
                   }`}
                 >
                   What's Happening
@@ -1014,87 +1067,107 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Controls - Horizontal scroll on mobile */}
-            <div className="overflow-x-auto pb-2">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-max">
-                {/* Create Button */}
-                <button
-                  onClick={() => setOpenCreate(true)}
-                  className="px-4 py-2 rounded-full font-medium text-white
-                           bg-gradient-to-r from-purple-600 to-pink-600
-                           shadow-lg flex items-center gap-2 whitespace-nowrap"
-                >
-                  <span className="text-lg">+</span>
-                  <span>Event</span>
-                </button>
-
-                {/* Mobile Menu Toggle for Lists */}
-                {isMobile && mode === 'my' && (
+            {/* Controls - Enhanced Mobile Scroll */}
+            <div className="relative">
+              <div className="overflow-x-auto pb-2 scrollbar-hide">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-max">
+                  {/* Create Button */}
                   <button
-                    onClick={() => setMobileMenuOpen(true)}
-                    className="px-4 py-2 rounded-full bg-white shadow-md 
-                             text-gray-600 flex items-center gap-2"
+                    onClick={() => setOpenCreate(true)}
+                    className="px-3 sm:px-4 py-2 rounded-full font-medium text-white
+                             bg-gradient-to-r from-purple-600 to-pink-600
+                             shadow-lg flex items-center gap-2 whitespace-nowrap
+                             transform hover:scale-105 active:scale-95 transition-all duration-200"
                   >
-                    <span>📋</span>
-                    <span className="text-sm">Lists</span>
+                    <span className="text-lg">+</span>
+                    <span className="text-sm sm:text-base">Event</span>
                   </button>
-                )}
 
-                {/* Feature Buttons */}
-                <button
-                  onClick={() => setShowAnalytics(true)}
-                  className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                  title="View analytics"
-                >
-                  📊
-                </button>
+                  {/* Mobile Menu Toggle for Lists */}
+                  {isMobile && mode === 'my' && (
+                    <button
+                      onClick={() => setMobileMenuOpen(true)}
+                      className="px-3 sm:px-4 py-2 rounded-full bg-white shadow-md 
+                               text-gray-600 flex items-center gap-2
+                               transform hover:scale-105 active:scale-95 transition-all duration-200"
+                    >
+                      <span>📋</span>
+                      <span className="text-xs sm:text-sm">Lists</span>
+                      {(reminders.filter(r => !r.completed).length + todos.filter(t => !t.completed).length) > 0 && (
+                        <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                          {reminders.filter(r => !r.completed).length + todos.filter(t => !t.completed).length}
+                        </span>
+                      )}
+                    </button>
+                  )}
 
-                <button
-                  onClick={() => setShowTemplates(true)}
-                  className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                  title="Smart templates"
-                >
-                  ✨
-                </button>
-
-                <button
-                  onClick={() => setShowMeetingCoordinator(true)}
-                  className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                  title="Find meeting time"
-                >
-                  🤝
-                </button>
-
-                {/* Moon Toggle */}
-                <button
-                  onClick={() => setShowMoon(!showMoon)}
-                  className={`p-2 rounded-full transition-all duration-300 ${
-                    showMoon
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
-                      : 'bg-white text-gray-600 hover:shadow-md'
-                  }`}
-                  title="Toggle moon phases"
-                >
-                  🌙
-                </button>
-
-                {/* Keyboard Shortcuts - Desktop only */}
-                {!isMobile && (
+                  {/* Feature Buttons with Hover Effects */}
                   <button
-                    onClick={() => setShowShortcutsHelp(true)}
-                    className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                    title="Keyboard shortcuts (press ?)"
+                    onClick={() => setShowAnalytics(true)}
+                    className="p-2 rounded-full bg-white text-gray-600 shadow-md
+                             transform hover:scale-110 hover:rotate-6 active:scale-95 transition-all duration-200"
+                    title="View analytics"
                   >
-                    ⌨️
+                    📊
                   </button>
-                )}
+
+                  <button
+                    onClick={() => setShowTemplates(true)}
+                    className="p-2 rounded-full bg-white text-gray-600 shadow-md
+                             transform hover:scale-110 hover:-rotate-6 active:scale-95 transition-all duration-200"
+                    title="Smart templates"
+                  >
+                    ✨
+                  </button>
+
+                  <button
+                    onClick={() => setShowMeetingCoordinator(true)}
+                    className="p-2 rounded-full bg-white text-gray-600 shadow-md
+                             transform hover:scale-110 hover:rotate-6 active:scale-95 transition-all duration-200"
+                    title="Find meeting time"
+                  >
+                    🤝
+                  </button>
+
+                  {/* Moon Toggle with Animation */}
+                  <button
+                    onClick={() => setShowMoon(!showMoon)}
+                    className={`p-2 rounded-full transition-all duration-300 transform ${
+                      showMoon
+                        ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg scale-110 rotate-12'
+                        : 'bg-white text-gray-600 shadow-md hover:scale-110 hover:-rotate-12'
+                    } active:scale-95`}
+                    title="Toggle moon phases"
+                  >
+                    🌙
+                  </button>
+
+                  {/* Keyboard Shortcuts - Desktop only */}
+                  {!isMobile && (
+                    <button
+                      onClick={() => setShowShortcutsHelp(true)}
+                      className="p-2 rounded-full bg-white text-gray-600 shadow-md
+                               transform hover:scale-110 hover:rotate-6 active:scale-95 transition-all duration-200"
+                      title="Keyboard shortcuts (press ?)"
+                    >
+                      ⌨️
+                    </button>
+                  )}
+                </div>
               </div>
+              
+              {/* Scroll indicator for mobile */}
+              {isMobile && (
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-gradient-to-l from-white via-white/80 to-transparent pr-2 pl-4 pointer-events-none">
+                  <span className="text-gray-400 text-xs animate-pulse">→</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Main Content Area */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
+        {/* Main Content Area - Enhanced Mobile Layout */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
           <div className="flex gap-4 p-2 sm:p-4">
             {/* Sidebar - Desktop only */}
             {mode === 'my' && !isMobile && (
@@ -1108,7 +1181,8 @@ export default function CalendarPage() {
                         <h3 className="font-semibold text-gray-700">Carpool</h3>
                         <button
                           onClick={() => openCarpoolChat()}
-                          className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                          className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600
+                                   transform hover:scale-105 active:scale-95 transition-all duration-200"
                         >
                           + Start
                         </button>
@@ -1120,7 +1194,8 @@ export default function CalendarPage() {
                           {carpoolMatches.slice(0, 3).map((match, idx) => (
                             <div
                               key={idx}
-                              className="p-2 bg-green-50 rounded-lg cursor-pointer hover:bg-green-100"
+                              className="p-2 bg-green-50 rounded-lg cursor-pointer hover:bg-green-100
+                                       transform hover:scale-[1.02] transition-all duration-200"
                               onClick={() => openCarpoolChat(match.event)}
                             >
                               <div className="text-xs font-medium text-green-800">
@@ -1135,7 +1210,8 @@ export default function CalendarPage() {
                       ) : friends.length === 0 ? (
                         <div className="text-center py-3">
                           <p className="text-xs text-gray-400 mb-2">No friends added yet</p>
-                          <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                          <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600
+                                           transform hover:scale-105 active:scale-95 transition-all duration-200">
                             Invite Friends
                           </button>
                         </div>
@@ -1149,7 +1225,8 @@ export default function CalendarPage() {
                       <button
                         onClick={() => openCarpoolChat()}
                         className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 rounded-lg
-                                 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                                 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2
+                                 transform hover:scale-[1.02] active:scale-[0.98]"
                       >
                         <span>🚗</span>
                         <span>Manual Carpool Setup</span>
@@ -1165,7 +1242,7 @@ export default function CalendarPage() {
                           onClick={() => setShowRemindersList(!showRemindersList)}
                           className="flex items-center gap-2 font-semibold text-gray-700 hover:text-gray-900"
                         >
-                          <span>{showRemindersList ? '▼' : '▶'}</span>
+                          <span className="transform transition-transform duration-200">{showRemindersList ? '▼' : '▶'}</span>
                           <span>Reminders ({visibleReminders.length})</span>
                         </button>
                         <button
@@ -1173,7 +1250,8 @@ export default function CalendarPage() {
                             setQuickModalType('reminder');
                             setQuickModalOpen(true);
                           }}
-                          className="text-xs px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600"
+                          className="text-xs px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600
+                                   transform hover:scale-105 active:scale-95 transition-all duration-200"
                         >
                           + Add
                         </button>
@@ -1187,7 +1265,7 @@ export default function CalendarPage() {
                                 type="checkbox"
                                 checked={showCompletedItems}
                                 onChange={(e) => setShowCompletedItems(e.target.checked)}
-                                className="rounded"
+                                className="rounded accent-amber-500"
                               />
                               Show completed
                             </label>
@@ -1201,7 +1279,8 @@ export default function CalendarPage() {
                                 <div
                                   key={r.id}
                                   className={`group p-2 bg-amber-50 rounded-lg flex items-center gap-2
-                                            hover:bg-amber-100 transition-colors ${
+                                            hover:bg-amber-100 transition-all duration-200
+                                            transform hover:scale-[1.02] ${
                                     r.completed ? 'opacity-50' : ''
                                   }`}
                                   draggable={!isMobile}
@@ -1225,7 +1304,7 @@ export default function CalendarPage() {
                                       e.stopPropagation();
                                       toggleComplete(r.id, r.completed, 'reminder');
                                     }}
-                                    className="rounded-sm cursor-pointer"
+                                    className="rounded-sm cursor-pointer accent-amber-500"
                                   />
                                   <span className={`flex-1 text-sm ${isMobile ? '' : 'cursor-move'} ${
                                     r.completed ? 'line-through' : ''
@@ -1238,7 +1317,7 @@ export default function CalendarPage() {
                                       deleteItem(r.id);
                                     }}
                                     className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700
-                                             text-xs transition-opacity"
+                                             text-xs transition-opacity transform hover:scale-110"
                                   >
                                     ✕
                                   </button>
@@ -1264,7 +1343,7 @@ export default function CalendarPage() {
                         onClick={() => setShowTodosList(!showTodosList)}
                         className="flex items-center gap-2 font-semibold text-gray-700 hover:text-gray-900"
                       >
-                        <span>{showTodosList ? '▼' : '▶'}</span>
+                        <span className="transform transition-transform duration-200">{showTodosList ? '▼' : '▶'}</span>
                         <span>To-dos ({visibleTodos.length})</span>
                       </button>
                       <button
@@ -1272,7 +1351,8 @@ export default function CalendarPage() {
                           setQuickModalType('todo');
                           setQuickModalOpen(true);
                         }}
-                        className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                        className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600
+                                 transform hover:scale-105 active:scale-95 transition-all duration-200"
                       >
                         + Add
                       </button>
@@ -1288,7 +1368,8 @@ export default function CalendarPage() {
                               <div
                                 key={t.id}
                                 className={`group p-2 bg-green-50 rounded-lg flex items-center gap-2
-                                          hover:bg-green-100 transition-colors ${
+                                          hover:bg-green-100 transition-all duration-200
+                                          transform hover:scale-[1.02] ${
                                   t.completed ? 'opacity-50' : ''
                                 }`}
                                 draggable={!isMobile}
@@ -1312,7 +1393,7 @@ export default function CalendarPage() {
                                     e.stopPropagation();
                                     toggleComplete(t.id, t.completed, 'todo');
                                   }}
-                                  className="rounded-sm cursor-pointer"
+                                  className="rounded-sm cursor-pointer accent-green-500"
                                 />
                                 <span className={`flex-1 text-sm ${isMobile ? '' : 'cursor-move'} ${
                                   t.completed ? 'line-through' : ''
@@ -1325,7 +1406,7 @@ export default function CalendarPage() {
                                     deleteItem(t.id);
                                   }}
                                   className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700
-                                           text-xs transition-opacity"
+                                           text-xs transition-opacity transform hover:scale-110"
                                 >
                                   ✕
                                 </button>
@@ -1346,41 +1427,48 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {/* Calendar Grid */}
+            {/* Calendar Grid - Enhanced Mobile View */}
             <div className="flex-1 min-w-0">
-              <CalendarGrid
-                dbEvents={calendarEvents as any}
-                moonEvents={showMoon ? moonEvents : []}
-                showMoon={showMoon}
-                showWeather={false}
-                theme="default"
-                date={date}
-                setDate={setDate}
-                view={view}
-                setView={setView}
-                onSelectSlot={onSelectSlot}
-                onSelectEvent={onSelectEvent}
-                onDrop={isMobile ? undefined : onDrop}
-                onResize={isMobile ? undefined : onResize}
-                externalDragType={isMobile ? 'none' : dragType}
-                externalDragTitle={draggedItem?.title}
-                onExternalDrop={isMobile ? undefined : onExternalDrop}
-              />
+              <div className={isMobile ? 'calendar-mobile-wrapper' : ''}>
+                <CalendarGrid
+                  dbEvents={calendarEvents as any}
+                  moonEvents={showMoon ? moonEvents : []}
+                  showMoon={showMoon}
+                  showWeather={false}
+                  theme="default"
+                  date={date}
+                  setDate={setDate}
+                  view={view}
+                  setView={setView}
+                  onSelectSlot={onSelectSlot}
+                  onSelectEvent={onSelectEvent}
+                  onDrop={isMobile ? undefined : onDrop}
+                  onResize={isMobile ? undefined : onResize}
+                  externalDragType={isMobile ? 'none' : dragType}
+                  externalDragTitle={draggedItem?.title}
+                  onExternalDrop={isMobile ? undefined : onExternalDrop}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Mobile Lists Menu */}
+        {/* Mobile Lists Menu - Enhanced with Animations */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
+            <div 
+              className="fixed inset-0 bg-black/50 transition-opacity duration-300" 
+              onClick={() => setMobileMenuOpen(false)} 
+            />
             
-            <div className="fixed left-0 top-0 h-full w-80 bg-white shadow-xl overflow-y-auto">
+            <div className={`fixed left-0 top-0 h-full w-80 bg-white shadow-xl overflow-y-auto
+                          transform transition-transform duration-300 ease-out
+                          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
               <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-purple-600 to-pink-600 text-white">
                 <h2 className="font-semibold text-lg">My Lists</h2>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-2 rounded-lg hover:bg-white/20"
+                  className="p-2 rounded-lg hover:bg-white/20 transform hover:scale-110 active:scale-95 transition-all"
                 >
                   ✕
                 </button>
@@ -1395,7 +1483,8 @@ export default function CalendarPage() {
                       openCarpoolChat();
                       setMobileMenuOpen(false);
                     }}
-                    className="text-xs px-2 py-1 bg-green-500 text-white rounded"
+                    className="text-xs px-2 py-1 bg-green-500 text-white rounded
+                             transform hover:scale-105 active:scale-95 transition-all"
                   >
                     + Start
                   </button>
@@ -1406,7 +1495,8 @@ export default function CalendarPage() {
                     {carpoolMatches.slice(0, 3).map((match, idx) => (
                       <div
                         key={idx}
-                        className="p-2 bg-green-50 rounded-lg"
+                        className="p-2 bg-green-50 rounded-lg active:bg-green-100
+                                 transform active:scale-95 transition-all"
                         onClick={() => {
                           openCarpoolChat(match.event);
                           setMobileMenuOpen(false);
@@ -1424,7 +1514,8 @@ export default function CalendarPage() {
                 ) : friends.length === 0 ? (
                   <div className="text-center py-3">
                     <p className="text-sm text-gray-400 mb-2">No friends added yet</p>
-                    <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded">
+                    <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded
+                                     transform hover:scale-105 active:scale-95 transition-all">
                       Invite Friends
                     </button>
                   </div>
@@ -1447,7 +1538,8 @@ export default function CalendarPage() {
                       setQuickModalOpen(true);
                       setMobileMenuOpen(false);
                     }}
-                    className="text-xs px-2 py-1 bg-amber-500 text-white rounded"
+                    className="text-xs px-2 py-1 bg-amber-500 text-white rounded
+                             transform hover:scale-105 active:scale-95 transition-all"
                   >
                     + Add
                   </button>
@@ -1459,7 +1551,7 @@ export default function CalendarPage() {
                       type="checkbox"
                       checked={showCompletedItems}
                       onChange={(e) => setShowCompletedItems(e.target.checked)}
-                      className="rounded"
+                      className="rounded accent-amber-500"
                     />
                     Show completed
                   </label>
@@ -1470,21 +1562,22 @@ export default function CalendarPage() {
                     <p className="text-sm text-gray-400 italic p-2">No reminders yet</p>
                   ) : (
                     visibleReminders.map(r => (
-                      <div key={r.id} className={`p-2 bg-amber-50 rounded-lg flex items-center gap-2 ${
+                      <div key={r.id} className={`p-2 bg-amber-50 rounded-lg flex items-center gap-2
+                                                active:bg-amber-100 transition-all ${
                         r.completed ? 'opacity-50' : ''
                       }`}>
                         <input
                           type="checkbox"
                           checked={r.completed || false}
                           onChange={() => toggleComplete(r.id, r.completed, 'reminder')}
-                          className="rounded-sm"
+                          className="rounded-sm accent-amber-500"
                         />
                         <span className={`flex-1 text-sm ${r.completed ? 'line-through' : ''}`}>
                           {r.title}
                         </span>
                         <button
                           onClick={() => deleteItem(r.id)}
-                          className="text-red-500 text-xs"
+                          className="text-red-500 text-xs transform hover:scale-110 active:scale-95 transition-all"
                         >
                           ✕
                         </button>
@@ -1506,7 +1599,8 @@ export default function CalendarPage() {
                       setQuickModalOpen(true);
                       setMobileMenuOpen(false);
                     }}
-                    className="text-xs px-2 py-1 bg-green-500 text-white rounded"
+                    className="text-xs px-2 py-1 bg-green-500 text-white rounded
+                             transform hover:scale-105 active:scale-95 transition-all"
                   >
                     + Add
                   </button>
@@ -1517,21 +1611,22 @@ export default function CalendarPage() {
                     <p className="text-sm text-gray-400 italic p-2">No to-dos yet</p>
                   ) : (
                     visibleTodos.map(t => (
-                      <div key={t.id} className={`p-2 bg-green-50 rounded-lg flex items-center gap-2 ${
+                      <div key={t.id} className={`p-2 bg-green-50 rounded-lg flex items-center gap-2
+                                              active:bg-green-100 transition-all ${
                         t.completed ? 'opacity-50' : ''
                       }`}>
                         <input
                           type="checkbox"
                           checked={t.completed || false}
                           onChange={() => toggleComplete(t.id, t.completed, 'todo')}
-                          className="rounded-sm"
+                          className="rounded-sm accent-green-500"
                         />
                         <span className={`flex-1 text-sm ${t.completed ? 'line-through' : ''}`}>
                           {t.title}
                         </span>
                         <button
                           onClick={() => deleteItem(t.id)}
-                          className="text-red-500 text-xs"
+                          className="text-red-500 text-xs transform hover:scale-110 active:scale-95 transition-all"
                         >
                           ✕
                         </button>
@@ -1544,11 +1639,16 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* Quick Modal for Custom Reminders/Todos */}
+        {/* Quick Modal for Custom Reminders/Todos - Enhanced Mobile */}
         {quickModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black/50" onClick={() => setQuickModalOpen(false)} />
-            <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+            <div 
+              className="fixed inset-0 bg-black/50 transition-opacity duration-300" 
+              onClick={() => setQuickModalOpen(false)} 
+            />
+            <div className={`relative bg-white rounded-xl shadow-2xl p-4 sm:p-6 max-w-md w-full
+                          transform transition-all duration-300 scale-100
+                          ${quickModalOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
               <h3 className="text-lg font-semibold mb-4">
                 Create {quickModalType === 'reminder' ? 'Reminder' : 'To-do'}
               </h3>
@@ -1562,7 +1662,8 @@ export default function CalendarPage() {
                     onChange={(e) => setQuickModalForm(prev => ({ ...prev, title: e.target.value }))}
                     placeholder={`Enter ${quickModalType} title...`}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                             focus:outline-none focus:ring-2 focus:ring-purple-500"
+                             focus:outline-none focus:ring-2 focus:ring-purple-500
+                             transition-all duration-200"
                     autoFocus
                   />
                 </div>
@@ -1575,7 +1676,8 @@ export default function CalendarPage() {
                     placeholder="Optional notes..."
                     rows={2}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                             focus:outline-none focus:ring-2 focus:ring-purple-500"
+                             focus:outline-none focus:ring-2 focus:ring-purple-500
+                             transition-all duration-200"
                   />
                 </div>
 
@@ -1587,7 +1689,8 @@ export default function CalendarPage() {
                       value={quickModalForm.date}
                       onChange={(e) => setQuickModalForm(prev => ({ ...prev, date: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                               focus:outline-none focus:ring-2 focus:ring-purple-500"
+                               focus:outline-none focus:ring-2 focus:ring-purple-500
+                               transition-all duration-200"
                     />
                   </div>
                   <div>
@@ -1597,7 +1700,8 @@ export default function CalendarPage() {
                       value={quickModalForm.time}
                       onChange={(e) => setQuickModalForm(prev => ({ ...prev, time: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                               focus:outline-none focus:ring-2 focus:ring-purple-500"
+                               focus:outline-none focus:ring-2 focus:ring-purple-500
+                               transition-all duration-200"
                     />
                   </div>
                 </div>
@@ -1612,7 +1716,7 @@ export default function CalendarPage() {
                           ...prev, 
                           enableNotification: e.target.checked 
                         }))}
-                        className="rounded"
+                        className="rounded accent-purple-500"
                       />
                       <span className="text-sm font-medium">Enable notification</span>
                     </label>
@@ -1626,7 +1730,8 @@ export default function CalendarPage() {
                             ...prev, 
                             notificationMinutes: parseInt(e.target.value) 
                           }))}
-                          className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm"
+                          className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm
+                                   focus:outline-none focus:ring-2 focus:ring-purple-500"
                         >
                           <option value="5">5 minutes before</option>
                           <option value="10">10 minutes before</option>
@@ -1645,7 +1750,8 @@ export default function CalendarPage() {
                   onClick={createQuickItem}
                   disabled={!quickModalForm.title.trim()}
                   className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg
-                           hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                           hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed
+                           transform hover:scale-105 active:scale-95 transition-all duration-200"
                 >
                   Create
                 </button>
@@ -1662,7 +1768,7 @@ export default function CalendarPage() {
                     });
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
-                           hover:bg-gray-300 transition-colors"
+                           hover:bg-gray-300 transform hover:scale-105 active:scale-95 transition-all duration-200"
                 >
                   Cancel
                 </button>
@@ -1671,11 +1777,16 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* Carpool Chat Modal */}
+        {/* Carpool Chat Modal - Enhanced Mobile */}
         {showCarpoolChat && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black/50" onClick={() => setShowCarpoolChat(false)} />
-            <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+            <div 
+              className="fixed inset-0 bg-black/50 transition-opacity duration-300" 
+              onClick={() => setShowCarpoolChat(false)} 
+            />
+            <div className={`relative bg-white rounded-xl shadow-2xl p-4 sm:p-6 max-w-md w-full
+                          transform transition-all duration-300
+                          ${showCarpoolChat ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
               <h3 className="text-lg font-semibold mb-4">
                 🚗 Carpool Chat
               </h3>
@@ -1693,7 +1804,8 @@ export default function CalendarPage() {
                 {friends.length === 0 ? (
                   <div className="text-center py-6">
                     <p className="text-gray-600 mb-4">No friends added yet</p>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                                     transform hover:scale-105 active:scale-95 transition-all duration-200">
                       Invite Friends to MyZenTribe
                     </button>
                   </div>
@@ -1705,8 +1817,9 @@ export default function CalendarPage() {
                     
                     <div className="max-h-64 overflow-y-auto space-y-2">
                       {friends.map(friend => (
-                        <label key={friend.friend_id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
-                          <input type="checkbox" className="rounded" />
+                        <label key={friend.friend_id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded
+                                                                 transition-colors cursor-pointer">
+                          <input type="checkbox" className="rounded accent-green-500" />
                           <span className="text-sm">{friend.name}</span>
                           {friend.safe_to_carpool && (
                             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
@@ -1724,9 +1837,9 @@ export default function CalendarPage() {
                 {friends.length > 0 && (
                   <button
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg
-                             hover:bg-green-700 transition-colors"
+                             hover:bg-green-700 transform hover:scale-105 active:scale-95 transition-all duration-200"
                     onClick={() => {
-                      showToast({ type: 'success', message: 'Carpool chat created!' });
+                      showToast({ type: 'success', message: '✨ Carpool chat created!' });
                       setShowCarpoolChat(false);
                     }}
                   >
@@ -1736,7 +1849,7 @@ export default function CalendarPage() {
                 <button
                   onClick={() => setShowCarpoolChat(false)}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
-                           hover:bg-gray-300 transition-colors"
+                           hover:bg-gray-300 transform hover:scale-105 active:scale-95 transition-all duration-200"
                 >
                   {friends.length === 0 ? 'Close' : 'Cancel'}
                 </button>
@@ -1816,7 +1929,7 @@ export default function CalendarPage() {
               loadCalendar();
               showToast({ 
                 type: 'success', 
-                message: 'Meeting scheduled! Invites sent to participants.' 
+                message: '✨ Meeting scheduled! Invites sent to participants.' 
               });
               setShowMeetingCoordinator(false);
             }}
@@ -1847,6 +1960,86 @@ export default function CalendarPage() {
         }
         .animation-delay-4000 {
           animation-delay: 4s;
+        }
+        
+        /* Hide scrollbar for mobile horizontal scroll */
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        
+        /* Mobile calendar wrapper for better scroll behavior */
+        .calendar-mobile-wrapper {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Enhanced mobile calendar styles */
+        @media (max-width: 640px) {
+          .rbc-calendar {
+            min-width: 100%;
+            font-size: 0.75rem;
+          }
+          
+          .rbc-toolbar {
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.5rem;
+          }
+          
+          .rbc-toolbar-label {
+            font-size: 1rem;
+            font-weight: bold;
+          }
+          
+          .rbc-btn-group button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+          }
+          
+          .rbc-month-view {
+            min-height: 400px;
+          }
+          
+          .rbc-header {
+            padding: 0.25rem;
+            font-size: 0.7rem;
+          }
+          
+          .rbc-date-cell {
+            padding: 0.125rem;
+            font-size: 0.75rem;
+          }
+          
+          .rbc-event {
+            font-size: 0.6rem;
+            padding: 0.125rem;
+          }
+          
+          .rbc-show-more {
+            font-size: 0.6rem;
+          }
+          
+          .rbc-day-view,
+          .rbc-week-view {
+            min-width: 100%;
+          }
+          
+          .rbc-time-view {
+            min-height: 500px;
+          }
+          
+          .rbc-time-slot {
+            min-height: 30px;
+          }
+          
+          .rbc-timeslot-group {
+            min-height: 60px;
+          }
         }
       `}</style>
     </div>
