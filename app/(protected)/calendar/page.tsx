@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
-import CalendarThemeSelector from "@/components/CalendarThemeSelector";
 import EventDetails from "@/components/EventDetails";
 import CalendarAnalytics from "@/components/CalendarAnalytics";
 import SmartTemplates from "@/components/SmartTemplates";
@@ -49,7 +48,6 @@ type FeedEvent = DBEvent & {
 };
 
 type Mode = "my" | "whats";
-type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
 interface TodoReminder {
   id: string;
@@ -89,7 +87,6 @@ export default function CalendarPage() {
   const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
-  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
   // Event data
   const [events, setEvents] = useState<any[]>([]);
@@ -129,6 +126,10 @@ export default function CalendarPage() {
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
   const [selectedCarpoolEvent, setSelectedCarpoolEvent] = useState<DBEvent | null>(null);
   
+  // Mobile states
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
   // Quick create modal
   const [quickModalOpen, setQuickModalOpen] = useState(false);
   const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
@@ -138,7 +139,7 @@ export default function CalendarPage() {
     date: '',
     time: '',
     enableNotification: true,
-    notificationMinutes: 10 // minutes before event
+    notificationMinutes: 10
   });
 
   // Form for create/edit modal
@@ -173,6 +174,16 @@ export default function CalendarPage() {
   // Get moon events
   const moonEvents = useMoon(date, view);
 
+  // ===== MOBILE DETECTION =====
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // ===== AUTH CHECK =====
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
@@ -196,20 +207,7 @@ export default function CalendarPage() {
         }
       });
     }
-  }, []); // Empty dependency array ensures this runs only once on mount
-
-  // ===== THEME PERSISTENCE =====
-  useEffect(() => {
-    const saved = localStorage.getItem("mzt-calendar-theme");
-    if (saved) setCalendarTheme(saved as CalendarTheme);
   }, []);
-
-  // Save theme whenever it changes
-  useEffect(() => {
-    if (calendarTheme) {
-      localStorage.setItem("mzt-calendar-theme", calendarTheme);
-    }
-  }, [calendarTheme]);
 
   // ===== LOAD FRIENDS =====
   async function loadFriends() {
@@ -350,11 +348,6 @@ export default function CalendarPage() {
     setFeedLoading(true);
 
     try {
-      // Only get:
-      // 1. Direct invites from friends
-      // 2. Business events from businesses I follow 
-      // 3. Community events from communities I'm in
-      
       const { data: businessEvents } = await supabase
         .from("events")
         .select("*")
@@ -516,22 +509,26 @@ export default function CalendarPage() {
       setShowMeetingCoordinator(false);
       setShowShortcutsHelp(false);
       setQuickModalOpen(false);
+      setMobileMenuOpen(false);
     },
   };
 
-  useKeyboardShortcuts(shortcutActions);
+  useKeyboardShortcuts(shortcutActions, !isMobile); // Disable on mobile
 
   // ===== CALENDAR NAVIGATION HANDLERS =====
   const onSelectSlot = useCallback((slotInfo: any) => {
+    // Add touch support
+    const isTouchEvent = slotInfo.action === 'click' || slotInfo.action === 'select';
+    
     // If in month view and clicking a day, go to day view
-    if (view === 'month' && slotInfo.action === 'click') {
+    if (view === 'month' && isTouchEvent) {
       setDate(slotInfo.start);
       setView('day');
       return;
     }
 
     // If in day/week view and clicking a time slot
-    if ((view === 'day' || view === 'week') && slotInfo.action === 'click') {
+    if ((view === 'day' || view === 'week') && isTouchEvent) {
       // Open create event modal with pre-filled times
       const start = slotInfo.start || new Date();
       const end = slotInfo.end || new Date(start.getTime() + 3600000);
@@ -552,8 +549,10 @@ export default function CalendarPage() {
     setDetailsOpen(true);
   }, []);
 
-  // ===== DRAG & DROP HANDLERS =====
+  // ===== DRAG & DROP HANDLERS (Desktop only) =====
   const onDrop = async ({ event, start, end }: any) => {
+    if (isMobile) return; // Disable on mobile
+    
     const r = (event.resource || {}) as DBEvent;
     if (!me || r.created_by !== me) {
       showToast({
@@ -583,6 +582,8 @@ export default function CalendarPage() {
   };
 
   const onResize = async ({ event, start, end }: any) => {
+    if (isMobile) return; // Disable on mobile
+    
     const r = (event.resource || {}) as DBEvent;
     if (!me || r.created_by !== me) {
       showToast({
@@ -613,7 +614,7 @@ export default function CalendarPage() {
 
   // ===== HANDLE EXTERNAL DROP (from sidebar) =====
   const onExternalDrop = useCallback(async (info: any, type: 'reminder' | 'todo') => {
-    if (!draggedItem || !me) return;
+    if (isMobile || !draggedItem || !me) return;
 
     const start = info.start || new Date();
     const end = info.end || new Date(start.getTime() + 3600000);
@@ -654,7 +655,7 @@ export default function CalendarPage() {
         message: `Failed to create ${type}`
       });
     }
-  }, [draggedItem, me]);
+  }, [draggedItem, me, isMobile]);
 
   // ===== QUICK CREATE HANDLER =====
   async function createQuickItem() {
@@ -721,19 +722,50 @@ export default function CalendarPage() {
     }
   }
 
-  // ===== TOGGLE COMPLETE STATUS =====
-  async function toggleComplete(itemId: string, currentStatus: boolean) {
-    const { error } = await supabase
-      .from("events")
-      .update({ completed: !currentStatus })
-      .eq("id", itemId);
-
-    if (!error) {
+  // ===== TOGGLE COMPLETE STATUS (FIXED) =====
+  async function toggleComplete(itemId: string, currentStatus: boolean, itemType: 'reminder' | 'todo') {
+    if (!me) return;
+    
+    try {
+      const { error } = await supabase
+        .from("events")
+        .update({ completed: !currentStatus })
+        .eq("id", itemId)
+        .eq("created_by", me); // Ensure user owns the item
+      
+      if (error) {
+        console.error('Toggle complete error:', error);
+        showToast({
+          type: 'error',
+          message: 'Failed to update item. Please try again.'
+        });
+        return;
+      }
+      
       showToast({
         type: 'success',
         message: currentStatus ? 'Marked as incomplete' : 'Marked as complete!'
       });
+      
+      // Immediately update local state for responsive UI
+      if (itemType === 'reminder') {
+        setReminders(prev => prev.map(r => 
+          r.id === itemId ? { ...r, completed: !currentStatus } : r
+        ));
+      } else {
+        setTodos(prev => prev.map(t => 
+          t.id === itemId ? { ...t, completed: !currentStatus } : t
+        ));
+      }
+      
+      // Then reload from database to ensure sync
       loadCalendar();
+    } catch (error: any) {
+      console.error('Toggle complete error:', error);
+      showToast({
+        type: 'error',
+        message: 'Failed to update item'
+      });
     }
   }
 
@@ -915,14 +947,6 @@ export default function CalendarPage() {
     });
   };
 
-  const handleThemeChange = (newTheme: CalendarTheme) => {
-    setCalendarTheme(newTheme);
-    showToast({
-      type: 'success',
-      message: `Theme changed to ${newTheme}`
-    });
-  };
-
   // Get events for the calendar based on mode
   const calendarEvents = useMemo(() => {
     if (mode === 'whats') {
@@ -942,23 +966,25 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
-      {/* Animated Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 left-20 w-96 h-96 bg-purple-200 rounded-full
-                      mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
-        <div className="absolute top-40 right-20 w-96 h-96 bg-pink-200 rounded-full
-                      mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000" />
-        <div className="absolute bottom-20 left-1/2 w-96 h-96 bg-yellow-200 rounded-full
-                      mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
-      </div>
+      {/* Animated Background - Desktop only */}
+      {!isMobile ? (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-20 left-20 w-96 h-96 bg-purple-200 rounded-full
+                        mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
+          <div className="absolute top-40 right-20 w-96 h-96 bg-pink-200 rounded-full
+                        mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000" />
+          <div className="absolute bottom-20 left-1/2 w-96 h-96 bg-yellow-200 rounded-full
+                        mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
+        </div>
+      ) : null}
 
       {/* Main Container */}
       <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
         <div className="mb-6 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col gap-4">
             {/* Title & Mode Toggle */}
-            <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600
                            bg-clip-text text-transparent">
                 Calendar
@@ -967,7 +993,7 @@ export default function CalendarPage() {
               <div className="flex rounded-full bg-white/90 shadow-md p-1">
                 <button
                   onClick={() => setMode('my')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                     mode === 'my'
                       ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
                       : 'text-gray-600 hover:text-gray-900'
@@ -977,7 +1003,7 @@ export default function CalendarPage() {
                 </button>
                 <button
                   onClick={() => setMode('whats')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                     mode === 'whats'
                       ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
                       : 'text-gray-600 hover:text-gray-900'
@@ -988,84 +1014,90 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Controls */}
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Analytics */}
-              <button
-                onClick={() => setShowAnalytics(true)}
-                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                title="View analytics"
-              >
-                📊
-              </button>
+            {/* Controls - Horizontal scroll on mobile */}
+            <div className="overflow-x-auto pb-2">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-max">
+                {/* Create Button */}
+                <button
+                  onClick={() => setOpenCreate(true)}
+                  className="px-4 py-2 rounded-full font-medium text-white
+                           bg-gradient-to-r from-purple-600 to-pink-600
+                           shadow-lg flex items-center gap-2 whitespace-nowrap"
+                >
+                  <span className="text-lg">+</span>
+                  <span>Event</span>
+                </button>
 
-              {/* Templates */}
-              <button
-                onClick={() => setShowTemplates(true)}
-                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                title="Smart templates"
-              >
-                ✨
-              </button>
+                {/* Mobile Menu Toggle for Lists */}
+                {isMobile && mode === 'my' && (
+                  <button
+                    onClick={() => setMobileMenuOpen(true)}
+                    className="px-4 py-2 rounded-full bg-white shadow-md 
+                             text-gray-600 flex items-center gap-2"
+                  >
+                    <span>📋</span>
+                    <span className="text-sm">Lists</span>
+                  </button>
+                )}
 
-              {/* Meeting Coordinator */}
-              <button
-                onClick={() => setShowMeetingCoordinator(true)}
-                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                title="Find meeting time"
-              >
-                🤝
-              </button>
+                {/* Feature Buttons */}
+                <button
+                  onClick={() => setShowAnalytics(true)}
+                  className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                  title="View analytics"
+                >
+                  📊
+                </button>
 
-              {/* Moon Toggle */}
-              <button
-                onClick={() => setShowMoon(!showMoon)}
-                className={`p-2 rounded-full transition-all duration-300 ${
-                  showMoon
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
-                    : 'bg-white text-gray-600 hover:shadow-md'
-                }`}
-                title="Toggle moon phases"
-              >
-                🌙
-              </button>
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                  title="Smart templates"
+                >
+                  ✨
+                </button>
 
-              {/* Theme Selector */}
-              <CalendarThemeSelector
-                value={calendarTheme}
-                onChange={handleThemeChange}
-              />
+                <button
+                  onClick={() => setShowMeetingCoordinator(true)}
+                  className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                  title="Find meeting time"
+                >
+                  🤝
+                </button>
 
-              {/* Keyboard Shortcuts */}
-              <button
-                onClick={() => setShowShortcutsHelp(true)}
-                className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
-                title="Keyboard shortcuts (press ?)"
-              >
-                ⌨️
-              </button>
+                {/* Moon Toggle */}
+                <button
+                  onClick={() => setShowMoon(!showMoon)}
+                  className={`p-2 rounded-full transition-all duration-300 ${
+                    showMoon
+                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+                      : 'bg-white text-gray-600 hover:shadow-md'
+                  }`}
+                  title="Toggle moon phases"
+                >
+                  🌙
+                </button>
 
-              {/* Create Button */}
-              <button
-                onClick={() => setOpenCreate(true)}
-                className="px-4 lg:px-6 py-2 rounded-full font-medium text-white
-                         bg-gradient-to-r from-purple-600 to-pink-600
-                         hover:from-purple-700 hover:to-pink-700
-                         transform transition-all duration-300 hover:scale-105
-                         shadow-lg hover:shadow-xl flex items-center gap-2"
-              >
-                <span className="text-lg">+</span>
-                <span className="hidden sm:inline">Create Event</span>
-              </button>
+                {/* Keyboard Shortcuts - Desktop only */}
+                {!isMobile && (
+                  <button
+                    onClick={() => setShowShortcutsHelp(true)}
+                    className="p-2 rounded-full bg-white text-gray-600 hover:shadow-md transition-all"
+                    title="Keyboard shortcuts (press ?)"
+                  >
+                    ⌨️
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
-          <div className="flex gap-4 p-4">
-            {/* Sidebar - Todo/Reminder Lists & Carpool */}
-            {mode === 'my' && (
+          <div className="flex gap-4 p-2 sm:p-4">
+            {/* Sidebar - Desktop only */}
+            {mode === 'my' && !isMobile && (
               <div className="w-64 shrink-0 hidden lg:block">
                 <div className="bg-white rounded-lg shadow-md">
                   
@@ -1099,6 +1131,13 @@ export default function CalendarPage() {
                               </div>
                             </div>
                           ))}
+                        </div>
+                      ) : friends.length === 0 ? (
+                        <div className="text-center py-3">
+                          <p className="text-xs text-gray-400 mb-2">No friends added yet</p>
+                          <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Invite Friends
+                          </button>
                         </div>
                       ) : (
                         <p className="text-xs text-gray-400 italic mb-3">
@@ -1165,29 +1204,39 @@ export default function CalendarPage() {
                                             hover:bg-amber-100 transition-colors ${
                                     r.completed ? 'opacity-50' : ''
                                   }`}
-                                  draggable
+                                  draggable={!isMobile}
                                   onDragStart={() => {
-                                    setDraggedItem({ id: r.id, title: r.title, type: 'reminder' });
-                                    setDragType('reminder');
+                                    if (!isMobile) {
+                                      setDraggedItem({ id: r.id, title: r.title, type: 'reminder' });
+                                      setDragType('reminder');
+                                    }
                                   }}
                                   onDragEnd={() => {
-                                    setDraggedItem(null);
-                                    setDragType('none');
+                                    if (!isMobile) {
+                                      setDraggedItem(null);
+                                      setDragType('none');
+                                    }
                                   }}
                                 >
                                   <input
                                     type="checkbox"
-                                    checked={r.completed}
-                                    onChange={() => toggleComplete(r.id, r.completed)}
-                                    className="rounded-sm"
+                                    checked={r.completed || false}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      toggleComplete(r.id, r.completed, 'reminder');
+                                    }}
+                                    className="rounded-sm cursor-pointer"
                                   />
-                                  <span className={`flex-1 text-sm cursor-move ${
+                                  <span className={`flex-1 text-sm ${isMobile ? '' : 'cursor-move'} ${
                                     r.completed ? 'line-through' : ''
                                   }`}>
                                     {r.title}
                                   </span>
                                   <button
-                                    onClick={() => deleteItem(r.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteItem(r.id);
+                                    }}
                                     className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700
                                              text-xs transition-opacity"
                                   >
@@ -1198,7 +1247,7 @@ export default function CalendarPage() {
                             )}
                           </div>
 
-                          {visibleReminders.length > 0 && (
+                          {!isMobile && visibleReminders.length > 0 && (
                             <p className="text-xs text-gray-500 mt-2 italic">
                               Drag items to calendar to create copies
                             </p>
@@ -1242,29 +1291,39 @@ export default function CalendarPage() {
                                           hover:bg-green-100 transition-colors ${
                                   t.completed ? 'opacity-50' : ''
                                 }`}
-                                draggable
+                                draggable={!isMobile}
                                 onDragStart={() => {
-                                  setDraggedItem({ id: t.id, title: t.title, type: 'todo' });
-                                  setDragType('todo');
+                                  if (!isMobile) {
+                                    setDraggedItem({ id: t.id, title: t.title, type: 'todo' });
+                                    setDragType('todo');
+                                  }
                                 }}
                                 onDragEnd={() => {
-                                  setDraggedItem(null);
-                                  setDragType('none');
+                                  if (!isMobile) {
+                                    setDraggedItem(null);
+                                    setDragType('none');
+                                  }
                                 }}
                               >
                                 <input
                                   type="checkbox"
-                                  checked={t.completed}
-                                  onChange={() => toggleComplete(t.id, t.completed)}
-                                  className="rounded-sm"
+                                  checked={t.completed || false}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    toggleComplete(t.id, t.completed, 'todo');
+                                  }}
+                                  className="rounded-sm cursor-pointer"
                                 />
-                                <span className={`flex-1 text-sm cursor-move ${
+                                <span className={`flex-1 text-sm ${isMobile ? '' : 'cursor-move'} ${
                                   t.completed ? 'line-through' : ''
                                 }`}>
                                   {t.title}
                                 </span>
                                 <button
-                                  onClick={() => deleteItem(t.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteItem(t.id);
+                                  }}
                                   className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700
                                            text-xs transition-opacity"
                                 >
@@ -1275,7 +1334,7 @@ export default function CalendarPage() {
                           )}
                         </div>
 
-                        {visibleTodos.length > 0 && (
+                        {!isMobile && visibleTodos.length > 0 && (
                           <p className="text-xs text-gray-500 mt-2 italic">
                             Drag items to calendar to create copies
                           </p>
@@ -1288,28 +1347,202 @@ export default function CalendarPage() {
             )}
 
             {/* Calendar Grid */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <CalendarGrid
                 dbEvents={calendarEvents as any}
                 moonEvents={showMoon ? moonEvents : []}
                 showMoon={showMoon}
                 showWeather={false}
-                theme={calendarTheme}
+                theme="default"
                 date={date}
                 setDate={setDate}
                 view={view}
                 setView={setView}
                 onSelectSlot={onSelectSlot}
                 onSelectEvent={onSelectEvent}
-                onDrop={onDrop}
-                onResize={onResize}
-                externalDragType={dragType}
+                onDrop={isMobile ? undefined : onDrop}
+                onResize={isMobile ? undefined : onResize}
+                externalDragType={isMobile ? 'none' : dragType}
                 externalDragTitle={draggedItem?.title}
-                onExternalDrop={onExternalDrop}
+                onExternalDrop={isMobile ? undefined : onExternalDrop}
               />
             </div>
           </div>
         </div>
+
+        {/* Mobile Lists Menu */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
+            
+            <div className="fixed left-0 top-0 h-full w-80 bg-white shadow-xl overflow-y-auto">
+              <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+                <h2 className="font-semibold text-lg">My Lists</h2>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 rounded-lg hover:bg-white/20"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Carpool Section */}
+              <div className="border-b p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-700">Carpool</h3>
+                  <button
+                    onClick={() => {
+                      openCarpoolChat();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="text-xs px-2 py-1 bg-green-500 text-white rounded"
+                  >
+                    + Start
+                  </button>
+                </div>
+
+                {carpoolMatches.length > 0 ? (
+                  <div className="space-y-2 mb-3">
+                    {carpoolMatches.slice(0, 3).map((match, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 bg-green-50 rounded-lg"
+                        onClick={() => {
+                          openCarpoolChat(match.event);
+                          setMobileMenuOpen(false);
+                        }}
+                      >
+                        <div className="text-xs font-medium text-green-800">
+                          {match.event.title}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          {match.friends.length} friend{match.friends.length > 1 ? 's' : ''} going
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : friends.length === 0 ? (
+                  <div className="text-center py-3">
+                    <p className="text-sm text-gray-400 mb-2">No friends added yet</p>
+                    <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded">
+                      Invite Friends
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">
+                    No carpool matches found
+                  </p>
+                )}
+              </div>
+
+              {/* Reminders Section */}
+              <div className="border-b p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-700">
+                    Reminders ({visibleReminders.length})
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setQuickModalType('reminder');
+                      setQuickModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="text-xs px-2 py-1 bg-amber-500 text-white rounded"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                <div className="mb-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={showCompletedItems}
+                      onChange={(e) => setShowCompletedItems(e.target.checked)}
+                      className="rounded"
+                    />
+                    Show completed
+                  </label>
+                </div>
+                
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {visibleReminders.length === 0 ? (
+                    <p className="text-sm text-gray-400 italic p-2">No reminders yet</p>
+                  ) : (
+                    visibleReminders.map(r => (
+                      <div key={r.id} className={`p-2 bg-amber-50 rounded-lg flex items-center gap-2 ${
+                        r.completed ? 'opacity-50' : ''
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={r.completed || false}
+                          onChange={() => toggleComplete(r.id, r.completed, 'reminder')}
+                          className="rounded-sm"
+                        />
+                        <span className={`flex-1 text-sm ${r.completed ? 'line-through' : ''}`}>
+                          {r.title}
+                        </span>
+                        <button
+                          onClick={() => deleteItem(r.id)}
+                          className="text-red-500 text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* To-dos Section */}
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-700">
+                    To-dos ({visibleTodos.length})
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setQuickModalType('todo');
+                      setQuickModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="text-xs px-2 py-1 bg-green-500 text-white rounded"
+                  >
+                    + Add
+                  </button>
+                </div>
+                
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {visibleTodos.length === 0 ? (
+                    <p className="text-sm text-gray-400 italic p-2">No to-dos yet</p>
+                  ) : (
+                    visibleTodos.map(t => (
+                      <div key={t.id} className={`p-2 bg-green-50 rounded-lg flex items-center gap-2 ${
+                        t.completed ? 'opacity-50' : ''
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={t.completed || false}
+                          onChange={() => toggleComplete(t.id, t.completed, 'todo')}
+                          className="rounded-sm"
+                        />
+                        <span className={`flex-1 text-sm ${t.completed ? 'line-through' : ''}`}>
+                          {t.title}
+                        </span>
+                        <button
+                          onClick={() => deleteItem(t.id)}
+                          className="text-red-500 text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Modal for Custom Reminders/Todos */}
         {quickModalOpen && (
@@ -1457,42 +1690,55 @@ export default function CalendarPage() {
               )}
               
               <div className="space-y-3">
-                <p className="text-sm text-gray-600">
-                  Select friends to add to this carpool group:
-                </p>
-                
-                <div className="max-h-64 overflow-y-auto space-y-2">
-                  {friends.map(friend => (
-                    <label key={friend.friend_id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
-                      <input type="checkbox" className="rounded" />
-                      <span className="text-sm">{friend.name}</span>
-                      {friend.safe_to_carpool && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
-                          Carpool safe
-                        </span>
-                      )}
-                    </label>
-                  ))}
-                </div>
+                {friends.length === 0 ? (
+                  <div className="text-center py-6">
+                    <p className="text-gray-600 mb-4">No friends added yet</p>
+                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                      Invite Friends to MyZenTribe
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600">
+                      Select friends to add to this carpool group:
+                    </p>
+                    
+                    <div className="max-h-64 overflow-y-auto space-y-2">
+                      {friends.map(friend => (
+                        <label key={friend.friend_id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
+                          <input type="checkbox" className="rounded" />
+                          <span className="text-sm">{friend.name}</span>
+                          {friend.safe_to_carpool && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                              Carpool safe
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
               
               <div className="flex gap-3 mt-6">
-                <button
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg
-                           hover:bg-green-700 transition-colors"
-                  onClick={() => {
-                    showToast({ type: 'success', message: 'Carpool chat created!' });
-                    setShowCarpoolChat(false);
-                  }}
-                >
-                  Start Chat
-                </button>
+                {friends.length > 0 && (
+                  <button
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg
+                             hover:bg-green-700 transition-colors"
+                    onClick={() => {
+                      showToast({ type: 'success', message: 'Carpool chat created!' });
+                      setShowCarpoolChat(false);
+                    }}
+                  >
+                    Start Chat
+                  </button>
+                )}
                 <button
                   onClick={() => setShowCarpoolChat(false)}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg
                            hover:bg-gray-300 transition-colors"
                 >
-                  Cancel
+                  {friends.length === 0 ? 'Close' : 'Cancel'}
                 </button>
               </div>
             </div>
@@ -1577,11 +1823,13 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Keyboard Shortcuts Help */}
-        <KeyboardShortcutsHelp 
-          open={showShortcutsHelp} 
-          onClose={() => setShowShortcutsHelp(false)} 
-        />
+        {/* Keyboard Shortcuts Help - Desktop only */}
+        {!isMobile && (
+          <KeyboardShortcutsHelp 
+            open={showShortcutsHelp} 
+            onClose={() => setShowShortcutsHelp(false)} 
+          />
+        )}
       </div>
 
       <style jsx>{`
