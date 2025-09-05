@@ -847,9 +847,23 @@ export default function GratitudePage() {
               
               <button
                 onClick={() => window.location.href = '/gratitude/photos'}
-                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+                className="w-full py-3 rounded-xl mb-3 border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
               >
                 🖼️ Photo Library
+              </button>
+              
+              <button
+                onClick={() => {
+                  // Try direct calendar integration first, fall back to URL params
+                  if (confirm("Schedule daily reflection time at the same time each day?")) {
+                    scheduleReflectionTime(true); // Recurring
+                  } else {
+                    scheduleReflectionTime(false); // One-time
+                  }
+                }}
+                className="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:bg-gray-50 transition-colors"
+              >
+                📅 Schedule Reflection Time
               </button>
               
               {showPrompts && (
