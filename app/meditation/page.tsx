@@ -1,4 +1,4 @@
-// app/meditation/page.tsx
+// app/meditation/page.tsx - Meditation Lobby
 "use client";
 
 import { useEffect, useState, Suspense } from 'react';
@@ -20,14 +20,50 @@ to every user who joins. May this bring hope and inspiration to thousands, if no
 around the world. And so it is done, and so it is done.
 `.trim();
 
-// Background options
+// Background options with proper image paths
 const MEDITATION_BACKGROUNDS = [
-  { id: 'sunset', name: 'Golden Sunset', image: '/mz/sunset.jpg', description: 'Peaceful golden hour' },
-  { id: 'river', name: 'Flowing River', image: '/mz/river.gif', description: 'Gentle flowing water' },
-  { id: 'mandala', name: 'Sacred Mandala', image: '/mz/mandala.gif', description: 'Swirling sacred geometry' },
-  { id: 'forest', name: 'Forest Creek', image: '/mz/forest-creek.gif', description: 'Tranquil forest stream' },
-  { id: 'beach', name: 'Ocean Waves', image: '/mz/beach.jpg', description: 'Peaceful shoreline' },
-  { id: 'candle', name: 'Candlelight', image: '/mz/candle-room.jpg', description: 'Warm candlelit space' },
+  { 
+    id: 'sunset', 
+    name: 'Golden Sunset', 
+    image: '/mz/sunset.jpg', 
+    description: 'Peaceful golden hour',
+    overlay: 'linear-gradient(rgba(245,158,11,0.1), rgba(217,119,6,0.2))'
+  },
+  { 
+    id: 'river', 
+    name: 'Flowing River', 
+    image: '/mz/forest-creek.gif', 
+    description: 'Gentle flowing water',
+    overlay: 'linear-gradient(rgba(34,197,94,0.1), rgba(21,128,61,0.2))'
+  },
+  { 
+    id: 'mandala', 
+    name: 'Sacred Mandala', 
+    image: '/mz/patterns.jpg', 
+    description: 'Swirling sacred geometry',
+    overlay: 'linear-gradient(rgba(147,51,234,0.1), rgba(126,34,206,0.2))'
+  },
+  { 
+    id: 'beach', 
+    name: 'Ocean Waves', 
+    image: '/mz/beach.jpg', 
+    description: 'Peaceful shoreline',
+    overlay: 'linear-gradient(rgba(14,165,233,0.1), rgba(3,105,161,0.2))'
+  },
+  { 
+    id: 'forest', 
+    name: 'Forest Creek', 
+    image: '/mz/forest-creek.gif', 
+    description: 'Tranquil forest stream',
+    overlay: 'linear-gradient(rgba(34,197,94,0.1), rgba(21,128,61,0.2))'
+  },
+  { 
+    id: 'candle', 
+    name: 'Candlelight', 
+    image: '/mz/candle-room.jpg', 
+    description: 'Warm candlelit space',
+    overlay: 'linear-gradient(rgba(245,158,11,0.1), rgba(217,119,6,0.2))'
+  },
 ];
 
 function MeditationContent() {
@@ -40,7 +76,8 @@ function MeditationContent() {
   const [showAnonymous, setShowAnonymous] = useState(false);
   const [tribePulse, setTribePulse] = useState(0);
   const [activeParticipants, setActiveParticipants] = useState(0);
-  const [showCandleModal, setShowCandleModal] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
 
   useEffect(() => {
     initializeMeditation();
@@ -70,6 +107,9 @@ function MeditationContent() {
       
       // Get current active participants
       await getActiveParticipants();
+
+      // Load recent lobby chat messages
+      await loadChatMessages();
 
     } catch (error) {
       console.error('Meditation initialization error:', error);
@@ -115,8 +155,46 @@ function MeditationContent() {
     }
   };
 
-  const joinSession = async () => {
-    if (!currentUser) return;
+  const loadChatMessages = async () => {
+    try {
+      const { data: messages } = await supabase
+        .from('lobby_chat')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      setChatMessages(messages || []);
+    } catch (error) {
+      console.error('Chat messages error:', error);
+    }
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatMessage.trim() || !currentUser) return;
+
+    try {
+      const { error } = await supabase
+        .from('lobby_chat')
+        .insert({
+          user_id: showAnonymous ? null : currentUser.id,
+          message: chatMessage.trim(),
+          is_anonymous: showAnonymous
+        });
+
+      if (!error) {
+        setChatMessage('');
+        await loadChatMessages();
+      }
+    } catch (error) {
+      console.error('Send message error:', error);
+    }
+  };
+
+  const joinMeditation = async () => {
+    if (!currentUser || !selectedBackground) {
+      alert('Please select a sacred environment first');
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -125,34 +203,18 @@ function MeditationContent() {
           user_id: showAnonymous ? null : currentUser.id,
           is_anonymous: showAnonymous,
           joined_at: new Date().toISOString(),
-          session_id: eventId || 'general'
+          session_id: eventId || 'general',
+          background_choice: selectedBackground
         });
 
       if (!error) {
         setIsJoined(true);
         await getActiveParticipants();
+        // Redirect to actual meditation room
+        window.location.href = `/meditation/room?bg=${selectedBackground}&eventId=${eventId || ''}`;
       }
     } catch (error) {
-      console.error('Join session error:', error);
-    }
-  };
-
-  const leaveSession = async () => {
-    if (!currentUser) return;
-
-    try {
-      const { error } = await supabase
-        .from('meditation_presence')
-        .update({ left_at: new Date().toISOString() })
-        .eq('user_id', showAnonymous ? null : currentUser.id)
-        .is('left_at', null);
-
-      if (!error) {
-        setIsJoined(false);
-        await getActiveParticipants();
-      }
-    } catch (error) {
-      console.error('Leave session error:', error);
+      console.error('Join meditation error:', error);
     }
   };
 
@@ -174,52 +236,56 @@ function MeditationContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="text-white text-center">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
+        <div className="text-amber-800 text-center">
           <div className="relative mb-6">
-            <div className="animate-pulse w-16 h-16 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full mx-auto"></div>
-            <div className="absolute inset-0 w-16 h-16 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full mx-auto animate-ping opacity-20"></div>
+            <div className="animate-pulse w-16 h-16 bg-gradient-to-r from-amber-400 to-orange-400 rounded-full mx-auto"></div>
+            <div className="absolute inset-0 w-16 h-16 bg-gradient-to-r from-amber-400 to-orange-400 rounded-full mx-auto animate-ping opacity-20"></div>
           </div>
-          <p className="text-lg">Preparing your sacred space...</p>
+          <p className="text-lg">Opening the sacred lobby...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div 
-      className="min-h-screen relative overflow-hidden flex flex-col"
-      style={{
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url(${currentBg.image})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
-      }}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 relative overflow-hidden">
+      
+      {/* Hidden protective shield background */}
+      <div 
+        className="absolute inset-0 opacity-5 bg-center bg-no-repeat bg-contain pointer-events-none"
+        style={{
+          backgroundImage: 'url(/mz/shield.png)',
+          backgroundSize: '800px',
+          filter: 'sepia(100%) saturate(200%) hue-rotate(25deg)'
+        }}
+      />
+      
       {/* Header with Tribe Pulse */}
       <div className="relative z-10 p-4 md:p-6">
         <div className="max-w-6xl mx-auto flex justify-between items-start">
-          <div className="text-white">
+          <div className="text-amber-900">
             <h1 className="text-2xl md:text-4xl font-bold mb-2 flex items-center gap-3">
               <div className="relative">
                 <span className="text-3xl md:text-4xl">🧘</span>
-                <div className="absolute inset-0 animate-pulse bg-white/20 rounded-full scale-150"></div>
+                <div className="absolute inset-0 animate-pulse bg-amber-300/30 rounded-full scale-150"></div>
               </div>
-              Meditation Room
+              Meditation Lobby
             </h1>
-            <p className="text-white/90 text-sm md:text-base">
+            <p className="text-amber-700 text-sm md:text-base">
               Creating a continuous flow of healing energy into the world
             </p>
           </div>
 
           {/* Tribe Pulse Display */}
-          <div className="text-center text-white">
+          <div className="text-center text-amber-900">
             <div className="relative">
               <svg className="w-16 h-16 md:w-20 md:h-20 transform -rotate-90">
                 <circle
                   cx="50%"
                   cy="50%"
                   r="30"
-                  stroke="rgba(255,255,255,0.2)"
+                  stroke="rgba(180,83,9,0.2)"
                   strokeWidth="4"
                   fill="none"
                 />
@@ -235,8 +301,8 @@ function MeditationContent() {
                 />
                 <defs>
                   <linearGradient id="pulseGradient">
-                    <stop offset="0%" stopColor="#8B5CF6" />
-                    <stop offset="100%" stopColor="#EC4899" />
+                    <stop offset="0%" stopColor="#F59E0B" />
+                    <stop offset="100%" stopColor="#EA580C" />
                   </linearGradient>
                 </defs>
               </svg>
@@ -250,192 +316,229 @@ function MeditationContent() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full p-4 gap-6">
+      <div className="flex flex-col lg:flex-row max-w-6xl mx-auto w-full p-4 gap-6">
         
-        {/* Left Panel - Controls */}
-        <div className="md:w-80 space-y-4">
+        {/* Left Panel - Sacred Environment Selection */}
+        <div className="lg:w-80 space-y-6">
           
-          {/* Join/Leave Controls */}
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-            <h3 className="text-white font-semibold mb-4">Enter the Sacred Space</h3>
-            
-            {!isJoined ? (
-              <div className="space-y-4">
-                <label className="flex items-center text-white text-sm">
-                  <input
-                    type="checkbox"
-                    checked={showAnonymous}
-                    onChange={(e) => setShowAnonymous(e.target.checked)}
-                    className="mr-2 rounded"
-                  />
-                  Join anonymously
-                </label>
-                
-                <button
-                  onClick={joinSession}
-                  disabled={!currentUser}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-6 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all font-medium disabled:opacity-50"
-                >
-                  {currentUser ? 'Join Meditation' : 'Sign in to Join'}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="text-white/90 text-sm bg-green-500/20 p-3 rounded-lg">
-                  You are currently meditating ✨
-                </div>
-                <button
-                  onClick={leaveSession}
-                  className="w-full bg-white/20 text-white py-3 px-6 rounded-lg hover:bg-white/30 transition-all font-medium"
-                >
-                  Complete Session
-                </button>
-              </div>
-            )}
-            
-            <div className="mt-4 pt-4 border-t border-white/20">
-              <p className="text-white/75 text-sm">
-                {activeParticipants} {activeParticipants === 1 ? 'soul' : 'souls'} currently meditating
-              </p>
-            </div>
-          </div>
-
-          {/* Background Selector */}
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-            <h3 className="text-white font-semibold mb-4">Sacred Environment</h3>
-            <div className="grid grid-cols-2 gap-2">
+          {/* Background Selector - Must Choose First */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
+              🌅 Choose Your Sacred Environment
+            </h3>
+            <p className="text-amber-700 text-sm mb-4">
+              Select your meditation backdrop before entering
+            </p>
+            <div className="grid grid-cols-2 gap-3">
               {MEDITATION_BACKGROUNDS.map((bg) => (
                 <button
                   key={bg.id}
                   onClick={() => updateBackground(bg.id)}
                   className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${
                     selectedBackground === bg.id 
-                      ? 'border-purple-400 ring-2 ring-purple-400/50' 
-                      : 'border-white/20 hover:border-white/40'
+                      ? 'border-amber-500 ring-2 ring-amber-400/50 shadow-lg' 
+                      : 'border-amber-200 hover:border-amber-300'
                   }`}
                 >
                   <img
                     src={bg.image}
                     alt={bg.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback for missing images
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling!.textContent = bg.name;
+                    }}
                   />
-                  <div className="absolute inset-0 bg-black/20 flex items-end p-2">
-                    <span className="text-white text-xs font-medium">{bg.name}</span>
+                  <div 
+                    className="absolute inset-0 flex items-end p-2"
+                    style={{ background: bg.overlay }}
+                  >
+                    <span className="text-white text-xs font-medium drop-shadow-sm">{bg.name}</span>
                   </div>
+                  {selectedBackground === bg.id && (
+                    <div className="absolute top-1 right-1">
+                      <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Light a Candle */}
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+          {/* Join Controls */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4">Enter Sacred Space</h3>
+            
+            <div className="space-y-4">
+              <label className="flex items-center text-amber-800 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showAnonymous}
+                  onChange={(e) => setShowAnonymous(e.target.checked)}
+                  className="mr-2 rounded accent-amber-500"
+                />
+                Join anonymously
+              </label>
+              
+              <button
+                onClick={joinMeditation}
+                disabled={!currentUser || !selectedBackground}
+                className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {!currentUser 
+                  ? 'Sign in to Join' 
+                  : !selectedBackground 
+                  ? 'Choose Environment First'
+                  : 'Begin Meditation'
+                }
+              </button>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-amber-200">
+              <p className="text-amber-700 text-sm">
+                {activeParticipants} {activeParticipants === 1 ? 'soul' : 'souls'} currently meditating
+              </p>
+            </div>
+          </div>
+
+          {/* Light a Candle Link */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
               🕯️ Light a Candle
             </h3>
-            <p className="text-white/80 text-sm mb-4">
+            <p className="text-amber-700 text-sm mb-4">
               Send healing light for a loved one
             </p>
-            <button
-              onClick={() => setShowCandleModal(true)}
-              className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium"
+            <a
+              href="/candles"
+              className="block w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium text-center"
             >
-              Light Candle ($0.99)
-            </button>
+              Visit Candle Room
+            </a>
           </div>
         </div>
 
-        {/* Center - Meditation Space */}
+        {/* Center - Preview */}
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-white max-w-md">
+          <div className="text-center text-amber-900 max-w-md">
             {eventId && (
-              <div className="mb-8 p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/20">
-                <p className="text-lg">Group Meditation Session</p>
+              <div className="mb-8 p-4 bg-white/60 rounded-lg backdrop-blur-sm border border-amber-200">
+                <p className="text-lg font-semibold">Group Meditation Session</p>
                 <p className="text-sm opacity-75">Event ID: {eventId}</p>
               </div>
             )}
 
             <div className="space-y-6">
+              {/* Preview of selected background */}
               <div className="relative">
-                <div className="w-32 h-32 mx-auto bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-4xl">
-                  {isJoined ? '✨' : '🧘'}
+                <div 
+                  className="w-48 h-32 mx-auto rounded-2xl overflow-hidden border-4 border-amber-300 shadow-xl"
+                  style={{
+                    backgroundImage: `${currentBg.overlay}, url(${currentBg.image})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  }}
+                >
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="text-white text-2xl drop-shadow-lg">🧘</div>
+                  </div>
                 </div>
-                {isJoined && (
-                  <div className="absolute inset-0 w-32 h-32 mx-auto border-4 border-purple-400 rounded-full animate-ping opacity-30"></div>
-                )}
+                <div className="absolute -inset-2 border-2 border-amber-400 rounded-2xl animate-pulse opacity-30"></div>
               </div>
               
               <div>
                 <h2 className="text-2xl font-bold mb-2">
-                  {isJoined ? 'You are in meditation' : 'Find your center'}
+                  {selectedBackground ? `${currentBg.name} Selected` : 'Choose Your Environment'}
                 </h2>
-                <p className="text-white/80">
-                  {isJoined 
-                    ? 'Breathe deeply. Feel the collective energy of healing flowing through you.'
-                    : 'Breathe deeply. Let peace flow through you and into the world.'
+                <p className="text-amber-700">
+                  {selectedBackground 
+                    ? 'Ready to begin your meditation journey'
+                    : 'Select a sacred environment to start'
                   }
                 </p>
               </div>
-
-              {isJoined && (
-                <div className="text-sm text-white/70 bg-white/5 rounded-lg p-4">
-                  "In the stillness of the present moment, we find infinite peace."
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Right Panel - Group Chat (if event) */}
-        {eventId && (
-          <div className="md:w-80">
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 h-80">
-              <h3 className="text-white font-semibold mb-4">Group Circle</h3>
-              <div className="text-white/75 text-sm">
-                Group chat feature coming soon...
-              </div>
+        {/* Right Panel - Lobby Chat */}
+        <div className="lg:w-80">
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-amber-200 shadow-lg h-96 flex flex-col">
+            <div className="p-4 border-b border-amber-200">
+              <h3 className="text-amber-900 font-semibold flex items-center gap-2">
+                💝 Share What's On Your Heart
+              </h3>
             </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {chatMessages.length === 0 ? (
+                <div className="text-amber-600 text-sm text-center py-8">
+                  Be the first to share what's on your heart...
+                </div>
+              ) : (
+                chatMessages.slice().reverse().map((msg, index) => (
+                  <div key={index} className="text-sm">
+                    <div className="font-medium text-amber-800">
+                      {msg.is_anonymous ? 'Anonymous Soul' : (msg.user_name || 'Friend')}
+                    </div>
+                    <div className="text-amber-700">{msg.message}</div>
+                    <div className="text-xs text-amber-600 opacity-75">
+                      {new Date(msg.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {currentUser && (
+              <div className="p-4 border-t border-amber-200">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                    placeholder="Share your heart..."
+                    className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    maxLength={200}
+                  />
+                  <button
+                    onClick={sendChatMessage}
+                    disabled={!chatMessage.trim()}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+                  >
+                    💝
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Footer */}
       <div className="relative z-10 p-4 text-center">
         <a 
           href="/calendar"
-          className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 text-amber-700 hover:text-amber-900 transition-colors"
         >
           ← Back to Calendar
         </a>
       </div>
-
-      {/* Candle Modal Placeholder */}
-      {showCandleModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Light a Candle</h3>
-            <p className="text-gray-600 mb-4">
-              Feature coming soon - Light a virtual candle for a loved one
-            </p>
-            <button
-              onClick={() => setShowCandleModal(false)}
-              className="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export default function MeditationPage() {
+export default function MeditationLobbyPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p>Opening sacred space...</p>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
+        <div className="text-amber-800 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
+          <p>Opening sacred lobby...</p>
         </div>
       </div>
     }>
