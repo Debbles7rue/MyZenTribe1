@@ -209,6 +209,65 @@ export default function CalendarPage() {
     }
   }, []);
 
+  // ===== MOBILE SWIPE GESTURE HANDLING =====
+  useEffect(() => {
+    if (!isMobile) return;
+    
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    };
+    
+    const handleTouchEnd = (e: TouchEvent) => {
+      touchEndX = e.changedTouches[0].screenX;
+      touchEndY = e.changedTouches[0].screenY;
+      handleSwipe();
+    };
+    
+    const handleSwipe = () => {
+      const swipeThreshold = 50;
+      const horizontalSwipe = Math.abs(touchEndX - touchStartX);
+      const verticalSwipe = Math.abs(touchEndY - touchStartY);
+      
+      // Only process horizontal swipes that are stronger than vertical
+      if (horizontalSwipe > verticalSwipe && horizontalSwipe > swipeThreshold) {
+        if (touchEndX < touchStartX) {
+          // Swiped left - go to next period
+          const newDate = new Date(date);
+          if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+          else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+          else newDate.setDate(newDate.getDate() + 1);
+          setDate(newDate);
+          showToast({ type: 'info', message: '→ Next' });
+        } else {
+          // Swiped right - go to previous period
+          const newDate = new Date(date);
+          if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+          else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+          else newDate.setDate(newDate.getDate() - 1);
+          setDate(newDate);
+          showToast({ type: 'info', message: '← Previous' });
+        }
+      }
+    };
+    
+    const calendarElement = document.querySelector('.rbc-calendar');
+    if (calendarElement) {
+      calendarElement.addEventListener('touchstart', handleTouchStart);
+      calendarElement.addEventListener('touchend', handleTouchEnd);
+      
+      return () => {
+        calendarElement.removeEventListener('touchstart', handleTouchStart);
+        calendarElement.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [isMobile, date, view, setDate, showToast]);
+
   // ===== LOAD FRIENDS =====
   async function loadFriends() {
     if (!me) return;
@@ -515,21 +574,21 @@ export default function CalendarPage() {
 
   useKeyboardShortcuts(shortcutActions, !isMobile); // Disable on mobile
 
-  // ===== CALENDAR NAVIGATION HANDLERS =====
+  // ===== CALENDAR NAVIGATION HANDLERS - FIXED FOR MOBILE =====
   const onSelectSlot = useCallback((slotInfo: any) => {
-    // Add touch support
-    const isTouchEvent = slotInfo.action === 'click' || slotInfo.action === 'select';
+    // Better mobile detection - check if slots array exists (month view)
+    const isMonthView = view === 'month';
+    const isDayOrWeekView = view === 'day' || view === 'week';
     
-    // If in month view and clicking a day, go to day view
-    if (view === 'month' && isTouchEvent) {
+    // In month view, clicking/tapping a day should navigate to that day
+    if (isMonthView) {
       setDate(slotInfo.start);
       setView('day');
       return;
     }
-
-    // If in day/week view and clicking a time slot
-    if ((view === 'day' || view === 'week') && isTouchEvent) {
-      // Open create event modal with pre-filled times
+    
+    // In day/week view, clicking/tapping a time slot opens create modal
+    if (isDayOrWeekView) {
       const start = slotInfo.start || new Date();
       const end = slotInfo.end || new Date(start.getTime() + 3600000);
       
@@ -540,7 +599,7 @@ export default function CalendarPage() {
       }));
       setOpenCreate(true);
     }
-  }, [view]);
+  }, [view, toLocalInput]);
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
@@ -1427,7 +1486,7 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {/* Calendar Grid - Enhanced Mobile View */}
+            {/* Calendar Grid - Enhanced Mobile View with Fixed Props */}
             <div className="flex-1 min-w-0">
               <div className={isMobile ? 'calendar-mobile-wrapper' : ''}>
                 <CalendarGrid
@@ -1447,11 +1506,91 @@ export default function CalendarPage() {
                   externalDragType={isMobile ? 'none' : dragType}
                   externalDragTitle={draggedItem?.title}
                   onExternalDrop={isMobile ? undefined : onExternalDrop}
+                  selectable={true}  // FIXED: Added this for proper slot selection
+                  popup={false}      // FIXED: Added this to use our modals instead
                 />
               </div>
             </div>
           </div>
         </div>
+
+        {/* Mobile Bottom Navigation Bar - NEW! */}
+        {isMobile && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40 safe-area-bottom">
+            <div className="flex items-center justify-around py-2">
+              {/* Today Button */}
+              <button
+                onClick={() => {
+                  setDate(new Date());
+                  showToast({ type: 'info', message: '📅 Jumped to today' });
+                }}
+                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              >
+                <span className="text-lg">📍</span>
+                <span className="text-xs">Today</span>
+              </button>
+
+              {/* View Switcher */}
+              <button
+                onClick={() => {
+                  // Cycle through views
+                  const views: View[] = ['month', 'week', 'day'];
+                  const currentIndex = views.indexOf(view);
+                  const nextIndex = (currentIndex + 1) % views.length;
+                  setView(views[nextIndex]);
+                }}
+                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              >
+                <span className="text-lg">
+                  {view === 'month' ? '📅' : view === 'week' ? '📆' : '📋'}
+                </span>
+                <span className="text-xs capitalize">{view}</span>
+              </button>
+
+              {/* Previous */}
+              <button
+                onClick={() => {
+                  const newDate = new Date(date);
+                  if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+                  else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+                  else newDate.setDate(newDate.getDate() - 1);
+                  setDate(newDate);
+                }}
+                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              >
+                <span className="text-lg">⬅️</span>
+                <span className="text-xs">Prev</span>
+              </button>
+
+              {/* Next */}
+              <button
+                onClick={() => {
+                  const newDate = new Date(date);
+                  if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+                  else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+                  else newDate.setDate(newDate.getDate() + 1);
+                  setDate(newDate);
+                }}
+                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              >
+                <span className="text-lg">➡️</span>
+                <span className="text-xs">Next</span>
+              </button>
+
+              {/* Quick Add */}
+              <button
+                onClick={() => {
+                  setQuickModalType('reminder');
+                  setQuickModalOpen(true);
+                }}
+                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              >
+                <span className="text-lg">⚡</span>
+                <span className="text-xs">Quick</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Mobile Lists Menu - Enhanced with Animations */}
         {mobileMenuOpen && (
@@ -1976,6 +2115,7 @@ export default function CalendarPage() {
           width: 100%;
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
+          padding-bottom: 60px;
         }
         
         /* Enhanced mobile calendar styles */
@@ -1996,6 +2136,12 @@ export default function CalendarPage() {
             font-weight: bold;
           }
           
+          .rbc-toolbar button {
+            padding: 8px 12px !important;
+            font-size: 14px !important;
+            min-width: 60px;
+          }
+          
           .rbc-btn-group button {
             padding: 0.25rem 0.5rem;
             font-size: 0.75rem;
@@ -2003,6 +2149,20 @@ export default function CalendarPage() {
           
           .rbc-month-view {
             min-height: 400px;
+          }
+          
+          /* Make month cells more tappable */
+          .rbc-month-row {
+            min-height: 60px;
+          }
+          
+          .rbc-day-bg {
+            cursor: pointer;
+            -webkit-tap-highlight-color: rgba(124, 58, 237, 0.1);
+          }
+          
+          .rbc-day-bg:active {
+            background-color: rgba(124, 58, 237, 0.05);
           }
           
           .rbc-header {
@@ -2015,9 +2175,17 @@ export default function CalendarPage() {
             font-size: 0.75rem;
           }
           
+          /* Better event display on mobile */
           .rbc-event {
-            font-size: 0.6rem;
-            padding: 0.125rem;
+            font-size: 0.65rem !important;
+            padding: 1px 2px !important;
+            line-height: 1.2;
+          }
+          
+          .rbc-event-content {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           
           .rbc-show-more {
@@ -2033,13 +2201,37 @@ export default function CalendarPage() {
             min-height: 500px;
           }
           
+          /* Improve time slot selection in day/week view */
           .rbc-time-slot {
             min-height: 30px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: rgba(124, 58, 237, 0.1);
+          }
+          
+          .rbc-time-slot:active {
+            background-color: rgba(124, 58, 237, 0.05);
           }
           
           .rbc-timeslot-group {
             min-height: 60px;
           }
+          
+          /* Today button highlight */
+          .rbc-today {
+            background-color: rgba(124, 58, 237, 0.1) !important;
+          }
+          
+          /* Safe area for devices with home indicator (iPhone X+) */
+          .safe-area-bottom {
+            padding-bottom: env(safe-area-inset-bottom, 0);
+          }
+        }
+        
+        /* Smooth transitions for all devices */
+        .rbc-day-bg,
+        .rbc-time-slot,
+        .rbc-event {
+          transition: background-color 0.2s ease;
         }
       `}</style>
     </div>
