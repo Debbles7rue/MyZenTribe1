@@ -5,33 +5,42 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import NotificationBell from "@/components/NotificationBell";
+import NotificationBell from "./NotificationBell";
 
 export default function SiteHeader() {
   const pathname = usePathname();
-  const [userId, setUserId] = useState<string | null | "loading">("loading");
+  const [userId, setUserId] = useState<string | "loading" | null>("loading");
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
-  }, []);
+    checkUser();
+  }, [pathname]);
 
-  // close dropdown if clicking elsewhere
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      const t = e.target as HTMLElement;
-      if (!t.closest(".nav-caret") && !t.closest(".menu")) setOpenProfileMenu(false);
+  const checkUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    setUserId(data.user?.id || null);
+    
+    // Check if user is admin
+    if (data.user?.id) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", data.user.id)
+        .single();
+      
+      setIsAdmin(profile?.is_admin === true);
     }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
+  };
 
   const Nav = ({ href, children }: { href: string; children: React.ReactNode }) => {
-    const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
+    const isActive = href === "/" ? pathname === "/" : pathname?.startsWith(href);
+    const handleClick = () => {
+      // Close mobile menu when navigating
+      setOpenMobileMenu(false);
+    };
     return (
-      <Link href={href} className={`nav-link ${active ? "active" : ""}`}>
+      <Link href={href} className={`nav-link ${isActive ? "active" : ""}`} onClick={handleClick}>
         {children}
       </Link>
     );
@@ -55,37 +64,42 @@ export default function SiteHeader() {
           <div style={{ height: 38 }} />
         ) : userId ? (
           <>
-            <nav className="main-nav flex-1 flex justify-center">
-              <div className="flex gap-4">
-                <Nav href="/">Home</Nav>
-                <Nav href="/calendar">Calendar</Nav>
-                <Nav href="/map">Communities</Nav>
+            <nav className="main-nav">
+              <Nav href="/">Home</Nav>
+              <Nav href="/calendar">Calendar</Nav>
+              <Nav href="/communities">Communities</Nav>
 
-                {/* Profile + Business under dropdown */}
-                <div className="relative inline-flex">
-                  <Nav href="/profile">Profile</Nav>
-                  <button
-                    aria-label="Profile menu"
-                    className="nav-caret"
-                    onClick={() => setOpenProfileMenu((v) => !v)}
-                  >
-                    ▾
-                  </button>
-                  {openProfileMenu && (
-                    <div className="menu" role="menu">
-                      <Link href="/profile" className="menu-item" role="menuitem">
-                        Personal profile
-                      </Link>
-                      <Link href="/business" className="menu-item" role="menuitem">
-                        Business profile
-                      </Link>
-                    </div>
-                  )}
-                </div>
-
-                <Nav href="/meditation">Meditation</Nav>
-                <Nav href="/karma">Karma Corner</Nav>
+              {/* Profile + Business under dropdown */}
+              <div className="relative inline-flex">
+                <Nav href="/profile">Profile</Nav>
+                <button
+                  aria-label="Profile menu"
+                  className="nav-caret"
+                  onClick={() => setOpenProfileMenu((v) => !v)}
+                >
+                  ▾
+                </button>
+                {openProfileMenu && (
+                  <div className="menu" role="menu">
+                    <Link href="/profile" className="menu-item" role="menuitem">
+                      Personal profile
+                    </Link>
+                    <Link href="/business" className="menu-item" role="menuitem">
+                      Business profile
+                    </Link>
+                  </div>
+                )}
               </div>
+
+              <Nav href="/meditation">Meditation</Nav>
+              <Nav href="/karma">Karma Corner</Nav>
+              
+              {/* Admin link - only visible to admins */}
+              {isAdmin && (
+                <Nav href="/admin">
+                  <span style={{ color: '#dc2626', fontWeight: 600 }}>Admin</span>
+                </Nav>
+              )}
             </nav>
 
             <div className="auth-area">
