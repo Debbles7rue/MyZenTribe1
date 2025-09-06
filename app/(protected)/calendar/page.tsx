@@ -847,30 +847,57 @@ export default function CalendarPage() {
     }
     
     try {
-      // Add the created_by field and ensure all required fields are present
-      const eventsToInsert = templateEvents.map(event => ({
-        ...event,
-        created_by: me,
-        visibility: event.visibility || 'private',
-        source: event.source || 'personal',
-        status: event.status || 'scheduled',
-        rsvp_public: event.rsvp_public !== undefined ? event.rsvp_public : false,
-        completed: false
-      }));
+      console.log('Applying template with events:', templateEvents); // Debug log
       
-      for (const event of eventsToInsert) {
-        const { error } = await supabase.from('events').insert(event);
-        if (error) {
-          console.error('Error inserting template event:', error);
-          throw error;
-        }
+      // Ensure each event has all required fields with proper date formats
+      const eventsToInsert = templateEvents.map(event => {
+        // Make sure dates are proper ISO strings
+        const startTime = event.start_time ? new Date(event.start_time).toISOString() : new Date().toISOString();
+        const endTime = event.end_time ? new Date(event.end_time).toISOString() : new Date(new Date(startTime).getTime() + 3600000).toISOString();
+        
+        return {
+          title: event.title || 'Template Event',
+          description: event.description || '',
+          location: event.location || '',
+          start_time: startTime,
+          end_time: endTime,
+          created_by: me,
+          visibility: event.visibility || 'private',
+          source: event.source || 'personal',
+          status: event.status || 'scheduled',
+          event_type: event.event_type || null,
+          rsvp_public: event.rsvp_public !== undefined ? event.rsvp_public : false,
+          community_id: event.community_id || null,
+          image_path: event.image_path || null,
+          completed: false
+        };
+      });
+      
+      console.log('Events to insert:', eventsToInsert); // Debug log
+      
+      // Insert all events
+      const { data, error } = await supabase
+        .from('events')
+        .insert(eventsToInsert)
+        .select(); // Return inserted data to verify
+      
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
       }
       
-      await loadCalendar(); // Make sure to reload the calendar
-      showToast({ type: 'success', message: '✨ Routine added to calendar!' });
-    } catch (error) {
+      console.log('Inserted events:', data); // Debug log
+      
+      // Force reload the calendar
+      await loadCalendar();
+      
+      showToast({ type: 'success', message: `✨ ${data?.length || 0} events added to calendar!` });
+    } catch (error: any) {
       console.error('Template application error:', error);
-      showToast({ type: 'error', message: 'Failed to apply template' });
+      showToast({ 
+        type: 'error', 
+        message: `Failed to apply template: ${error.message || 'Unknown error'}` 
+      });
     }
   };
 
