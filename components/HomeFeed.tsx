@@ -1328,8 +1328,8 @@ export default function HomeFeed() {
         </div>
       </div>
 
-      {/* SOS Floating Button */}
-      <SOSFloatingButton />
+      {/* SOS Floating Button - Will add when component is ready */}
+      {/* <SOSFloatingButton /> */}
 
       <style jsx>{`
         .home-feed {
