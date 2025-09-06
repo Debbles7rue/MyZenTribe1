@@ -197,12 +197,14 @@ export default function FriendsPage() {
                   {friend.avatar_url ? (
                     <img
                       src={friend.avatar_url}
-                      alt={friend.full_name || "Friend"}
+                      alt={friend.full_name || friend.business_name || "Friend"}
                       className="w-16 h-16 rounded-full object-cover"
                     />
                   ) : (
                     <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-lavender-400 flex items-center justify-center text-white text-xl font-bold">
-                      {(friend.full_name || friend.email || "?")[0].toUpperCase()}
+                      {friend.is_business && friend.business_name 
+                        ? friend.business_name[0].toUpperCase()
+                        : (friend.full_name || friend.email || "?")[0].toUpperCase()}
                     </div>
                   )}
 
