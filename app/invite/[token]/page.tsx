@@ -16,6 +16,7 @@ type ProfileData = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
+  email: string | null;
 };
 
 export default function InviteAcceptPage({ params }: { params: { token: string } }) {
@@ -24,7 +25,7 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [inviterProfile, setInviterProfile] = useState<ProfileData | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>({});
 
   useEffect(() => {
     handleInvite();
@@ -34,9 +35,14 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
     try {
       setLoading(true);
       setError(null);
+      setDebugInfo({ step: "Starting", token: params.token });
 
       // 1. Check if user is signed in
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        setDebugInfo(prev => ({ ...prev, authError: authError.message }));
+      }
+      
       const user = userData?.user;
 
       if (!user) {
@@ -46,7 +52,7 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
         return;
       }
 
-      setCurrentUserId(user.id);
+      setDebugInfo(prev => ({ ...prev, userId: user.id, userEmail: user.email }));
 
       // 2. Validate the invite token
       const { data: inviteData, error: inviteError } = await supabase
@@ -56,12 +62,14 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
         .single();
 
       if (inviteError || !inviteData) {
+        setDebugInfo(prev => ({ ...prev, inviteError: inviteError?.message }));
         setError("This invite link is invalid or has expired.");
         setLoading(false);
         return;
       }
 
       const invite = inviteData as InviteData;
+      setDebugInfo(prev => ({ ...prev, invite }));
 
       // 3. Check if already accepted
       if (invite.accepted_at) {
@@ -72,7 +80,7 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
 
       // 4. Can't friend yourself
       if (invite.to_user === user.id) {
-        setError("You cannot send a friend request to yourself.");
+        setError("You cannot accept your own invite.");
         setLoading(false);
         return;
       }
@@ -80,7 +88,7 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
       // 5. Get inviter's profile
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url")
+        .select("id, full_name, avatar_url, email")
         .eq("id", invite.to_user)
         .single();
 
@@ -88,43 +96,76 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
         setInviterProfile(profileData as ProfileData);
       }
 
-      // 6. Check if friendship already exists
-      const { data: existingFriendship } = await supabase
+      // 6. Check if friendship already exists (in either direction)
+      const { data: existingFriendships, error: checkError } = await supabase
         .from("friendships")
         .select("*")
         .or(
           `and(user_id.eq.${user.id},friend_id.eq.${invite.to_user}),and(user_id.eq.${invite.to_user},friend_id.eq.${user.id})`
-        )
-        .single();
+        );
 
-      if (existingFriendship) {
+      setDebugInfo(prev => ({ 
+        ...prev, 
+        existingFriendships,
+        checkError: checkError?.message 
+      }));
+
+      if (existingFriendships && existingFriendships.length > 0) {
         setError("You are already friends with this person.");
         setLoading(false);
         return;
       }
 
-      // 7. Create the friendship (bidirectional)
-      const { error: friendshipError } = await supabase.from("friendships").insert([
+      // 7. Create BOTH direction friendship records in a single insert
+      const friendshipRecords = [
         {
           user_id: user.id,
           friend_id: invite.to_user,
           status: "accepted",
-          created_at: new Date().toISOString(),
         },
         {
           user_id: invite.to_user,
           friend_id: user.id,
           status: "accepted",
-          created_at: new Date().toISOString(),
-        },
-      ]);
+        }
+      ];
+
+      setDebugInfo(prev => ({ ...prev, attemptingToCreate: friendshipRecords }));
+
+      const { data: createdFriendships, error: friendshipError } = await supabase
+        .from("friendships")
+        .insert(friendshipRecords)
+        .select();
 
       if (friendshipError) {
         console.error("Friendship creation error:", friendshipError);
-        setError("Failed to create friendship. Please try again.");
-        setLoading(false);
-        return;
+        setDebugInfo(prev => ({ ...prev, friendshipError: friendshipError.message }));
+        
+        // Try creating them one by one if bulk insert fails
+        let successCount = 0;
+        for (const record of friendshipRecords) {
+          const { error: singleError } = await supabase
+            .from("friendships")
+            .insert(record);
+          
+          if (!singleError) {
+            successCount++;
+          } else {
+            setDebugInfo(prev => ({ 
+              ...prev, 
+              [`singleError_${successCount}`]: singleError.message 
+            }));
+          }
+        }
+
+        if (successCount === 0) {
+          setError("Failed to create friendship. You might already be friends or there was a database error.");
+          setLoading(false);
+          return;
+        }
       }
+
+      setDebugInfo(prev => ({ ...prev, createdFriendships }));
 
       // 8. Mark invite as accepted
       const { error: updateError } = await supabase
@@ -134,33 +175,54 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
 
       if (updateError) {
         console.error("Invite update error:", updateError);
+        setDebugInfo(prev => ({ ...prev, inviteUpdateError: updateError.message }));
       }
 
       // 9. Create notification for the inviter
-      await supabase.from("notifications").insert({
+      const notificationData = {
         user_id: invite.to_user,
         type: "friend.accepted",
-        title: "Friend Request Accepted",
+        title: "New Friend!",
         body: `${user.user_metadata?.full_name || user.email} accepted your friend request!`,
         actor_id: user.id,
         entity_id: user.id,
-        target_url: `/profile/${user.id}`,
-      });
+        target_url: `/friends`,
+        is_read: false
+      };
+
+      setDebugInfo(prev => ({ ...prev, attemptingNotification: notificationData }));
+
+      const { data: notifData, error: notifError } = await supabase
+        .from("notifications")
+        .insert(notificationData)
+        .select();
+
+      if (notifError) {
+        console.error("Notification error:", notifError);
+        setDebugInfo(prev => ({ ...prev, notificationError: notifError.message }));
+        // Don't fail the whole process if notification fails
+      } else {
+        setDebugInfo(prev => ({ ...prev, notificationCreated: notifData }));
+      }
 
       setSuccess(true);
       
-      // Redirect to friend's profile or friends list after 2 seconds
+      // Redirect to friends list after 3 seconds
       setTimeout(() => {
-        router.push(`/profile/${invite.to_user}`);
-      }, 2000);
+        router.push(`/friends`);
+      }, 3000);
 
     } catch (err: any) {
       console.error("Invite acceptance error:", err);
+      setDebugInfo(prev => ({ ...prev, unexpectedError: err.message }));
       setError(err.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
   }
+
+  // Debug mode toggle
+  const [showDebug, setShowDebug] = useState(false);
 
   if (loading) {
     return (
@@ -171,6 +233,20 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
             <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
           </div>
           <p className="mt-4 text-gray-600">Processing invite...</p>
+          
+          {/* Debug toggle */}
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="mt-4 text-xs text-gray-500 underline"
+          >
+            {showDebug ? "Hide" : "Show"} Debug Info
+          </button>
+          
+          {showDebug && (
+            <pre className="mt-4 text-left text-xs bg-gray-100 p-2 rounded overflow-auto">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          )}
         </div>
       </div>
     );
@@ -183,12 +259,35 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
           <div className="text-6xl mb-4">😕</div>
           <h1 className="text-2xl font-bold mb-4 text-gray-800">Invite Issue</h1>
           <p className="text-red-600 mb-6">{error}</p>
+          
+          <div className="space-y-2">
+            <button
+              onClick={() => router.push("/friends")}
+              className="btn btn-brand w-full"
+            >
+              Go to Friends
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn btn-neutral w-full"
+            >
+              Try Again
+            </button>
+          </div>
+
+          {/* Debug info */}
           <button
-            onClick={() => router.push("/friends")}
-            className="btn btn-brand"
+            onClick={() => setShowDebug(!showDebug)}
+            className="mt-4 text-xs text-gray-500 underline"
           >
-            Go to Friends
+            {showDebug ? "Hide" : "Show"} Debug Info
           </button>
+          
+          {showDebug && (
+            <pre className="mt-4 text-left text-xs bg-gray-100 p-2 rounded overflow-auto max-h-64">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          )}
         </div>
       </div>
     );
@@ -205,7 +304,7 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
               <p className="text-gray-600 mb-4">
                 You are now connected with{" "}
                 <span className="font-semibold">
-                  {inviterProfile.full_name || "your friend"}
+                  {inviterProfile.full_name || inviterProfile.email || "your friend"}
                 </span>
               </p>
               {inviterProfile.avatar_url && (
@@ -217,7 +316,30 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
               )}
             </div>
           )}
-          <p className="text-sm text-gray-500">Redirecting to their profile...</p>
+          <p className="text-sm text-gray-500">Redirecting to your friends list...</p>
+          
+          <div className="mt-4">
+            <button
+              onClick={() => router.push("/friends")}
+              className="btn btn-brand"
+            >
+              View Friends Now
+            </button>
+          </div>
+
+          {/* Debug info for success case */}
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="mt-4 text-xs text-gray-500 underline"
+          >
+            {showDebug ? "Hide" : "Show"} Debug Info
+          </button>
+          
+          {showDebug && (
+            <pre className="mt-4 text-left text-xs bg-gray-100 p-2 rounded overflow-auto max-h-64">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          )}
         </div>
       </div>
     );
