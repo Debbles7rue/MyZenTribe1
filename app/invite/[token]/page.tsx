@@ -181,6 +181,7 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
       // 9. Create notification for the inviter
       const notificationData = {
         user_id: invite.to_user,
+        kind: "friend", // Add the required kind field
         type: "friend.accepted",
         title: "New Friend!",
         body: `${user.user_metadata?.full_name || user.email} accepted your friend request!`,
@@ -295,53 +296,72 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50">
-        <div className="card p-8 max-w-md text-center">
-          <div className="text-6xl mb-4">🎉</div>
-          <h1 className="text-2xl font-bold mb-4 text-gray-800">You're Now Friends!</h1>
-          {inviterProfile && (
-            <div className="mb-6">
-              <p className="text-gray-600 mb-4">
-                You are now connected with{" "}
-                <span className="font-semibold">
-                  {inviterProfile.full_name || inviterProfile.email || "your friend"}
-                </span>
-              </p>
-              {inviterProfile.avatar_url && (
-                <img
-                  src={inviterProfile.avatar_url}
-                  alt={inviterProfile.full_name || "Friend"}
-                  className="w-20 h-20 rounded-full mx-auto mb-4 border-4 border-purple-200"
-                />
-              )}
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50">
+          <div className="card p-8 max-w-md text-center">
+            <div className="text-6xl mb-4">🎉</div>
+            <h1 className="text-2xl font-bold mb-4 text-gray-800">You're Now Friends!</h1>
+            {inviterProfile && (
+              <div className="mb-6">
+                <p className="text-gray-600 mb-4">
+                  You are now connected with{" "}
+                  <span className="font-semibold">
+                    {inviterProfile.full_name || inviterProfile.email || "your friend"}
+                  </span>
+                </p>
+                {inviterProfile.avatar_url && (
+                  <img
+                    src={inviterProfile.avatar_url}
+                    alt={inviterProfile.full_name || "Friend"}
+                    className="w-20 h-20 rounded-full mx-auto mb-4 border-4 border-purple-200"
+                  />
+                )}
+              </div>
+            )}
+            
+            {!showQuestionnaire && (
+              <p className="text-sm text-gray-500">Preparing friend questionnaire...</p>
+            )}
+            
+            <div className="mt-4">
+              <button
+                onClick={() => setShowQuestionnaire(true)}
+                className="btn btn-brand"
+              >
+                Categorize Friend
+              </button>
             </div>
-          )}
-          <p className="text-sm text-gray-500">Redirecting to your friends list...</p>
-          
-          <div className="mt-4">
-            <button
-              onClick={() => router.push("/friends")}
-              className="btn btn-brand"
-            >
-              View Friends Now
-            </button>
-          </div>
 
-          {/* Debug info for success case */}
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className="mt-4 text-xs text-gray-500 underline"
-          >
-            {showDebug ? "Hide" : "Show"} Debug Info
-          </button>
-          
-          {showDebug && (
-            <pre className="mt-4 text-left text-xs bg-gray-100 p-2 rounded overflow-auto max-h-64">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          )}
+            {/* Debug info for success case */}
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="mt-4 text-xs text-gray-500 underline"
+            >
+              {showDebug ? "Hide" : "Show"} Debug Info
+            </button>
+            
+            {showDebug && (
+              <pre className="mt-4 text-left text-xs bg-gray-100 p-2 rounded overflow-auto max-h-64">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            )}
+          </div>
         </div>
-      </div>
+
+        {/* Friend Questionnaire Modal */}
+        {inviterProfile && (
+          <FriendQuestionnaire
+            isOpen={showQuestionnaire}
+            onClose={() => {
+              setShowQuestionnaire(false);
+              router.push("/friends");
+            }}
+            friendId={inviterProfile.id}
+            friendName={inviterProfile.full_name || inviterProfile.email || "Friend"}
+            isNewFriend={true}
+          />
+        )}
+      </>
     );
   }
 
