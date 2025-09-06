@@ -7,14 +7,9 @@ import { supabase } from "@/lib/supabaseClient";
 type Props = {
   userId: string | null;
   embed?: boolean;
-
-  /** Optional display mode. "compact" = QR + basic actions (no email UI) */
-  mode?: string; // accept any string to avoid TS friction (e.g., "compact")
-  /** Preferred QR size (px). Also supports legacy `qrSize`. */
+  mode?: string;
   size?: number;
   qrSize?: number;
-
-  /** Accept legacy prop some pages might pass; unused here but keeps TS happy. */
   context?: string;
 };
 
@@ -30,45 +25,85 @@ export default function ProfileInviteQR({
   const [err, setErr] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [qrOk, setQrOk] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-  // Fetch (or create) a reusable invite token
+  // Fetch or create a reusable invite token
   useEffect(() => {
     let alive = true;
     (async () => {
       if (!userId) return;
       setLoading(true);
       setErr(null);
-      const { data, error } = await supabase.rpc("get_or_create_reusable_invite", { p_target: userId });
-      if (!alive) return;
-      if (error || !data) setErr(error?.message || "Could not load invite link");
-      else setToken(String(data));
-      setLoading(false);
+      
+      try {
+        // Try RPC function first
+        const { data, error } = await supabase.rpc("get_or_create_reusable_invite", { 
+          p_target: userId 
+        });
+        
+        if (error) {
+          console.error("RPC error:", error);
+          // Fallback to direct table access
+          const { data: inviteData, error: inviteError } = await supabase
+            .from("friend_invites")
+            .select("token")
+            .eq("to_user", userId)
+            .is("accepted_at", null)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          
+          if (inviteError) throw inviteError;
+          
+          if (inviteData && inviteData.length > 0) {
+            setToken(inviteData[0].token);
+          } else {
+            // Create new invite
+            const { data: newInvite, error: createError } = await supabase
+              .from("friend_invites")
+              .insert({ to_user: userId })
+              .select("token")
+              .single();
+            
+            if (createError) throw createError;
+            setToken(newInvite.token);
+          }
+        } else {
+          setToken(String(data));
+        }
+      } catch (error: any) {
+        console.error("Error getting/creating invite:", error);
+        if (!alive) return;
+        setErr(error?.message || "Could not load invite link");
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
+    
     return () => {
       alive = false;
     };
   }, [userId]);
 
-  // One canonical link used for BOTH QR and copy
+  // Build the invite URL
   const inviteUrl = useMemo(() => {
     if (!token || typeof window === "undefined") return "";
     return new URL(`/invite/${token}`, window.location.origin).toString();
   }, [token]);
 
-  // Final QR size preference (default ~180)
+  // QR size (default 180px)
   const finalSize = useMemo(() => {
     if (typeof size === "number" && size > 0) return size;
     if (typeof qrSize === "number" && qrSize > 0) return qrSize;
     return 180;
   }, [size, qrSize]);
 
-  // Small QR, cache-busted so CDNs never serve an older data URL
+  // QR code URL using free QR service
   const qrUrl = useMemo(() => {
     if (!inviteUrl) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=${finalSize}x${finalSize}&data=${encodeURIComponent(
       inviteUrl
-    )}&_cb=${encodeURIComponent(token || "")}`;
-  }, [inviteUrl, token, finalSize]);
+    )}`;
+  }, [inviteUrl, finalSize]);
 
   const emailValid = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), [email]);
 
@@ -84,9 +119,16 @@ export default function ProfileInviteQR({
     window.open(inviteUrl, "_blank", "noopener,noreferrer");
   }, [inviteUrl]);
 
-  const copyLink = useCallback(() => {
+  const copyLink = useCallback(async () => {
     if (!inviteUrl) return;
-    navigator.clipboard.writeText(inviteUrl).catch(() => {});
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+      alert("Failed to copy link. You can select and copy it manually.");
+    }
   }, [inviteUrl]);
 
   const showEmailUI = mode !== "compact";
@@ -94,91 +136,109 @@ export default function ProfileInviteQR({
   const Content = (
     <div className="stack" style={{ gap: 10 }}>
       <div className="label" style={{ fontWeight: 600 }}>
-        Invite friends <span className="muted text-xs">v2</span>
+        Invite friends
       </div>
 
-      {/* QR */}
-      {inviteUrl ? (
-        <div className="card p-3" style={{ textAlign: "center" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={qrUrl}
-            alt="Invite QR"
-            width={finalSize}
-            height={finalSize}
-            style={{
-              width: finalSize,
-              height: finalSize,
-              margin: "0 auto",
-              borderRadius: 12,
-              border: "1px solid #eee",
-              display: qrOk ? "block" : "none",
-            }}
-            onError={() => setQrOk(false)}
-          />
-          {!qrOk && (
-            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-              (QR preview unavailable; use the link or Open button below)
-            </div>
-          )}
-
-          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            Scan the QR or share your link.
+      {loading ? (
+        <div className="text-center py-4">
+          <div className="animate-pulse">
+            <div className="h-32 w-32 bg-gray-200 rounded-lg mx-auto mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-48 mx-auto"></div>
           </div>
-
-          <div className="right mt-2" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button className="btn" onClick={openLink} disabled={!inviteUrl}>
-              Open link
-            </button>
-            <button className="btn btn-brand" onClick={copyLink} disabled={!inviteUrl || loading}>
-              Copy link
-            </button>
-          </div>
+          <p className="text-sm text-gray-500 mt-2">Generating your invite...</p>
         </div>
-      ) : (
-        <div className="muted">Generating your invite…</div>
-      )}
-
-      {/* Link + copy (same exact URL the QR encodes) */}
-      <div style={{ display: showEmailUI ? "flex" : "none", gap: 8, flexWrap: "wrap" }}>
-        <input
-          className="input"
-          value={inviteUrl}
-          readOnly
-          placeholder={loading ? "Loading invite link..." : ""}
-          style={{ minWidth: 260, flex: 1 }}
-        />
-        <button className="btn btn-brand" onClick={copyLink} disabled={!inviteUrl || loading}>
-          Copy link
-        </button>
-      </div>
-
-      {/* Email input + send (hidden in compact mode) */}
-      {showEmailUI && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            className="input"
-            placeholder="friend@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ minWidth: 220, flex: 1 }}
-          />
-          <button
-            className="btn"
-            onClick={sendEmail}
-            disabled={!emailValid || !inviteUrl || loading}
-            title={!inviteUrl ? "Loading invite link..." : ""}
+      ) : err ? (
+        <div className="text-center py-4">
+          <p className="text-red-600 text-sm mb-2">{err}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn btn-sm btn-neutral"
           >
-            Email invite
+            Try Again
           </button>
         </div>
-      )}
+      ) : inviteUrl ? (
+        <>
+          {/* QR Code */}
+          <div className="card p-3" style={{ textAlign: "center" }}>
+            <img
+              src={qrUrl}
+              alt="Invite QR Code"
+              width={finalSize}
+              height={finalSize}
+              style={{
+                width: finalSize,
+                height: finalSize,
+                margin: "0 auto",
+                borderRadius: 12,
+                border: "1px solid #eee",
+                display: qrOk ? "block" : "none",
+              }}
+              onError={() => setQrOk(false)}
+              onLoad={() => setQrOk(true)}
+            />
+            {!qrOk && (
+              <div 
+                className="bg-gray-100 rounded-lg flex items-center justify-center"
+                style={{ 
+                  width: finalSize, 
+                  height: finalSize, 
+                  margin: "0 auto" 
+                }}
+              >
+                <div className="text-center p-4">
+                  <div className="text-4xl mb-2">📱</div>
+                  <div className="text-sm text-gray-600">QR Code Loading...</div>
+                </div>
+              </div>
+            )}
 
-      {err && (
-        <p className="muted" style={{ color: "#b91c1c" }}>
-          {err}
-        </p>
-      )}
+            <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              Scan QR or share your link
+            </div>
+
+            <div className="mt-3" style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button className="btn btn-sm" onClick={openLink}>
+                Open link
+              </button>
+              <button className="btn btn-sm btn-brand" onClick={copyLink}>
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+            </div>
+          </div>
+
+          {/* Link input */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              className="input"
+              value={inviteUrl}
+              readOnly
+              style={{ minWidth: 260, flex: 1 }}
+              onFocus={(e) => e.target.select()}
+            />
+          </div>
+
+          {/* Email input (if not compact mode) */}
+          {showEmailUI && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input
+                className="input"
+                placeholder="friend@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ minWidth: 220, flex: 1 }}
+              />
+              <button
+                className="btn"
+                onClick={sendEmail}
+                disabled={!emailValid || !inviteUrl}
+              >
+                Email invite
+              </button>
+            </div>
+          )}
+        </>
+      ) : null}
     </div>
   );
 
