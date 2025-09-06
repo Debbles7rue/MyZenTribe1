@@ -1,11 +1,11 @@
-// app/meditation/room/page.tsx - Mobile-First Meditation Room
+// app/meditation/room/page.tsx - Just the Meditation Room
 "use client";
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-// Simplified background options with fallbacks
+// Simplified backgrounds with reliable gradients
 const MEDITATION_BACKGROUNDS = [
   { 
     id: 'sunset', 
@@ -48,9 +48,13 @@ const MEDITATION_BACKGROUNDS = [
 // Healing frequencies
 const HEALING_FREQUENCIES = [
   { name: 'Silent', freq: 0, description: 'Pure silence' },
-  { name: '528 Hz', freq: 528, description: 'Love frequency' },
   { name: '396 Hz', freq: 396, description: 'Release fear' },
+  { name: '417 Hz', freq: 417, description: 'Undo situations' },
+  { name: '528 Hz', freq: 528, description: 'Love frequency' },
+  { name: '639 Hz', freq: 639, description: 'Relationships' },
   { name: '741 Hz', freq: 741, description: 'Intuition' },
+  { name: '852 Hz', freq: 852, description: 'Spiritual order' },
+  { name: '963 Hz', freq: 963, description: 'Crown chakra' },
 ];
 
 function MeditationRoomContent() {
@@ -66,8 +70,8 @@ function MeditationRoomContent() {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [selectedFrequency, setSelectedFrequency] = useState(528);
   const [volume, setVolume] = useState(0.3);
-  const [todaysProgress, setTodaysProgress] = useState(127); // Mock data for now
-  const [activeParticipants, setActiveParticipants] = useState(3); // Mock data
+  const [todaysProgress, setTodaysProgress] = useState(127);
+  const [activeParticipants, setActiveParticipants] = useState(3);
   const [isLoading, setIsLoading] = useState(true);
   
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -80,8 +84,6 @@ function MeditationRoomContent() {
   useEffect(() => {
     initializeSession();
     setupAudioContext();
-    
-    // Set loading to false after a short delay
     setTimeout(() => setIsLoading(false), 1000);
     
     return () => {
@@ -90,7 +92,6 @@ function MeditationRoomContent() {
     };
   }, []);
 
-  // Session timer
   useEffect(() => {
     if (isActive && sessionStartTime) {
       intervalRef.current = setInterval(() => {
@@ -115,8 +116,45 @@ function MeditationRoomContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      await loadStats();
     } catch (error) {
       console.error('Session initialization error:', error);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      // Load today's collective progress
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { data: sessions } = await supabase
+        .from('meditation_presence')
+        .select('joined_at, left_at')
+        .gte('joined_at', today.toISOString());
+
+      if (sessions) {
+        const totalMinutes = sessions.reduce((total, session) => {
+          if (session.left_at) {
+            const duration = new Date(session.left_at).getTime() - new Date(session.joined_at).getTime();
+            return total + (duration / (1000 * 60));
+          }
+          return total;
+        }, 0);
+        setTodaysProgress(Math.round(totalMinutes));
+      }
+
+      // Get active participants
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: active } = await supabase
+        .from('meditation_presence')
+        .select('user_id')
+        .gte('joined_at', fiveMinutesAgo)
+        .is('left_at', null);
+
+      setActiveParticipants(active?.length || 0);
+    } catch (error) {
+      console.error('Stats loading error:', error);
     }
   };
 
@@ -176,9 +214,21 @@ function MeditationRoomContent() {
       setIsActive(true);
       setShowMenu(false);
 
+      // Record session start in database
+      await supabase
+        .from('meditation_presence')
+        .insert({
+          user_id: currentUser.id,
+          session_id: eventId || 'general',
+          background_choice: backgroundId,
+          joined_at: new Date().toISOString()
+        });
+
       if (audioEnabled && selectedFrequency > 0) {
         await startFrequency();
       }
+
+      await loadStats();
     } catch (error) {
       console.error('Start meditation error:', error);
     }
@@ -189,9 +239,20 @@ function MeditationRoomContent() {
       setIsActive(false);
       stopFrequency();
       
-      if (sessionDuration > 0) {
-        alert(`Great session! You meditated for ${formatTime(sessionDuration)}`);
+      // Record session end in database
+      if (currentUser) {
+        await supabase
+          .from('meditation_presence')
+          .update({ left_at: new Date().toISOString() })
+          .eq('user_id', currentUser.id)
+          .is('left_at', null);
       }
+      
+      if (sessionDuration > 0) {
+        alert(`Beautiful session! You meditated for ${formatTime(sessionDuration)}`);
+      }
+
+      await loadStats();
     } catch (error) {
       console.error('End meditation error:', error);
     }
@@ -260,7 +321,7 @@ function MeditationRoomContent() {
   return (
     <div className={`min-h-screen bg-gradient-to-br ${currentBg.gradient} relative overflow-hidden`}>
       
-      {/* Mobile-friendly header */}
+      {/* Header */}
       <div className="relative z-20 p-4 bg-black/20 backdrop-blur-sm text-white">
         <div className="flex justify-between items-center">
           <div>
@@ -284,7 +345,7 @@ function MeditationRoomContent() {
         </div>
       </div>
 
-      {/* Stats bar - mobile responsive */}
+      {/* Stats Bar */}
       <div className="bg-black/10 text-white p-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
@@ -301,7 +362,7 @@ function MeditationRoomContent() {
           </div>
         </div>
         
-        {/* Progress bar */}
+        {/* 24hr Progress Bar */}
         <div className="mt-3">
           <div className="flex justify-between text-xs opacity-75 mb-1">
             <span>24hr Collective Goal</span>
@@ -316,7 +377,7 @@ function MeditationRoomContent() {
         </div>
       </div>
 
-      {/* Main meditation area */}
+      {/* Main Meditation Area */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-white text-center">
         {!isActive ? (
           <div className="space-y-6 max-w-sm">
@@ -357,7 +418,7 @@ function MeditationRoomContent() {
         )}
       </div>
 
-      {/* Menu overlay */}
+      {/* Settings Menu Overlay */}
       {showMenu && (
         <div className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm">
           <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm rounded-t-2xl p-6 text-gray-800 max-h-[80vh] overflow-y-auto">
@@ -431,7 +492,17 @@ function MeditationRoomContent() {
                 </div>
               </div>
 
-              {/* Close button */}
+              {eventId && (
+                <div>
+                  <h4 className="font-semibold mb-3">Group Session</h4>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="text-sm text-blue-800">
+                      You're in a group meditation session
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => setShowMenu(false)}
                 className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
