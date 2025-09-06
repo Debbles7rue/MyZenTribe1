@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import SiteHeader from "@/components/SiteHeader";
 import FirstRunGate from "@/components/FirstRunGate";
 import { ToastProvider } from "@/components/ToastProvider";
+import ElevenElevenFireworks from "@/components/ElevenElevenFireworks";
 
 export const metadata: Metadata = {
   title: "MyZenTribe",
@@ -35,6 +36,8 @@ export default function RootLayout({
           <FirstRunGate />
           {/* Page content */}
           <main className="page-wrap">{children}</main>
+          {/* 11:11 Fireworks */}
+          <ElevenElevenFireworks />
         </ToastProvider>
       </body>
     </html>
