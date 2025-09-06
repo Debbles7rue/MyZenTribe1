@@ -1608,8 +1608,8 @@ export default function CalendarPage() {
                     <p className="text-sm text-gray-400 italic p-2">No to-dos yet</p>
                   ) : (
                     visibleTodos.map(t => (
-                      <div key={t.id} className={`p-2 border border-green-400 bg-gradient-to-br from-white to-green-50 rounded-lg flex items-center gap-2
-                                              active:shadow-md transition-all ${
+                      <div key={t.id} className={`p-2 border-2 border-green-400 bg-gradient-to-br from-white via-green-50/30 to-green-100/50 rounded-lg flex items-center gap-2
+                                              active:shadow-lg transition-all ${
                         t.completed ? 'opacity-50' : ''
                       }`}>
                         <input
@@ -1618,7 +1618,7 @@ export default function CalendarPage() {
                           onChange={() => toggleComplete(t.id, t.completed, 'todo')}
                           className="rounded-sm accent-green-500"
                         />
-                        <span className={`flex-1 text-sm text-green-700 ${t.completed ? 'line-through' : ''}`}>
+                        <span className={`flex-1 text-sm font-medium text-green-700 ${t.completed ? 'line-through' : ''}`}>
                           {t.title}
                         </span>
                         <button
