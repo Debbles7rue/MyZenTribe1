@@ -11,8 +11,11 @@ import { useToast } from "@/components/ToastProvider";
 import type { DBEvent, Visibility } from "@/lib/types";
 
 // Weather API configuration
-const WEATHER_API_KEY = "YOUR_API_KEY_HERE"; // You'll need to add your OpenWeatherMap API key
+const WEATHER_API_KEY = "55dc1d12983cdb4bfdc04fce9bb63a55";
 const WEATHER_API_URL = "https://api.openweathermap.org/data/2.5";
+
+// Add this near the top of the component for better user experience
+const isWeatherConfigured = WEATHER_API_KEY && WEATHER_API_KEY !== "YOUR_API_KEY_HERE";
 
 // Dynamic import of CalendarGrid with weather support
 const WeatherCalendarGrid = dynamic(() => import("@/components/WeatherCalendarGrid"), { 
