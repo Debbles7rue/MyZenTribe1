@@ -338,7 +338,7 @@ export default function FriendsPage() {
 
       {activeTab === "invite" && (
         <div>
-          <InvitePanel userId={userId} />
+          <InviteFriendsPanel userId={userId} />
           
           <div className="mt-8 card p-6 bg-purple-50">
             <h3 className="font-semibold text-lg mb-3">How Friend Invites Work:</h3>
