@@ -79,7 +79,7 @@ export default function FriendsPage() {
         if (profileError) throw profileError;
 
         // Map profiles to friend format
-        const friendList: Friend[] = profiles?.map(profile => {
+        const friendList: Friend[] = enrichedProfiles?.map(profile => {
           const friendship = friendships?.find(f => 
             (f.user_id === userId && f.friend_id === profile.id) ||
             (f.friend_id === userId && f.user_id === profile.id)
