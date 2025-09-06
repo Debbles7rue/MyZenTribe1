@@ -33,18 +33,68 @@ export default function HomeFeed() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6">
-      {/* Composer */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+      {/* Composer - Mobile Optimized with Media Upload */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-5 sm:mb-6">
         <textarea
-          className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          className="w-full p-2 sm:p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
           rows={3}
           placeholder="Share something with your friends…"
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
-        <div className="mt-3 flex items-center gap-3">
+        
+        {/* Media Upload Section */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
+          <button
+            type="button"
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={() => document.getElementById('photo-upload')?.click()}
+          >
+            📷 Photo
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={() => document.getElementById('video-upload')?.click()}
+          >
+            🎥 Video
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={() => document.getElementById('gif-upload')?.click()}
+          >
+            ✨ GIF
+          </button>
+          
+          {/* Hidden file inputs */}
+          <input
+            id="photo-upload"
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => console.log('Photos selected:', e.target.files)}
+          />
+          <input
+            id="video-upload"
+            type="file"
+            accept="video/*"
+            style={{ display: 'none' }}
+            onChange={(e) => console.log('Video selected:', e.target.files)}
+          />
+          <input
+            id="gif-upload"
+            type="file"
+            accept="image/gif"
+            style={{ display: 'none' }}
+            onChange={(e) => console.log('GIF selected:', e.target.files)}
+          />
+        </div>
+        
+        <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <select 
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
             value={privacy} 
             onChange={(e) => setPrivacy(e.target.value as any)}
           >
@@ -53,7 +103,7 @@ export default function HomeFeed() {
             <option value="private">Only me</option>
           </select>
           <button 
-            className="ml-auto px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50"
+            className="sm:ml-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 text-base min-h-[44px]"
             onClick={post} 
             disabled={saving || !body.trim()}
           >
