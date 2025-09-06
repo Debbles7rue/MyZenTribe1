@@ -167,6 +167,13 @@ export default function CalendarPage() {
     image_path: "",
   });
 
+// ===== HELPER FUNCTION - MUST BE DEFINED EARLY =====
+const toLocalInput = useCallback((d: Date) => {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+}, []);
+
   // Touch refs for mobile swipe
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
