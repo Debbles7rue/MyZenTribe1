@@ -167,19 +167,17 @@ export default function CalendarPage() {
     image_path: "",
   });
 
-// ===== HELPER FUNCTION - MUST BE DEFINED EARLY =====
-const toLocalInput = useCallback((d: Date) => {
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
-}, []);
-
   // Touch refs for mobile swipe
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
 
   // Get moon events
   const moonEvents = useMoon(date, view);
+
+  // ===== HELPER FUNCTION - DEFINED ONCE =====
+  const toLocalInput = useCallback((d: Date) => {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }, []);
 
   // ===== MOBILE DETECTION =====
   useEffect(() => {
@@ -214,66 +212,7 @@ const toLocalInput = useCallback((d: Date) => {
         }
       });
     }
-  }, []);
-
-  // ===== MOBILE SWIPE GESTURE HANDLING =====
-  useEffect(() => {
-    if (!isMobile) return;
-    
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchEndX = 0;
-    let touchEndY = 0;
-    
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartX = e.changedTouches[0].screenX;
-      touchStartY = e.changedTouches[0].screenY;
-    };
-    
-    const handleTouchEnd = (e: TouchEvent) => {
-      touchEndX = e.changedTouches[0].screenX;
-      touchEndY = e.changedTouches[0].screenY;
-      handleSwipe();
-    };
-    
-    const handleSwipe = () => {
-      const swipeThreshold = 50;
-      const horizontalSwipe = Math.abs(touchEndX - touchStartX);
-      const verticalSwipe = Math.abs(touchEndY - touchStartY);
-      
-      // Only process horizontal swipes that are stronger than vertical
-      if (horizontalSwipe > verticalSwipe && horizontalSwipe > swipeThreshold) {
-        if (touchEndX < touchStartX) {
-          // Swiped left - go to next period
-          const newDate = new Date(date);
-          if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
-          else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
-          else newDate.setDate(newDate.getDate() + 1);
-          setDate(newDate);
-          showToast({ type: 'info', message: '→ Next' });
-        } else {
-          // Swiped right - go to previous period
-          const newDate = new Date(date);
-          if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
-          else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
-          else newDate.setDate(newDate.getDate() - 1);
-          setDate(newDate);
-          showToast({ type: 'info', message: '← Previous' });
-        }
-      }
-    };
-    
-    const calendarElement = document.querySelector('.rbc-calendar');
-    if (calendarElement) {
-      calendarElement.addEventListener('touchstart', handleTouchStart);
-      calendarElement.addEventListener('touchend', handleTouchEnd);
-      
-      return () => {
-        calendarElement.removeEventListener('touchstart', handleTouchStart);
-        calendarElement.removeEventListener('touchend', handleTouchEnd);
-      };
-    }
-  }, [isMobile, date, view, setDate, showToast]);
+  }, [showToast]);
 
   // ===== LOAD FRIENDS =====
   async function loadFriends() {
@@ -581,21 +520,17 @@ const toLocalInput = useCallback((d: Date) => {
 
   useKeyboardShortcuts(shortcutActions, !isMobile); // Disable on mobile
 
-  // ===== CALENDAR NAVIGATION HANDLERS - FIXED FOR MOBILE =====
+  // ===== CALENDAR NAVIGATION HANDLERS =====
   const onSelectSlot = useCallback((slotInfo: any) => {
-    // Better mobile detection - check if slots array exists (month view)
-    const isMonthView = view === 'month';
-    const isDayOrWeekView = view === 'day' || view === 'week';
-    
-    // In month view, clicking/tapping a day should navigate to that day
-    if (isMonthView) {
+    // Enhanced mobile support - clicking a day in month view opens day view
+    if (view === 'month') {
       setDate(slotInfo.start);
       setView('day');
       return;
     }
-    
-    // In day/week view, clicking/tapping a time slot opens create modal
-    if (isDayOrWeekView) {
+
+    // If in day/week view, open create event modal with pre-filled times
+    if (view === 'day' || view === 'week') {
       const start = slotInfo.start || new Date();
       const end = slotInfo.end || new Date(start.getTime() + 3600000);
       
@@ -721,7 +656,7 @@ const toLocalInput = useCallback((d: Date) => {
         message: `Failed to create ${type}`
       });
     }
-  }, [draggedItem, me, isMobile]);
+  }, [draggedItem, me, isMobile, showToast]);
 
   // ===== QUICK CREATE HANDLER =====
   async function createQuickItem() {
@@ -1047,10 +982,6 @@ const toLocalInput = useCallback((d: Date) => {
     setShowCarpoolChat(true);
   };
 
-  // ===== HELPER FUNCTIONS =====
-  const toLocalInput = (d: Date) =>
-    new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-
   const resetForm = () => {
     setForm({
       title: "",
@@ -1086,7 +1017,7 @@ const toLocalInput = useCallback((d: Date) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
       {/* Animated Background - Desktop only */}
-      {!isMobile ? (
+      {!isMobile && (
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-20 left-20 w-96 h-96 bg-purple-200 rounded-full
                         mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
@@ -1095,7 +1026,7 @@ const toLocalInput = useCallback((d: Date) => {
           <div className="absolute bottom-20 left-1/2 w-96 h-96 bg-yellow-200 rounded-full
                         mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
         </div>
-      ) : null}
+      )}
 
       {/* Main Container */}
       <div className="relative z-10 container mx-auto px-2 sm:px-4 py-4 sm:py-6 max-w-7xl">
@@ -1260,7 +1191,7 @@ const toLocalInput = useCallback((d: Date) => {
                           {carpoolMatches.slice(0, 3).map((match, idx) => (
                             <div
                               key={idx}
-                              className="p-2 bg-green-50 rounded-lg cursor-pointer hover:bg-green-100
+                              className="p-2 border border-green-500 bg-gradient-to-br from-white to-green-50 rounded-lg cursor-pointer hover:shadow-md
                                        transform hover:scale-[1.02] transition-all duration-200"
                               onClick={() => openCarpoolChat(match.event)}
                             >
@@ -1290,8 +1221,8 @@ const toLocalInput = useCallback((d: Date) => {
                       {/* Manual Carpool Button */}
                       <button
                         onClick={() => openCarpoolChat()}
-                        className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 rounded-lg
-                                 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2
+                        className="w-full text-xs px-3 py-2 border border-blue-300 bg-gradient-to-br from-white to-blue-50 text-blue-700 rounded-lg
+                                 hover:shadow-md transition-all flex items-center justify-center gap-2
                                  transform hover:scale-[1.02] active:scale-[0.98]"
                       >
                         <span>🚗</span>
@@ -1344,8 +1275,8 @@ const toLocalInput = useCallback((d: Date) => {
                               visibleReminders.map(r => (
                                 <div
                                   key={r.id}
-                                  className={`group p-2 bg-amber-50 rounded-lg flex items-center gap-2
-                                            hover:bg-amber-100 transition-all duration-200
+                                  className={`group p-2 border border-amber-400 bg-gradient-to-br from-white to-amber-50 rounded-lg flex items-center gap-2
+                                            hover:shadow-md transition-all duration-200
                                             transform hover:scale-[1.02] ${
                                     r.completed ? 'opacity-50' : ''
                                   }`}
@@ -1372,7 +1303,7 @@ const toLocalInput = useCallback((d: Date) => {
                                     }}
                                     className="rounded-sm cursor-pointer accent-amber-500"
                                   />
-                                  <span className={`flex-1 text-sm ${isMobile ? '' : 'cursor-move'} ${
+                                  <span className={`flex-1 text-sm text-amber-800 ${isMobile ? '' : 'cursor-move'} ${
                                     r.completed ? 'line-through' : ''
                                   }`}>
                                     {r.title}
@@ -1433,8 +1364,8 @@ const toLocalInput = useCallback((d: Date) => {
                             visibleTodos.map(t => (
                               <div
                                 key={t.id}
-                                className={`group p-2 bg-green-50 rounded-lg flex items-center gap-2
-                                          hover:bg-green-100 transition-all duration-200
+                                className={`group p-2 border border-green-400 bg-gradient-to-br from-white to-green-50 rounded-lg flex items-center gap-2
+                                          hover:shadow-md transition-all duration-200
                                           transform hover:scale-[1.02] ${
                                   t.completed ? 'opacity-50' : ''
                                 }`}
@@ -1461,7 +1392,7 @@ const toLocalInput = useCallback((d: Date) => {
                                   }}
                                   className="rounded-sm cursor-pointer accent-green-500"
                                 />
-                                <span className={`flex-1 text-sm ${isMobile ? '' : 'cursor-move'} ${
+                                <span className={`flex-1 text-sm text-green-700 ${isMobile ? '' : 'cursor-move'} ${
                                   t.completed ? 'line-through' : ''
                                 }`}>
                                   {t.title}
@@ -1493,7 +1424,7 @@ const toLocalInput = useCallback((d: Date) => {
               </div>
             )}
 
-            {/* Calendar Grid - Enhanced Mobile View with Fixed Props */}
+            {/* Calendar Grid - Enhanced Mobile View */}
             <div className="flex-1 min-w-0">
               <div className={isMobile ? 'calendar-mobile-wrapper' : ''}>
                 <CalendarGrid
@@ -1513,91 +1444,11 @@ const toLocalInput = useCallback((d: Date) => {
                   externalDragType={isMobile ? 'none' : dragType}
                   externalDragTitle={draggedItem?.title}
                   onExternalDrop={isMobile ? undefined : onExternalDrop}
-                  selectable={true}  // FIXED: Added this for proper slot selection
-                  popup={false}      // FIXED: Added this to use our modals instead
                 />
               </div>
             </div>
           </div>
         </div>
-
-        {/* Mobile Bottom Navigation Bar - NEW! */}
-        {isMobile && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40 safe-area-bottom">
-            <div className="flex items-center justify-around py-2">
-              {/* Today Button */}
-              <button
-                onClick={() => {
-                  setDate(new Date());
-                  showToast({ type: 'info', message: '📅 Jumped to today' });
-                }}
-                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
-              >
-                <span className="text-lg">📍</span>
-                <span className="text-xs">Today</span>
-              </button>
-
-              {/* View Switcher */}
-              <button
-                onClick={() => {
-                  // Cycle through views
-                  const views: View[] = ['month', 'week', 'day'];
-                  const currentIndex = views.indexOf(view);
-                  const nextIndex = (currentIndex + 1) % views.length;
-                  setView(views[nextIndex]);
-                }}
-                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
-              >
-                <span className="text-lg">
-                  {view === 'month' ? '📅' : view === 'week' ? '📆' : '📋'}
-                </span>
-                <span className="text-xs capitalize">{view}</span>
-              </button>
-
-              {/* Previous */}
-              <button
-                onClick={() => {
-                  const newDate = new Date(date);
-                  if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
-                  else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
-                  else newDate.setDate(newDate.getDate() - 1);
-                  setDate(newDate);
-                }}
-                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
-              >
-                <span className="text-lg">⬅️</span>
-                <span className="text-xs">Prev</span>
-              </button>
-
-              {/* Next */}
-              <button
-                onClick={() => {
-                  const newDate = new Date(date);
-                  if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
-                  else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
-                  else newDate.setDate(newDate.getDate() + 1);
-                  setDate(newDate);
-                }}
-                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
-              >
-                <span className="text-lg">➡️</span>
-                <span className="text-xs">Next</span>
-              </button>
-
-              {/* Quick Add */}
-              <button
-                onClick={() => {
-                  setQuickModalType('reminder');
-                  setQuickModalOpen(true);
-                }}
-                className="flex flex-col items-center p-2 text-gray-600 hover:text-purple-600 transition-colors"
-              >
-                <span className="text-lg">⚡</span>
-                <span className="text-xs">Quick</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Mobile Lists Menu - Enhanced with Animations */}
         {mobileMenuOpen && (
@@ -1641,7 +1492,7 @@ const toLocalInput = useCallback((d: Date) => {
                     {carpoolMatches.slice(0, 3).map((match, idx) => (
                       <div
                         key={idx}
-                        className="p-2 bg-green-50 rounded-lg active:bg-green-100
+                        className="p-2 border border-green-400 bg-gradient-to-br from-white to-green-50 rounded-lg active:shadow-md
                                  transform active:scale-95 transition-all"
                         onClick={() => {
                           openCarpoolChat(match.event);
@@ -1708,8 +1559,8 @@ const toLocalInput = useCallback((d: Date) => {
                     <p className="text-sm text-gray-400 italic p-2">No reminders yet</p>
                   ) : (
                     visibleReminders.map(r => (
-                      <div key={r.id} className={`p-2 bg-amber-50 rounded-lg flex items-center gap-2
-                                                active:bg-amber-100 transition-all ${
+                      <div key={r.id} className={`p-2 border border-amber-400 bg-gradient-to-br from-white to-amber-50 rounded-lg flex items-center gap-2
+                                                active:shadow-md transition-all ${
                         r.completed ? 'opacity-50' : ''
                       }`}>
                         <input
@@ -1718,7 +1569,7 @@ const toLocalInput = useCallback((d: Date) => {
                           onChange={() => toggleComplete(r.id, r.completed, 'reminder')}
                           className="rounded-sm accent-amber-500"
                         />
-                        <span className={`flex-1 text-sm ${r.completed ? 'line-through' : ''}`}>
+                        <span className={`flex-1 text-sm text-amber-700 ${r.completed ? 'line-through' : ''}`}>
                           {r.title}
                         </span>
                         <button
@@ -1757,8 +1608,8 @@ const toLocalInput = useCallback((d: Date) => {
                     <p className="text-sm text-gray-400 italic p-2">No to-dos yet</p>
                   ) : (
                     visibleTodos.map(t => (
-                      <div key={t.id} className={`p-2 bg-green-50 rounded-lg flex items-center gap-2
-                                              active:bg-green-100 transition-all ${
+                      <div key={t.id} className={`p-2 border border-green-400 bg-gradient-to-br from-white to-green-50 rounded-lg flex items-center gap-2
+                                              active:shadow-md transition-all ${
                         t.completed ? 'opacity-50' : ''
                       }`}>
                         <input
@@ -1767,7 +1618,7 @@ const toLocalInput = useCallback((d: Date) => {
                           onChange={() => toggleComplete(t.id, t.completed, 'todo')}
                           className="rounded-sm accent-green-500"
                         />
-                        <span className={`flex-1 text-sm ${t.completed ? 'line-through' : ''}`}>
+                        <span className={`flex-1 text-sm text-green-700 ${t.completed ? 'line-through' : ''}`}>
                           {t.title}
                         </span>
                         <button
@@ -1938,7 +1789,7 @@ const toLocalInput = useCallback((d: Date) => {
               </h3>
               
               {selectedCarpoolEvent && (
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                <div className="mb-4 p-3 border border-blue-300 bg-gradient-to-br from-white to-blue-50 rounded-lg">
                   <div className="text-sm font-medium text-blue-900">{selectedCarpoolEvent.title}</div>
                   <div className="text-xs text-blue-700">
                     {new Date(selectedCarpoolEvent.start_time).toLocaleString()}
@@ -2122,7 +1973,6 @@ const toLocalInput = useCallback((d: Date) => {
           width: 100%;
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
-          padding-bottom: 60px;
         }
         
         /* Enhanced mobile calendar styles */
@@ -2143,12 +1993,6 @@ const toLocalInput = useCallback((d: Date) => {
             font-weight: bold;
           }
           
-          .rbc-toolbar button {
-            padding: 8px 12px !important;
-            font-size: 14px !important;
-            min-width: 60px;
-          }
-          
           .rbc-btn-group button {
             padding: 0.25rem 0.5rem;
             font-size: 0.75rem;
@@ -2156,20 +2000,6 @@ const toLocalInput = useCallback((d: Date) => {
           
           .rbc-month-view {
             min-height: 400px;
-          }
-          
-          /* Make month cells more tappable */
-          .rbc-month-row {
-            min-height: 60px;
-          }
-          
-          .rbc-day-bg {
-            cursor: pointer;
-            -webkit-tap-highlight-color: rgba(124, 58, 237, 0.1);
-          }
-          
-          .rbc-day-bg:active {
-            background-color: rgba(124, 58, 237, 0.05);
           }
           
           .rbc-header {
@@ -2182,17 +2012,9 @@ const toLocalInput = useCallback((d: Date) => {
             font-size: 0.75rem;
           }
           
-          /* Better event display on mobile */
           .rbc-event {
-            font-size: 0.65rem !important;
-            padding: 1px 2px !important;
-            line-height: 1.2;
-          }
-          
-          .rbc-event-content {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-size: 0.6rem;
+            padding: 0.125rem;
           }
           
           .rbc-show-more {
@@ -2208,37 +2030,13 @@ const toLocalInput = useCallback((d: Date) => {
             min-height: 500px;
           }
           
-          /* Improve time slot selection in day/week view */
           .rbc-time-slot {
             min-height: 30px;
-            cursor: pointer;
-            -webkit-tap-highlight-color: rgba(124, 58, 237, 0.1);
-          }
-          
-          .rbc-time-slot:active {
-            background-color: rgba(124, 58, 237, 0.05);
           }
           
           .rbc-timeslot-group {
             min-height: 60px;
           }
-          
-          /* Today button highlight */
-          .rbc-today {
-            background-color: rgba(124, 58, 237, 0.1) !important;
-          }
-          
-          /* Safe area for devices with home indicator (iPhone X+) */
-          .safe-area-bottom {
-            padding-bottom: env(safe-area-inset-bottom, 0);
-          }
-        }
-        
-        /* Smooth transitions for all devices */
-        .rbc-day-bg,
-        .rbc-time-slot,
-        .rbc-event {
-          transition: background-color 0.2s ease;
         }
       `}</style>
     </div>
