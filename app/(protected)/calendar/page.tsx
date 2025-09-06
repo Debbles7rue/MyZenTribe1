@@ -841,13 +841,35 @@ export default function CalendarPage() {
 
   // ===== TEMPLATE HANDLERS =====
   const handleApplyTemplate = async (templateEvents: any[]) => {
+    if (!me) {
+      showToast({ type: 'error', message: 'Please log in first' });
+      return;
+    }
+    
     try {
-      for (const event of templateEvents) {
-        await supabase.from('events').insert(event);
+      // Add the created_by field and ensure all required fields are present
+      const eventsToInsert = templateEvents.map(event => ({
+        ...event,
+        created_by: me,
+        visibility: event.visibility || 'private',
+        source: event.source || 'personal',
+        status: event.status || 'scheduled',
+        rsvp_public: event.rsvp_public !== undefined ? event.rsvp_public : false,
+        completed: false
+      }));
+      
+      for (const event of eventsToInsert) {
+        const { error } = await supabase.from('events').insert(event);
+        if (error) {
+          console.error('Error inserting template event:', error);
+          throw error;
+        }
       }
-      loadCalendar();
+      
+      await loadCalendar(); // Make sure to reload the calendar
       showToast({ type: 'success', message: '✨ Routine added to calendar!' });
     } catch (error) {
+      console.error('Template application error:', error);
       showToast({ type: 'error', message: 'Failed to apply template' });
     }
   };
