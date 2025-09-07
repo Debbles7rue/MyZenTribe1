@@ -829,7 +829,7 @@ const BusinessDashboard: React.FC = () => {
                 {(profile.creator_type === "event_host" || profile.creator_type === "both") && (
                   <button 
                     className="action-btn"
-                    onClick={() => window.location.href = '/events/create?type=business'}
+                    onClick={() => window.location.href = '/events'}
                   >
                     <span className="action-icon">📅</span>
                     <span>Create Event</span>
