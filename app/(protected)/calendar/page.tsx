@@ -341,28 +341,32 @@ export default function CalendarPage() {
     }
   }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, addPoints]);
 
-  // ===== CALENDAR NAVIGATION =====
+  // ===== CALENDAR NAVIGATION - FIXED VERSION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
     if (batchMode) return; // Disable slot selection in batch mode
     
     vibrate();
     
-    if (view === 'month' && isMobile) {
+    // In month view, clicking a day should navigate to day view
+    if (view === 'month') {
       setDate(slotInfo.start);
       setView('day');
       return;
     }
-
-    const start = slotInfo.start || new Date();
-    const end = slotInfo.end || new Date(start.getTime() + 3600000);
     
-    setForm(prev => ({
-      ...prev,
-      start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-      end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-    }));
-    setOpenCreate(true);
-  }, [view, isMobile, batchMode, setForm, vibrate]);
+    // In week or day view, clicking a time slot should open the create modal
+    if (view === 'week' || view === 'day') {
+      const start = slotInfo.start || new Date();
+      const end = slotInfo.end || new Date(start.getTime() + 3600000);
+      
+      setForm(prev => ({
+        ...prev,
+        start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+        end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+      }));
+      setOpenCreate(true);
+    }
+  }, [view, batchMode, setForm, vibrate]);
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
@@ -385,12 +389,12 @@ export default function CalendarPage() {
       return;
     }
     
-    // Normal event selection
+    // Normal event selection - show details
     if (r?.id) {
       setSelected(r);
       setDetailsOpen(true);
     }
-  }, [batchMode, selectedBatchEvents, setSelected, vibrate]);
+  }, [batchMode, setSelected, vibrate]);
 
   // ===== BATCH ACTIONS =====
   const handleBatchDelete = useCallback(async () => {
@@ -466,6 +470,11 @@ export default function CalendarPage() {
     return todos.filter(t => showCompletedItems || !t.completed);
   }, [todos, showCompletedItems]);
 
+  // ===== DEBUG: Log button clicks =====
+  const debugLog = (action: string) => {
+    console.log(`Button clicked: ${action}`);
+  };
+
   return (
     <div className={`min-h-screen transition-colors duration-500 ${
       darkMode 
@@ -523,37 +532,91 @@ export default function CalendarPage() {
         {/* Header Component */}
         <CalendarHeader
           mode={mode}
-          setMode={setMode}
+          setMode={(newMode) => {
+            debugLog(`Mode changed to: ${newMode}`);
+            setMode(newMode);
+          }}
           calendarTheme={calendarTheme}
-          setCalendarTheme={setCalendarTheme}
+          setCalendarTheme={(theme) => {
+            debugLog(`Theme changed to: ${theme}`);
+            setCalendarTheme(theme);
+          }}
           showMoon={showMoon}
-          setShowMoon={setShowMoon}
+          setShowMoon={(show) => {
+            debugLog(`Moon phases: ${show}`);
+            setShowMoon(show);
+          }}
           isMobile={isMobile}
-          setOpenCreate={setOpenCreate}
-          setMobileMenuOpen={setMobileMenuOpen}
-          setShowTemplates={setShowTemplates}
-          setShowAnalytics={setShowAnalytics}
-          setShowMeetingCoordinator={setShowMeetingCoordinator}
-          setShowShortcutsHelp={setShowShortcutsHelp}
+          setOpenCreate={(open) => {
+            debugLog('Create event modal opened');
+            setOpenCreate(open);
+          }}
+          setMobileMenuOpen={(open) => {
+            debugLog('Mobile menu toggled');
+            setMobileMenuOpen(open);
+          }}
+          setShowTemplates={(show) => {
+            debugLog('Templates modal opened');
+            setShowTemplates(show);
+          }}
+          setShowAnalytics={(show) => {
+            debugLog('Analytics modal opened');
+            setShowAnalytics(show);
+          }}
+          setShowMeetingCoordinator={(show) => {
+            debugLog('Meeting coordinator opened');
+            setShowMeetingCoordinator(show);
+          }}
+          setShowShortcutsHelp={(show) => {
+            debugLog('Shortcuts help opened');
+            setShowShortcutsHelp(show);
+          }}
           darkMode={darkMode}
-          setDarkMode={setDarkMode}
+          setDarkMode={(dark) => {
+            debugLog(`Dark mode: ${dark}`);
+            setDarkMode(dark);
+          }}
           focusMode={focusMode}
-          setFocusMode={setFocusMode}
+          setFocusMode={(focus) => {
+            debugLog(`Focus mode: ${focus}`);
+            setFocusMode(focus);
+          }}
           batchMode={batchMode}
-          setBatchMode={setBatchMode}
+          setBatchMode={(batch) => {
+            debugLog(`Batch mode: ${batch}`);
+            setBatchMode(batch);
+          }}
           userStats={userStats}
           isListening={isListening}
-          startListening={startListening}
+          startListening={() => {
+            debugLog('Voice command started');
+            startListening();
+          }}
         />
 
         {/* Mobile Quick Actions Bar */}
         {isMobile && (
           <MobileQuickActions
-            onMoodTrack={() => setShowMoodTracker(true)}
-            onPhotoMemories={() => setShowMemories(true)}
-            onPomodoro={() => setShowPomodoroTimer(true)}
-            onTimeBlock={() => setShowTimeBlocking(true)}
-            onVoiceCommand={startListening}
+            onMoodTrack={() => {
+              debugLog('Mood tracker opened');
+              setShowMoodTracker(true);
+            }}
+            onPhotoMemories={() => {
+              debugLog('Photo memories opened');
+              setShowMemories(true);
+            }}
+            onPomodoro={() => {
+              debugLog('Pomodoro timer opened');
+              setShowPomodoroTimer(true);
+            }}
+            onTimeBlock={() => {
+              debugLog('Time blocking opened');
+              setShowTimeBlocking(true);
+            }}
+            onVoiceCommand={() => {
+              debugLog('Voice command triggered');
+              startListening();
+            }}
             isListening={isListening}
           />
         )}
@@ -567,19 +630,19 @@ export default function CalendarPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => handleBatchMove(1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600"
+                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
               >
                 Move +1 day
               </button>
               <button
                 onClick={() => handleBatchMove(-1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600"
+                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
               >
                 Move -1 day
               </button>
               <button
                 onClick={handleBatchDelete}
-                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
+                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
               >
                 Delete
               </button>
@@ -668,8 +731,12 @@ export default function CalendarPage() {
         {/* Mobile Floating Action Button */}
         {isMobile && (
           <FloatingActionButton
-            onClick={() => setOpenCreate(true)}
+            onClick={() => {
+              debugLog('Floating action button clicked');
+              setOpenCreate(true);
+            }}
             onLongPress={() => {
+              debugLog('Floating action button long-pressed');
               vibrate();
               setQuickModalType('reminder');
               setQuickModalOpen(true);
