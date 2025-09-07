@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link"; // Added for profile links
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 type Post = {
   id: string;
-  user_id: string; // Added to support profile links
+  user_id: string;
   image_path: string;
   caption: string | null;
-  description: string | null; // Added for future collaborative features
-  visibility: "private" | "public"; // Simplified to private/public
+  description: string | null;
+  visibility: "private" | "friends" | "acquaintances" | "public";
   created_at: string;
   updated_at: string;
   url: string;
-  tags: { id: string; name: string }[]; // Enhanced to include user IDs
+  tags: { id: string; name: string }[];
 };
 
 type Comment = {
@@ -22,37 +22,86 @@ type Comment = {
   post_id: string;
   user_id: string;
   user_name: string;
+  user_avatar?: string;
   body: string;
   created_at: string;
 };
 
+type RelationshipType = 'friend' | 'acquaintance' | 'restricted' | 'none';
+
+interface PhotosFeedProps {
+  userId: string | null; // Profile being viewed
+  viewerUserId?: string | null; // Current logged-in user
+  isPublicView?: boolean; // True when viewing someone else's profile
+  relationshipType?: RelationshipType; // Relationship between viewer and profile owner
+}
+
 const VISIBILITY_OPTIONS = [
-  { value: "private", label: "Private (Only on my profile)", icon: "🔒" },
-  { value: "public", label: "Public (Friends can see)", icon: "🌍" },
+  { value: "private", label: "Private (Only me)", icon: "🔒" },
+  { value: "friends", label: "Friends", icon: "👥" },
+  { value: "acquaintances", label: "Friends & Acquaintances", icon: "🤝" },
+  { value: "public", label: "Public (Everyone)", icon: "🌍" },
 ] as const;
 
-export default function PhotosFeed({ userId }: { userId: string | null }) {
+export default function PhotosFeed({ 
+  userId, 
+  viewerUserId, 
+  isPublicView = false,
+  relationshipType = 'none' 
+}: PhotosFeedProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({});
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "public">("private");
+  const [visibility, setVisibility] = useState<Post["visibility"]>("friends");
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editCaption, setEditCaption] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
-  const [editVisibility, setEditVisibility] = useState<"private" | "public">("private");
+  const [editVisibility, setEditVisibility] = useState<Post["visibility"]>("friends");
   const [commentText, setCommentText] = useState<{ [postId: string]: string }>({});
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [likeCounts, setLikeCounts] = useState<{ [postId: string]: number }>({});
 
-  const canPost = useMemo(() => !!userId, [userId]);
+  // Determine if current user can post (only on their own profile)
+  const canPost = useMemo(() => {
+    return !isPublicView && userId && userId === viewerUserId;
+  }, [userId, viewerUserId, isPublicView]);
+
+  // Determine if current user is viewing their own profile
+  const isOwnProfile = userId === viewerUserId;
 
   // Show temporary message
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
+  };
+
+  // Filter posts based on relationship
+  const filterPostsByRelationship = (posts: Post[]): Post[] => {
+    if (isOwnProfile) {
+      // Show all posts on own profile
+      return posts;
+    }
+
+    return posts.filter(post => {
+      switch (post.visibility) {
+        case 'public':
+          return true;
+        case 'acquaintances':
+          return relationshipType === 'friend' || relationshipType === 'acquaintance';
+        case 'friends':
+          return relationshipType === 'friend';
+        case 'private':
+          return false;
+        default:
+          return false;
+      }
+    });
   };
 
   async function listPosts() {
@@ -99,16 +148,18 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
         };
       }));
 
-      setPosts(items);
+      // Filter posts based on relationship
+      const filteredPosts = filterPostsByRelationship(items);
+      setPosts(filteredPosts);
 
-      // Load comments for all posts
-      const postIds = items.map(p => p.id);
+      // Load comments for visible posts
+      const postIds = filteredPosts.map(p => p.id);
       if (postIds.length > 0) {
         const { data: allComments } = await supabase
           .from("photo_comments")
           .select(`
             id, post_id, user_id, body, created_at,
-            profiles!inner(full_name)
+            profiles!inner(full_name, avatar_url)
           `)
           .in("post_id", postIds)
           .order("created_at", { ascending: true });
@@ -121,11 +172,34 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
             post_id: c.post_id,
             user_id: c.user_id,
             user_name: c.profiles?.full_name ?? "Anonymous",
+            user_avatar: c.profiles?.avatar_url,
             body: c.body,
             created_at: c.created_at
           });
         });
         setComments(commentsByPost);
+
+        // Load likes
+        if (viewerUserId) {
+          const { data: likes } = await supabase
+            .from("photo_likes")
+            .select("post_id")
+            .eq("user_id", viewerUserId)
+            .in("post_id", postIds);
+          
+          setLikedPosts(new Set(likes?.map(l => l.post_id) ?? []));
+        }
+
+        // Load like counts
+        const { data: likeCounts } = await supabase
+          .from("photo_likes")
+          .select("post_id")
+          .in("post_id", postIds);
+        
+        const counts: { [key: string]: number } = {};
+        postIds.forEach(id => counts[id] = 0);
+        likeCounts?.forEach(l => counts[l.post_id]++);
+        setLikeCounts(counts);
       }
     } catch (err: any) {
       console.error("Error loading posts:", err);
@@ -135,7 +209,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
 
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
+    if (!file || !userId || !canPost) return;
     
     setUploading(true);
     try {
@@ -180,9 +254,9 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
       setCaption("");
       setDescription("");
       setTags("");
-      setVisibility("private");
+      setVisibility("friends");
       
-      showMessage("success", "Photo uploaded successfully!");
+      showMessage("success", "Photo uploaded successfully! 🎉");
       await listPosts();
     } catch (err: any) {
       console.error("Upload error:", err);
@@ -193,7 +267,45 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
     }
   }
 
+  async function toggleLike(postId: string) {
+    if (!viewerUserId) {
+      showMessage("error", "Please sign in to like posts");
+      return;
+    }
+
+    try {
+      if (likedPosts.has(postId)) {
+        // Unlike
+        await supabase
+          .from("photo_likes")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", viewerUserId);
+        
+        setLikedPosts(prev => {
+          const next = new Set(prev);
+          next.delete(postId);
+          return next;
+        });
+        setLikeCounts(prev => ({ ...prev, [postId]: Math.max(0, prev[postId] - 1) }));
+      } else {
+        // Like
+        await supabase
+          .from("photo_likes")
+          .insert({ post_id: postId, user_id: viewerUserId });
+        
+        setLikedPosts(prev => new Set([...prev, postId]));
+        setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+      }
+    } catch (err: any) {
+      console.error("Like error:", err);
+      showMessage("error", "Failed to update like");
+    }
+  }
+
   async function startEdit(post: Post) {
+    if (post.user_id !== viewerUserId) return;
+    
     setEditingPostId(post.id);
     setEditCaption(post.caption || "");
     setEditDescription(post.description || "");
@@ -238,7 +350,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
       }
 
       setEditingPostId(null);
-      showMessage("success", "Post updated!");
+      showMessage("success", "Post updated! ✨");
       await listPosts();
     } catch (err: any) {
       console.error("Edit error:", err);
@@ -266,19 +378,19 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
   }
 
   async function handleCommentSubmit(postId: string) {
-    if (!userId || !commentText[postId]?.trim()) return;
+    if (!viewerUserId || !commentText[postId]?.trim()) return;
 
     try {
       const { error } = await supabase.from("photo_comments").insert({
         post_id: postId,
-        user_id: userId,
+        user_id: viewerUserId,
         body: commentText[postId].trim()
       });
 
       if (error) throw error;
 
       setCommentText({ ...commentText, [postId]: "" });
-      showMessage("success", "Comment added!");
+      showMessage("success", "Comment added! 💬");
       await listPosts();
     } catch (err: any) {
       console.error("Comment error:", err);
@@ -288,125 +400,140 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
 
   useEffect(() => { 
     listPosts(); 
-  }, [userId]);
+  }, [userId, viewerUserId, relationshipType]);
 
   return (
-    <section className="relative">
-      <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-        Photos & Memories
-      </h2>
+    <section className="photos-feed">
+      {/* Only show title and upload on own profile */}
+      {!isPublicView && (
+        <>
+          <h2 className="feed-title">
+            Photos & Memories
+          </h2>
 
-      {/* Message Toast */}
-      {message && (
-        <div className={`fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg animate-bounce-in
-          ${message.type === "success" ? "bg-green-500" : "bg-red-500"} text-white`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Upload Section */}
-      {canPost && (
-        <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Caption</label>
-              <input 
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" 
-                value={caption} 
-                onChange={(e) => setCaption(e.target.value.slice(0, 100))} 
-                placeholder="Share this moment..." 
-                maxLength={100}
-              />
-              <span className="text-xs text-gray-500">{caption.length}/100</span>
+          {/* Message Toast */}
+          {message && (
+            <div className={`message-toast ${message.type}`}>
+              {message.text}
             </div>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Description</label>
-              <textarea 
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" 
-                value={description} 
-                onChange={(e) => setDescription(e.target.value.slice(0, 500))} 
-                placeholder="Tell the story..."
-                rows={2}
-                maxLength={500}
-              />
-              <span className="text-xs text-gray-500">{description.length}/500</span>
+          {/* Upload Section - Only on own profile */}
+          {canPost && (
+            <div className="upload-card">
+              <div className="upload-form">
+                <div className="form-group">
+                  <label className="form-label">Caption</label>
+                  <input 
+                    className="form-input" 
+                    value={caption} 
+                    onChange={(e) => setCaption(e.target.value.slice(0, 100))} 
+                    placeholder="Share this moment..." 
+                    maxLength={100}
+                  />
+                  <span className="char-count">{caption.length}/100</span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea 
+                    className="form-textarea" 
+                    value={description} 
+                    onChange={(e) => setDescription(e.target.value.slice(0, 500))} 
+                    placeholder="Tell the story..."
+                    rows={2}
+                    maxLength={500}
+                  />
+                  <span className="char-count">{description.length}/500</span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Tag Friends</label>
+                  <input 
+                    className="form-input" 
+                    value={tags} 
+                    onChange={(e) => setTags(e.target.value)} 
+                    placeholder="Names separated by commas" 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Visibility</label>
+                  <select 
+                    className="form-select" 
+                    value={visibility} 
+                    onChange={(e) => setVisibility(e.target.value as any)}
+                  >
+                    {VISIBILITY_OPTIONS.map(v => (
+                      <option key={v.value} value={v.value}>
+                        {v.icon} {v.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="upload-button">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="file-input" 
+                    onChange={onUpload} 
+                    disabled={uploading}
+                  />
+                  {uploading ? "Uploading..." : "📸 Upload Photo"}
+                </label>
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Tag Friends</label>
-              <input 
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" 
-                value={tags} 
-                onChange={(e) => setTags(e.target.value)} 
-                placeholder="Names separated by commas" 
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Visibility</label>
-              <select 
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" 
-                value={visibility} 
-                onChange={(e) => setVisibility(e.target.value as any)}
-              >
-                {VISIBILITY_OPTIONS.map(v => (
-                  <option key={v.value} value={v.value}>
-                    {v.icon} {v.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <label className="relative inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:opacity-90 transition cursor-pointer">
-              <input 
-                type="file" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={onUpload} 
-                disabled={uploading}
-              />
-              {uploading ? "Uploading..." : "📸 Upload Photo"}
-            </label>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
       {/* Posts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="posts-grid">
         {posts.map(post => (
-          <div key={post.id} className="bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-lg transition">
-            <img 
-              src={post.url} 
-              alt={post.caption || ""} 
-              className="w-full h-64 object-cover"
-            />
+          <div key={post.id} className="post-card">
+            <div className="post-image-container">
+              <img 
+                src={post.url} 
+                alt={post.caption || ""} 
+                className="post-image"
+                onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
+              />
+              
+              {/* Like button overlay */}
+              <button
+                className={`like-button ${likedPosts.has(post.id) ? 'liked' : ''}`}
+                onClick={() => toggleLike(post.id)}
+              >
+                {likedPosts.has(post.id) ? '❤️' : '🤍'}
+              </button>
+            </div>
             
-            <div className="p-4">
+            <div className="post-content">
               {editingPostId === post.id ? (
                 /* Edit Mode */
-                <div className="space-y-2">
+                <div className="edit-mode">
                   <input
-                    className="w-full px-2 py-1 border rounded"
+                    className="edit-input"
                     value={editCaption}
                     onChange={(e) => setEditCaption(e.target.value.slice(0, 100))}
                     placeholder="Caption"
                   />
                   <textarea
-                    className="w-full px-2 py-1 border rounded"
+                    className="edit-textarea"
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value.slice(0, 500))}
                     placeholder="Description"
                     rows={2}
                   />
                   <input
-                    className="w-full px-2 py-1 border rounded"
+                    className="edit-input"
                     value={editTags}
                     onChange={(e) => setEditTags(e.target.value)}
                     placeholder="Tags"
                   />
                   <select
-                    className="w-full px-2 py-1 border rounded"
+                    className="edit-select"
                     value={editVisibility}
                     onChange={(e) => setEditVisibility(e.target.value as any)}
                   >
@@ -416,16 +543,16 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                       </option>
                     ))}
                   </select>
-                  <div className="flex gap-2">
+                  <div className="edit-actions">
                     <button
                       onClick={saveEdit}
-                      className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                      className="btn-save"
                     >
                       Save
                     </button>
                     <button
                       onClick={() => setEditingPostId(null)}
-                      className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                      className="btn-cancel"
                     >
                       Cancel
                     </button>
@@ -435,21 +562,22 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                 /* View Mode */
                 <>
                   {post.caption && (
-                    <h3 className="font-semibold text-gray-800 mb-1">{post.caption}</h3>
+                    <h3 className="post-caption">{post.caption}</h3>
                   )}
-                  {post.description && (
-                    <p className="text-gray-600 text-sm mb-2">{post.description}</p>
+                  
+                  {expandedPost === post.id && post.description && (
+                    <p className="post-description">{post.description}</p>
                   )}
                   
                   {/* Tags with clickable profile links */}
                   {post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      <span className="text-sm text-gray-500">Tagged:</span>
+                    <div className="post-tags">
+                      <span className="tag-label">Tagged:</span>
                       {post.tags.map((tag, idx) => (
                         <span key={tag.id}>
                           <Link 
                             href={`/profile/${tag.id}`}
-                            className="text-sm text-purple-600 hover:underline"
+                            className="tag-link"
                           >
                             {tag.name}
                           </Link>
@@ -459,23 +587,33 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                    <span>{VISIBILITY_OPTIONS.find(v => v.value === post.visibility)?.icon} {post.visibility}</span>
-                    <span>{new Date(post.created_at).toLocaleDateString()}</span>
+                  {/* Post Meta */}
+                  <div className="post-meta">
+                    <div className="meta-left">
+                      <span className="visibility-badge">
+                        {VISIBILITY_OPTIONS.find(v => v.value === post.visibility)?.icon}
+                      </span>
+                      <span className="like-count">
+                        {likeCounts[post.id] || 0} likes
+                      </span>
+                    </div>
+                    <span className="post-date">
+                      {new Date(post.created_at).toLocaleDateString()}
+                    </span>
                   </div>
 
                   {/* Action Buttons - Only for post owner */}
-                  {post.user_id === userId && (
-                    <div className="flex gap-2 mb-3">
+                  {post.user_id === viewerUserId && (
+                    <div className="post-actions">
                       <button
                         onClick={() => startEdit(post)}
-                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        className="btn-edit"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => deletePost(post.id)}
-                        className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                        className="btn-delete"
                       >
                         Delete
                       </button>
@@ -483,27 +621,36 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                   )}
 
                   {/* Comments Section */}
-                  <div className="border-t pt-3">
-                    <h4 className="text-sm font-semibold mb-2">Comments</h4>
+                  <div className="comments-section">
+                    <h4 className="comments-title">Comments</h4>
                     
                     {/* Display Comments */}
-                    {comments[post.id]?.map(comment => (
-                      <div key={comment.id} className="mb-2 text-sm">
-                        <Link 
-                          href={`/profile/${comment.user_id}`}
-                          className="font-medium text-purple-600 hover:underline"
-                        >
-                          {comment.user_name}
-                        </Link>
-                        <span className="text-gray-700 ml-1">{comment.body}</span>
-                      </div>
-                    ))}
+                    <div className="comments-list">
+                      {comments[post.id]?.map(comment => (
+                        <div key={comment.id} className="comment">
+                          <Link 
+                            href={`/profile/${comment.user_id}`}
+                            className="comment-author"
+                          >
+                            {comment.user_avatar && (
+                              <img 
+                                src={comment.user_avatar} 
+                                alt={comment.user_name}
+                                className="comment-avatar"
+                              />
+                            )}
+                            {comment.user_name}
+                          </Link>
+                          <span className="comment-body">{comment.body}</span>
+                        </div>
+                      ))}
+                    </div>
 
                     {/* Add Comment */}
-                    {userId && (
-                      <div className="flex gap-2 mt-2">
+                    {viewerUserId && (
+                      <div className="comment-form">
                         <input
-                          className="flex-1 px-2 py-1 text-sm border rounded"
+                          className="comment-input"
                           placeholder="Add a comment..."
                           value={commentText[post.id] || ""}
                           onChange={(e) => setCommentText({
@@ -516,7 +663,7 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
                         />
                         <button
                           onClick={() => handleCommentSubmit(post.id)}
-                          className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                          className="comment-submit"
                         >
                           Post
                         </button>
@@ -530,12 +677,539 @@ export default function PhotosFeed({ userId }: { userId: string | null }) {
         ))}
       </div>
 
+      {/* Empty State */}
       {!posts.length && (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-lg">No photos yet</p>
-          <p className="text-sm">Share your first memory!</p>
+        <div className="empty-state">
+          {isPublicView && relationshipType === 'none' ? (
+            <>
+              <p className="empty-title">No public photos</p>
+              <p className="empty-subtitle">Connect as friends to see more content</p>
+            </>
+          ) : (
+            <>
+              <p className="empty-title">No photos yet</p>
+              <p className="empty-subtitle">
+                {canPost ? "Share your first memory!" : "Check back later for updates"}
+              </p>
+            </>
+          )}
         </div>
       )}
+
+      <style jsx>{`
+        .photos-feed {
+          position: relative;
+        }
+
+        .feed-title {
+          font-size: 2rem;
+          font-weight: 700;
+          margin-bottom: 1rem;
+          background: linear-gradient(135deg, #8b5cf6, #ec4899);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        @media (max-width: 640px) {
+          .feed-title {
+            font-size: 1.5rem;
+          }
+        }
+
+        /* Message Toast */
+        .message-toast {
+          position: fixed;
+          top: 5rem;
+          right: 1rem;
+          z-index: 50;
+          padding: 1rem;
+          border-radius: 0.5rem;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          animation: slideIn 0.3s ease;
+          color: white;
+          font-weight: 500;
+        }
+
+        .message-toast.success {
+          background: #10b981;
+        }
+
+        .message-toast.error {
+          background: #ef4444;
+        }
+
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        /* Upload Card */
+        .upload-card {
+          background: white;
+          border-radius: 1rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          border: 1px solid #e5e7eb;
+          padding: 1.5rem;
+          margin-bottom: 2rem;
+        }
+
+        @media (max-width: 640px) {
+          .upload-card {
+            padding: 1rem;
+            border-radius: 0.75rem;
+          }
+        }
+
+        .upload-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .form-group {
+          position: relative;
+        }
+
+        .form-label {
+          display: block;
+          font-size: 0.875rem;
+          font-weight: 500;
+          margin-bottom: 0.25rem;
+          color: #374151;
+        }
+
+        .form-input, .form-textarea, .form-select {
+          width: 100%;
+          padding: 0.625rem 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.5rem;
+          font-size: 16px; /* Prevents iOS zoom */
+          transition: all 0.2s;
+        }
+
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+
+        .form-textarea {
+          resize: vertical;
+          min-height: 4rem;
+        }
+
+        .char-count {
+          position: absolute;
+          right: 0.5rem;
+          bottom: -1.25rem;
+          font-size: 0.75rem;
+          color: #9ca3af;
+        }
+
+        .upload-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #8b5cf6, #ec4899);
+          color: white;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .upload-button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .file-input {
+          display: none;
+        }
+
+        /* Posts Grid */
+        .posts-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+          .posts-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+        }
+
+        .post-card {
+          background: white;
+          border-radius: 1rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          overflow: hidden;
+          transition: all 0.2s;
+        }
+
+        .post-card:hover {
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+          transform: translateY(-2px);
+        }
+
+        .post-image-container {
+          position: relative;
+          aspect-ratio: 1;
+          overflow: hidden;
+          background: #f3f4f6;
+        }
+
+        .post-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .post-image:hover {
+          transform: scale(1.05);
+        }
+
+        .like-button {
+          position: absolute;
+          bottom: 0.75rem;
+          right: 0.75rem;
+          width: 2.5rem;
+          height: 2.5rem;
+          background: rgba(255,255,255,0.9);
+          border: none;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 1.25rem;
+          transition: all 0.2s;
+          backdrop-filter: blur(10px);
+        }
+
+        .like-button:hover {
+          transform: scale(1.1);
+        }
+
+        .like-button.liked {
+          background: rgba(239,68,68,0.1);
+        }
+
+        .post-content {
+          padding: 1rem;
+        }
+
+        .post-caption {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .post-description {
+          color: #6b7280;
+          font-size: 0.875rem;
+          line-height: 1.5;
+          margin-bottom: 0.75rem;
+        }
+
+        .post-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.25rem;
+          margin-bottom: 0.75rem;
+          font-size: 0.875rem;
+        }
+
+        .tag-label {
+          color: #6b7280;
+        }
+
+        .tag-link {
+          color: #8b5cf6;
+          text-decoration: none;
+        }
+
+        .tag-link:hover {
+          text-decoration: underline;
+        }
+
+        .post-meta {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 0.5rem;
+          border-top: 1px solid #f3f4f6;
+          font-size: 0.75rem;
+          color: #6b7280;
+        }
+
+        .meta-left {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .visibility-badge {
+          font-size: 0.875rem;
+        }
+
+        .like-count {
+          font-weight: 500;
+        }
+
+        .post-date {
+          color: #9ca3af;
+        }
+
+        .post-actions {
+          display: flex;
+          gap: 0.5rem;
+          margin-top: 0.75rem;
+        }
+
+        .btn-edit, .btn-delete {
+          padding: 0.375rem 0.75rem;
+          border-radius: 0.375rem;
+          border: none;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn-edit {
+          background: #3b82f6;
+          color: white;
+        }
+
+        .btn-edit:hover {
+          background: #2563eb;
+        }
+
+        .btn-delete {
+          background: #ef4444;
+          color: white;
+        }
+
+        .btn-delete:hover {
+          background: #dc2626;
+        }
+
+        /* Edit Mode */
+        .edit-mode {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .edit-input, .edit-textarea, .edit-select {
+          width: 100%;
+          padding: 0.5rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+        }
+
+        .edit-textarea {
+          resize: vertical;
+          min-height: 3rem;
+        }
+
+        .edit-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .btn-save, .btn-cancel {
+          flex: 1;
+          padding: 0.5rem;
+          border-radius: 0.375rem;
+          border: none;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn-save {
+          background: #10b981;
+          color: white;
+        }
+
+        .btn-save:hover {
+          background: #059669;
+        }
+
+        .btn-cancel {
+          background: #6b7280;
+          color: white;
+        }
+
+        .btn-cancel:hover {
+          background: #4b5563;
+        }
+
+        /* Comments Section */
+        .comments-section {
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid #f3f4f6;
+        }
+
+        .comments-title {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #374151;
+          margin: 0 0 0.75rem 0;
+        }
+
+        .comments-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .comment {
+          font-size: 0.875rem;
+          line-height: 1.5;
+        }
+
+        .comment-author {
+          font-weight: 600;
+          color: #8b5cf6;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          margin-right: 0.25rem;
+        }
+
+        .comment-author:hover {
+          text-decoration: underline;
+        }
+
+        .comment-avatar {
+          width: 1.25rem;
+          height: 1.25rem;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+
+        .comment-body {
+          color: #4b5563;
+        }
+
+        .comment-form {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .comment-input {
+          flex: 1;
+          padding: 0.375rem 0.5rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+        }
+
+        .comment-input:focus {
+          outline: none;
+          border-color: #8b5cf6;
+        }
+
+        .comment-submit {
+          padding: 0.375rem 0.75rem;
+          background: #8b5cf6;
+          color: white;
+          border: none;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .comment-submit:hover {
+          background: #7c3aed;
+        }
+
+        /* Empty State */
+        .empty-state {
+          text-align: center;
+          padding: 4rem 2rem;
+          color: #6b7280;
+        }
+
+        .empty-title {
+          font-size: 1.125rem;
+          font-weight: 500;
+          margin-bottom: 0.5rem;
+        }
+
+        .empty-subtitle {
+          font-size: 0.875rem;
+          color: #9ca3af;
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 640px) {
+          .message-toast {
+            right: 0.5rem;
+            left: 0.5rem;
+            font-size: 0.875rem;
+          }
+
+          .posts-grid {
+            padding: 0;
+          }
+
+          .post-card {
+            border-radius: 0.75rem;
+          }
+
+          .like-button {
+            width: 2rem;
+            height: 2rem;
+            font-size: 1rem;
+          }
+
+          .post-content {
+            padding: 0.75rem;
+          }
+
+          .comment-form {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 0.5rem;
+            border-top: 1px solid #e5e7eb;
+            margin: 0 -0.75rem -0.75rem;
+          }
+        }
+
+        /* Touch-friendly on mobile */
+        @media (hover: none) {
+          .post-image:hover {
+            transform: none;
+          }
+          
+          .like-button:hover {
+            transform: none;
+          }
+        }
+      `}</style>
     </section>
   );
 }
