@@ -55,10 +55,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Webhook error' }, { status: 400 });
   }
 }
-
-// Stripe requires raw body for signature verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
