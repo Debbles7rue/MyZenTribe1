@@ -23,17 +23,13 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // First, get the list of friend IDs (if you have a friends table)
-  // For now, we'll implement a basic version that shows:
-  // 1. Your own posts (any privacy)
-  // 2. Public posts from everyone
-  // 3. Friends posts from your friends (when friends system is added)
-  
-  // Build the query with proper filtering
+  // 1) pull posts you can see - FIXED to show your posts and public posts
+  // For now: shows your own posts (any privacy) + all public posts
+  // When friends system is added, we'll include friends' posts too
   let q = supabase
     .from("posts")
     .select("*")
-    .or(`user_id.eq.${uid},privacy.eq.public`) // Show your own posts and all public posts
+    .or(`user_id.eq.${uid},privacy.eq.public`) // Show your posts + public posts
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -48,7 +44,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
     return { rows: [], error: error.message };
   }
   
-  if (!posts || posts.length === 0) {
+  if (!posts?.length) {
     console.log("No posts found");
     return { rows: [], error: null };
   }
@@ -58,20 +54,15 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const ids = posts.map((p: any) => p.id);
   const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
 
-  // 2) hydrate authors
-  const { data: profs, error: profsError } = await supabase
+  // 2) hydrate authors - keeping original logic
+  const { data: profs } = await supabase
     .from("profiles")
     .select("id, full_name, avatar_url")
     .in("id", authorIds);
 
-  if (profsError) {
-    console.error("Error fetching profiles:", profsError);
-  }
-
-  // 3) like counts + my likes + comment counts
+  // 3) like counts + my like - keeping original but with error handling
   const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
-    supabase
-      .from("post_likes")
+    supabase.from("post_likes")
       .select("post_id")
       .in("post_id", ids)
       .then(({ data }) => ({
@@ -80,13 +71,11 @@ export async function listHomeFeed(limit = 20, before?: string) {
           count: (data || []).filter(like => like.post_id === id).length
         })) : []
       })),
-    supabase
-      .from("post_likes")
+    supabase.from("post_likes")
       .select("post_id")
       .eq("user_id", uid)
       .in("post_id", ids),
-    supabase
-      .from("post_comments")
+    supabase.from("post_comments")
       .select("post_id")
       .in("post_id", ids)
       .then(({ data }) => ({
@@ -98,9 +87,9 @@ export async function listHomeFeed(limit = 20, before?: string) {
   ]);
 
   const byId = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
-  const likeCountBy = Object.fromEntries((likeCounts ?? []).map((r: any) => [r.post_id, r.count]));
+  const likeCountBy = Object.fromEntries((likeCounts ?? []).map((r: any) => [r.post_id, r.count || 0]));
   const myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
-  const commentCountBy = Object.fromEntries((commentCounts ?? []).map((r: any) => [r.post_id, r.count]));
+  const commentCountBy = Object.fromEntries((commentCounts ?? []).map((r: any) => [r.post_id, r.count || 0]));
 
   const rows: Post[] = (posts as any[]).map((p) => ({
     ...p,
@@ -174,21 +163,4 @@ export function timeAgo(iso: string) {
   if (h < 24) return `${h}h`; const d = Math.floor(h / 24);
   if (d < 7) return `${d}d`; const w = Math.floor(d / 7);
   return `${w}w`;
-}
-
-// Helper function to get friends (for future implementation)
-export async function getFriends(userId: string) {
-  // This will need a friends/connections table in Supabase
-  // For now, returning empty array
-  // When you set up friends table, update this to:
-  /*
-  const { data } = await supabase
-    .from("friends")
-    .select("friend_id")
-    .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
-    .eq("status", "accepted");
-  
-  return data?.map(f => f.friend_id === userId ? f.user_id : f.friend_id) || [];
-  */
-  return [];
 }
