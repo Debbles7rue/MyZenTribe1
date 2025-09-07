@@ -1,8 +1,5 @@
 // app/(protected)/calendar/components/CalendarSidebar.tsx
 import React from 'react';
-import CarpoolSection from './CarpoolSection';
-import RemindersSection from './RemindersSection';
-import TodosSection from './TodosSection';
 import type { Friend, TodoReminder, CarpoolMatch } from '../types';
 
 interface CalendarSidebarProps {
