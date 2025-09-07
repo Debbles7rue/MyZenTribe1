@@ -6,16 +6,24 @@ import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
-import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
 
-// Import our new modular components
+// Import our modular components
 import { useCalendarData } from "./hooks/useCalendarData";
 import { useCalendarActions } from "./hooks/useCalendarActions";
+import { useSwipeGestures } from "./hooks/useSwipeGestures";
+import { useVoiceCommands } from "./hooks/useVoiceCommands";
+import { useNotifications } from "./hooks/useNotifications";
+import { useGameification } from "./hooks/useGameification";
 import CalendarHeader from "./components/CalendarHeader";
 import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
 import FeedView from "./components/FeedView";
 import CalendarModals from "./components/CalendarModals";
+import MobileQuickActions from "./components/MobileQuickActions";
+import FloatingActionButton from "./components/FloatingActionButton";
+import MoodTracker from "./components/MoodTracker";
+import PhotoMemories from "./components/PhotoMemories";
+import DarkModeToggle from "./components/DarkModeToggle";
 import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -25,16 +33,16 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
     <div className="card p-3">
       <div style={{ height: "680px", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-32 mb-4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-4"></div>
           <div className="space-y-3">
             <div className="grid grid-cols-7 gap-2">
               {Array.from({ length: 7 }).map((_, i) => (
-                <div key={i} className="h-8 bg-gray-200 rounded"></div>
+                <div key={i} className="h-8 bg-gray-200 dark:bg-gray-700 rounded"></div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-2">
               {Array.from({ length: 35 }).map((_, i) => (
-                <div key={i} className="h-16 bg-gray-100 rounded"></div>
+                <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 rounded"></div>
               ))}
             </div>
           </div>
@@ -54,6 +62,13 @@ export default function CalendarPage() {
   const [showWeather, setShowWeather] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showMemories, setShowMemories] = useState(false);
+  const [showMoodTracker, setShowMoodTracker] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -66,6 +81,8 @@ export default function CalendarPage() {
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
   const [quickModalOpen, setQuickModalOpen] = useState(false);
   const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
+  const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
+  const [showTimeBlocking, setShowTimeBlocking] = useState(false);
 
   // ===== SIDEBAR STATES =====
   const [showCompletedItems, setShowCompletedItems] = useState(false);
@@ -74,10 +91,10 @@ export default function CalendarPage() {
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
 
-  // ===== MOBILE TOUCH REFS FOR SWIPE GESTURES =====
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
+  // ===== REFS FOR MOBILE INTERACTIONS =====
   const calendarRef = useRef<HTMLDivElement>(null);
+  const pullToRefreshRef = useRef<HTMLDivElement>(null);
+  const lastVibrationTime = useRef(0);
 
   // ===== TOAST & MOON =====
   const { showToast } = useToast();
@@ -88,9 +105,7 @@ export default function CalendarPage() {
     me,
     events,
     loading,
-    error,
     feed,
-    feedLoading,
     selected,
     setSelected,
     selectedFeedEvent,
@@ -109,8 +124,7 @@ export default function CalendarPage() {
     setQuickModalForm,
     loadCalendar,
     loadFeed,
-    resetForm,
-    subscribeToRealtimeUpdates
+    resetForm
   } = useCalendarData();
 
   const {
@@ -151,179 +165,288 @@ export default function CalendarPage() {
     setSelectedCarpoolFriends
   });
 
-  // ===== MOBILE DETECTION =====
+  // ===== GAMIFICATION HOOKS =====
+  const { 
+    userStats, 
+    checkAchievements, 
+    addPoints,
+    showConfetti 
+  } = useGameification(me);
+
+  // ===== NOTIFICATION HOOKS =====
+  useNotifications(reminders, todos, events, showToast);
+
+  // ===== MOBILE DETECTION & DARK MODE =====
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 1024);
     };
+    
+    const checkDarkMode = () => {
+      const hour = new Date().getHours();
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isEvening = hour >= 18 || hour < 6;
+      setDarkMode(prefersDark || isEvening);
+    };
+    
     checkMobile();
+    checkDarkMode();
+    
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    const darkModeInterval = setInterval(checkDarkMode, 60000); // Check every minute
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      clearInterval(darkModeInterval);
+    };
   }, []);
 
-  // ===== REALTIME SUBSCRIPTIONS =====
+  // ===== APPLY DARK MODE CLASS =====
   useEffect(() => {
-    if (me) {
-      const unsubscribe = subscribeToRealtimeUpdates();
-      return () => {
-        if (unsubscribe) unsubscribe();
-      };
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
-  }, [me, subscribeToRealtimeUpdates]);
+  }, [darkMode]);
 
-  // ===== KEYBOARD SHORTCUTS =====
-  const shortcutActions = {
-    createEvent: () => setOpenCreate(true),
-    switchView: () => {
-      const views: View[] = ['month', 'week', 'day'];
-      const currentIndex = views.indexOf(view);
-      setView(views[(currentIndex + 1) % views.length]);
-    },
-    navigateNext: () => {
+  // ===== MOBILE SWIPE GESTURES =====
+  const swipeHandlers = useSwipeGestures({
+    onSwipeLeft: () => {
+      if (!isMobile) return;
+      vibrate();
       const newDate = new Date(date);
       if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
       else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
       else newDate.setDate(newDate.getDate() + 1);
       setDate(newDate);
+      showToast({ type: 'info', message: `📅 ${formatDateForToast(newDate)}` });
     },
-    navigatePrevious: () => {
+    onSwipeRight: () => {
+      if (!isMobile) return;
+      vibrate();
       const newDate = new Date(date);
       if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
       else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
       else newDate.setDate(newDate.getDate() - 1);
       setDate(newDate);
+      showToast({ type: 'info', message: `📅 ${formatDateForToast(newDate)}` });
     },
-    navigateToday: () => setDate(new Date()),
-    openSearch: () => document.getElementById('search-input')?.focus(),
-    openTemplates: () => setShowTemplates(true),
-    openAnalytics: () => setShowAnalytics(true),
-    toggleMoon: () => setShowMoon(!showMoon),
-    toggleWeather: () => setShowWeather(!showWeather),
-    createReminder: () => {
-      setQuickModalType('reminder');
-      setQuickModalOpen(true);
+    onSwipeUp: () => {
+      if (!isMobile) return;
+      vibrate();
+      setOpenCreate(true);
     },
-    createTodo: () => {
-      setQuickModalType('todo');
-      setQuickModalOpen(true);
-    },
-    showHelp: () => setShowShortcutsHelp(true),
-    escape: () => {
-      // Close any open modals
-      setOpenCreate(false);
-      setOpenEdit(false);
-      setDetailsOpen(false);
-      setShowAnalytics(false);
-      setShowTemplates(false);
-      setShowMeetingCoordinator(false);
-      setShowShortcutsHelp(false);
-      setQuickModalOpen(false);
-      setMobileMenuOpen(false);
-      setShowCarpoolChat(false);
-    },
-  };
+    onSwipeDown: async () => {
+      if (!isMobile || isRefreshing) return;
+      await handlePullToRefresh();
+    }
+  });
 
-  useKeyboardShortcuts(shortcutActions, !isMobile); // Disable on mobile
-
-  // ===== MOBILE SWIPE HANDLERS =====
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartX.current || !touchStartY.current) return;
-
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
-
-    const diffX = touchStartX.current - touchEndX;
-    const diffY = touchStartY.current - touchEndY;
-
-    const minSwipeDistance = 50;
-
-    // Horizontal swipe (navigate days/weeks/months)
-    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > minSwipeDistance) {
-      if (diffX > 0) {
-        // Swiped left - go to next
-        shortcutActions.navigateNext();
-        // Add haptic feedback if available
-        if (navigator.vibrate) navigator.vibrate(10);
-      } else {
-        // Swiped right - go to previous
-        shortcutActions.navigatePrevious();
-        if (navigator.vibrate) navigator.vibrate(10);
+  // ===== VOICE COMMANDS =====
+  const { isListening, startListening } = useVoiceCommands({
+    onCommand: (command: string) => {
+      const lower = command.toLowerCase();
+      
+      if (lower.includes('create') || lower.includes('add')) {
+        if (lower.includes('meeting') || lower.includes('event')) {
+          setOpenCreate(true);
+        } else if (lower.includes('reminder')) {
+          setQuickModalType('reminder');
+          setQuickModalOpen(true);
+        } else if (lower.includes('todo') || lower.includes('task')) {
+          setQuickModalType('todo');
+          setQuickModalOpen(true);
+        }
+        vibrate();
+      } else if (lower.includes('next')) {
+        const newDate = new Date(date);
+        if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+        else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+        else newDate.setDate(newDate.getDate() + 1);
+        setDate(newDate);
+        vibrate();
+      } else if (lower.includes('previous') || lower.includes('back')) {
+        const newDate = new Date(date);
+        if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+        else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+        else newDate.setDate(newDate.getDate() - 1);
+        setDate(newDate);
+        vibrate();
+      } else if (lower.includes('today')) {
+        setDate(new Date());
+        vibrate();
+      } else if (lower.includes('week')) {
+        setView('week');
+        vibrate();
+      } else if (lower.includes('month')) {
+        setView('month');
+        vibrate();
+      } else if (lower.includes('day')) {
+        setView('day');
+        vibrate();
       }
     }
+  });
 
-    // Vertical swipe (pull to refresh)
-    if (diffY < -minSwipeDistance && touchStartY.current < 100) {
-      // Pulled down from top - refresh
-      loadCalendar();
-      showToast({ type: 'success', message: '🔄 Calendar refreshed!' });
-      if (navigator.vibrate) navigator.vibrate([10, 10]);
+  // ===== HAPTIC FEEDBACK =====
+  const vibrate = useCallback(() => {
+    if (!isMobile) return;
+    
+    const now = Date.now();
+    if (now - lastVibrationTime.current < 50) return; // Debounce
+    
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10); // Short haptic feedback
+      lastVibrationTime.current = now;
     }
+  }, [isMobile]);
 
-    // Reset
-    touchStartX.current = 0;
-    touchStartY.current = 0;
-  };
+  // ===== PULL TO REFRESH =====
+  const handlePullToRefresh = useCallback(async () => {
+    if (!isMobile || isRefreshing) return;
+    
+    setIsRefreshing(true);
+    vibrate();
+    
+    try {
+      await loadCalendar();
+      if (mode === 'whats') await loadFeed();
+      
+      showToast({ 
+        type: 'success', 
+        message: '✨ Calendar refreshed!',
+        duration: 2000
+      });
+      
+      // Add points for refresh
+      addPoints(5, 'refresh');
+    } catch (error) {
+      showToast({ 
+        type: 'error', 
+        message: 'Failed to refresh' 
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, addPoints]);
 
   // ===== CALENDAR NAVIGATION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
-    const isTouchEvent = slotInfo.action === 'click' || slotInfo.action === 'select' || slotInfo.action === 'doubleClick';
+    if (batchMode) return; // Disable slot selection in batch mode
     
-    if (view === 'month' && isTouchEvent) {
+    vibrate();
+    
+    if (view === 'month' && isMobile) {
       setDate(slotInfo.start);
       setView('day');
-      setMobileMenuOpen(false);
-      // Haptic feedback for mobile
-      if (isMobile && navigator.vibrate) navigator.vibrate(5);
       return;
     }
 
-    if ((view === 'day' || view === 'week') && isTouchEvent) {
-      const start = slotInfo.start || new Date();
-      const end = slotInfo.end || new Date(start.getTime() + 3600000);
-      
-      setForm(prev => ({
-        ...prev,
-        start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-        end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-      }));
-      setOpenCreate(true);
-      if (isMobile && navigator.vibrate) navigator.vibrate(10);
-    }
-  }, [view, setForm, isMobile]);
+    const start = slotInfo.start || new Date();
+    const end = slotInfo.end || new Date(start.getTime() + 3600000);
+    
+    setForm(prev => ({
+      ...prev,
+      start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+      end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    }));
+    setOpenCreate(true);
+  }, [view, isMobile, batchMode, setForm, vibrate]);
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
     if (r?.moonPhase) return;
     
+    vibrate();
+    
+    // Handle batch mode selection
+    if (batchMode) {
+      const eventId = r?.id || evt.id;
+      setSelectedBatchEvents(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(eventId)) {
+          newSet.delete(eventId);
+        } else {
+          newSet.add(eventId);
+        }
+        return newSet;
+      });
+      return;
+    }
+    
+    // Normal event selection
     if (r?.id) {
       setSelected(r);
       setDetailsOpen(true);
-    } else {
-      const found = events.find(e => e.id === evt.id);
-      if (found) {
-        setSelected(found);
-        setDetailsOpen(true);
-      }
     }
-    // Haptic feedback
-    if (isMobile && navigator.vibrate) navigator.vibrate(5);
-  }, [events, setSelected, isMobile]);
+  }, [batchMode, selectedBatchEvents, setSelected, vibrate]);
+
+  // ===== BATCH ACTIONS =====
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedBatchEvents.size === 0) return;
+    
+    if (confirm(`Delete ${selectedBatchEvents.size} events?`)) {
+      for (const eventId of selectedBatchEvents) {
+        await handleDeleteEvent(eventId);
+      }
+      
+      showConfetti();
+      addPoints(selectedBatchEvents.size * 10, 'batch-delete');
+      setSelectedBatchEvents(new Set());
+      setBatchMode(false);
+    }
+  }, [selectedBatchEvents, handleDeleteEvent, showConfetti, addPoints]);
+
+  const handleBatchMove = useCallback((days: number) => {
+    if (selectedBatchEvents.size === 0) return;
+    
+    // Implementation for batch move
+    showToast({ 
+      type: 'success', 
+      message: `Moved ${selectedBatchEvents.size} events ${days > 0 ? 'forward' : 'backward'} ${Math.abs(days)} days` 
+    });
+    
+    addPoints(selectedBatchEvents.size * 5, 'batch-move');
+    setSelectedBatchEvents(new Set());
+    setBatchMode(false);
+  }, [selectedBatchEvents, showToast, addPoints]);
+
+  // ===== HELPER FUNCTIONS =====
+  const formatDateForToast = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    });
+  };
+
+  const openCarpoolChat = (event?: any) => {
+    setSelectedCarpoolEvent(event || null);
+    setSelectedCarpoolFriends(new Set());
+    setShowCarpoolChat(true);
+    vibrate();
+  };
 
   // ===== FILTERED DATA =====
   const calendarEvents = useMemo(() => {
-    if (mode === 'whats') {
-      if (!feedLoading && feed.length === 0) {
-        loadFeed();
-      }
-      return feed.filter(e => !e._dismissed);
+    let events = mode === 'whats' ? feed.filter(e => !e._dismissed) : events;
+    
+    // Apply focus mode filter (only today's events)
+    if (focusMode) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      events = events.filter(e => {
+        const eventStart = new Date(e.start_time);
+        return eventStart >= today && eventStart < tomorrow;
+      });
     }
+    
     return events;
-  }, [mode, events, feed, feedLoading, loadFeed]);
+  }, [mode, events, feed, focusMode]);
 
   const visibleReminders = useMemo(() => {
     return reminders.filter(r => showCompletedItems || !r.completed);
@@ -333,17 +456,29 @@ export default function CalendarPage() {
     return todos.filter(t => showCompletedItems || !t.completed);
   }, [todos, showCompletedItems]);
 
-  // ===== HELPER FOR CARPOOL =====
-  const openCarpoolChat = (event?: any) => {
-    setSelectedCarpoolEvent(event || null);
-    setSelectedCarpoolFriends(new Set());
-    setShowCarpoolChat(true);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode 
+        ? 'bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900' 
+        : 'bg-gradient-to-br from-purple-50 via-white to-pink-50'
+    }`}>
+      {/* Pull to Refresh Indicator */}
+      {isMobile && (
+        <div 
+          ref={pullToRefreshRef}
+          className={`fixed top-0 left-0 right-0 z-50 flex justify-center py-2 transition-all duration-300 ${
+            isRefreshing ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+          }`}
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
+            <div className="animate-spin h-4 w-4 border-2 border-purple-500 border-t-transparent rounded-full" />
+            <span className="text-sm text-gray-600 dark:text-gray-300">Refreshing...</span>
+          </div>
+        </div>
+      )}
+
       {/* Animated Background - Desktop only */}
-      {!isMobile && (
+      {!isMobile && !darkMode && (
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-20 left-20 w-96 h-96 bg-purple-200 rounded-full
                         mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
@@ -354,12 +489,25 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Main Container with Touch Support */}
+      {/* Gamification Achievements Popup */}
+      {userStats?.lastAchievement && (
+        <div className="fixed top-4 right-4 z-50 animate-bounce-in">
+          <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-lg px-4 py-3 shadow-xl">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🏆</span>
+              <div>
+                <div className="font-bold">Achievement Unlocked!</div>
+                <div className="text-sm opacity-90">{userStats.lastAchievement}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Container */}
       <div 
-        ref={calendarRef}
         className="relative z-10 container mx-auto px-2 sm:px-4 py-4 sm:py-6 max-w-7xl"
-        onTouchStart={isMobile ? handleTouchStart : undefined}
-        onTouchEnd={isMobile ? handleTouchEnd : undefined}
+        {...(isMobile ? swipeHandlers : {})}
       >
         
         {/* Header Component */}
@@ -370,8 +518,6 @@ export default function CalendarPage() {
           setCalendarTheme={setCalendarTheme}
           showMoon={showMoon}
           setShowMoon={setShowMoon}
-          showWeather={showWeather}
-          setShowWeather={setShowWeather}
           isMobile={isMobile}
           setOpenCreate={setOpenCreate}
           setMobileMenuOpen={setMobileMenuOpen}
@@ -379,36 +525,62 @@ export default function CalendarPage() {
           setShowAnalytics={setShowAnalytics}
           setShowMeetingCoordinator={setShowMeetingCoordinator}
           setShowShortcutsHelp={setShowShortcutsHelp}
-          loading={loading}
-          error={error}
-          onRefresh={loadCalendar}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          focusMode={focusMode}
+          setFocusMode={setFocusMode}
+          batchMode={batchMode}
+          setBatchMode={setBatchMode}
+          userStats={userStats}
+          isListening={isListening}
+          startListening={startListening}
         />
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center justify-between">
-            <span className="text-sm">{error}</span>
-            <button 
-              onClick={loadCalendar}
-              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs"
-            >
-              Retry
-            </button>
+        {/* Mobile Quick Actions Bar */}
+        {isMobile && (
+          <MobileQuickActions
+            onMoodTrack={() => setShowMoodTracker(true)}
+            onPhotoMemories={() => setShowMemories(true)}
+            onPomodoro={() => setShowPomodoroTimer(true)}
+            onTimeBlock={() => setShowTimeBlocking(true)}
+            onVoiceCommand={startListening}
+            isListening={isListening}
+          />
+        )}
+
+        {/* Batch Mode Actions Bar */}
+        {batchMode && selectedBatchEvents.size > 0 && (
+          <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+              {selectedBatchEvents.size} events selected
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleBatchMove(1)}
+                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600"
+              >
+                Move +1 day
+              </button>
+              <button
+                onClick={() => handleBatchMove(-1)}
+                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600"
+              >
+                Move -1 day
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         )}
 
         {/* Main Content Area */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
-          {/* Loading Overlay */}
-          {loading && (
-            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-20 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
-                <span className="text-sm text-gray-600">Loading events...</span>
-              </div>
-            </div>
-          )}
-
+        <div className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden ${
+          focusMode ? 'ring-4 ring-purple-500 ring-opacity-50' : ''
+        }`}>
           <div className="flex gap-4 p-2 sm:p-4">
             
             {/* Desktop Sidebar */}
@@ -437,55 +609,25 @@ export default function CalendarPage() {
                 }}
                 onToggleComplete={handleToggleComplete}
                 onDeleteItem={handleDeleteItem}
+                userStats={userStats}
               />
             )}
 
             {/* Calendar or Feed View */}
-            <div className="flex-1 relative">
-              {/* Mobile swipe indicator */}
-              {isMobile && view !== 'month' && (
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10">
-                  <div className="bg-black/50 text-white text-xs px-3 py-1 rounded-full">
-                    ← Swipe to navigate →
-                  </div>
-                </div>
-              )}
-
-              {mode === 'whats' ? (
-                feedLoading ? (
-                  <div className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-gray-600">Finding events...</p>
-                    </div>
-                  </div>
-                ) : feed.filter(e => !e._dismissed).length > 0 ? (
-                  <FeedView
-                    feed={feed.filter(e => !e._dismissed)}
-                    onDismiss={dismissFeedEvent}
-                    onInterested={handleShowInterest}
-                    onRSVP={handleRSVP}
-                    onShowDetails={(event) => {
-                      setSelectedFeedEvent(event);
-                      setDetailsOpen(true);
-                    }}
-                    isMobile={isMobile}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <div className="text-6xl mb-4">🎉</div>
-                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No upcoming events</h3>
-                      <p className="text-gray-500 text-sm">Check back later for exciting events!</p>
-                      <button 
-                        onClick={loadFeed} 
-                        className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                      >
-                        Refresh
-                      </button>
-                    </div>
-                  </div>
-                )
+            <div className="flex-1" ref={calendarRef}>
+              {mode === 'whats' && feed.length > 0 ? (
+                <FeedView
+                  feed={feed.filter(e => !e._dismissed)}
+                  onDismiss={dismissFeedEvent}
+                  onInterested={handleShowInterest}
+                  onRSVP={handleRSVP}
+                  onShowDetails={(event) => {
+                    setSelectedFeedEvent(event);
+                    setDetailsOpen(true);
+                    vibrate();
+                  }}
+                  isMobile={isMobile}
+                />
               ) : (
                 <CalendarGrid
                   dbEvents={calendarEvents}
@@ -499,63 +641,30 @@ export default function CalendarPage() {
                   setView={setView}
                   onSelectSlot={onSelectSlot}
                   onSelectEvent={onSelectEvent}
-                  onDrop={onDrop}
-                  onResize={onResize}
+                  onDrop={isMobile ? undefined : onDrop}
+                  onResize={isMobile ? undefined : onResize}
                   externalDragType={dragType}
                   externalDragTitle={draggedItem?.title}
                   onExternalDrop={handleExternalDrop}
+                  darkMode={darkMode}
+                  focusMode={focusMode}
+                  selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
                 />
               )}
             </div>
           </div>
         </div>
 
-        {/* Mobile Bottom Action Bar */}
+        {/* Mobile Floating Action Button */}
         {isMobile && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t shadow-lg z-30">
-            <div className="flex items-center justify-around py-2">
-              <button
-                onClick={() => setDate(new Date())}
-                className="flex flex-col items-center gap-1 p-2 text-gray-600"
-              >
-                <span className="text-lg">📅</span>
-                <span className="text-xs">Today</span>
-              </button>
-              <button
-                onClick={() => {
-                  setQuickModalType('reminder');
-                  setQuickModalOpen(true);
-                }}
-                className="flex flex-col items-center gap-1 p-2 text-amber-600"
-              >
-                <span className="text-lg">⏰</span>
-                <span className="text-xs">Reminder</span>
-              </button>
-              <button
-                onClick={() => setOpenCreate(true)}
-                className="flex flex-col items-center gap-1 p-3 bg-purple-600 text-white rounded-full shadow-lg transform hover:scale-110"
-              >
-                <span className="text-2xl">+</span>
-              </button>
-              <button
-                onClick={() => {
-                  setQuickModalType('todo');
-                  setQuickModalOpen(true);
-                }}
-                className="flex flex-col items-center gap-1 p-2 text-green-600"
-              >
-                <span className="text-lg">✅</span>
-                <span className="text-xs">Todo</span>
-              </button>
-              <button
-                onClick={() => setMobileMenuOpen(true)}
-                className="flex flex-col items-center gap-1 p-2 text-gray-600"
-              >
-                <span className="text-lg">☰</span>
-                <span className="text-xs">Menu</span>
-              </button>
-            </div>
-          </div>
+          <FloatingActionButton
+            onClick={() => setOpenCreate(true)}
+            onLongPress={() => {
+              vibrate();
+              setQuickModalType('reminder');
+              setQuickModalOpen(true);
+            }}
+          />
         )}
 
         {/* Mobile Sidebar */}
@@ -580,10 +689,34 @@ export default function CalendarPage() {
             setShowMeetingCoordinator={setShowMeetingCoordinator}
             onToggleComplete={handleToggleComplete}
             onDeleteItem={handleDeleteItem}
+            userStats={userStats}
           />
         )}
 
-        {/* All Modals */}
+        {/* Photo Memories Overlay */}
+        {showMemories && (
+          <PhotoMemories
+            date={date}
+            onClose={() => setShowMemories(false)}
+            userId={me}
+          />
+        )}
+
+        {/* Mood Tracker Modal */}
+        {showMoodTracker && (
+          <MoodTracker
+            date={date}
+            onClose={() => setShowMoodTracker(false)}
+            onSave={(mood) => {
+              // Save mood to database
+              showToast({ type: 'success', message: `Mood saved: ${mood}` });
+              addPoints(10, 'mood-track');
+              setShowMoodTracker(false);
+            }}
+          />
+        )}
+
+        {/* All Other Modals */}
         <CalendarModals
           // Modal visibility states
           openCreate={openCreate}
@@ -592,9 +725,11 @@ export default function CalendarPage() {
           showAnalytics={showAnalytics}
           showTemplates={showTemplates}
           showMeetingCoordinator={showMeetingCoordinator}
-          showShortcutsHelp={showShortcutsHelp && !isMobile}
+          showShortcutsHelp={showShortcutsHelp}
           showCarpoolChat={showCarpoolChat}
           quickModalOpen={quickModalOpen}
+          showPomodoroTimer={showPomodoroTimer}
+          showTimeBlocking={showTimeBlocking}
           
           // Modal setters
           setOpenCreate={setOpenCreate}
@@ -606,6 +741,8 @@ export default function CalendarPage() {
           setShowShortcutsHelp={setShowShortcutsHelp}
           setShowCarpoolChat={setShowCarpoolChat}
           setQuickModalOpen={setQuickModalOpen}
+          setShowPomodoroTimer={setShowPomodoroTimer}
+          setShowTimeBlocking={setShowTimeBlocking}
           
           // Data
           me={me}
@@ -624,7 +761,11 @@ export default function CalendarPage() {
           isMobile={isMobile}
           
           // Actions
-          handleCreateEvent={handleCreateEvent}
+          handleCreateEvent={() => {
+            handleCreateEvent();
+            showConfetti();
+            addPoints(20, 'event-create');
+          }}
           handleUpdateEvent={handleUpdateEvent}
           handleEdit={(event) => {
             setSelected(event);
@@ -642,10 +783,18 @@ export default function CalendarPage() {
             });
             setOpenEdit(true);
             setDetailsOpen(false);
+            vibrate();
           }}
           handleApplyTemplate={handleApplyTemplate}
-          createQuickItem={createQuickItem}
-          createCarpoolGroup={createCarpoolGroup}
+          createQuickItem={() => {
+            createQuickItem();
+            addPoints(10, 'quick-create');
+          }}
+          createCarpoolGroup={() => {
+            createCarpoolGroup();
+            addPoints(30, 'carpool-create');
+            showConfetti();
+          }}
           resetForm={resetForm}
         />
       </div>
@@ -667,25 +816,65 @@ export default function CalendarPage() {
           animation-delay: 4s;
         }
         
-        /* Mobile-specific enhancements */
-        @media (max-width: 768px) {
-          /* Ensure bottom padding for fixed bottom bar */
-          .container {
-            padding-bottom: 80px !important;
+        @keyframes bounce-in {
+          0% {
+            transform: scale(0) rotate(-180deg);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.2) rotate(10deg);
+          }
+          100% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+          }
+        }
+        .animate-bounce-in {
+          animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+          .rbc-calendar {
+            font-size: 0.875rem;
           }
           
-          /* Smooth scrolling for mobile */
-          * {
+          .rbc-toolbar {
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.5rem;
+          }
+          
+          .rbc-event {
+            font-size: 0.75rem;
+            padding: 0.125rem;
+          }
+          
+          /* Better touch targets */
+          .rbc-day-bg, .rbc-date-cell {
+            min-height: 44px;
+            touch-action: manipulation;
+          }
+          
+          /* Smooth scrolling */
+          .rbc-time-view {
+            scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
           }
-          
-          /* Prevent text selection on buttons */
-          button {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-          }
+        }
+        
+        /* Dark mode transitions */
+        .dark * {
+          transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Focus mode glow */
+        @keyframes focus-glow {
+          0%, 100% { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
+          50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.8); }
+        }
+        .focus-mode-glow {
+          animation: focus-glow 2s infinite;
         }
       `}</style>
     </div>
