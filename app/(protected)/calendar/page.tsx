@@ -54,18 +54,69 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
 });
 
 export default function CalendarPage() {
-  // ===== CORE STATE =====
-  const [mode, setMode] = useState<Mode>("my");
+  // ===== CORE STATE WITH PERSISTENCE =====
+  const [mode, setMode] = useState<Mode>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('calendar-mode') as Mode) || 'my';
+    }
+    return 'my';
+  });
+
   const [date, setDate] = useState<Date>(new Date());
-  const [view, setView] = useState<View>("month");
-  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
-  const [showMoon, setShowMoon] = useState(true);
-  const [showWeather, setShowWeather] = useState(false);
+
+  const [view, setView] = useState<View>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('calendar-view') as View) || 'month';
+    }
+    return 'month';
+  });
+
+  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('calendar-theme') as CalendarTheme) || 'default';
+    }
+    return 'default';
+  });
+
+  const [showMoon, setShowMoon] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('show-moon') === 'true';
+    }
+    return true;
+  });
+
+  const [showWeather, setShowWeather] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('show-weather') === 'true';
+    }
+    return false;
+  });
+
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dark-mode');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+      // Default to system preference
+      const hour = new Date().getHours();
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return prefersDark || (hour >= 18 || hour < 6);
+    }
+    return false;
+  });
+
+  const [focusMode, setFocusMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('focus-mode') === 'true';
+    }
+    return false;
+  });
+
+  // Regular state without persistence
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
   const [showMemories, setShowMemories] = useState(false);
   const [showMoodTracker, setShowMoodTracker] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
@@ -91,6 +142,79 @@ export default function CalendarPage() {
   const [showTodosList, setShowTodosList] = useState(true);
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
+
+  // ===== PERSIST PREFERENCES TO LOCAL STORAGE =====
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('calendar-mode', mode);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('calendar-view', view);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('calendar-theme', calendarTheme);
+    }
+  }, [calendarTheme]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('show-moon', String(showMoon));
+    }
+  }, [showMoon]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('show-weather', String(showWeather));
+    }
+  }, [showWeather]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dark-mode', String(darkMode));
+    }
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('focus-mode', String(focusMode));
+    }
+  }, [focusMode]);
+
+  // ===== APPLY THEME STYLES =====
+  useEffect(() => {
+    // Apply the theme class to the calendar
+    const root = document.documentElement;
+    
+    // Remove all theme classes
+    root.classList.remove('theme-default', 'theme-spring', 'theme-summer', 
+                         'theme-autumn', 'theme-winter', 'theme-nature', 'theme-ocean');
+    
+    // Add current theme class
+    root.classList.add(`theme-${calendarTheme}`);
+    
+    // Apply theme-specific styles
+    const themeColors = {
+      default: { primary: '#8B5CF6', secondary: '#EC4899' },
+      spring: { primary: '#10B981', secondary: '#F59E0B' },
+      summer: { primary: '#F59E0B', secondary: '#3B82F6' },
+      autumn: { primary: '#DC2626', secondary: '#F97316' },
+      winter: { primary: '#60A5FA', secondary: '#C084FC' },
+      nature: { primary: '#059669', secondary: '#84CC16' },
+      ocean: { primary: '#0EA5E9', secondary: '#06B6D4' }
+    };
+    
+    const colors = themeColors[calendarTheme];
+    if (colors) {
+      root.style.setProperty('--theme-primary', colors.primary);
+      root.style.setProperty('--theme-secondary', colors.secondary);
+    }
+  }, [calendarTheme]);
 
   // ===== REFS FOR MOBILE INTERACTIONS =====
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -193,10 +317,14 @@ export default function CalendarPage() {
     };
     
     const checkDarkMode = () => {
-      const hour = new Date().getHours();
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const isEvening = hour >= 18 || hour < 6;
-      setDarkMode(prefersDark || isEvening);
+      // Only auto-update if user hasn't manually set a preference
+      const savedPreference = localStorage.getItem('dark-mode');
+      if (savedPreference === null) {
+        const hour = new Date().getHours();
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isEvening = hour >= 18 || hour < 6;
+        setDarkMode(prefersDark || isEvening);
+      }
     };
     
     checkMobile();
@@ -470,11 +598,6 @@ export default function CalendarPage() {
     return todos.filter(t => showCompletedItems || !t.completed);
   }, [todos, showCompletedItems]);
 
-  // ===== DEBUG: Log button clicks =====
-  const debugLog = (action: string) => {
-    console.log(`Button clicked: ${action}`);
-  };
-
   return (
     <div className={`min-h-screen transition-colors duration-500 ${
       darkMode 
@@ -532,91 +655,37 @@ export default function CalendarPage() {
         {/* Header Component */}
         <CalendarHeader
           mode={mode}
-          setMode={(newMode) => {
-            debugLog(`Mode changed to: ${newMode}`);
-            setMode(newMode);
-          }}
+          setMode={setMode}
           calendarTheme={calendarTheme}
-          setCalendarTheme={(theme) => {
-            debugLog(`Theme changed to: ${theme}`);
-            setCalendarTheme(theme);
-          }}
+          setCalendarTheme={setCalendarTheme}
           showMoon={showMoon}
-          setShowMoon={(show) => {
-            debugLog(`Moon phases: ${show}`);
-            setShowMoon(show);
-          }}
+          setShowMoon={setShowMoon}
           isMobile={isMobile}
-          setOpenCreate={(open) => {
-            debugLog('Create event modal opened');
-            setOpenCreate(open);
-          }}
-          setMobileMenuOpen={(open) => {
-            debugLog('Mobile menu toggled');
-            setMobileMenuOpen(open);
-          }}
-          setShowTemplates={(show) => {
-            debugLog('Templates modal opened');
-            setShowTemplates(show);
-          }}
-          setShowAnalytics={(show) => {
-            debugLog('Analytics modal opened');
-            setShowAnalytics(show);
-          }}
-          setShowMeetingCoordinator={(show) => {
-            debugLog('Meeting coordinator opened');
-            setShowMeetingCoordinator(show);
-          }}
-          setShowShortcutsHelp={(show) => {
-            debugLog('Shortcuts help opened');
-            setShowShortcutsHelp(show);
-          }}
+          setOpenCreate={setOpenCreate}
+          setMobileMenuOpen={setMobileMenuOpen}
+          setShowTemplates={setShowTemplates}
+          setShowAnalytics={setShowAnalytics}
+          setShowMeetingCoordinator={setShowMeetingCoordinator}
+          setShowShortcutsHelp={setShowShortcutsHelp}
           darkMode={darkMode}
-          setDarkMode={(dark) => {
-            debugLog(`Dark mode: ${dark}`);
-            setDarkMode(dark);
-          }}
+          setDarkMode={setDarkMode}
           focusMode={focusMode}
-          setFocusMode={(focus) => {
-            debugLog(`Focus mode: ${focus}`);
-            setFocusMode(focus);
-          }}
+          setFocusMode={setFocusMode}
           batchMode={batchMode}
-          setBatchMode={(batch) => {
-            debugLog(`Batch mode: ${batch}`);
-            setBatchMode(batch);
-          }}
+          setBatchMode={setBatchMode}
           userStats={userStats}
           isListening={isListening}
-          startListening={() => {
-            debugLog('Voice command started');
-            startListening();
-          }}
+          startListening={startListening}
         />
 
         {/* Mobile Quick Actions Bar */}
         {isMobile && (
           <MobileQuickActions
-            onMoodTrack={() => {
-              debugLog('Mood tracker opened');
-              setShowMoodTracker(true);
-            }}
-            onPhotoMemories={() => {
-              debugLog('Photo memories opened');
-              setShowMemories(true);
-            }}
-            onPomodoro={() => {
-              debugLog('Pomodoro timer opened');
-              setShowPomodoroTimer(true);
-            }}
-            onTimeBlock={() => {
-              debugLog('Time blocking opened');
-              setShowTimeBlocking(true);
-            }}
-            onVoiceCommand={() => {
-              debugLog('Voice command triggered');
-              startListening();
-            }}
+            onMoodTrack={() => setShowMoodTracker(true)}
+            onPhotoMemories={() => setShowMemories(true)}
+            onPomodoro={() => setShowPomodoroTimer(true)}
+            onTimeBlock={() => setShowTimeBlocking(true)}
+            onVoiceCommand={startListening}
             isListening={isListening}
           />
         )}
@@ -731,12 +800,8 @@ export default function CalendarPage() {
         {/* Mobile Floating Action Button */}
         {isMobile && (
           <FloatingActionButton
-            onClick={() => {
-              debugLog('Floating action button clicked');
-              setOpenCreate(true);
-            }}
+            onClick={() => setOpenCreate(true)}
             onLongPress={() => {
-              debugLog('Floating action button long-pressed');
               vibrate();
               setQuickModalType('reminder');
               setQuickModalOpen(true);
@@ -952,6 +1017,49 @@ export default function CalendarPage() {
         }
         .focus-mode-glow {
           animation: focus-glow 2s infinite;
+        }
+        
+        /* Theme-specific styles */
+        .theme-spring .rbc-today {
+          background-color: #D1FAE5 !important;
+        }
+        .theme-spring .rbc-event {
+          background-color: #10B981 !important;
+        }
+        
+        .theme-summer .rbc-today {
+          background-color: #FEF3C7 !important;
+        }
+        .theme-summer .rbc-event {
+          background-color: #F59E0B !important;
+        }
+        
+        .theme-autumn .rbc-today {
+          background-color: #FED7AA !important;
+        }
+        .theme-autumn .rbc-event {
+          background-color: #EA580C !important;
+        }
+        
+        .theme-winter .rbc-today {
+          background-color: #DBEAFE !important;
+        }
+        .theme-winter .rbc-event {
+          background-color: #3B82F6 !important;
+        }
+        
+        .theme-nature .rbc-today {
+          background-color: #D1FAE5 !important;
+        }
+        .theme-nature .rbc-event {
+          background-color: #059669 !important;
+        }
+        
+        .theme-ocean .rbc-today {
+          background-color: #CFFAFE !important;
+        }
+        .theme-ocean .rbc-event {
+          background-color: #0891B2 !important;
         }
       `}</style>
     </div>
