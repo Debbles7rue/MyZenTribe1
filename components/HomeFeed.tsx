@@ -133,7 +133,7 @@ export default function HomeFeed() {
         </div>
       )}
 
-      {/* Bottom Action Buttons */}
+      {/* Bottom Action Buttons - Updated with consistent styling */}
       <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 mb-20">
         <a 
           href="/contact" 
@@ -149,13 +149,13 @@ export default function HomeFeed() {
         </a>
         <a 
           href="/donate" 
-          className="px-4 py-3 bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded-xl font-medium hover:shadow-lg transition-all text-center"
+          className="px-4 py-3 bg-white border-2 border-blue-200 text-blue-700 rounded-xl font-medium hover:bg-blue-50 hover:border-blue-300 transition-all text-center shadow-sm"
         >
           💝 Donations
         </a>
         <a 
           href="/safety" 
-          className="px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all text-center"
+          className="px-4 py-3 bg-white border-2 border-red-200 text-red-700 rounded-xl font-medium hover:bg-red-50 hover:border-red-300 transition-all text-center shadow-sm"
         >
           🆘 SOS Setup
         </a>
