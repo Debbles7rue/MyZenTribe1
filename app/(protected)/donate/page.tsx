@@ -6,29 +6,27 @@ import { useState } from "react";
 export default function DonatePage() {
   const [selectedAmount, setSelectedAmount] = useState<number>(10);
 
-  // You'll replace these with your actual Stripe Payment Links
-  // Create these in your Stripe Dashboard under "Payment Links"
+  // Your actual Stripe Payment Links - READY TO USE!
   const stripeLinks = {
-    5: "https://buy.stripe.com/your-5-dollar-link",
-    10: "https://buy.stripe.com/your-10-dollar-link",
-    25: "https://buy.stripe.com/your-25-dollar-link",
-    50: "https://buy.stripe.com/your-50-dollar-link",
-    100: "https://buy.stripe.com/your-100-dollar-link",
-    custom: "https://donate.stripe.com/your-custom-amount-link"
+    5: "https://buy.stripe.com/28E14m3YtfUEa4U1QW6wE00",
+    10: "https://buy.stripe.com/eVq28q52xfUE2Cs5386wE01",
+    25: "https://buy.stripe.com/aFaeVceD74bW1yoeDI6wE02",
+    50: "https://buy.stripe.com/6oUaEWcuZbEo0uk67c6wE03",
+    100: "https://buy.stripe.com/9B614m1QlgYIcd2dzE6wE04"
   };
 
   const predefinedAmounts = [5, 10, 25, 50, 100];
 
   const handleDonation = () => {
-    // For now, we'll use a temporary message
-    // Replace with actual Stripe payment links when you have them
-    const link = stripeLinks[selectedAmount as keyof typeof stripeLinks] || stripeLinks.custom;
+    const link = stripeLinks[selectedAmount as keyof typeof stripeLinks];
     
-    // If you have Stripe payment links set up, uncomment this line:
-    // window.location.href = link;
-    
-    // Temporary alert while you set up Stripe
-    alert(`Donation feature coming soon! You selected $${selectedAmount}. \n\nTo set this up:\n1. Go to your Stripe Dashboard\n2. Create Payment Links for each amount\n3. Replace the URLs in this file`);
+    if (link && link.includes("stripe.com")) {
+      // If you have real Stripe links, this will work
+      window.location.href = link;
+    } else {
+      // This alert only shows if the links aren't updated yet
+      alert("Please update the Stripe payment links in the code!");
+    }
   };
 
   return (
@@ -77,13 +75,6 @@ export default function DonatePage() {
             </div>
           </div>
 
-          {/* Custom Amount Note */}
-          <div className="mb-6 p-4 bg-purple-50 rounded-lg">
-            <p className="text-sm text-purple-700">
-              💡 For custom amounts, click the donate button and enter your preferred amount on the payment page.
-            </p>
-          </div>
-
           {/* Donate Button */}
           <button
             onClick={handleDonation}
@@ -92,7 +83,7 @@ export default function DonatePage() {
             Donate ${selectedAmount}
           </button>
 
-          {/* Alternative Payment Methods */}
+          {/* Alternative Payment Methods - Optional */}
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-sm font-medium text-gray-700 mb-3">Other ways to support:</p>
             <div className="space-y-2">
@@ -128,7 +119,7 @@ export default function DonatePage() {
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
             </svg>
-            Secure payment processing
+            Secure payment powered by Stripe
           </div>
         </div>
 
