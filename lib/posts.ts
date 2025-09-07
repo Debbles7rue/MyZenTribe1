@@ -23,55 +23,121 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // 1) pull posts you can see
+  // First, get the list of friend IDs (if you have a friends table)
+  // For now, we'll implement a basic version that shows:
+  // 1. Your own posts (any privacy)
+  // 2. Public posts from everyone
+  // 3. Friends posts from your friends (when friends system is added)
+  
+  // Build the query with proper filtering
   let q = supabase
     .from("posts")
     .select("*")
+    .or(`user_id.eq.${uid},privacy.eq.public`) // Show your own posts and all public posts
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (before) q = q.lt("created_at", before);
 
+  console.log("Fetching posts for user:", uid); // Debug log
+
   const { data: posts, error } = await q;
-  if (error || !posts?.length) return { rows: (posts ?? []) as Post[], error: error?.message || null };
+  
+  if (error) {
+    console.error("Error fetching posts:", error);
+    return { rows: [], error: error.message };
+  }
+  
+  if (!posts || posts.length === 0) {
+    console.log("No posts found");
+    return { rows: [], error: null };
+  }
+
+  console.log(`Found ${posts.length} posts`); // Debug log
 
   const ids = posts.map((p: any) => p.id);
   const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
 
   // 2) hydrate authors
-  const { data: profs } = await supabase
+  const { data: profs, error: profsError } = await supabase
     .from("profiles")
     .select("id, full_name, avatar_url")
     .in("id", authorIds);
 
-  // 3) like counts + my like
+  if (profsError) {
+    console.error("Error fetching profiles:", profsError);
+  }
+
+  // 3) like counts + my likes + comment counts
   const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
-    supabase.from("post_likes").select("post_id, count:user_id").in("post_id", ids).group("post_id"),
-    supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
-    supabase.from("post_comments").select("post_id, count:id").in("post_id", ids).group("post_id"),
+    supabase
+      .from("post_likes")
+      .select("post_id")
+      .in("post_id", ids)
+      .then(({ data }) => ({
+        data: data ? ids.map(id => ({
+          post_id: id,
+          count: (data || []).filter(like => like.post_id === id).length
+        })) : []
+      })),
+    supabase
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", uid)
+      .in("post_id", ids),
+    supabase
+      .from("post_comments")
+      .select("post_id")
+      .in("post_id", ids)
+      .then(({ data }) => ({
+        data: data ? ids.map(id => ({
+          post_id: id,
+          count: (data || []).filter(comment => comment.post_id === id).length
+        })) : []
+      })),
   ]);
 
   const byId = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
-  const likeCountBy = Object.fromEntries((likeCounts ?? []).map((r: any) => [r.post_id, Number(r.count)]));
+  const likeCountBy = Object.fromEntries((likeCounts ?? []).map((r: any) => [r.post_id, r.count]));
   const myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
-  const commentCountBy = Object.fromEntries((commentCounts ?? []).map((r: any) => [r.post_id, Number(r.count)]));
+  const commentCountBy = Object.fromEntries((commentCounts ?? []).map((r: any) => [r.post_id, r.count]));
 
   const rows: Post[] = (posts as any[]).map((p) => ({
     ...p,
-    author: byId[p.user_id] || null,
+    author: byId[p.user_id] || { id: p.user_id, full_name: "Anonymous", avatar_url: null },
     like_count: likeCountBy[p.id] ?? 0,
     liked_by_me: myLikeSet.has(p.id),
     comment_count: commentCountBy[p.id] ?? 0,
   }));
 
+  console.log("Returning posts:", rows.length); // Debug log
   return { rows, error: null };
 }
 
 export async function createPost(body: string, privacy: Post["privacy"] = "friends", image_url?: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
-  const { error } = await supabase.from("posts").insert({ user_id: uid, body, privacy, image_url: image_url || null });
-  return { ok: !error, error: error?.message || null };
+  
+  console.log("Creating post:", { user_id: uid, body, privacy }); // Debug log
+  
+  const { data, error } = await supabase
+    .from("posts")
+    .insert({ 
+      user_id: uid, 
+      body, 
+      privacy, 
+      image_url: image_url || null 
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    console.error("Error creating post:", error);
+    return { ok: false, error: error.message };
+  }
+  
+  console.log("Post created successfully:", data);
+  return { ok: true, error: null };
 }
 
 export async function toggleLike(post_id: string) {
@@ -108,4 +174,21 @@ export function timeAgo(iso: string) {
   if (h < 24) return `${h}h`; const d = Math.floor(h / 24);
   if (d < 7) return `${d}d`; const w = Math.floor(d / 7);
   return `${w}w`;
+}
+
+// Helper function to get friends (for future implementation)
+export async function getFriends(userId: string) {
+  // This will need a friends/connections table in Supabase
+  // For now, returning empty array
+  // When you set up friends table, update this to:
+  /*
+  const { data } = await supabase
+    .from("friends")
+    .select("friend_id")
+    .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
+    .eq("status", "accepted");
+  
+  return data?.map(f => f.friend_id === userId ? f.user_id : f.friend_id) || [];
+  */
+  return [];
 }
