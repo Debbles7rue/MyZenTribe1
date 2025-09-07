@@ -1,226 +1,198 @@
-// Key changes to make in your page.tsx file:
+// FIXES TO APPLY TO YOUR page.tsx
 
-// 1. FIX THE MOBILE BUTTON TEXT - Update the CalendarHeader component call
-// Find the CalendarHeader component in your page.tsx and modify the mode buttons section
-
-// In CalendarHeader.tsx, update the mode switcher buttons:
-<div className="flex bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-xl p-1 shadow-lg">
+// 1. FIX MOBILE HEADER VISIBILITY
+// In CalendarHeader.tsx, update the mobile menu button styling:
+{isMobile && (
   <button
-    onClick={() => setMode('my')}
-    className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-      mode === 'my'
-        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105'
-        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-    }`}
+    onClick={() => setMobileMenuOpen(true)}
+    className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700"
+    aria-label="Open menu"
   >
-    <span className="hidden sm:inline">My Calendar</span>
-    <span className="sm:hidden">My</span>
+    <svg className="w-6 h-6 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
   </button>
-  <button
-    onClick={() => setMode('whats')}
-    className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-      mode === 'whats'
-        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105'
-        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-    }`}
-  >
-    <span className="hidden sm:inline">What's Happening</span>
-    <span className="sm:hidden">Events</span>
-  </button>
-</div>
+)}
 
-// 2. REPLACE THE FEED VIEW WITH CALENDAR GRID FOR WHAT'S HAPPENING
-// In your page.tsx, find this section around line 750-780 and replace it:
+// 2. REMOVE PHOTO MEMORIES FROM MOBILE QUICK ACTIONS
+// In your page.tsx, update the MobileQuickActions component call (around line 650):
+{isMobile && (
+  <MobileQuickActions
+    onMoodTrack={() => setShowMoodTracker(true)}
+    // Remove this line: onPhotoMemories={() => setShowMemories(true)}
+    onPomodoro={() => setShowPomodoroTimer(true)}
+    onTimeBlock={() => setShowTimeBlocking(true)}
+    onVoiceCommand={startListening}
+    isListening={isListening}
+  />
+)}
 
-{/* Calendar or Feed View */}
-<div className="flex-1" ref={calendarRef}>
-  {mode === 'whats' ? (
-    // Show calendar grid for What's Happening with special event colors
-    <CalendarGrid
-      dbEvents={processWhatsHappeningEvents(feed)}
-      moonEvents={moonEvents}
-      showMoon={showMoon}
-      showWeather={showWeather}
-      theme={calendarTheme}
-      date={date}
-      setDate={setDate}
-      view={view}
-      setView={setView}
-      onSelectSlot={onSelectSlot}
-      onSelectEvent={onSelectEvent}
-      onDrop={undefined} // Disable drag/drop in What's Happening mode
-      onResize={undefined} // Disable resize in What's Happening mode
-      externalDragType={'none'}
-      externalDragTitle={undefined}
-      onExternalDrop={undefined}
-      darkMode={darkMode}
-      focusMode={focusMode}
-      selectedBatchEvents={undefined}
-      isWhatsHappening={true} // Add this prop to indicate special mode
-    />
-  ) : (
-    // Show normal calendar for My Calendar
-    <CalendarGrid
-      dbEvents={calendarEvents}
-      moonEvents={moonEvents}
-      showMoon={showMoon}
-      showWeather={showWeather}
-      theme={calendarTheme}
-      date={date}
-      setDate={setDate}
-      view={view}
-      setView={setView}
-      onSelectSlot={onSelectSlot}
-      onSelectEvent={onSelectEvent}
-      onDrop={isMobile ? undefined : onDrop}
-      onResize={isMobile ? undefined : onResize}
-      externalDragType={dragType}
-      externalDragTitle={draggedItem?.title}
-      onExternalDrop={handleExternalDrop}
-      darkMode={darkMode}
-      focusMode={focusMode}
-      selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
-      isWhatsHappening={false}
-    />
-  )}
-</div>
+// Also remove the Photo Memories Overlay section (around line 790):
+// DELETE THIS ENTIRE SECTION:
+{/* Photo Memories Overlay */}
+{showMemories && (
+  <PhotoMemories
+    date={date}
+    onClose={() => setShowMemories(false)}
+    userId={me}
+  />
+)}
 
-// 3. ADD HELPER FUNCTION TO PROCESS EVENTS WITH COLOR CODING
-// Add this function near your other helper functions (around line 480):
-
-const processWhatsHappeningEvents = useCallback((feedEvents: any[]) => {
-  // Filter for business, creator, community, and friend invite events only
-  const filteredEvents = feedEvents.filter(event => {
-    // Check if event is from business, creator, community, or friend invite
-    return event.source === 'business' || 
-           event.source === 'creator' || 
-           event.source === 'community' ||
-           (event.source === 'friend' && event.is_invite);
-  });
-
-  // Add color coding based on user's interaction
-  return filteredEvents.map(event => {
-    let color = '#6B7280'; // Default gray for no interaction
-    
-    // Check if user has shown interest or RSVP'd
-    const userEvent = events.find(e => 
-      e.original_event_id === event.id && e.created_by === me
-    );
-    
-    if (userEvent) {
-      if (userEvent.rsvp) {
-        color = '#10B981'; // Green for RSVP'd
-      } else if (userEvent.interested) {
-        color = '#F59E0B'; // Amber for interested
-      }
+// 3. FIX CALENDAR CELL CLICK ON MOBILE
+// Replace the onSelectSlot function (around line 380):
+const onSelectSlot = useCallback((slotInfo: any) => {
+  if (batchMode) return;
+  
+  // Add immediate feedback for mobile
+  if (isMobile) {
+    // Vibrate immediately to confirm touch
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
     }
-    
-    return {
-      ...event,
-      color,
-      title: event.title + (userEvent?.rsvp ? ' ✓' : userEvent?.interested ? ' ★' : '')
-    };
-  });
-}, [events, me]);
-
-// 4. UPDATE THE EVENT SELECTION FOR WHAT'S HAPPENING MODE
-// Modify the onSelectEvent function to handle What's Happening events differently:
-
-const onSelectEvent = useCallback((evt: any) => {
-  const r = evt.resource as any;
-  if (r?.moonPhase) return;
+  }
   
-  vibrate();
-  
-  // Handle batch mode selection
-  if (batchMode) {
-    const eventId = r?.id || evt.id;
-    setSelectedBatchEvents(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(eventId)) {
-        newSet.delete(eventId);
-      } else {
-        newSet.add(eventId);
-      }
-      return newSet;
-    });
+  // In month view, clicking/tapping a day should navigate to day view
+  if (view === 'month') {
+    setDate(slotInfo.start);
+    setView('day');
+    // Add toast notification for mobile users
+    if (isMobile) {
+      showToast({ 
+        type: 'info', 
+        message: `Viewing ${slotInfo.start.toLocaleDateString('en-US', { 
+          weekday: 'short', 
+          month: 'short', 
+          day: 'numeric' 
+        })}` 
+      });
+    }
     return;
   }
   
-  // Check if we're in What's Happening mode
-  if (mode === 'whats' && r?.id) {
-    // Show action modal for interested/RSVP instead of edit
-    setSelectedFeedEvent(r);
-    setDetailsOpen(true);
-    // The details modal should show "Interested" and "RSVP" buttons
-  } else if (r?.id) {
-    // Normal event selection for My Calendar
-    setSelected(r);
-    setDetailsOpen(true);
+  // In week or day view, clicking a time slot should open the create modal
+  if (view === 'week' || view === 'day') {
+    const start = slotInfo.start || new Date();
+    const end = slotInfo.end || new Date(start.getTime() + 3600000);
+    
+    setForm(prev => ({
+      ...prev,
+      start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+      end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    }));
+    setOpenCreate(true);
   }
-}, [batchMode, mode, setSelected, setSelectedFeedEvent, vibrate]);
+}, [view, batchMode, isMobile, setForm, showToast]);
 
-// 5. ADD CUSTOM STYLES FOR EVENT COLORS
-// Add these styles to your style section:
+// 4. FIX DRAG AND DROP
+// Add this to your CalendarGrid component props (around line 750):
+<CalendarGrid
+  dbEvents={calendarEvents}
+  moonEvents={moonEvents}
+  showMoon={showMoon}
+  showWeather={showWeather}
+  theme={calendarTheme}
+  date={date}
+  setDate={setDate}
+  view={view}
+  setView={setView}
+  onSelectSlot={onSelectSlot}
+  onSelectEvent={onSelectEvent}
+  // Fix drag and drop by ensuring it's only enabled on desktop
+  onDrop={!isMobile ? onDrop : undefined}
+  onResize={!isMobile ? onResize : undefined}
+  draggableAccessor={!isMobile ? () => true : () => false} // Add this line
+  externalDragType={!isMobile ? dragType : 'none'}
+  externalDragTitle={!isMobile ? draggedItem?.title : undefined}
+  onExternalDrop={!isMobile ? handleExternalDrop : undefined}
+  darkMode={darkMode}
+  focusMode={focusMode}
+  selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
+/>
 
-/* Event status colors */
-.rbc-event.interested {
-  background-color: #F59E0B !important; /* Amber for interested */
-  border-left: 3px solid #D97706 !important;
+// 5. ADD MOBILE-SPECIFIC STYLES FOR BETTER TOUCH TARGETS
+// Add to your styles section at the bottom:
+/* Mobile touch optimization */
+@media (max-width: 1024px) {
+  /* Make calendar cells more tappable */
+  .rbc-day-bg {
+    min-height: 60px !important;
+    cursor: pointer !important;
+  }
+  
+  .rbc-date-cell {
+    padding: 8px !important;
+    font-size: 16px !important;
+  }
+  
+  /* Prevent text selection on mobile */
+  .rbc-calendar {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  
+  /* Make events easier to tap */
+  .rbc-event {
+    min-height: 25px !important;
+    padding: 4px !important;
+  }
+  
+  /* Disable drag ghost on mobile */
+  .rbc-addons-dnd-drag-preview {
+    display: none !important;
+  }
 }
 
-.rbc-event.rsvp {
-  background-color: #10B981 !important; /* Green for RSVP */
-  border-left: 3px solid #059669 !important;
+// 6. UPDATE MobileQuickActions.tsx component to remove photo memories:
+// In components/MobileQuickActions.tsx, remove the photo memories button:
+interface MobileQuickActionsProps {
+  onMoodTrack: () => void;
+  // Remove: onPhotoMemories: () => void;
+  onPomodoro: () => void;
+  onTimeBlock: () => void;
+  onVoiceCommand: () => void;
+  isListening: boolean;
 }
 
-.rbc-event.no-interaction {
-  background-color: #6B7280 !important; /* Gray for no interaction */
-  opacity: 0.8;
-}
-
-/* What's Happening mode indicators */
-.whats-happening-mode .rbc-event {
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.whats-happening-mode .rbc-event:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Legend for What's Happening */
-.event-legend {
-  display: flex;
-  gap: 1rem;
-  padding: 0.5rem;
-  background: white;
-  border-radius: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.legend-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.legend-dot.interested {
-  background-color: #F59E0B;
-}
-
-.legend-dot.rsvp {
-  background-color: #10B981;
-}
-
-.legend-dot.available {
-  background-color: #6B7280;
+export default function MobileQuickActions({
+  onMoodTrack,
+  // Remove: onPhotoMemories,
+  onPomodoro,
+  onTimeBlock,
+  onVoiceCommand,
+  isListening
+}: MobileQuickActionsProps) {
+  return (
+    <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+      <button
+        onClick={onMoodTrack}
+        className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 rounded-lg shadow-sm whitespace-nowrap text-sm"
+      >
+        😊 Mood
+      </button>
+      {/* Remove the Photo Memories button */}
+      <button
+        onClick={onPomodoro}
+        className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 rounded-lg shadow-sm whitespace-nowrap text-sm"
+      >
+        🍅 Focus
+      </button>
+      <button
+        onClick={onTimeBlock}
+        className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 rounded-lg shadow-sm whitespace-nowrap text-sm"
+      >
+        📊 Time Block
+      </button>
+      <button
+        onClick={onVoiceCommand}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm whitespace-nowrap text-sm ${
+          isListening ? 'bg-red-500 text-white' : 'bg-white/80 dark:bg-gray-800/80'
+        }`}
+      >
+        🎤 Voice
+      </button>
+    </div>
+  );
 }
