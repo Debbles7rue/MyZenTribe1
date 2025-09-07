@@ -1,42 +1,32 @@
 // app/(protected)/calendar/hooks/useVoiceCommands.ts
-import { useState, useCallback, useRef } from 'react';
 
-interface VoiceCommandOptions {
+import { useState, useCallback, useEffect, useRef } from 'react';
+
+interface UseVoiceCommandsProps {
   onCommand: (command: string) => void;
-  language?: string;
 }
 
-export function useVoiceCommands({ onCommand, language = 'en-US' }: VoiceCommandOptions) {
+export function useVoiceCommands({ onCommand }: UseVoiceCommandsProps) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
 
-  const startListening = useCallback(() => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      console.warn('Speech recognition not supported');
-      return;
-    }
-
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    
-    if (!recognitionRef.current) {
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = language;
-
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-      };
+      recognitionRef.current.lang = 'en-US';
 
       recognitionRef.current.onresult = (event: any) => {
         const current = event.resultIndex;
         const transcript = event.results[current][0].transcript;
         setTranscript(transcript);
-
+        
         if (event.results[current].isFinal) {
           onCommand(transcript);
-          setTimeout(() => setTranscript(''), 2000);
+          setTranscript('');
         }
       };
 
@@ -50,23 +40,45 @@ export function useVoiceCommands({ onCommand, language = 'en-US' }: VoiceCommand
       };
     }
 
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [onCommand]);
+
+  const startListening = useCallback(() => {
+    if (recognitionRef.current && !isListening) {
       recognitionRef.current.start();
+      setIsListening(true);
+      
+      // Vibrate on start
+      if ('vibrate' in navigator) {
+        navigator.vibrate(20);
+      }
     }
-  }, [isListening, language, onCommand]);
+  }, [isListening]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
+    if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
+      setIsListening(false);
     }
-  }, []);
+  }, [isListening]);
+
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }, [isListening, startListening, stopListening]);
 
   return {
     isListening,
     transcript,
     startListening,
     stopListening,
+    toggleListening
   };
 }
