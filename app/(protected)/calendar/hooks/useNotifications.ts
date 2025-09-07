@@ -131,3 +131,33 @@ export function useNotifications(
     return () => clearInterval(cleanup);
   }, [reminders, todos, events]);
 }
+// app/(protected)/calendar/hooks/useNotifications.ts
+
+export function useNotifications(
+  reminders: TodoReminder[], 
+  todos: TodoReminder[], 
+  events: DBEvent[],
+  showToast: (toast: any) => void
+) {
+  // ... all your existing code ...
+
+  // Clean up old notifications
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      // ... existing cleanup code ...
+    }, 3600000);
+
+    return () => clearInterval(cleanup);
+  }, [reminders, todos, events]);
+
+  // ADD THIS RETURN STATEMENT HERE, RIGHT BEFORE THE CLOSING BRACE:
+  return {
+    requestPermission: async () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        return await Notification.requestPermission();
+      }
+      return Notification.permission;
+    },
+    sendNotification: notifyItem
+  };
+}  // <-- This is the closing brace of the function
