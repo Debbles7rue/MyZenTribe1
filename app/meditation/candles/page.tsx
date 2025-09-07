@@ -1,16 +1,16 @@
-// app/candles/page.tsx
+// app/meditation/candles/page.tsx
 "use client";
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const runtime = 'edge';
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-// Your type definitions and the rest of your code here...
 type Candle = {
-  // ... rest of your actual code
   id: string;
   name: string;
   color: string;
@@ -70,7 +70,7 @@ export default function CandleRoomPage() {
     if (success === 'true' && candleId) {
       setCheckingPayment(true);
       checkPaymentStatus(candleId);
-      window.history.replaceState({}, '', '/candles');
+      window.history.replaceState({}, '', '/meditation/candles');
     }
   }, [searchParams]);
 
@@ -732,7 +732,7 @@ function AddEternalCandleModal({
       return;
     }
 
-    const returnUrl = `${window.location.origin}/candles?success=true&candle_id=${data.id}`;
+    const returnUrl = `${window.location.origin}/meditation/candles?success=true&candle_id=${data.id}`;
     const stripeUrl = `https://buy.stripe.com/cNi5kCgLfeQA2CseDI6wE06?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(window.location.href)}`;
     
     window.location.href = stripeUrl;
@@ -941,7 +941,7 @@ function AddRenewableCandleModal({
       return;
     }
 
-    const returnUrl = `${window.location.origin}/candles?success=true&candle_id=${data.id}`;
+    const returnUrl = `${window.location.origin}/meditation/candles?success=true&candle_id=${data.id}`;
     const stripeUrl = `https://buy.stripe.com/14AdR8amRbEocd267c6wE05?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(window.location.href)}`;
     
     window.location.href = stripeUrl;
