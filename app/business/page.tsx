@@ -1,6 +1,10 @@
 // app/business/page.tsx - BUSINESS OWNER DASHBOARD
 "use client";
 
+export const dynamic = 'force-dynamic';  // Add this line!
+
+import { useEffect, useMemo, useRef, useState } from "react";
+// ... rest of your imports
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
