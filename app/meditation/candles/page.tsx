@@ -1,18 +1,16 @@
 // app/candles/page.tsx
 "use client";
 
-export const dynamic = 'force-dynamic';  // Add this line!
-
-import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-// ... rest of your imports
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+// Your type definitions and the rest of your code here...
 type Candle = {
+  // ... rest of your actual code
   id: string;
   name: string;
   color: string;
