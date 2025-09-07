@@ -14,6 +14,7 @@ import { useSwipeGestures } from "./hooks/useSwipeGestures";
 import { useVoiceCommands } from "./hooks/useVoiceCommands";
 import { useNotifications } from "./hooks/useNotifications";
 import { useGameification } from "./hooks/useGameification";
+import { useCarpoolMatches } from "./hooks/useCarpoolMatches";
 import CalendarHeader from "./components/CalendarHeader";
 import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
@@ -113,7 +114,6 @@ export default function CalendarPage() {
     reminders,
     todos,
     friends,
-    carpoolMatches,
     selectedCarpoolEvent,
     setSelectedCarpoolEvent,
     selectedCarpoolFriends,
@@ -126,6 +126,16 @@ export default function CalendarPage() {
     loadFeed,
     resetForm
   } = useCalendarData();
+
+  // ===== CARPOOL MATCHES HOOK =====
+  const {
+    carpoolMatches,
+    suggestedCarpools,
+    loading: carpoolLoading,
+    createCarpoolGroup: createCarpoolFromMatch,
+    sendCarpoolInvite,
+    calculateImpact
+  } = useCarpoolMatches({ userId: me, events, friends });
 
   const {
     handleCreateEvent,
@@ -430,7 +440,7 @@ export default function CalendarPage() {
 
   // ===== FILTERED DATA =====
   const calendarEvents = useMemo(() => {
-    let events = mode === 'whats' ? feed.filter(e => !e._dismissed) : events;
+    let filteredEvents = mode === 'whats' ? feed.filter(e => !e._dismissed) : events;
     
     // Apply focus mode filter (only today's events)
     if (focusMode) {
@@ -439,13 +449,13 @@ export default function CalendarPage() {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      events = events.filter(e => {
+      filteredEvents = filteredEvents.filter(e => {
         const eventStart = new Date(e.start_time);
         return eventStart >= today && eventStart < tomorrow;
       });
     }
     
-    return events;
+    return filteredEvents;
   }, [mode, events, feed, focusMode]);
 
   const visibleReminders = useMemo(() => {
