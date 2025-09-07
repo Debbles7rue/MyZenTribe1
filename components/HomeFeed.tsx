@@ -15,7 +15,14 @@ export default function HomeFeed() {
 
   async function load() {
     setLoading(true);
-    const { rows } = await listHomeFeed();
+    console.log("Loading posts...");
+    const { rows, error } = await listHomeFeed();
+    if (error) {
+      console.error("Error loading posts:", error);
+      alert(`Error loading posts: ${error}`);
+    } else {
+      console.log(`Loaded ${rows.length} posts`);
+    }
     setRows(rows);
     setLoading(false);
   }
@@ -25,10 +32,18 @@ export default function HomeFeed() {
   async function post() {
     if (!body.trim()) return;
     setSaving(true);
-    await createPost(body.trim(), privacy);
+    console.log("Creating post with privacy:", privacy);
+    const result = await createPost(body.trim(), privacy);
+    if (!result.ok) {
+      console.error("Error creating post:", result.error);
+      alert(`Error creating post: ${result.error}`);
+      setSaving(false);
+      return;
+    }
+    console.log("Post created successfully!");
     setBody("");
     setSaving(false);
-    await load();
+    await load(); // Reload the feed
   }
 
   return (
