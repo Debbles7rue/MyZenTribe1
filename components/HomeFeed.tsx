@@ -15,11 +15,11 @@ export default function HomeFeed() {
 
   async function load() {
     setLoading(true);
-    console.log("Loading posts...");
+    console.log("Loading posts..."); // Debug log
     const { rows, error } = await listHomeFeed();
     if (error) {
       console.error("Error loading posts:", error);
-      alert(`Error loading posts: ${error}`);
+      // Don't show alert to users, just log it
     } else {
       console.log(`Loaded ${rows.length} posts`);
     }
@@ -32,11 +32,12 @@ export default function HomeFeed() {
   async function post() {
     if (!body.trim()) return;
     setSaving(true);
-    console.log("Creating post with privacy:", privacy);
+    console.log("Creating post with privacy:", privacy); // Debug log
     const result = await createPost(body.trim(), privacy);
     if (!result.ok) {
       console.error("Error creating post:", result.error);
-      alert(`Error creating post: ${result.error}`);
+      // Optionally show user-friendly error
+      alert("Unable to post right now. Please try again.");
       setSaving(false);
       return;
     }
@@ -58,7 +59,7 @@ export default function HomeFeed() {
           onChange={(e) => setBody(e.target.value)}
         />
         
-        {/* Media Upload Section */}
+        {/* Media Upload Section - KEEPING ALL FEATURES */}
         <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
           <button
             type="button"
@@ -82,28 +83,37 @@ export default function HomeFeed() {
             ✨ GIF
           </button>
           
-          {/* Hidden file inputs */}
+          {/* Hidden file inputs - KEEPING ALL */}
           <input
             id="photo-upload"
             type="file"
             accept="image/*"
             multiple
             style={{ display: 'none' }}
-            onChange={(e) => console.log('Photos selected:', e.target.files)}
+            onChange={(e) => {
+              console.log('Photos selected:', e.target.files);
+              // TODO: Handle photo upload
+            }}
           />
           <input
             id="video-upload"
             type="file"
             accept="video/*"
             style={{ display: 'none' }}
-            onChange={(e) => console.log('Video selected:', e.target.files)}
+            onChange={(e) => {
+              console.log('Video selected:', e.target.files);
+              // TODO: Handle video upload
+            }}
           />
           <input
             id="gif-upload"
             type="file"
             accept="image/gif"
             style={{ display: 'none' }}
-            onChange={(e) => console.log('GIF selected:', e.target.files)}
+            onChange={(e) => {
+              console.log('GIF selected:', e.target.files);
+              // TODO: Handle GIF upload
+            }}
           />
         </div>
         
@@ -148,7 +158,7 @@ export default function HomeFeed() {
         </div>
       )}
 
-      {/* Bottom Action Buttons - Updated with consistent styling */}
+      {/* Bottom Action Buttons - ALL BUTTONS WITH CONSISTENT STYLING */}
       <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 mb-20">
         <a 
           href="/contact" 
@@ -176,7 +186,7 @@ export default function HomeFeed() {
         </a>
       </div>
 
-      {/* Floating SOS Button - will appear in bottom right */}
+      {/* Floating SOS Button - KEEPING THIS */}
       <SOSFloatingButton />
     </div>
   );
