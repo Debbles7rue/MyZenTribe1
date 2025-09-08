@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import CommunityPhotoUploader from "@/components/CommunityPhotoUploader";
 
 const SUGGESTED_TAGS = [
   "Drum Circle",
   "Meditation",
-  "Yoga",
+  "Yoga", 
   "Breathwork",
   "Sound Healing",
   "Ecstatic Dance",
@@ -20,320 +22,438 @@ const SUGGESTED_TAGS = [
   "Healing",
   "Nature",
   "Workshops",
-  "Retreats"
+  "Retreats",
+  "Qi Gong",
+  "Sound Bath",
+  "Kirtan",
+  "Reiki"
 ];
 
 const REGIONS = [
   "Online Only",
-  "Northeast US",
-  "Southeast US",
-  "Midwest US",
-  "Southwest US",
-  "West Coast US",
-  "Pacific Northwest",
-  "International",
-  "Europe",
-  "Asia",
-  "Australia",
-  "South America",
-  "Africa"
+  "Dallas-Fort Worth",
+  "Austin",
+  "Houston",
+  "San Antonio",
+  "Phoenix",
+  "Los Angeles",
+  "San Francisco",
+  "New York",
+  "Chicago",
+  "Miami",
+  "Seattle",
+  "Denver",
+  "Portland",
+  "Other"
+];
+
+const COMMUNITY_GUIDELINES = [
+  "Kindness first - treat all members with respect",
+  "No spam or self-promotion without permission",
+  "Respect privacy - don't share personal information",
+  "Keep discussions relevant to the community",
+  "No hate speech, discrimination, or harassment",
+  "Report concerns to moderators",
+  "Celebrate diverse perspectives and beliefs"
 ];
 
 export default function CreateCommunityPage() {
   const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    is_private: false,
-    region: "Online Only",
-    tags: [] as string[],
-    guidelines: "",
-  });
+  
+  // Form fields
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [region, setRegion] = useState("Online Only");
+  const [customRegion, setCustomRegion] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [customTag, setCustomTag] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [guidelines, setGuidelines] = useState(COMMUNITY_GUIDELINES.join("\n"));
+  
+  // Character counts
+  const maxDescriptionLength = 500;
 
-  const handleTagToggle = (tag: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.includes(tag)
-        ? prev.tags.filter(t => t !== tag)
-        : [...prev.tags, tag]
-    }));
-  };
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function checkAuth() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/signin?redirect=/communities/create");
+      return;
+    }
+    setUserId(user.id);
+  }
+
+  function toggleTag(tag: string) {
+    if (tags.includes(tag)) {
+      setTags(tags.filter(t => t !== tag));
+    } else {
+      setTags([...tags, tag]);
+    }
+  }
+
+  function addCustomTag() {
+    const trimmedTag = customTag.trim();
+    if (trimmedTag && !tags.includes(trimmedTag)) {
+      setTags([...tags, trimmedTag]);
+      setCustomTag("");
+    }
+  }
+
+  function removeTag(tag: string) {
+    setTags(tags.filter(t => t !== tag));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    if (!userId) {
+      alert("Please sign in to create a community");
+      return;
+    }
 
-    if (!formData.name.trim()) {
+    if (!name.trim()) {
       alert("Please enter a community name");
       return;
     }
 
-    if (formData.tags.length === 0) {
-      alert("Please select at least one tag to help people find your community");
+    if (tags.length === 0) {
+      alert("Please select at least one tag");
       return;
     }
+
+    const finalRegion = region === "Other" && customRegion ? customRegion : region;
 
     setLoading(true);
 
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/signin");
-        return;
-      }
-
       // Create the community
-      const { data: community, error: createError } = await supabase
+      const { data: community, error: communityError } = await supabase
         .from("communities")
         .insert({
-          name: formData.name.trim(),
-          description: formData.description.trim() || null,
-          owner_id: user.id,
-          is_private: formData.is_private,
-          region: formData.region,
-          tags: formData.tags,
-          guidelines: formData.guidelines.trim() || null,
+          name: name.trim(),
+          description: description.trim() || null,
+          region: finalRegion,
+          tags,
+          is_private: isPrivate,
+          cover_url: coverUrl,
+          created_by: userId,
+          status: "active"
         })
         .select()
         .single();
 
-      if (createError) throw createError;
+      if (communityError) throw communityError;
 
-      // Add the creator as the owner in community_members
+      // Make creator the owner
       const { error: memberError } = await supabase
         .from("community_members")
         .insert({
           community_id: community.id,
-          user_id: user.id,
+          user_id: userId,
           role: "owner",
-          status: "approved"
+          status: "member"
         });
 
       if (memberError) throw memberError;
 
-      // Create a welcome post
+      // Create initial announcement
       await supabase
-        .from("community_posts")
+        .from("community_announcements")
         .insert({
           community_id: community.id,
-          author_id: user.id,
-          title: "Welcome to " + formData.name + "!",
-          content: "This is the beginning of our community. Feel free to introduce yourself and start connecting with others.",
-          is_pinned: true
+          title: "Welcome to our community!",
+          body: `Welcome to ${community.name}! We're excited to have you here. Please take a moment to read our community guidelines and introduce yourself.`,
+          created_by: userId,
+          is_pinned: true,
+          published_at: new Date().toISOString()
         });
 
-      // Redirect to the new community
       router.push(`/communities/${community.id}`);
     } catch (error: any) {
       console.error("Error creating community:", error);
-      alert("Failed to create community. Please try again.");
+      alert(error.message || "Failed to create community");
+    } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Create Your Community</h1>
-          <p className="text-gray-600">
-            Build a space for like-minded individuals in your area or online
-          </p>
+      <div className="container mx-auto px-4 py-6 max-w-3xl">
+        {/* Header */}
+        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Create Your Community</h1>
+          <p className="text-gray-600">Build a space for like-minded individuals in your area or online</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md p-6 space-y-6">
-          {/* Community Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Community Name *
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Dallas Drum Circle, Online Meditation Group"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              maxLength={100}
-              required
-            />
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Info */}
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
+            
+            <div className="space-y-4">
+              {/* Community Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Community Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Dallas Drum Circle, Online Meditation Group"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  placeholder="What is your community about? What makes it special?"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value.slice(0, maxDescriptionLength))}
+                  rows={4}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {description.length}/{maxDescriptionLength} characters
+                </p>
+              </div>
+
+              {/* Cover Photo */}
+              {userId && (
+                <CommunityPhotoUploader
+                  value={coverUrl}
+                  onChange={setCoverUrl}
+                  userId={userId}
+                  label="Cover Photo (optional)"
+                />
+              )}
+            </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="What is your community about? What makes it special?"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 h-32"
-              maxLength={500}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {formData.description.length}/500 characters
-            </p>
-          </div>
+          {/* Location */}
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Location</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Region *
+                </label>
+                <select
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                  required
+                >
+                  {REGIONS.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose "Online Only" if your community doesn't have a physical location
+                </p>
+              </div>
 
-          {/* Region */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Region *
-            </label>
-            <select
-              value={formData.region}
-              onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              {REGIONS.map(region => (
-                <option key={region} value={region}>{region}</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Choose "Online Only" if your community doesn't have a physical location
-            </p>
+              {region === "Other" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Custom Region
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter your region"
+                    value={customRegion}
+                    onChange={(e) => setCustomRegion(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tags * (Select at least one)
-            </label>
-            <div className="flex flex-wrap gap-2">
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Tags * (Select at least one)</h2>
+            
+            {/* Selected Tags */}
+            {tags.length > 0 && (
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm text-gray-700 mb-2">Selected tags:</p>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map(tag => (
+                    <span
+                      key={tag}
+                      className="px-3 py-1 bg-purple-600 text-white rounded-full text-sm flex items-center gap-1"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 hover:text-purple-200"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suggested Tags */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
               {SUGGESTED_TAGS.map(tag => (
                 <button
                   key={tag}
                   type="button"
-                  onClick={() => handleTagToggle(tag)}
-                  className={`px-3 py-1 rounded-full text-sm transition ${
-                    formData.tags.includes(tag)
-                      ? "bg-purple-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  onClick={() => toggleTag(tag)}
+                  className={`px-3 py-2 rounded-lg text-sm transition ${
+                    tags.includes(tag)
+                      ? "bg-purple-100 text-purple-700 border-2 border-purple-300"
+                      : "bg-gray-50 text-gray-700 border-2 border-gray-200 hover:border-purple-200"
                   }`}
                 >
                   {tag}
                 </button>
               ))}
             </div>
+
+            {/* Custom Tag Input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add custom tag..."
+                value={customTag}
+                onChange={(e) => setCustomTag(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addCustomTag())}
+                className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              <button
+                type="button"
+                onClick={addCustomTag}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+              >
+                Add
+              </button>
+            </div>
           </div>
 
-          {/* Privacy */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Privacy Settings
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+          {/* Privacy Settings */}
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Privacy Settings</h2>
+            
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-gray-50">
                 <input
                   type="radio"
-                  name="privacy"
-                  checked={!formData.is_private}
-                  onChange={() => setFormData({ ...formData, is_private: false })}
-                  className="text-purple-600"
+                  checked={!isPrivate}
+                  onChange={() => setIsPrivate(false)}
+                  className="mt-1"
                 />
-                <div>
+                <div className="flex-1">
                   <div className="font-medium">Public Community</div>
-                  <div className="text-sm text-gray-600">
-                    Anyone can view and join immediately
-                  </div>
+                  <div className="text-sm text-gray-600">Anyone can view and join immediately</div>
                 </div>
               </label>
-              
-              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-gray-50">
                 <input
                   type="radio"
-                  name="privacy"
-                  checked={formData.is_private}
-                  onChange={() => setFormData({ ...formData, is_private: true })}
-                  className="text-purple-600"
+                  checked={isPrivate}
+                  onChange={() => setIsPrivate(true)}
+                  className="mt-1"
                 />
-                <div>
+                <div className="flex-1">
                   <div className="font-medium">Private Community</div>
-                  <div className="text-sm text-gray-600">
-                    People must request to join and be approved
-                  </div>
+                  <div className="text-sm text-gray-600">People must request to join and be approved</div>
                 </div>
               </label>
             </div>
           </div>
 
           {/* Community Guidelines */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Community Guidelines
-            </label>
-            <textarea
-              value={formData.guidelines}
-              onChange={(e) => setFormData({ ...formData, guidelines: e.target.value })}
-              placeholder="What are the rules and expectations for members? (optional)"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 h-24"
-              maxLength={1000}
-            />
-          </div>
-
-          {/* Admin Notice */}
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-purple-900 mb-1">
-              You'll be the community owner
-            </h3>
-            <p className="text-sm text-purple-700">
-              As the creator, you'll have full admin rights including:
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Community Guidelines</h2>
+            <p className="text-sm text-gray-600 mb-3">
+              You'll be the community owner. As the creator, you'll have full admin rights including:
             </p>
-            <ul className="text-sm text-purple-700 mt-2 space-y-1 list-disc list-inside">
+            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 mb-4">
               <li>Appointing moderators to help manage the community</li>
               <li>Moderating content and managing members</li>
               <li>Setting community rules and guidelines</li>
               <li>Creating announcements and pinned posts</li>
             </ul>
+            
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Custom Guidelines (optional)
+            </label>
+            <textarea
+              value={guidelines}
+              onChange={(e) => setGuidelines(e.target.value)}
+              rows={6}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none text-sm"
+              placeholder="Add any specific rules for your community..."
+            />
           </div>
 
-          {/* Submit Buttons */}
-          <div className="flex gap-4">
+          {/* Tips */}
+          <div className="bg-blue-50 rounded-2xl p-6">
+            <h3 className="font-semibold text-blue-900 mb-3">Tips for Building a Great Community</h3>
+            <ul className="space-y-2 text-sm text-blue-800">
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Choose a clear, descriptive name that reflects your community's purpose</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Start with a public community to grow faster, you can change it later</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Post regularly and encourage members to share their experiences</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Appoint trusted moderators as your community grows</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span>✓</span>
+                <span>Host events and activities to bring members together</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
               type="button"
-              onClick={() => router.push("/communities")}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              onClick={() => router.back()}
+              className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
               disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={loading || !formData.name.trim() || formData.tags.length === 0}
-              className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || !name.trim() || tags.length === 0}
             >
               {loading ? "Creating..." : "Create Community"}
             </button>
           </div>
         </form>
-
-        {/* Tips */}
-        <div className="mt-8 bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-3">Tips for Building a Great Community</h2>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li className="flex gap-2">
-              <span className="text-purple-600">✓</span>
-              <span>Choose a clear, descriptive name that reflects your community's purpose</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-purple-600">✓</span>
-              <span>Start with a public community to grow faster, you can change it later</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-purple-600">✓</span>
-              <span>Post regularly and encourage members to share their experiences</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-purple-600">✓</span>
-              <span>Appoint trusted moderators as your community grows</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-purple-600">✓</span>
-              <span>Host events and activities to bring members together</span>
-            </li>
-          </ul>
-        </div>
       </div>
     </div>
   );
