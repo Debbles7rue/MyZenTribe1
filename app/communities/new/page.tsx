@@ -91,6 +91,10 @@ export default function CommunitiesPage() {
   const [showPrivate, setShowPrivate] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [userMemberships, setUserMemberships] = useState<Set<string>>(new Set());
+  
+  // Mobile-specific states
+  const [showFilters, setShowFilters] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -102,7 +106,6 @@ export default function CommunitiesPage() {
     if (user) {
       setUserId(user.id);
       
-      // Load user's community memberships
       const { data: memberships } = await supabase
         .from("community_members")
         .select("community_id")
@@ -132,7 +135,6 @@ export default function CommunitiesPage() {
       return;
     }
 
-    // Get member counts for each community
     const communitiesWithCounts = await Promise.all(
       (communitiesData || []).map(async (community) => {
         const { count } = await supabase
@@ -181,10 +183,8 @@ export default function CommunitiesPage() {
 
   // Filter communities
   const filteredCommunities = communities.filter(c => {
-    // Private filter
     if (!showPrivate && c.visibility === "private") return false;
     
-    // Search filter (searches title, about, and category)
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       const matchesSearch = 
@@ -194,16 +194,13 @@ export default function CommunitiesPage() {
       if (!matchesSearch) return false;
     }
     
-    // Category filter
     if (categoryFilter && c.category !== categoryFilter) return false;
     
-    // Zip filter
     if (zipFilter) {
       if (!c.zip) return false;
       if (radiusFilter === "exact") {
         if (c.zip !== zipFilter) return false;
       } else if (radiusFilter === "nearby") {
-        // Match first 3 digits of zip for "nearby"
         if (!c.zip.startsWith(zipFilter.slice(0, 3))) return false;
       }
     }
@@ -211,15 +208,26 @@ export default function CommunitiesPage() {
     return true;
   });
 
+  // Check if any filters are active
+  const hasActiveFilters = searchTerm || categoryFilter || zipFilter;
+
+  // Clear all filters
+  function clearFilters() {
+    setSearchTerm("");
+    setCategoryFilter("");
+    setZipFilter("");
+    setShowFilters(false);
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
-        <div className="container mx-auto px-4 py-6 max-w-7xl">
+      <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5] pb-20">
+        <div className="container mx-auto px-4 py-4 max-w-7xl">
           <div className="animate-pulse">
-            <div className="h-10 bg-gray-200 rounded w-1/3 mb-6"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded-2xl"></div>
+            <div className="h-10 bg-gray-200 rounded w-2/3 mb-6"></div>
+            <div className="space-y-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 bg-gray-200 rounded-2xl"></div>
               ))}
             </div>
           </div>
@@ -229,265 +237,315 @@ export default function CommunitiesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5]">
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Discover Communities</h1>
-          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+    <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5] pb-24">
+      {/* Mobile-optimized Header - Sticky */}
+      <div className="sticky top-0 z-40 bg-gradient-to-b from-[#EDE7F6] to-[#EDE7F6]/95 backdrop-blur-sm border-b border-purple-100">
+        <div className="container mx-auto px-4 py-3 max-w-7xl">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Communities</h1>
             <Link
-              href="/communities/new"
-              className="flex-1 sm:flex-initial px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition shadow-sm text-center"
+              href="/communities/map"
+              className="p-2 bg-white rounded-full shadow-sm"
+              aria-label="Map view"
             >
-              Create Community
+              <span className="text-xl">🗺️</span>
             </Link>
           </div>
         </div>
+      </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 mb-6">
-          {/* Mobile: Stack vertically */}
-          <div className="flex flex-col lg:grid lg:grid-cols-12 gap-3">
-            {/* Search Bar */}
-            <div className="lg:col-span-4">
-              <input
-                type="text"
-                placeholder="Search communities..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-            
-            {/* Category Filter with Datalist */}
-            <div className="lg:col-span-3">
-              <input
-                type="text"
-                list="category-suggestions"
-                placeholder="Type or select category..."
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <datalist id="category-suggestions">
-                {Object.entries(CATEGORY_STRUCTURE).map(([main, subs]) => (
-                  <optgroup key={main} label={main}>
-                    {subs.map(sub => (
-                      <option key={sub} value={sub} />
-                    ))}
-                  </optgroup>
-                ))}
-              </datalist>
-            </div>
-
-            {/* Zip Code */}
-            <div className="lg:col-span-2">
-              <input
-                type="text"
-                placeholder="ZIP code"
-                value={zipFilter}
-                onChange={(e) => setZipFilter(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                maxLength={5}
-                className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-
-            {/* Radius */}
-            <div className="lg:col-span-2">
-              <select
-                value={radiusFilter}
-                onChange={(e) => setRadiusFilter(e.target.value)}
-                className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                disabled={!zipFilter}
+      <div className="container mx-auto px-4 py-4 max-w-7xl">
+        {/* Mobile Search Bar - Always visible */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search communities..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-3 pr-12 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white shadow-sm"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-500"
+                aria-label="Clear search"
               >
-                <option value="exact">Exact ZIP</option>
-                <option value="nearby">Nearby (~25mi)</option>
-              </select>
-            </div>
+                ×
+              </button>
+            )}
+          </div>
+        </div>
 
-            {/* Show Private Toggle */}
-            <div className="lg:col-span-1 flex items-center justify-center lg:justify-start">
-              <label className="flex items-center gap-2 cursor-pointer">
+        {/* Filter Toggle Button - Mobile optimized */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`w-full px-4 py-3 rounded-xl font-medium transition-colors flex items-center justify-between ${
+              hasActiveFilters 
+                ? "bg-purple-600 text-white" 
+                : "bg-white text-gray-700 border"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span>🎯</span>
+              <span>Filters</span>
+              {hasActiveFilters && (
+                <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
+                  Active
+                </span>
+              )}
+            </span>
+            <span className="text-xl">{showFilters ? "−" : "+"}</span>
+          </button>
+        </div>
+
+        {/* Collapsible Filters - Mobile optimized */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl shadow-sm p-4 mb-4 animate-in slide-in-from-top">
+            <div className="space-y-3">
+              {/* Category Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category
+                </label>
+                <button
+                  onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+                  className="w-full px-4 py-3 border rounded-xl text-left bg-white flex justify-between items-center"
+                >
+                  <span className={categoryFilter ? "text-gray-900" : "text-gray-500"}>
+                    {categoryFilter || "Select category..."}
+                  </span>
+                  <span>▼</span>
+                </button>
+                
+                {showCategoryPicker && (
+                  <div className="mt-2 max-h-60 overflow-y-auto border rounded-xl p-2 bg-white">
+                    <button
+                      onClick={() => {
+                        setCategoryFilter("");
+                        setShowCategoryPicker(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-gray-600 hover:bg-gray-50 rounded-lg"
+                    >
+                      All Categories
+                    </button>
+                    {Object.entries(CATEGORY_STRUCTURE).map(([main, subs]) => (
+                      <div key={main} className="mt-2">
+                        <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase">
+                          {main}
+                        </div>
+                        {subs.map(sub => (
+                          <button
+                            key={sub}
+                            onClick={() => {
+                              setCategoryFilter(sub);
+                              setShowCategoryPicker(false);
+                            }}
+                            className={`w-full px-3 py-2 text-left rounded-lg ${
+                              categoryFilter === sub 
+                                ? "bg-purple-100 text-purple-700" 
+                                : "hover:bg-gray-50"
+                            }`}
+                          >
+                            {sub}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ZIP Code with Radius */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Location
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    placeholder="ZIP code"
+                    value={zipFilter}
+                    onChange={(e) => setZipFilter(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    maxLength={5}
+                    className="flex-1 px-4 py-3 border rounded-xl text-base"
+                  />
+                  <select
+                    value={radiusFilter}
+                    onChange={(e) => setRadiusFilter(e.target.value)}
+                    className="px-4 py-3 border rounded-xl bg-white"
+                    disabled={!zipFilter}
+                  >
+                    <option value="exact">Exact</option>
+                    <option value="nearby">Nearby</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Privacy Toggle */}
+              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <span className="text-gray-700 font-medium">Show Private Communities</span>
                 <input
                   type="checkbox"
                   checked={showPrivate}
                   onChange={(e) => setShowPrivate(e.target.checked)}
-                  className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                  className="w-6 h-6 text-purple-600 rounded"
                 />
-                <span className="text-gray-700 text-sm whitespace-nowrap">Private</span>
               </label>
+
+              {/* Clear Filters Button */}
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="w-full py-3 text-purple-600 font-medium"
+                >
+                  Clear All Filters
+                </button>
+              )}
             </div>
           </div>
+        )}
 
-          {/* Active Filters (Mobile-friendly) */}
-          {(searchTerm || categoryFilter || zipFilter) && (
-            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
-              {searchTerm && (
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs sm:text-sm flex items-center gap-1">
-                  Search: {searchTerm}
-                  <button onClick={() => setSearchTerm("")} className="ml-1 hover:text-purple-900">×</button>
-                </span>
-              )}
+        {/* Active Filter Pills - Horizontal scroll on mobile */}
+        {hasActiveFilters && !showFilters && (
+          <div className="mb-4 overflow-x-auto">
+            <div className="flex gap-2 pb-2">
               {categoryFilter && (
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs sm:text-sm flex items-center gap-1">
+                <button
+                  onClick={() => setCategoryFilter("")}
+                  className="flex items-center gap-1 px-3 py-2 bg-purple-100 text-purple-700 rounded-full whitespace-nowrap text-sm"
+                >
                   {categoryFilter}
-                  <button onClick={() => setCategoryFilter("")} className="ml-1 hover:text-purple-900">×</button>
-                </span>
+                  <span className="ml-1 text-lg">×</span>
+                </button>
               )}
               {zipFilter && (
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs sm:text-sm flex items-center gap-1">
-                  ZIP: {zipFilter}
-                  <button onClick={() => setZipFilter("")} className="ml-1 hover:text-purple-900">×</button>
-                </span>
+                <button
+                  onClick={() => setZipFilter("")}
+                  className="flex items-center gap-1 px-3 py-2 bg-purple-100 text-purple-700 rounded-full whitespace-nowrap text-sm"
+                >
+                  📍 {zipFilter}
+                  <span className="ml-1 text-lg">×</span>
+                </button>
               )}
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setCategoryFilter("");
-                  setZipFilter("");
-                }}
-                className="text-purple-600 hover:text-purple-700 text-xs sm:text-sm"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* MAP PLACEHOLDER SECTION - This will always show */}
-        <div className="bg-white rounded-2xl shadow-md p-4 mb-6">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-lg font-semibold text-gray-800">Community Map</h2>
-            <Link
-              href="/communities/map"
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700"
-            >
-              Open Full Map
-            </Link>
-          </div>
-
-          {/* Map placeholder - always visible */}
-          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-12 text-center" style={{ minHeight: 300 }}>
-            <div className="max-w-md mx-auto">
-              <div className="text-6xl mb-4">🗺️</div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                Interactive Map Coming Soon
-              </h3>
-              <p className="text-gray-600 mb-6">
-                The community map will show locations of drum circles, meditation groups, and wellness events near you.
-              </p>
-              <Link
-                href="/communities/map"
-                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-              >
-                View Full Map Page
-              </Link>
             </div>
           </div>
+        )}
 
-          {/* Map info */}
-          <div className="mt-3 text-sm text-gray-600 flex justify-between items-center">
-            <span>Find local communities and events on the map</span>
-            <Link href="/communities/map" className="text-purple-600 hover:text-purple-700">
-              Add your location →
-            </Link>
-          </div>
+        {/* Map Section - Smaller on mobile */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+          <Link href="/communities/map" className="block">
+            <div className="relative bg-gradient-to-br from-purple-50 to-blue-50 p-8 sm:p-12" style={{ height: "150px" }}>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">🗺️</div>
+                  <p className="text-sm font-medium text-gray-700">Tap to view map</p>
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Results Count */}
-        <div className="mb-4 text-gray-600 text-sm sm:text-base">
-          {filteredCommunities.length} {filteredCommunities.length === 1 ? "community" : "communities"} found
+        <div className="mb-3 text-gray-600 text-sm flex justify-between items-center">
+          <span>{filteredCommunities.length} communities</span>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-purple-600 text-sm"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
-        {/* Communities Grid - Responsive */}
+        {/* Communities List - Mobile optimized cards */}
         {filteredCommunities.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 sm:p-12 text-center">
+          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
             <div className="max-w-md mx-auto">
-              <p className="text-gray-500 text-base sm:text-lg mb-4">No communities found matching your criteria.</p>
-              <p className="text-purple-600 font-medium mb-6">Be the first to create one!</p>
-              <Link
-                href="/communities/new"
-                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-              >
-                Create Community
-              </Link>
+              <div className="text-5xl mb-4">🌱</div>
+              <p className="text-gray-600 mb-2">No communities found</p>
+              <p className="text-sm text-gray-500 mb-6">
+                Be the first to create one in your area!
+              </p>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="space-y-4">
             {filteredCommunities.map(community => (
               <div
                 key={community.id}
-                className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-all flex flex-col"
+                className="bg-white rounded-2xl shadow-sm overflow-hidden"
               >
-                {/* Cover Image or Gradient */}
-                <div className="h-32 rounded-t-2xl overflow-hidden">
+                {/* Cover Image - Smaller on mobile */}
+                <div className="h-24 sm:h-32 relative">
                   {community.cover_url || community.photo_url ? (
                     <img
                       src={community.cover_url || community.photo_url || ""}
                       alt=""
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-purple-400 to-pink-400" />
                   )}
+                  {community.visibility === "private" && (
+                    <span className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs rounded-full">
+                      Private
+                    </span>
+                  )}
                 </div>
 
-                {/* Community Info */}
-                <div className="p-4 sm:p-6 flex-1 flex flex-col">
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-lg sm:text-xl font-semibold text-gray-800 flex-1">
-                        {community.title}
-                      </h3>
-                      {community.visibility === "private" && (
-                        <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                          Private
-                        </span>
-                      )}
-                    </div>
+                {/* Community Info - Optimized for mobile */}
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-1">
+                    {community.title}
+                  </h3>
 
-                    {community.about && (
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                        {community.about}
-                      </p>
+                  {/* Category & Location on same line */}
+                  <div className="flex items-center gap-2 mb-2 text-sm">
+                    {community.category && (
+                      <span className="text-purple-600">
+                        {community.category}
+                      </span>
                     )}
-
-                    {/* Category & ZIP */}
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {community.category && (
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                          {community.category}
-                        </span>
-                      )}
-                      {community.zip && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                          📍 {community.zip}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Member Count */}
-                    <div className="text-sm text-gray-500">
-                      {community.member_count || 0} members
-                    </div>
+                    {community.category && community.zip && (
+                      <span className="text-gray-400">•</span>
+                    )}
+                    {community.zip && (
+                      <span className="text-gray-600">
+                        📍 {community.zip}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Action Button */}
-                  <div className="mt-4">
+                  {/* About - Show less on mobile */}
+                  {community.about && (
+                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                      {community.about}
+                    </p>
+                  )}
+
+                  {/* Members and Action - Side by side */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {community.member_count || 0} members
+                    </span>
+                    
                     {userMemberships.has(community.id) ? (
                       <Link
                         href={`/communities/${community.id}`}
-                        className="block w-full text-center px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium text-sm sm:text-base"
+                        className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-full font-medium text-sm"
                       >
-                        View Community
+                        View
                       </Link>
                     ) : (
                       <button
                         onClick={() => joinCommunity(community.id, community.visibility)}
-                        className="w-full px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium text-sm sm:text-base"
+                        className="px-6 py-2.5 bg-purple-600 text-white rounded-full font-medium text-sm"
                       >
-                        {community.visibility === "private" ? "Request to Join" : "Join Community"}
+                        {community.visibility === "private" ? "Request" : "Join"}
                       </button>
                     )}
                   </div>
@@ -496,6 +554,27 @@ export default function CommunitiesPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Sticky Create Button - Mobile optimized */}
+      <div className="fixed bottom-6 right-6 z-50 lg:hidden">
+        <Link
+          href="/communities/new"
+          className="flex items-center justify-center w-14 h-14 bg-purple-600 text-white rounded-full shadow-lg"
+          aria-label="Create community"
+        >
+          <span className="text-2xl">+</span>
+        </Link>
+      </div>
+
+      {/* Desktop Create Button */}
+      <div className="hidden lg:block fixed bottom-6 right-6 z-50">
+        <Link
+          href="/communities/new"
+          className="px-6 py-3 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 transition font-medium"
+        >
+          Create Community
+        </Link>
       </div>
     </div>
   );
