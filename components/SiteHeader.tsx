@@ -23,8 +23,12 @@ export default function SiteHeader() {
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const t = e.target as HTMLElement;
-      if (!t.closest(".nav-caret") && !t.closest(".menu")) setOpenProfileMenu(false);
-      if (!t.closest(".hamburger") && !t.closest(".mobile-menu")) setOpenMobileMenu(false);
+      if (!t.closest(".profile-dropdown") && !t.closest(".profile-menu")) {
+        setOpenProfileMenu(false);
+      }
+      if (!t.closest(".hamburger-btn") && !t.closest(".mobile-menu-panel")) {
+        setOpenMobileMenu(false);
+      }
     }
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
@@ -36,10 +40,17 @@ export default function SiteHeader() {
     setOpenMobileMenu(false);
   }, [pathname]);
 
-  const Nav = ({ href, children }: { href: string; children: React.ReactNode }) => {
+  const NavLink = ({ href, children, className = "" }: { 
+    href: string; 
+    children: React.ReactNode;
+    className?: string;
+  }) => {
     const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
     return (
-      <Link href={href} className={`nav-link ${active ? "active" : ""}`}>
+      <Link 
+        href={href} 
+        className={`nav-link ${active ? "active" : ""} ${className}`}
+      >
         {children}
       </Link>
     );
@@ -52,241 +63,549 @@ export default function SiteHeader() {
 
   return (
     <header className="site-header">
-      <div className="header-inner container-app">
-        {/* Brand */}
-        <Link href="/" className="brand" aria-label="MyZenTribe Home">
-          <div className="brand-name">
-            <span className="brand-zen">My</span>ZenTribe
-          </div>
+      <div className="header-container">
+        {/* Logo/Brand */}
+        <Link href="/" className="brand-logo" aria-label="MyZenTribe Home">
+          <span className="brand-my">My</span>
+          <span className="brand-zen">Zen</span>
+          <span className="brand-tribe">Tribe</span>
         </Link>
 
-        {/* Desktop nav + actions */}
+        {/* Desktop Navigation */}
         {userId === "loading" ? (
-          <div style={{ height: 38 }} />
+          <div className="loading-placeholder" />
         ) : userId ? (
           <>
-            <nav className="main-nav desktop">
-              <Nav href="/">Home</Nav>
-              <Nav href="/calendar">Calendar</Nav>
-              <Nav href="/communities">Communities</Nav>
-
-              {/* Profile + Business under dropdown (desktop) */}
-              <div className="relative inline-flex items-center">
-                <Nav href="/profile">Profile</Nav>
+            <nav className="desktop-nav">
+              <NavLink href="/">Home</NavLink>
+              <NavLink href="/calendar">Calendar</NavLink>
+              <NavLink href="/communities">Communities</NavLink>
+              
+              {/* Profile Dropdown */}
+              <div className="profile-dropdown">
                 <button
-                  aria-label="Profile menu"
-                  className="nav-caret"
-                  onClick={() => setOpenProfileMenu((v) => !v)}
+                  className={`nav-link dropdown-trigger ${
+                    pathname?.startsWith("/profile") || pathname?.startsWith("/business") ? "active" : ""
+                  }`}
+                  onClick={() => setOpenProfileMenu(!openProfileMenu)}
                   aria-expanded={openProfileMenu}
-                  aria-haspopup="menu"
+                  aria-haspopup="true"
                 >
-                  ▾
+                  Profile
+                  <svg className="dropdown-icon" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                    <path d="M6 8L0 0h12L6 8z"/>
+                  </svg>
                 </button>
+                
                 {openProfileMenu && (
-                  <div className="menu" role="menu">
-                    <Link href="/profile" className="menu-item" role="menuitem">
-                      Personal profile
+                  <div className="profile-menu">
+                    <Link href="/profile" className="menu-item">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="8" cy="4" r="3"/>
+                        <path d="M8 9c-3.3 0-6 1.3-6 3v1h12v-1c0-1.7-2.7-3-6-3z"/>
+                      </svg>
+                      Personal Profile
                     </Link>
-                    <Link href="/business" className="menu-item" role="menuitem">
-                      Business profile
+                    <Link href="/business" className="menu-item">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z"/>
+                      </svg>
+                      Business Profile
                     </Link>
                   </div>
                 )}
               </div>
-
-              <Nav href="/meditation">Meditation</Nav>
-              <Nav href="/safety">Safety</Nav>
-              <Nav href="/karma">Karma Corner</Nav>
+              
+              <NavLink href="/meditation">Meditation</NavLink>
+              <NavLink href="/safety">Safety</NavLink>
+              <NavLink href="/karma">Karma Corner</NavLink>
             </nav>
 
-            <div className="auth-area desktop">
+            <div className="desktop-actions">
               <NotificationBell href="/notifications" />
-              <button className="btn" onClick={signOut} aria-label="Sign out">
-                Sign out
+              <button className="sign-out-btn" onClick={signOut}>
+                Sign Out
               </button>
             </div>
 
-            {/* Mobile hamburger (only the trigger; dropdown lives below) */}
+            {/* Mobile Hamburger Button */}
             <button
-              className="hamburger mobile"
-              aria-label="Open menu"
+              className="hamburger-btn"
+              onClick={() => setOpenMobileMenu(!openMobileMenu)}
               aria-expanded={openMobileMenu}
-              onClick={() => setOpenMobileMenu((v) => !v)}
+              aria-label="Toggle navigation menu"
             >
-              <span className="bar" />
-              <span className="bar" />
-              <span className="bar" />
-              <span className="label">Menu</span>
+              <span className={`hamburger-icon ${openMobileMenu ? "open" : ""}`}>
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
             </button>
           </>
         ) : (
           <>
-            <div className="auth-area desktop">
-              <Link href="/login" className="btn btn-brand">
-                Log in
+            <div className="desktop-actions">
+              <Link href="/login" className="login-btn">
+                Log In
               </Link>
             </div>
+            
             <button
-              className="hamburger mobile"
-              aria-label="Open menu"
+              className="hamburger-btn"
+              onClick={() => setOpenMobileMenu(!openMobileMenu)}
               aria-expanded={openMobileMenu}
-              onClick={() => setOpenMobileMenu((v) => !v)}
+              aria-label="Toggle navigation menu"
             >
-              <span className="bar" />
-              <span className="bar" />
-              <span className="bar" />
-              <span className="label">Menu</span>
+              <span className={`hamburger-icon ${openMobileMenu ? "open" : ""}`}>
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
             </button>
           </>
         )}
       </div>
 
-      {/* Mobile dropdown (simple list — includes Safety) */}
-      {openMobileMenu && (
-        <div className="mobile-menu">
+      {/* Mobile Menu Panel */}
+      <div className={`mobile-menu-panel ${openMobileMenu ? "open" : ""}`}>
+        <nav className="mobile-nav">
           {userId ? (
             <>
-              <Link href="/" className="mobile-item">Home</Link>
-              <Link href="/calendar" className="mobile-item">Calendar</Link>
-              <Link href="/communities" className="mobile-item">Communities</Link>
-              <Link href="/profile" className="mobile-item">Profile</Link>
-              <Link href="/business" className="mobile-item">Business profile</Link>
-              <Link href="/meditation" className="mobile-item">Meditation</Link>
-              <Link href="/safety" className="mobile-item">Safety</Link>
-              <Link href="/karma" className="mobile-item">Karma Corner</Link>
-
-              <div className="mobile-divider" />
-              <Link href="/notifications" className="mobile-item">Notifications</Link>
-              <button className="mobile-item danger" onClick={signOut}>Sign out</button>
+              <Link href="/" className="mobile-nav-link">
+                <span className="nav-icon">🏠</span>
+                Home
+              </Link>
+              <Link href="/calendar" className="mobile-nav-link">
+                <span className="nav-icon">📅</span>
+                Calendar
+              </Link>
+              <Link href="/communities" className="mobile-nav-link">
+                <span className="nav-icon">👥</span>
+                Communities
+              </Link>
+              
+              <div className="mobile-section-divider" />
+              
+              <Link href="/profile" className="mobile-nav-link">
+                <span className="nav-icon">👤</span>
+                Personal Profile
+              </Link>
+              <Link href="/business" className="mobile-nav-link">
+                <span className="nav-icon">💼</span>
+                Business Profile
+              </Link>
+              
+              <div className="mobile-section-divider" />
+              
+              <Link href="/meditation" className="mobile-nav-link">
+                <span className="nav-icon">🧘</span>
+                Meditation
+              </Link>
+              <Link href="/safety" className="mobile-nav-link">
+                <span className="nav-icon">🛡️</span>
+                Safety
+              </Link>
+              <Link href="/karma" className="mobile-nav-link">
+                <span className="nav-icon">✨</span>
+                Karma Corner
+              </Link>
+              
+              <div className="mobile-section-divider" />
+              
+              <Link href="/notifications" className="mobile-nav-link">
+                <span className="nav-icon">🔔</span>
+                Notifications
+              </Link>
+              
+              <button className="mobile-sign-out" onClick={signOut}>
+                Sign Out
+              </button>
             </>
           ) : (
-            <Link href="/login" className="mobile-item primary">Log in</Link>
+            <Link href="/login" className="mobile-login-btn">
+              Log In to MyZenTribe
+            </Link>
           )}
-        </div>
-      )}
+        </nav>
+      </div>
 
       <style jsx global>{`
         .site-header {
           position: sticky;
           top: 0;
-          z-index: 40;
-          background: #fff;
-          border-bottom: 1px solid rgba(0,0,0,.06);
+          z-index: 100;
+          background: linear-gradient(to bottom, #ffffff, #fafafa);
+          border-bottom: 1px solid rgba(147, 51, 234, 0.1);
+          backdrop-filter: blur(10px);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
-        .header-inner {
+
+        .header-container {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 20px;
+          height: 64px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 16px;
-          padding: 10px 16px;
+          gap: 32px;
         }
-        .brand-name { font-weight: 700; font-size: 20px; letter-spacing: 0.2px; }
-        .brand-zen { color: #7c3aed; } /* lavender accent */
 
-        /* Desktop nav */
-        .main-nav.desktop {
+        /* Brand Logo */
+        .brand-logo {
           display: flex;
           align-items: center;
-          gap: 18px;
-          flex-wrap: wrap;
+          font-size: 24px;
+          font-weight: 700;
+          letter-spacing: -0.5px;
+          transition: transform 0.2s ease;
         }
-        .nav-link {
-          padding: 6px 10px;
-          border-radius: 10px;
-          color: #111827;
-          line-height: 1;
-          white-space: nowrap;
-        }
-        .nav-link:hover { background: #f3f4f6; }
-        .nav-link.active { color: #7c3aed; background: #f3e8ff; }
 
-        .nav-caret {
-          margin-left: -6px;
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          padding: 0 6px;
-          color: inherit;
-          line-height: 1;
+        .brand-logo:hover {
+          transform: scale(1.05);
         }
-        .menu {
-          position: absolute;
-          top: calc(100% + 8px);
-          left: 0;
-          background: #fff;
-          border: 1px solid rgba(0,0,0,.08);
-          border-radius: 10px;
-          box-shadow: 0 8px 24px rgba(0,0,0,.12);
-          min-width: 200px;
-          z-index: 50;
-          overflow: hidden;
+
+        .brand-my {
+          color: #6b7280;
         }
-        .menu-item { display: block; padding: 10px 12px; font-size: 14px; color: #1f2937; }
-        .menu-item:hover { background: #f9fafb; }
 
-        .auth-area.desktop { display: flex; align-items: center; gap: 12px; }
+        .brand-zen {
+          color: #9333ea;
+          background: linear-gradient(135deg, #9333ea, #c084fc);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
 
-        /* Hamburger button (mobile only) */
-        .hamburger {
+        .brand-tribe {
+          color: #1f2937;
+        }
+
+        /* Desktop Navigation */
+        .desktop-nav {
           display: none;
           align-items: center;
           gap: 8px;
-          padding: 6px 10px;
-          border: 1px solid rgba(0,0,0,.1);
-          border-radius: 10px;
-          background: #fff;
-        }
-        .hamburger .bar {
-          width: 22px;
-          height: 2px;
-          background: #111827;
-          display: block;
-          border-radius: 2px;
-          box-shadow: 0 0 0 1px rgba(255,255,255,0); /* ensures crisp lines on some devices */
-        }
-        .hamburger .label {
-          font-size: 12px;
-          color: #374151;
+          flex: 1;
+          justify-content: center;
         }
 
-        /* Mobile dropdown panel (simple list) */
-        .mobile-menu {
+        @media (min-width: 1024px) {
+          .desktop-nav {
+            display: flex;
+          }
+        }
+
+        .nav-link {
+          position: relative;
+          padding: 8px 16px;
+          font-size: 15px;
+          font-weight: 500;
+          color: #4b5563;
+          border-radius: 8px;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .nav-link:hover {
+          color: #1f2937;
+          background: rgba(147, 51, 234, 0.05);
+        }
+
+        .nav-link.active {
+          color: #9333ea;
+          background: rgba(147, 51, 234, 0.1);
+        }
+
+        /* Profile Dropdown */
+        .profile-dropdown {
+          position: relative;
+        }
+
+        .dropdown-trigger {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-family: inherit;
+          font-size: inherit;
+        }
+
+        .dropdown-icon {
+          transition: transform 0.2s ease;
+        }
+
+        .dropdown-trigger[aria-expanded="true"] .dropdown-icon {
+          transform: rotate(180deg);
+        }
+
+        .profile-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 50%;
+          transform: translateX(-50%);
+          min-width: 200px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+          border: 1px solid rgba(147, 51, 234, 0.1);
+          overflow: hidden;
+          animation: slideDown 0.2s ease;
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        .menu-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          color: #4b5563;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.2s ease;
+        }
+
+        .menu-item:hover {
+          background: rgba(147, 51, 234, 0.05);
+          color: #9333ea;
+        }
+
+        .menu-item svg {
+          opacity: 0.6;
+        }
+
+        /* Desktop Actions */
+        .desktop-actions {
           display: none;
+          align-items: center;
+          gap: 12px;
+        }
+
+        @media (min-width: 1024px) {
+          .desktop-actions {
+            display: flex;
+          }
+        }
+
+        .sign-out-btn {
+          padding: 8px 20px;
+          background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+          color: #4b5563;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .sign-out-btn:hover {
+          background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-btn {
+          padding: 8px 24px;
+          background: linear-gradient(135deg, #9333ea, #c084fc);
+          color: white;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          transition: all 0.2s ease;
+        }
+
+        .login-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 20px rgba(147, 51, 234, 0.3);
+        }
+
+        /* Hamburger Button */
+        .hamburger-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: white;
+          border: 1px solid rgba(147, 51, 234, 0.2);
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        @media (min-width: 1024px) {
+          .hamburger-btn {
+            display: none;
+          }
+        }
+
+        .hamburger-btn:hover {
+          background: rgba(147, 51, 234, 0.05);
+        }
+
+        .hamburger-icon {
+          position: relative;
+          width: 20px;
+          height: 14px;
+        }
+
+        .hamburger-icon span {
           position: absolute;
           left: 0;
+          width: 100%;
+          height: 2px;
+          background: #4b5563;
+          border-radius: 1px;
+          transition: all 0.3s ease;
+        }
+
+        .hamburger-icon span:nth-child(1) {
+          top: 0;
+        }
+
+        .hamburger-icon span:nth-child(2) {
+          top: 6px;
+        }
+
+        .hamburger-icon span:nth-child(3) {
+          top: 12px;
+        }
+
+        .hamburger-icon.open span:nth-child(1) {
+          top: 6px;
+          transform: rotate(45deg);
+        }
+
+        .hamburger-icon.open span:nth-child(2) {
+          opacity: 0;
+        }
+
+        .hamburger-icon.open span:nth-child(3) {
+          top: 6px;
+          transform: rotate(-45deg);
+        }
+
+        /* Mobile Menu Panel */
+        .mobile-menu-panel {
+          position: fixed;
+          top: 64px;
+          left: 0;
           right: 0;
-          top: 100%;
-          background: #ffffff;
-          border-bottom: 1px solid rgba(0,0,0,.06);
-          box-shadow: 0 8px 24px rgba(0,0,0,.08);
-          padding: 10px 16px 16px;
+          bottom: 0;
+          background: white;
+          transform: translateX(100%);
+          transition: transform 0.3s ease;
+          overflow-y: auto;
+          z-index: 99;
         }
-        .mobile-item {
-          display: block;
-          padding: 12px 10px;
-          border-radius: 10px;
-          color: #111827;
-        }
-        .mobile-item:hover { background: #f9fafb; }
-        .mobile-item.primary { background: #7c3aed; color: #fff; text-align: center; }
-        .mobile-item.primary:hover { background: #6d28d9; }
-        .mobile-item.danger { color: #b91c1c; text-align: left; }
 
-        .mobile-divider {
+        .mobile-menu-panel.open {
+          transform: translateX(0);
+        }
+
+        @media (min-width: 1024px) {
+          .mobile-menu-panel {
+            display: none;
+          }
+        }
+
+        .mobile-nav {
+          padding: 20px;
+        }
+
+        .mobile-nav-link {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 16px;
+          color: #4b5563;
+          font-size: 16px;
+          font-weight: 500;
+          border-radius: 12px;
+          transition: all 0.2s ease;
+        }
+
+        .mobile-nav-link:hover {
+          background: rgba(147, 51, 234, 0.05);
+          color: #9333ea;
+          transform: translateX(4px);
+        }
+
+        .nav-icon {
+          font-size: 20px;
+          width: 28px;
+          text-align: center;
+        }
+
+        .mobile-section-divider {
           height: 1px;
-          background: rgba(0,0,0,.06);
-          margin: 8px 0 4px;
+          background: rgba(147, 51, 234, 0.1);
+          margin: 12px 0;
         }
 
-        /* Responsive */
-        @media (max-width: 1024px) {
-          .main-nav.desktop { display: none; }
-          .auth-area.desktop { display: none; }
-          .hamburger.mobile { display: inline-flex; }
-          .mobile-menu { display: block; }
+        .mobile-sign-out {
+          width: 100%;
+          margin-top: 20px;
+          padding: 14px;
+          background: linear-gradient(135deg, #fef2f2, #fee2e2);
+          color: #dc2626;
+          border: 1px solid rgba(220, 38, 38, 0.2);
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
-        @media (min-width: 1025px) {
-          .hamburger.mobile { display: none; }
+
+        .mobile-sign-out:hover {
+          background: linear-gradient(135deg, #fee2e2, #fecaca);
+          transform: scale(0.98);
+        }
+
+        .mobile-login-btn {
+          display: block;
+          padding: 16px;
+          background: linear-gradient(135deg, #9333ea, #c084fc);
+          color: white;
+          text-align: center;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 600;
+          transition: all 0.2s ease;
+        }
+
+        .mobile-login-btn:hover {
+          transform: scale(0.98);
+          box-shadow: 0 4px 20px rgba(147, 51, 234, 0.3);
+        }
+
+        .loading-placeholder {
+          width: 100px;
+          height: 40px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+          .header-container {
+            padding: 0 16px;
+          }
+          
+          .brand-logo {
+            font-size: 20px;
+          }
         }
       `}</style>
     </header>
