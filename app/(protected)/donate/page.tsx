@@ -6,9 +6,9 @@ import { useState } from "react";
 export default function DonatePage() {
   const [selectedAmount, setSelectedAmount] = useState<number>(10);
 
-  // Your actual Stripe Payment Links - READY TO USE!
+  // Your actual Stripe Payment Links
   const stripeLinks = {
-    5: "https://buy.stripe.com/28E14m3YtfUEa4U1QW6wE00",
+    5: "https://buy.stripe.com/cNi5kCgLfeQA2CseDI6wE06",
     10: "https://buy.stripe.com/eVq28q52xfUE2Cs5386wE01",
     25: "https://buy.stripe.com/aFaeVceD74bW1yoeDI6wE02",
     50: "https://buy.stripe.com/6oUaEWcuZbEo0uk67c6wE03",
@@ -21,11 +21,9 @@ export default function DonatePage() {
     const link = stripeLinks[selectedAmount as keyof typeof stripeLinks];
     
     if (link && link.includes("stripe.com")) {
-      // If you have real Stripe links, this will work
       window.location.href = link;
     } else {
-      // This alert only shows if the links aren't updated yet
-      alert("Please update the Stripe payment links in the code!");
+      alert("Please select a valid donation amount");
     }
   };
 
@@ -83,43 +81,14 @@ export default function DonatePage() {
             Donate ${selectedAmount}
           </button>
 
-          {/* Alternative Payment Methods - Optional */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-sm font-medium text-gray-700 mb-3">Other ways to support:</p>
-            <div className="space-y-2">
-              <a
-                href="https://paypal.me/yourusername"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                <span className="mr-2">💳</span> PayPal
-              </a>
-              <a
-                href="https://venmo.com/yourusername"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center w-full py-2 px-4 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors"
-              >
-                <span className="mr-2">📱</span> Venmo
-              </a>
-              <a
-                href="https://cash.app/$yourusername"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-              >
-                <span className="mr-2">💵</span> Cash App
-              </a>
-            </div>
-          </div>
-
           {/* Security Note */}
-          <div className="mt-4 flex items-center justify-center text-sm text-gray-500">
-            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-            </svg>
-            Secure payment powered by Stripe
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-center text-sm text-gray-500">
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              Secure payment powered by Stripe
+            </div>
           </div>
         </div>
 
@@ -132,9 +101,9 @@ export default function DonatePage() {
             <div className="flex items-start">
               <span className="text-2xl mr-3 flex-shrink-0">🌱</span>
               <div>
-                <h4 className="font-medium text-gray-800">Keep the Platform Free</h4>
+                <h4 className="font-medium text-gray-800">Platform Development</h4>
                 <p className="text-gray-600 text-sm mt-1">
-                  Help us maintain a free, accessible space for everyone seeking connection and support.
+                  Help us build new features and maintain a premium experience for our community.
                 </p>
               </div>
             </div>
