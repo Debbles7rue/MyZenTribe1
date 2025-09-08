@@ -146,9 +146,9 @@ export default function DonationsPage() {
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Your Impact</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
-                <div className="text-2xl mb-1">🌍</div>
-                <div className="text-3xl font-bold text-purple-600">500+</div>
-                <div className="text-sm text-gray-600">Community Members</div>
+                <div className="text-2xl mb-1">🛡️</div>
+                <div className="text-3xl font-bold text-purple-600">24/7</div>
+                <div className="text-sm text-gray-600">Safety Monitoring</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl mb-1">🧘</div>
