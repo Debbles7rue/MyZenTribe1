@@ -320,17 +320,35 @@ export default function SiteHeader() {
         /* Profile Dropdown */
         .profile-dropdown {
           position: relative;
+          display: inline-flex;
+          align-items: center;
         }
 
         .dropdown-trigger {
           display: flex;
           align-items: center;
           gap: 6px;
+          padding: 10px 14px;
           background: none;
           border: none;
+          border-radius: 8px;
           cursor: pointer;
           font-family: inherit;
-          font-size: inherit;
+          font-size: 15px;
+          font-weight: 500;
+          color: #4b5563;
+          transition: all 0.2s ease;
+        }
+
+        .dropdown-trigger:hover {
+          color: #1f2937;
+          background: rgba(147, 51, 234, 0.05);
+        }
+
+        .dropdown-trigger.active {
+          color: #9333ea;
+          background: rgba(147, 51, 234, 0.1);
+          font-weight: 600;
         }
 
         .dropdown-icon {
