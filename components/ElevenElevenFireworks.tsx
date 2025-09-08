@@ -5,95 +5,187 @@ import React, { useEffect, useState, useRef } from 'react';
 
 export default function ElevenElevenFireworks() {
   const [showFireworks, setShowFireworks] = useState(false);
-  const [hasTriggeredAM, setHasTriggeredAM] = useState(false);
-  const [hasTriggeredPM, setHasTriggeredPM] = useState(false);
-  const lastCheckRef = useRef<string>('');
+  const [countdown, setCountdown] = useState<string>('');
+  const hasTriggeredTodayRef = useRef<Set<string>>(new Set());
+  const lastDateRef = useRef<string>('');
 
   useEffect(() => {
-    // Check time every second
-    const interval = setInterval(() => {
-      const now = new Date();
-      const hours = now.getHours();
-      const minutes = now.getMinutes();
-      const seconds = now.getSeconds();
-      const currentTimeString = `${hours}:${minutes}`;
+    // Check immediately when component mounts
+    checkTime();
 
-      // Check if it's exactly 11:11 (and we haven't triggered in the last minute)
-      if (minutes === 11 && seconds === 0) {
-        if (hours === 11 && !hasTriggeredAM && lastCheckRef.current !== '11:11AM') {
-          // 11:11 AM
-          triggerFireworks();
-          setHasTriggeredAM(true);
-          lastCheckRef.current = '11:11AM';
-        } else if (hours === 23 && !hasTriggeredPM && lastCheckRef.current !== '11:11PM') {
-          // 11:11 PM (23:11 in 24-hour format)
-          triggerFireworks();
-          setHasTriggeredPM(true);
-          lastCheckRef.current = '11:11PM';
-        }
-      }
-
-      // Reset triggers at midnight for the next day
-      if (hours === 0 && minutes === 0 && seconds === 0) {
-        setHasTriggeredAM(false);
-        setHasTriggeredPM(false);
-        lastCheckRef.current = '';
-      }
-    }, 1000);
+    // Then check every second
+    const interval = setInterval(checkTime, 1000);
 
     return () => clearInterval(interval);
-  }, [hasTriggeredAM, hasTriggeredPM]);
+  }, []);
+
+  const checkTime = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const today = now.toDateString();
+
+    // Reset the tracking for a new day
+    if (today !== lastDateRef.current) {
+      hasTriggeredTodayRef.current = new Set();
+      lastDateRef.current = today;
+    }
+
+    // Check if it's 11:11 (for the entire minute, not just at :00 seconds)
+    if (hours === 11 && minutes === 11) {
+      // 11:11 AM
+      if (!hasTriggeredTodayRef.current.has('11:11AM')) {
+        console.log('🎆 Triggering 11:11 AM fireworks!');
+        triggerFireworks();
+        hasTriggeredTodayRef.current.add('11:11AM');
+      }
+    } else if (hours === 23 && minutes === 11) {
+      // 11:11 PM (23:11 in 24-hour format)
+      if (!hasTriggeredTodayRef.current.has('11:11PM')) {
+        console.log('🎆 Triggering 11:11 PM fireworks!');
+        triggerFireworks();
+        hasTriggeredTodayRef.current.add('11:11PM');
+      }
+    }
+
+    // Optional: Show countdown when close to 11:11
+    updateCountdown(now);
+  };
+
+  const updateCountdown = (now: Date) => {
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+
+    // Calculate time until next 11:11
+    let targetHour = 11;
+    if (hours >= 11 && !(hours === 11 && minutes < 11)) {
+      targetHour = 23; // Next is 11:11 PM
+    }
+    if (hours >= 23 && !(hours === 23 && minutes < 11)) {
+      targetHour = 11; // Next is 11:11 AM tomorrow
+    }
+
+    const timeToTarget = (targetHour - hours) * 3600 + (11 - minutes) * 60 - seconds;
+    
+    // Only show countdown if within 5 minutes
+    if (timeToTarget > 0 && timeToTarget <= 300) {
+      const mins = Math.floor(timeToTarget / 60);
+      const secs = timeToTarget % 60;
+      setCountdown(`${mins}:${secs.toString().padStart(2, '0')}`);
+    } else {
+      setCountdown('');
+    }
+  };
 
   const triggerFireworks = () => {
     setShowFireworks(true);
     
-    // Play a subtle sound if you want (optional)
+    // Play a subtle chime sound (optional)
     try {
       const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTS');
       audio.volume = 0.3;
-      audio.play().catch(() => {}); // Ignore if audio doesn't play
+      audio.play().catch(() => {
+        console.log('Audio play failed - browser may block autoplay');
+      });
     } catch (e) {
-      // Ignore audio errors
+      console.log('Audio not supported');
     }
 
-    // Auto-hide after 5 seconds
+    // Show for 7 seconds (a bit longer to enjoy it!)
     setTimeout(() => {
       setShowFireworks(false);
-    }, 5000);
+    }, 7000);
   };
 
-  if (!showFireworks) return null;
+  // Manual trigger for testing (you can call this from console)
+  useEffect(() => {
+    // Add to window for testing: window.testFireworks()
+    (window as any).testFireworks = () => {
+      console.log('🧪 Testing fireworks...');
+      triggerFireworks();
+    };
+  }, []);
 
   return (
-    <div className="eleven-eleven-container">
-      {/* Main message */}
-      <div className="eleven-message">
-        <div className="eleven-time">11:11</div>
-        <div className="eleven-text">Make a wish! ✨</div>
-      </div>
+    <>
+      {/* Countdown timer (optional - shows when close to 11:11) */}
+      {countdown && !showFireworks && (
+        <div className="countdown-badge">
+          <span className="countdown-label">11:11 in</span>
+          <span className="countdown-time">{countdown}</span>
+        </div>
+      )}
 
-      {/* Fireworks */}
-      <div className="fireworks">
-        {/* Multiple firework bursts */}
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className={`firework firework-${i + 1}`}>
-            <div className="explosion">
-              {[...Array(12)].map((_, j) => (
-                <div key={j} className="spark" />
-              ))}
-            </div>
+      {/* Fireworks display */}
+      {showFireworks && (
+        <div className="eleven-eleven-container">
+          {/* Main message */}
+          <div className="eleven-message">
+            <div className="eleven-time">11:11</div>
+            <div className="eleven-text">Make a wish! ✨</div>
+            <div className="eleven-subtext">The universe is listening...</div>
           </div>
-        ))}
-      </div>
 
-      {/* Falling stars effect */}
-      <div className="stars">
-        {[...Array(20)].map((_, i) => (
-          <div key={i} className={`star star-${i + 1}`} />
-        ))}
-      </div>
+          {/* Fireworks */}
+          <div className="fireworks">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className={`firework firework-${i + 1}`}>
+                <div className="explosion">
+                  {[...Array(12)].map((_, j) => (
+                    <div key={j} className="spark" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Falling stars effect */}
+          <div className="stars">
+            {[...Array(25)].map((_, i) => (
+              <div key={i} className={`star star-${i + 1}`} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
+        /* Countdown Badge */
+        .countdown-badge {
+          position: fixed;
+          top: 80px;
+          right: 20px;
+          background: linear-gradient(135deg, rgba(147, 51, 234, 0.9), rgba(196, 132, 252, 0.9));
+          color: white;
+          padding: 8px 16px;
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          z-index: 1000;
+          box-shadow: 0 4px 20px rgba(147, 51, 234, 0.3);
+          animation: pulse 2s ease-in-out infinite;
+          backdrop-filter: blur(10px);
+        }
+
+        .countdown-label {
+          font-size: 12px;
+          opacity: 0.9;
+        }
+
+        .countdown-time {
+          font-size: 14px;
+          font-weight: bold;
+          font-variant-numeric: tabular-nums;
+        }
+
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+
+        /* Main Container */
         .eleven-eleven-container {
           position: fixed;
           top: 0;
@@ -102,7 +194,8 @@ export default function ElevenElevenFireworks() {
           bottom: 0;
           z-index: 9999;
           pointer-events: none;
-          animation: fadeIn 0.3s ease-in;
+          animation: fadeIn 0.5s ease-in;
+          background: radial-gradient(circle at center, rgba(147, 51, 234, 0.1), transparent);
         }
 
         @keyframes fadeIn {
@@ -118,11 +211,11 @@ export default function ElevenElevenFireworks() {
           transform: translate(-50%, -50%);
           text-align: center;
           z-index: 10000;
-          animation: messageFloat 5s ease-in-out;
+          animation: messageFloat 7s ease-in-out;
         }
 
         .eleven-time {
-          font-size: 72px;
+          font-size: 80px;
           font-weight: bold;
           background: linear-gradient(45deg, #FFD700, #FFA500, #FF69B4, #9370DB);
           background-clip: text;
@@ -131,28 +224,37 @@ export default function ElevenElevenFireworks() {
           text-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
           animation: shimmer 2s ease-in-out infinite;
           margin-bottom: 10px;
+          letter-spacing: 8px;
         }
 
         .eleven-text {
-          font-size: 24px;
+          font-size: 28px;
           color: white;
           text-shadow: 
             0 0 10px rgba(255, 255, 255, 0.8),
             0 0 20px rgba(255, 215, 0, 0.6),
             0 0 30px rgba(255, 215, 0, 0.4);
-          animation: pulse 1s ease-in-out infinite;
+          animation: glow 1.5s ease-in-out infinite;
+          margin-bottom: 8px;
+        }
+
+        .eleven-subtext {
+          font-size: 16px;
+          color: rgba(255, 255, 255, 0.8);
+          font-style: italic;
+          animation: fadeInUp 2s ease-out;
         }
 
         @keyframes messageFloat {
           0%, 100% { 
-            transform: translate(-50%, -50%) scale(1);
+            transform: translate(-50%, -50%) scale(0.8);
             opacity: 0;
           }
-          10% {
+          15% {
             transform: translate(-50%, -50%) scale(1.1);
             opacity: 1;
           }
-          90% {
+          85% {
             transform: translate(-50%, -50%) scale(1);
             opacity: 1;
           }
@@ -163,13 +265,30 @@ export default function ElevenElevenFireworks() {
             filter: brightness(1) hue-rotate(0deg);
           }
           50% { 
-            filter: brightness(1.2) hue-rotate(10deg);
+            filter: brightness(1.3) hue-rotate(15deg);
           }
         }
 
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
+        @keyframes glow {
+          0%, 100% { 
+            transform: scale(1);
+            filter: brightness(1);
+          }
+          50% { 
+            transform: scale(1.02);
+            filter: brightness(1.2);
+          }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         /* Fireworks */
@@ -187,12 +306,14 @@ export default function ElevenElevenFireworks() {
           height: 4px;
         }
 
-        .firework-1 { top: 20%; left: 20%; animation-delay: 0s; }
+        .firework-1 { top: 25%; left: 20%; animation-delay: 0s; }
         .firework-2 { top: 30%; left: 70%; animation-delay: 0.3s; }
-        .firework-3 { top: 60%; left: 30%; animation-delay: 0.6s; }
-        .firework-4 { top: 40%; left: 80%; animation-delay: 0.9s; }
+        .firework-3 { top: 60%; left: 25%; animation-delay: 0.6s; }
+        .firework-4 { top: 35%; left: 80%; animation-delay: 0.9s; }
         .firework-5 { top: 70%; left: 60%; animation-delay: 1.2s; }
-        .firework-6 { top: 25%; left: 50%; animation-delay: 1.5s; }
+        .firework-6 { top: 20%; left: 50%; animation-delay: 1.5s; }
+        .firework-7 { top: 50%; left: 85%; animation-delay: 1.8s; }
+        .firework-8 { top: 65%; left: 15%; animation-delay: 2.1s; }
 
         .explosion {
           position: absolute;
@@ -207,7 +328,7 @@ export default function ElevenElevenFireworks() {
             opacity: 1;
           }
           100% {
-            transform: scale(50);
+            transform: scale(60);
             opacity: 0;
           }
         }
@@ -220,94 +341,46 @@ export default function ElevenElevenFireworks() {
           animation: sparkle 3s ease-out forwards;
         }
 
-        .spark:nth-child(1) { 
-          background: #FFD700;
-          transform: rotate(0deg) translateX(0);
-          animation-delay: 0s;
-        }
-        .spark:nth-child(2) { 
-          background: #FF69B4;
-          transform: rotate(30deg) translateX(0);
-          animation-delay: 0.1s;
-        }
-        .spark:nth-child(3) { 
-          background: #00CED1;
-          transform: rotate(60deg) translateX(0);
-          animation-delay: 0.2s;
-        }
-        .spark:nth-child(4) { 
-          background: #FFD700;
-          transform: rotate(90deg) translateX(0);
-          animation-delay: 0.3s;
-        }
-        .spark:nth-child(5) { 
-          background: #FF1493;
-          transform: rotate(120deg) translateX(0);
-          animation-delay: 0.4s;
-        }
-        .spark:nth-child(6) { 
-          background: #00FA9A;
-          transform: rotate(150deg) translateX(0);
-          animation-delay: 0.5s;
-        }
-        .spark:nth-child(7) { 
-          background: #FFD700;
-          transform: rotate(180deg) translateX(0);
-          animation-delay: 0.6s;
-        }
-        .spark:nth-child(8) { 
-          background: #FF69B4;
-          transform: rotate(210deg) translateX(0);
-          animation-delay: 0.7s;
-        }
-        .spark:nth-child(9) { 
-          background: #87CEEB;
-          transform: rotate(240deg) translateX(0);
-          animation-delay: 0.8s;
-        }
-        .spark:nth-child(10) { 
-          background: #FFD700;
-          transform: rotate(270deg) translateX(0);
-          animation-delay: 0.9s;
-        }
-        .spark:nth-child(11) { 
-          background: #FF1493;
-          transform: rotate(300deg) translateX(0);
-          animation-delay: 1s;
-        }
-        .spark:nth-child(12) { 
-          background: #00CED1;
-          transform: rotate(330deg) translateX(0);
-          animation-delay: 1.1s;
-        }
+        .spark:nth-child(1) { background: #FFD700; }
+        .spark:nth-child(2) { background: #FF69B4; }
+        .spark:nth-child(3) { background: #00CED1; }
+        .spark:nth-child(4) { background: #FFA500; }
+        .spark:nth-child(5) { background: #FF1493; }
+        .spark:nth-child(6) { background: #00FA9A; }
+        .spark:nth-child(7) { background: #FFD700; }
+        .spark:nth-child(8) { background: #FF69B4; }
+        .spark:nth-child(9) { background: #87CEEB; }
+        .spark:nth-child(10) { background: #FFA500; }
+        .spark:nth-child(11) { background: #FF1493; }
+        .spark:nth-child(12) { background: #00CED1; }
 
         @keyframes sparkle {
           0% {
-            transform: rotate(var(--rotation)) translateX(0) scale(0);
+            transform: rotate(calc(var(--i) * 30deg)) translateX(0) scale(0);
             opacity: 1;
           }
           50% {
-            transform: rotate(var(--rotation)) translateX(100px) scale(1);
+            transform: rotate(calc(var(--i) * 30deg)) translateX(120px) scale(1);
             opacity: 1;
           }
           100% {
-            transform: rotate(var(--rotation)) translateX(150px) scale(0);
+            transform: rotate(calc(var(--i) * 30deg)) translateX(180px) scale(0);
             opacity: 0;
           }
         }
 
-        .spark:nth-child(1) { --rotation: 0deg; }
-        .spark:nth-child(2) { --rotation: 30deg; }
-        .spark:nth-child(3) { --rotation: 60deg; }
-        .spark:nth-child(4) { --rotation: 90deg; }
-        .spark:nth-child(5) { --rotation: 120deg; }
-        .spark:nth-child(6) { --rotation: 150deg; }
-        .spark:nth-child(7) { --rotation: 180deg; }
-        .spark:nth-child(8) { --rotation: 210deg; }
-        .spark:nth-child(9) { --rotation: 240deg; }
-        .spark:nth-child(10) { --rotation: 270deg; }
-        .spark:nth-child(11) { --rotation: 300deg; }
-        .spark:nth-child(12) { --rotation: 330deg; }
+        .spark:nth-child(1) { --i: 0; animation-delay: 0s; }
+        .spark:nth-child(2) { --i: 1; animation-delay: 0.1s; }
+        .spark:nth-child(3) { --i: 2; animation-delay: 0.2s; }
+        .spark:nth-child(4) { --i: 3; animation-delay: 0.3s; }
+        .spark:nth-child(5) { --i: 4; animation-delay: 0.4s; }
+        .spark:nth-child(6) { --i: 5; animation-delay: 0.5s; }
+        .spark:nth-child(7) { --i: 6; animation-delay: 0.6s; }
+        .spark:nth-child(8) { --i: 7; animation-delay: 0.7s; }
+        .spark:nth-child(9) { --i: 8; animation-delay: 0.8s; }
+        .spark:nth-child(10) { --i: 9; animation-delay: 0.9s; }
+        .spark:nth-child(11) { --i: 10; animation-delay: 1s; }
+        .spark:nth-child(12) { --i: 11; animation-delay: 1.1s; }
 
         /* Falling stars */
         .stars {
@@ -316,6 +389,7 @@ export default function ElevenElevenFireworks() {
           height: 100%;
           top: 0;
           left: 0;
+          overflow: hidden;
         }
 
         .star {
@@ -325,15 +399,15 @@ export default function ElevenElevenFireworks() {
           background: white;
           border-radius: 50%;
           box-shadow: 
-            0 0 4px white,
-            0 0 8px white,
-            0 0 12px rgba(255, 215, 0, 0.5);
-          animation: fall 3s linear forwards;
+            0 0 6px white,
+            0 0 12px white,
+            0 0 20px rgba(255, 215, 0, 0.5);
+          animation: fall 4s linear forwards;
         }
 
         @keyframes fall {
           0% {
-            transform: translateY(-100px) translateX(0);
+            transform: translateY(-100px) translateX(0) rotate(0deg);
             opacity: 0;
           }
           10% {
@@ -343,43 +417,42 @@ export default function ElevenElevenFireworks() {
             opacity: 1;
           }
           100% {
-            transform: translateY(100vh) translateX(50px);
+            transform: translateY(100vh) translateX(100px) rotate(720deg);
             opacity: 0;
           }
         }
 
-        .star-1 { left: 5%; animation-delay: 0s; }
-        .star-2 { left: 10%; animation-delay: 0.2s; }
-        .star-3 { left: 15%; animation-delay: 0.4s; }
-        .star-4 { left: 20%; animation-delay: 0.6s; }
-        .star-5 { left: 25%; animation-delay: 0.8s; }
-        .star-6 { left: 30%; animation-delay: 1s; }
-        .star-7 { left: 35%; animation-delay: 1.2s; }
-        .star-8 { left: 40%; animation-delay: 1.4s; }
-        .star-9 { left: 45%; animation-delay: 1.6s; }
-        .star-10 { left: 50%; animation-delay: 1.8s; }
-        .star-11 { left: 55%; animation-delay: 2s; }
-        .star-12 { left: 60%; animation-delay: 2.2s; }
-        .star-13 { left: 65%; animation-delay: 2.4s; }
-        .star-14 { left: 70%; animation-delay: 2.6s; }
-        .star-15 { left: 75%; animation-delay: 2.8s; }
-        .star-16 { left: 80%; animation-delay: 3s; }
-        .star-17 { left: 85%; animation-delay: 3.2s; }
-        .star-18 { left: 90%; animation-delay: 3.4s; }
-        .star-19 { left: 95%; animation-delay: 3.6s; }
-        .star-20 { left: 98%; animation-delay: 3.8s; }
+        /* Star positions and delays */
+        ${[...Array(25)].map((_, i) => `
+          .star-${i + 1} { 
+            left: ${4 + i * 4}%; 
+            animation-delay: ${i * 0.15}s;
+            animation-duration: ${3 + (i % 3)}s;
+          }
+        `).join('')}
 
         /* Mobile adjustments */
         @media (max-width: 768px) {
           .eleven-time {
-            font-size: 56px;
+            font-size: 60px;
+            letter-spacing: 4px;
           }
           
           .eleven-text {
-            font-size: 20px;
+            font-size: 22px;
+          }
+
+          .eleven-subtext {
+            font-size: 14px;
+          }
+
+          .countdown-badge {
+            top: 70px;
+            right: 10px;
+            padding: 6px 12px;
           }
         }
       `}</style>
-    </div>
+    </>
   );
 }
