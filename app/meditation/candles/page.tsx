@@ -3,7 +3,6 @@
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const runtime = 'edge';
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
