@@ -1,233 +1,6 @@
 // components/SiteHeader.tsx
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import NotificationBell from "@/components/NotificationBell";
-
-export default function SiteHeader() {
-  const pathname = usePathname();
-  const [userId, setUserId] = useState<string | null | "loading">("loading");
-  const [openProfileMenu, setOpenProfileMenu] = useState(false);
-  const [openMobileMenu, setOpenMobileMenu] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
-  }, []);
-
-  // Close dropdowns on outside click
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      const t = e.target as HTMLElement;
-      if (!t.closest(".profile-dropdown") && !t.closest(".profile-menu")) {
-        setOpenProfileMenu(false);
-      }
-      if (!t.closest(".hamburger-btn") && !t.closest(".mobile-menu-panel")) {
-        setOpenMobileMenu(false);
-      }
-    }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
-
-  // Close menus on route change
-  useEffect(() => {
-    setOpenProfileMenu(false);
-    setOpenMobileMenu(false);
-  }, [pathname]);
-
-  const NavLink = ({ href, children, className = "" }: { 
-    href: string; 
-    children: React.ReactNode;
-    className?: string;
-  }) => {
-    const active = pathname === href || (href !== "/" && (pathname?.startsWith(href) ?? false));
-    return (
-      <Link 
-        href={href} 
-        className={`nav-link ${active ? "active" : ""} ${className}`}
-      >
-        {children}
-      </Link>
-    );
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
-
-  return (
-    <header className="site-header">
-      <div className="header-container">
-        {/* Logo/Brand */}
-        <Link href="/" className="brand-logo" aria-label="MyZenTribe Home">
-          <span className="brand-my">My</span>
-          <span className="brand-zen">Zen</span>
-          <span className="brand-tribe">Tribe</span>
-        </Link>
-
-        {/* Desktop Navigation */}
-        {userId === "loading" ? (
-          <div className="loading-placeholder" />
-        ) : userId ? (
-          <>
-            <nav className="desktop-nav">
-              <NavLink href="/">Home</NavLink>
-              <NavLink href="/calendar">Calendar</NavLink>
-              <NavLink href="/communities">Communities</NavLink>
-              
-              {/* Profile Dropdown */}
-              <div className="profile-dropdown">
-                <button
-                  className={`nav-link dropdown-trigger ${
-                    pathname?.startsWith("/profile") || pathname?.startsWith("/business") ? "active" : ""
-                  }`}
-                  onClick={() => setOpenProfileMenu(!openProfileMenu)}
-                  aria-expanded={openProfileMenu}
-                  aria-haspopup="true"
-                >
-                  Profile
-                  <svg className="dropdown-icon" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
-                    <path d="M6 8L0 0h12L6 8z"/>
-                  </svg>
-                </button>
-                
-                {openProfileMenu && (
-                  <div className="profile-menu">
-                    <Link href="/profile" className="menu-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <circle cx="8" cy="4" r="3"/>
-                        <path d="M8 9c-3.3 0-6 1.3-6 3v1h12v-1c0-1.7-2.7-3-6-3z"/>
-                      </svg>
-                      Personal Profile
-                    </Link>
-                    <Link href="/business" className="menu-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M2 2h5v5H2V2zm7 0h5v5H9V2zM2 9h5v5H2V9zm7 0h5v5H9V9z"/>
-                      </svg>
-                      Business Profile
-                    </Link>
-                  </div>
-                )}
-              </div>
-              
-              <NavLink href="/meditation">Meditation</NavLink>
-              <NavLink href="/safety">Safety</NavLink>
-              <NavLink href="/karma">Karma Corner</NavLink>
-            </nav>
-
-            <div className="desktop-actions">
-              <NotificationBell href="/notifications" />
-              <button className="sign-out-btn" onClick={signOut}>
-                Sign Out
-              </button>
-            </div>
-
-            {/* Mobile Hamburger Button */}
-            <button
-              className="hamburger-btn"
-              onClick={() => setOpenMobileMenu(!openMobileMenu)}
-              aria-expanded={openMobileMenu}
-              aria-label="Toggle navigation menu"
-            >
-              <span className={`hamburger-icon ${openMobileMenu ? "open" : ""}`}>
-                <span></span>
-                <span></span>
-                <span></span>
-              </span>
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="desktop-actions">
-              <Link href="/login" className="login-btn">
-                Log In
-              </Link>
-            </div>
-            
-            <button
-              className="hamburger-btn"
-              onClick={() => setOpenMobileMenu(!openMobileMenu)}
-              aria-expanded={openMobileMenu}
-              aria-label="Toggle navigation menu"
-            >
-              <span className={`hamburger-icon ${openMobileMenu ? "open" : ""}`}>
-                <span></span>
-                <span></span>
-                <span></span>
-              </span>
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Mobile Menu Panel */}
-      <div className={`mobile-menu-panel ${openMobileMenu ? "open" : ""}`}>
-        <nav className="mobile-nav">
-          {userId ? (
-            <>
-              <Link href="/" className="mobile-nav-link">
-                <span className="nav-icon">🏠</span>
-                Home
-              </Link>
-              <Link href="/calendar" className="mobile-nav-link">
-                <span className="nav-icon">📅</span>
-                Calendar
-              </Link>
-              <Link href="/communities" className="mobile-nav-link">
-                <span className="nav-icon">👥</span>
-                Communities
-              </Link>
-              
-              <div className="mobile-section-divider" />
-              
-              <Link href="/profile" className="mobile-nav-link">
-                <span className="nav-icon">👤</span>
-                Personal Profile
-              </Link>
-              <Link href="/business" className="mobile-nav-link">
-                <span className="nav-icon">💼</span>
-                Business Profile
-              </Link>
-              
-              <div className="mobile-section-divider" />
-              
-              <Link href="/meditation" className="mobile-nav-link">
-                <span className="nav-icon">🧘</span>
-                Meditation
-              </Link>
-              <Link href="/safety" className="mobile-nav-link">
-                <span className="nav-icon">🛡️</span>
-                Safety
-              </Link>
-              <Link href="/karma" className="mobile-nav-link">
-                <span className="nav-icon">✨</span>
-                Karma Corner
-              </Link>
-              
-              <div className="mobile-section-divider" />
-              
-              <Link href="/notifications" className="mobile-nav-link">
-                <span className="nav-icon">🔔</span>
-                Notifications
-              </Link>
-              
-              <button className="mobile-sign-out" onClick={signOut}>
-                Sign Out
-              </button>
-            </>
-          ) : (
-            <Link href="/login" className="mobile-login-btn">
-              Log In to MyZenTribe
-            </Link>
-          )}
-        </nav>
-      </div>
+// ONLY REPLACE THE CSS SECTION - Keep all your existing JSX/HTML exactly as is
+// Find the <style jsx global>{`...`}</style> section and replace just the CSS with this:
 
       <style jsx global>{`
         .site-header {
@@ -248,7 +21,7 @@ export default function SiteHeader() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 32px;
+          gap: 16px;
         }
 
         /* Brand Logo */
@@ -259,6 +32,7 @@ export default function SiteHeader() {
           font-weight: 700;
           letter-spacing: -0.5px;
           transition: transform 0.2s ease;
+          flex-shrink: 0;
         }
 
         .brand-logo:hover {
@@ -281,19 +55,20 @@ export default function SiteHeader() {
           color: #1f2937;
         }
 
-        /* Desktop Navigation */
+        /* Desktop Navigation - NOW ALWAYS VISIBLE */
         .desktop-nav {
-          display: none;
+          display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 4px;
           flex: 1;
           justify-content: center;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
 
-        @media (min-width: 1024px) {
-          .desktop-nav {
-            display: flex;
-          }
+        .desktop-nav::-webkit-scrollbar {
+          display: none;
         }
 
         .nav-link {
@@ -371,6 +146,7 @@ export default function SiteHeader() {
           border: 1px solid rgba(147, 51, 234, 0.1);
           overflow: hidden;
           animation: slideDown 0.2s ease;
+          z-index: 1000;
         }
 
         @keyframes slideDown {
@@ -404,17 +180,12 @@ export default function SiteHeader() {
           opacity: 0.6;
         }
 
-        /* Desktop Actions */
+        /* Desktop Actions - NOW ALWAYS VISIBLE */
         .desktop-actions {
-          display: none;
+          display: flex;
           align-items: center;
           gap: 12px;
-        }
-
-        @media (min-width: 1024px) {
-          .desktop-actions {
-            display: flex;
-          }
+          flex-shrink: 0;
         }
 
         .sign-out-btn {
@@ -450,9 +221,9 @@ export default function SiteHeader() {
           box-shadow: 0 4px 20px rgba(147, 51, 234, 0.3);
         }
 
-        /* Hamburger Button */
+        /* Hamburger Button - Still available as backup */
         .hamburger-btn {
-          display: flex;
+          display: none;
           align-items: center;
           justify-content: center;
           width: 40px;
@@ -462,12 +233,6 @@ export default function SiteHeader() {
           border-radius: 8px;
           cursor: pointer;
           transition: all 0.2s ease;
-        }
-
-        @media (min-width: 1024px) {
-          .hamburger-btn {
-            display: none;
-          }
         }
 
         .hamburger-btn:hover {
@@ -516,7 +281,7 @@ export default function SiteHeader() {
           transform: rotate(-45deg);
         }
 
-        /* Mobile Menu Panel */
+        /* Mobile Menu Panel - Still available */
         .mobile-menu-panel {
           position: fixed;
           top: 64px;
@@ -532,12 +297,6 @@ export default function SiteHeader() {
 
         .mobile-menu-panel.open {
           transform: translateX(0);
-        }
-
-        @media (min-width: 1024px) {
-          .mobile-menu-panel {
-            display: none;
-          }
         }
 
         .mobile-nav {
@@ -615,17 +374,93 @@ export default function SiteHeader() {
           height: 40px;
         }
 
-        /* Responsive adjustments */
-        @media (max-width: 640px) {
+        /* Mobile Responsive adjustments */
+        @media (max-width: 768px) {
           .header-container {
-            padding: 0 16px;
+            padding: 0 12px;
+            gap: 8px;
           }
           
           .brand-logo {
-            font-size: 20px;
+            font-size: 18px;
+          }
+          
+          .nav-link {
+            padding: 6px 10px;
+            font-size: 13px;
+          }
+          
+          .dropdown-trigger {
+            padding: 6px 10px;
+            font-size: 13px;
+          }
+          
+          .sign-out-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+          }
+          
+          .login-btn {
+            padding: 6px 14px;
+            font-size: 12px;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .header-container {
+            padding: 0 8px;
+            gap: 4px;
+          }
+          
+          .brand-logo {
+            font-size: 16px;
+          }
+          
+          .nav-link {
+            padding: 4px 8px;
+            font-size: 12px;
+          }
+          
+          .dropdown-trigger {
+            padding: 4px 8px;
+            font-size: 12px;
+          }
+          
+          .dropdown-icon {
+            width: 10px;
+            height: 6px;
+          }
+          
+          .sign-out-btn,
+          .login-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+          }
+          
+          /* Hide some nav items on very small screens if needed */
+          .desktop-nav {
+            gap: 2px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          /* On very small screens, you might want to show hamburger */
+          /* Uncomment below to show hamburger on tiny screens */
+          /*
+          .hamburger-btn {
+            display: flex;
+          }
+          .desktop-nav {
+            display: none;
+          }
+          .desktop-actions {
+            display: none;
+          }
+          */
+          
+          .nav-link {
+            padding: 4px 6px;
+            font-size: 11px;
           }
         }
       `}</style>
-    </header>
-  );
-}
