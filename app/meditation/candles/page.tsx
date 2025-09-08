@@ -1,3 +1,4 @@
+// app/meditation/candles/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,6 +32,30 @@ const COLOR_PRESETS = [
 const PAGE_SIZE = 24;
 
 export default function CandleRoomPage() {
+  const [mounted, setMounted] = useState(false);
+  
+  // Only run on client side
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Show loading state during SSR and initial mount
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-pulse text-5xl mb-4">🕯️</div>
+          <p className="text-amber-700">Loading sacred space...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Once mounted, render the actual component
+  return <CandleRoomContent />;
+}
+
+function CandleRoomContent() {
   const [loading, setLoading] = useState(true);
   const [activeCandles, setActiveCandles] = useState<Candle[]>([]);
   const [memoryOrbs, setMemoryOrbs] = useState<Candle[]>([]);
@@ -99,6 +124,9 @@ export default function CandleRoomPage() {
   }
 
   function showSuccessAnimation(isEternal: boolean) {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+    
     const elem = document.createElement('div');
     elem.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40';
     elem.innerHTML = `
@@ -729,10 +757,12 @@ function AddEternalCandleModal({
       return;
     }
 
-    const returnUrl = `${window.location.origin}/meditation/candles?success=true&candle_id=${data.id}`;
-    const stripeUrl = `https://buy.stripe.com/cNi5kCgLfeQA2CseDI6wE06?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(window.location.href)}`;
+    const returnUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/meditation/candles?success=true&candle_id=${data.id}`;
+    const stripeUrl = `https://buy.stripe.com/cNi5kCgLfeQA2CseDI6wE06?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
     
-    window.location.href = stripeUrl;
+    if (typeof window !== 'undefined') {
+      window.location.href = stripeUrl;
+    }
   }
 
   return (
@@ -938,10 +968,12 @@ function AddRenewableCandleModal({
       return;
     }
 
-    const returnUrl = `${window.location.origin}/meditation/candles?success=true&candle_id=${data.id}`;
-    const stripeUrl = `https://buy.stripe.com/14AdR8amRbEocd267c6wE05?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(window.location.href)}`;
+    const returnUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/meditation/candles?success=true&candle_id=${data.id}`;
+    const stripeUrl = `https://buy.stripe.com/14AdR8amRbEocd267c6wE05?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
     
-    window.location.href = stripeUrl;
+    if (typeof window !== 'undefined') {
+      window.location.href = stripeUrl;
+    }
   }
 
   return (
