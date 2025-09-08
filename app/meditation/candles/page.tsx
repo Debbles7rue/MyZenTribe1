@@ -65,7 +65,9 @@ export default function CandleRoomPage() {
     if (success === 'true' && candleId) {
       setCheckingPayment(true);
       checkPaymentStatus(candleId);
-      window.history.replaceState({}, '', '/meditation/candles');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/meditation/candles');
+      }
     }
   }, [searchParams]);
 
