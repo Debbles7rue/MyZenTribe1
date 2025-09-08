@@ -1,40 +1,15 @@
-// /app/api/sos/send/route.ts (example)
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+// /app/api/sos/send/route.ts
+import { NextResponse } from "next/server";
 
-export async function POST(req: Request) {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name) => cookies().get(name)?.value,
-        set: () => {},
-        remove: () => {},
-      },
-    }
-  );
+// Keep Netlify on Node runtime; avoid static optimization.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  // …build notification payload…
-  const { error: insertErr } = await supabase
-    .from("notifications")
-    .insert({
-      user_id: user.id,           // ✅ never null
-      type: "sos_test",
-      title: "SOS test prepared",
-      body: "We prepared an SOS test message.",
-      link: null,
-    });
-
-  if (insertErr) return new Response(insertErr.message, { status: 400 });
-  return new Response("ok");
+/**
+ * Placeholder endpoint (no server deps).
+ * Your client-side "Send Test" already opens SMS/Mail apps,
+ * so we just return OK here.
+ */
+export async function POST() {
+  return NextResponse.json({ ok: true });
 }
