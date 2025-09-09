@@ -1,4 +1,5 @@
 // app/(protected)/calendar/hooks/useNotifications.ts
+
 import { useEffect, useRef } from 'react';
 import type { TodoReminder } from '../types';
 import type { DBEvent } from '@/lib/types';
@@ -18,34 +19,6 @@ export function useNotifications(
 ) {
   const notifiedItems = useRef<Set<string>>(new Set());
   const checkInterval = useRef<NodeJS.Timeout>();
-
-  // Define notifyItem function here, outside of useEffect
-  const notifyItem = (type: string, title: string, timeString: string) => {
-    const icon = type === 'reminder' ? '🔔' : type === 'todo' ? '✅' : '📅';
-    const message = `${icon} ${title} - ${timeString}`;
-
-    // Show toast
-    showToast({
-      type: 'info',
-      message,
-      duration: 5000
-    });
-
-    // Show browser notification if permitted
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(`${type.charAt(0).toUpperCase()}${type.slice(1)} Alert`, {
-        body: `${title} - coming up in ${timeString}`,
-        icon: '/icon-192x192.png',
-        tag: `notification-${type}-${title}`,
-        requireInteraction: false
-      });
-    }
-
-    // Vibrate on mobile
-    if ('vibrate' in navigator) {
-      navigator.vibrate([200, 100, 200]);
-    }
-  };
 
   useEffect(() => {
     // Request notification permission
@@ -104,7 +77,34 @@ export function useNotifications(
         clearInterval(checkInterval.current);
       }
     };
-  }, [reminders, todos, events, showToast, notifyItem]);
+  }, [reminders, todos, events, showToast]);
+
+  const notifyItem = (type: string, title: string, timeString: string) => {
+    const icon = type === 'reminder' ? '🔔' : type === 'todo' ? '✅' : '📅';
+    const message = `${icon} ${title} - ${timeString}`;
+
+    // Show toast
+    showToast({
+      type: 'info',
+      message,
+      duration: 5000
+    });
+
+    // Show browser notification if permitted
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(`${type.charAt(0).toUpperCase()}${type.slice(1)} Alert`, {
+        body: `${title} - coming up in ${timeString}`,
+        icon: '/icon-192x192.png',
+        tag: `notification-${type}-${title}`,
+        requireInteraction: false
+      });
+    }
+
+    // Vibrate on mobile
+    if ('vibrate' in navigator) {
+      navigator.vibrate([200, 100, 200]);
+    }
+  };
 
   // Clean up old notifications
   useEffect(() => {
@@ -130,15 +130,4 @@ export function useNotifications(
 
     return () => clearInterval(cleanup);
   }, [reminders, todos, events]);
-  
-  // Make sure it ends with the return statement:
-  return {
-    requestPermission: async () => {
-      if ('Notification' in window && Notification.permission === 'default') {
-        return await Notification.requestPermission();
-      }
-      return Notification.permission;
-    },
-    sendNotification: notifyItem
-  };
 }
