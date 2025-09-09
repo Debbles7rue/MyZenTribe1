@@ -512,8 +512,6 @@ export default function CalendarPage() {
           setShowMoon={setShowMoon}
           showWeather={showWeather}
           setShowWeather={setShowWeather}
-          showFunDays={showFunDays}
-          setShowFunDays={setShowFunDays}
           isMobile={isMobile}
           setOpenCreate={setOpenCreate}
           setMobileMenuOpen={setMobileMenuOpen}
