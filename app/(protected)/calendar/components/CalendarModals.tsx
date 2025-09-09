@@ -379,7 +379,7 @@ export default function CalendarModals({
         )}
       </Modal>
 
-      {/* Quick Add Modal (Reminder/Todo) - WITH FIX */}
+      {/* Quick Add Modal (Reminder/Todo) */}
       <Modal 
         isOpen={quickModalOpen} 
         onClose={() => setQuickModalOpen(false)} 
@@ -396,7 +396,6 @@ export default function CalendarModals({
               onChange={(e) => setQuickModalForm(prev => ({ ...prev, title: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
               placeholder={`${quickModalType === 'reminder' ? 'Reminder' : 'To-do'} title`}
-              autoFocus
             />
           </div>
           
