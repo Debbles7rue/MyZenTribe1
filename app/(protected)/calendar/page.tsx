@@ -20,6 +20,7 @@ import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
 import FeedView from "./components/FeedView";
 import CalendarModals from "./components/CalendarModals";
+import MobileQuickActions from "./components/MobileQuickActions";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import DarkModeToggle from "./components/DarkModeToggle";
