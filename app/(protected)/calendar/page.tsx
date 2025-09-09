@@ -510,6 +510,10 @@ export default function CalendarPage() {
           setCalendarTheme={setCalendarTheme}
           showMoon={showMoon}
           setShowMoon={setShowMoon}
+          showWeather={showWeather}
+          setShowWeather={setShowWeather}
+          showFunDays={showFunDays}
+          setShowFunDays={setShowFunDays}
           isMobile={isMobile}
           setOpenCreate={setOpenCreate}
           setMobileMenuOpen={setMobileMenuOpen}
@@ -522,9 +526,6 @@ export default function CalendarPage() {
           startListening={startListening}
           activeHeaderTab={activeHeaderTab}
           setActiveHeaderTab={setActiveHeaderTab}
-          setShowTemplates={setShowTemplates}
-          setQuickModalType={setQuickModalType}
-          setQuickModalOpen={setQuickModalOpen}
           gamificationEnabled={gamificationEnabled}
           setGamificationEnabled={setGamificationEnabled}
         />
@@ -548,12 +549,20 @@ export default function CalendarPage() {
                     </label>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowTemplates(true)}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all"
-                >
-                  Browse Event Templates
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setShowTemplates(true)}
+                    className="px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all"
+                  >
+                    📋 Browse Event Templates
+                  </button>
+                  <button
+                    onClick={() => setShowTimeBlocking(true)}
+                    className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:shadow-lg transition-all"
+                  >
+                    ⏰ Time Block Schedule
+                  </button>
+                </div>
                 {gamificationEnabled && userStats && (
                   <div className="mt-4 p-3 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg">
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Current Stats</div>
