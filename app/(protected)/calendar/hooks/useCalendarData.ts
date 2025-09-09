@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { DBEvent } from '@/lib/types';
-import type { TodoReminder, Friend, FeedEvent, CalendarForm, QuickModalForm } from '../types';
+import type { TodoReminder, Friend, CarpoolMatch, FeedEvent, CalendarForm, QuickModalForm } from '../types';
 
 export function useCalendarData() {
   // User state
@@ -24,6 +24,7 @@ export function useCalendarData() {
   const [reminders, setReminders] = useState<TodoReminder[]>([]);
   const [todos, setTodos] = useState<TodoReminder[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [carpoolMatches, setCarpoolMatches] = useState<CarpoolMatch[]>([]);
   
   // Forms
   const [form, setForm] = useState<CalendarForm>({
@@ -113,6 +114,26 @@ export function useCalendarData() {
         })));
       }
       
+      // Generate mock carpool matches
+      setCarpoolMatches([
+        {
+          id: '1',
+          friendName: 'Sarah Chen',
+          destination: 'Downtown Office',
+          time: '8:30 AM',
+          date: new Date().toISOString().split('T')[0],
+          savings: '$12'
+        },
+        {
+          id: '2',
+          friendName: 'Mike Johnson',
+          destination: 'Tech Campus',
+          time: '9:00 AM',
+          date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+          savings: '$8'
+        }
+      ]);
+      
     } catch (error) {
       console.error('Error loading calendar:', error);
     } finally {
@@ -181,6 +202,7 @@ export function useCalendarData() {
     reminders,
     todos,
     friends,
+    carpoolMatches,
     selectedCarpoolEvent,
     setSelectedCarpoolEvent,
     selectedCarpoolFriends,
