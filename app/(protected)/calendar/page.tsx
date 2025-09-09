@@ -20,10 +20,8 @@ import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
 import FeedView from "./components/FeedView";
 import CalendarModals from "./components/CalendarModals";
-import MobileQuickActions from "./components/MobileQuickActions";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
-import PhotoMemories from "./components/PhotoMemories";
 import DarkModeToggle from "./components/DarkModeToggle";
 import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
@@ -65,11 +63,12 @@ export default function CalendarPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
-  const [showMemories, setShowMemories] = useState(false);
   const [showMoodTracker, setShowMoodTracker] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
+  
+  // ===== GAMIFICATION STATE (NOW OPTIONAL) =====
+  const [gamificationEnabled, setGamificationEnabled] = useState(false);
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -83,12 +82,12 @@ export default function CalendarPage() {
   const [quickModalOpen, setQuickModalOpen] = useState(false);
   const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
-  const [showTimeBlocking, setShowTimeBlocking] = useState(false);
+  
+  // ===== HEADER TABS STATE (MOVED FROM SIDEBAR) =====
+  const [activeHeaderTab, setActiveHeaderTab] = useState<'calendar' | 'reminders' | 'todos' | 'templates'>('calendar');
+  const [showCompletedItems, setShowCompletedItems] = useState(false);
 
   // ===== SIDEBAR STATES =====
-  const [showCompletedItems, setShowCompletedItems] = useState(false);
-  const [showRemindersList, setShowRemindersList] = useState(true);
-  const [showTodosList, setShowTodosList] = useState(true);
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
 
@@ -175,13 +174,13 @@ export default function CalendarPage() {
     setSelectedCarpoolFriends
   });
 
-  // ===== GAMIFICATION HOOKS =====
+  // ===== GAMIFICATION HOOKS (NOW CONDITIONAL) =====
   const { 
     userStats, 
     checkAchievements, 
     addPoints,
     showConfetti 
-  } = useGameification(me);
+  } = useGameification(gamificationEnabled ? me : null); // Only active if enabled
 
   // ===== NOTIFICATION HOOKS =====
   useNotifications(reminders, todos, events, showToast);
@@ -286,15 +285,6 @@ export default function CalendarPage() {
       } else if (lower.includes('today')) {
         setDate(new Date());
         vibrate();
-      } else if (lower.includes('week')) {
-        setView('week');
-        vibrate();
-      } else if (lower.includes('month')) {
-        setView('month');
-        vibrate();
-      } else if (lower.includes('day')) {
-        setView('day');
-        vibrate();
       }
     }
   });
@@ -329,8 +319,10 @@ export default function CalendarPage() {
         duration: 2000
       });
       
-      // Add points for refresh
-      addPoints(5, 'refresh');
+      // Add points for refresh (only if gamification enabled)
+      if (gamificationEnabled) {
+        addPoints(5, 'refresh');
+      }
     } catch (error) {
       showToast({ 
         type: 'error', 
@@ -339,7 +331,7 @@ export default function CalendarPage() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, addPoints]);
+  }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, addPoints, gamificationEnabled]);
 
   // ===== CALENDAR NAVIGATION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
@@ -401,12 +393,14 @@ export default function CalendarPage() {
         await handleDeleteEvent(eventId);
       }
       
-      showConfetti();
-      addPoints(selectedBatchEvents.size * 10, 'batch-delete');
+      if (gamificationEnabled) {
+        showConfetti();
+        addPoints(selectedBatchEvents.size * 10, 'batch-delete');
+      }
       setSelectedBatchEvents(new Set());
       setBatchMode(false);
     }
-  }, [selectedBatchEvents, handleDeleteEvent, showConfetti, addPoints]);
+  }, [selectedBatchEvents, handleDeleteEvent, showConfetti, addPoints, gamificationEnabled]);
 
   const handleBatchMove = useCallback((days: number) => {
     if (selectedBatchEvents.size === 0) return;
@@ -417,10 +411,12 @@ export default function CalendarPage() {
       message: `Moved ${selectedBatchEvents.size} events ${days > 0 ? 'forward' : 'backward'} ${Math.abs(days)} days` 
     });
     
-    addPoints(selectedBatchEvents.size * 5, 'batch-move');
+    if (gamificationEnabled) {
+      addPoints(selectedBatchEvents.size * 5, 'batch-move');
+    }
     setSelectedBatchEvents(new Set());
     setBatchMode(false);
-  }, [selectedBatchEvents, showToast, addPoints]);
+  }, [selectedBatchEvents, showToast, addPoints, gamificationEnabled]);
 
   // ===== HELPER FUNCTIONS =====
   const formatDateForToast = (date: Date) => {
@@ -441,22 +437,8 @@ export default function CalendarPage() {
   // ===== FILTERED DATA =====
   const calendarEvents = useMemo(() => {
     let filteredEvents = mode === 'whats' ? feed.filter(e => !e._dismissed) : events;
-    
-    // Apply focus mode filter (only today's events)
-    if (focusMode) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      filteredEvents = filteredEvents.filter(e => {
-        const eventStart = new Date(e.start_time);
-        return eventStart >= today && eventStart < tomorrow;
-      });
-    }
-    
     return filteredEvents;
-  }, [mode, events, feed, focusMode]);
+  }, [mode, events, feed]);
 
   const visibleReminders = useMemo(() => {
     return reminders.filter(r => showCompletedItems || !r.completed);
@@ -499,8 +481,8 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Gamification Achievements Popup */}
-      {userStats?.lastAchievement && (
+      {/* Gamification Achievements Popup (Only if enabled) */}
+      {gamificationEnabled && userStats?.lastAchievement && (
         <div className="fixed top-4 right-4 z-50 animate-bounce-in">
           <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-lg px-4 py-3 shadow-xl">
             <div className="flex items-center gap-2">
@@ -520,7 +502,7 @@ export default function CalendarPage() {
         {...(isMobile ? swipeHandlers : {})}
       >
         
-        {/* Header Component */}
+        {/* Header Component with Tab Navigation */}
         <CalendarHeader
           mode={mode}
           setMode={setMode}
@@ -531,31 +513,233 @@ export default function CalendarPage() {
           isMobile={isMobile}
           setOpenCreate={setOpenCreate}
           setMobileMenuOpen={setMobileMenuOpen}
-          setShowTemplates={setShowTemplates}
-          setShowAnalytics={setShowAnalytics}
-          setShowMeetingCoordinator={setShowMeetingCoordinator}
-          setShowShortcutsHelp={setShowShortcutsHelp}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
-          focusMode={focusMode}
-          setFocusMode={setFocusMode}
           batchMode={batchMode}
           setBatchMode={setBatchMode}
-          userStats={userStats}
+          userStats={gamificationEnabled ? userStats : null}
           isListening={isListening}
           startListening={startListening}
+          activeHeaderTab={activeHeaderTab}
+          setActiveHeaderTab={setActiveHeaderTab}
+          setShowTemplates={setShowTemplates}
+          setQuickModalType={setQuickModalType}
+          setQuickModalOpen={setQuickModalOpen}
+          gamificationEnabled={gamificationEnabled}
+          setGamificationEnabled={setGamificationEnabled}
         />
 
-        {/* Mobile Quick Actions Bar */}
+        {/* Header Tab Content (Templates, Reminders, Todos) */}
+        {activeHeaderTab !== 'calendar' && (
+          <div className="mb-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-lg p-4">
+            {activeHeaderTab === 'templates' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Templates & Goals</h3>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={gamificationEnabled}
+                        onChange={(e) => setGamificationEnabled(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-gray-600 dark:text-gray-400">Enable Goal Tracking</span>
+                    </label>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all"
+                >
+                  Browse Event Templates
+                </button>
+                {gamificationEnabled && userStats && (
+                  <div className="mt-4 p-3 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg">
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Current Stats</div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{userStats.points}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Points</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-pink-600 dark:text-pink-400">{userStats.streak}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Day Streak</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{userStats.level}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Level</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeHeaderTab === 'reminders' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Reminders</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setQuickModalType('reminder');
+                        setQuickModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600"
+                    >
+                      + Add Reminder
+                    </button>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={showCompletedItems}
+                        onChange={(e) => setShowCompletedItems(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <span>Show completed</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {visibleReminders.length === 0 ? (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">No reminders yet</p>
+                  ) : (
+                    visibleReminders.map((reminder) => (
+                      <div
+                        key={reminder.id}
+                        className={`p-2 rounded-lg border ${
+                          reminder.completed 
+                            ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 opacity-60' 
+                            : 'bg-white dark:bg-gray-700 border-purple-200 dark:border-purple-700'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={reminder.completed}
+                            onChange={() => handleToggleComplete(reminder.id, 'reminder')}
+                            className="mt-1 rounded border-gray-300"
+                          />
+                          <div className="flex-1">
+                            <div className={`text-sm ${reminder.completed ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                              {reminder.title}
+                            </div>
+                            {reminder.due_date && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Due: {new Date(reminder.due_date).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteItem(reminder.id, 'reminder')}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeHeaderTab === 'todos' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">To-Dos</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setQuickModalType('todo');
+                        setQuickModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-pink-500 text-white rounded-lg text-sm hover:bg-pink-600"
+                    >
+                      + Add To-Do
+                    </button>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={showCompletedItems}
+                        onChange={(e) => setShowCompletedItems(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <span>Show completed</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {visibleTodos.length === 0 ? (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">No to-dos yet</p>
+                  ) : (
+                    visibleTodos.map((todo) => (
+                      <div
+                        key={todo.id}
+                        className={`p-2 rounded-lg border ${
+                          todo.completed 
+                            ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 opacity-60' 
+                            : 'bg-white dark:bg-gray-700 border-pink-200 dark:border-pink-700'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={todo.completed}
+                            onChange={() => handleToggleComplete(todo.id, 'todo')}
+                            className="mt-1 rounded border-gray-300"
+                          />
+                          <div className="flex-1">
+                            <div className={`text-sm ${todo.completed ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                              {todo.title}
+                            </div>
+                            {todo.priority && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                todo.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                todo.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {todo.priority}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteItem(todo.id, 'todo')}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Mobile Quick Actions Bar - Only Mood Tracker */}
         {isMobile && (
-          <MobileQuickActions
-            onMoodTrack={() => setShowMoodTracker(true)}
-            onPhotoMemories={() => setShowMemories(true)}
-            onPomodoro={() => setShowPomodoroTimer(true)}
-            onTimeBlock={() => setShowTimeBlocking(true)}
-            onVoiceCommand={startListening}
-            isListening={isListening}
-          />
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-2">
+            <button
+              onClick={() => setShowMoodTracker(true)}
+              className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded-lg text-sm font-medium shadow-md"
+            >
+              😊 Track Mood
+            </button>
+            <button
+              onClick={startListening}
+              className={`flex-shrink-0 px-4 py-2 ${
+                isListening 
+                  ? 'bg-red-500 animate-pulse' 
+                  : 'bg-gradient-to-r from-blue-400 to-purple-400'
+              } text-white rounded-lg text-sm font-medium shadow-md`}
+            >
+              {isListening ? '🎤 Listening...' : '🎙️ Voice Command'}
+            </button>
+          </div>
         )}
 
         {/* Batch Mode Actions Bar */}
@@ -588,39 +772,37 @@ export default function CalendarPage() {
         )}
 
         {/* Main Content Area */}
-        <div className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden ${
-          focusMode ? 'ring-4 ring-purple-500 ring-opacity-50' : ''
-        }`}>
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Desktop Sidebar */}
+            {/* Simplified Desktop Sidebar - Only Carpool */}
             {mode === 'my' && !isMobile && (
-              <CalendarSidebar
-                carpoolMatches={carpoolMatches}
-                friends={friends}
-                visibleReminders={visibleReminders}
-                visibleTodos={visibleTodos}
-                showRemindersList={showRemindersList}
-                setShowRemindersList={setShowRemindersList}
-                showTodosList={showTodosList}
-                setShowTodosList={setShowTodosList}
-                showCompletedItems={showCompletedItems}
-                setShowCompletedItems={setShowCompletedItems}
-                openCarpoolChat={openCarpoolChat}
-                setQuickModalType={setQuickModalType}
-                setQuickModalOpen={setQuickModalOpen}
-                onDragStart={(item: TodoReminder, type: 'reminder' | 'todo') => {
-                  setDraggedItem(item);
-                  setDragType(type);
-                }}
-                onDragEnd={() => {
-                  setDraggedItem(null);
-                  setDragType('none');
-                }}
-                onToggleComplete={handleToggleComplete}
-                onDeleteItem={handleDeleteItem}
-                userStats={userStats}
-              />
+              <div className="w-64 space-y-4">
+                {/* Carpool Matches */}
+                {carpoolMatches.length > 0 && (
+                  <div className="bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                      <span>🚗</span> Carpool Opportunities
+                    </h3>
+                    <div className="space-y-2">
+                      {carpoolMatches.slice(0, 3).map((match, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg cursor-pointer hover:shadow-md transition-all"
+                          onClick={() => openCarpoolChat(match.event)}
+                        >
+                          <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
+                            {match.event.title}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {match.matches.length} potential carpoolers
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Calendar or Feed View */}
@@ -657,7 +839,6 @@ export default function CalendarPage() {
                   externalDragTitle={draggedItem?.title}
                   onExternalDrop={handleExternalDrop}
                   darkMode={darkMode}
-                  focusMode={focusMode}
                   selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
                 />
               )}
@@ -677,15 +858,15 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Mobile Sidebar */}
+        {/* Mobile Sidebar (Simplified) */}
         {isMobile && (
           <MobileSidebar
             open={mobileMenuOpen}
             onClose={() => setMobileMenuOpen(false)}
             carpoolMatches={carpoolMatches}
             friends={friends}
-            visibleReminders={visibleReminders}
-            visibleTodos={visibleTodos}
+            visibleReminders={[]} // Empty since we moved to header
+            visibleTodos={[]} // Empty since we moved to header
             showCompletedItems={showCompletedItems}
             setShowCompletedItems={setShowCompletedItems}
             openCarpoolChat={(event) => {
@@ -699,16 +880,7 @@ export default function CalendarPage() {
             setShowMeetingCoordinator={setShowMeetingCoordinator}
             onToggleComplete={handleToggleComplete}
             onDeleteItem={handleDeleteItem}
-            userStats={userStats}
-          />
-        )}
-
-        {/* Photo Memories Overlay */}
-        {showMemories && (
-          <PhotoMemories
-            date={date}
-            onClose={() => setShowMemories(false)}
-            userId={me}
+            userStats={gamificationEnabled ? userStats : null}
           />
         )}
 
@@ -720,7 +892,9 @@ export default function CalendarPage() {
             onSave={(mood) => {
               // Save mood to database
               showToast({ type: 'success', message: `Mood saved: ${mood}` });
-              addPoints(10, 'mood-track');
+              if (gamificationEnabled) {
+                addPoints(10, 'mood-track');
+              }
               setShowMoodTracker(false);
             }}
           />
@@ -739,7 +913,7 @@ export default function CalendarPage() {
           showCarpoolChat={showCarpoolChat}
           quickModalOpen={quickModalOpen}
           showPomodoroTimer={showPomodoroTimer}
-          showTimeBlocking={showTimeBlocking}
+          showTimeBlocking={false} // Disabled as requested
           
           // Modal setters
           setOpenCreate={setOpenCreate}
@@ -752,7 +926,7 @@ export default function CalendarPage() {
           setShowCarpoolChat={setShowCarpoolChat}
           setQuickModalOpen={setQuickModalOpen}
           setShowPomodoroTimer={setShowPomodoroTimer}
-          setShowTimeBlocking={setShowTimeBlocking}
+          setShowTimeBlocking={() => {}} // Disabled
           
           // Data
           me={me}
@@ -773,8 +947,10 @@ export default function CalendarPage() {
           // Actions
           handleCreateEvent={() => {
             handleCreateEvent();
-            showConfetti();
-            addPoints(20, 'event-create');
+            if (gamificationEnabled) {
+              showConfetti();
+              addPoints(20, 'event-create');
+            }
           }}
           handleUpdateEvent={handleUpdateEvent}
           handleEdit={(event) => {
@@ -790,6 +966,9 @@ export default function CalendarPage() {
               community_id: event.community_id || "",
               source: event.source || "personal",
               image_path: event.image_path || "",
+              cover_photo: event.cover_photo || "",
+              pre_event: event.pre_event || null,
+              post_event: event.post_event || null,
             });
             setOpenEdit(true);
             setDetailsOpen(false);
@@ -798,12 +977,16 @@ export default function CalendarPage() {
           handleApplyTemplate={handleApplyTemplate}
           createQuickItem={() => {
             createQuickItem();
-            addPoints(10, 'quick-create');
+            if (gamificationEnabled) {
+              addPoints(10, 'quick-create');
+            }
           }}
           createCarpoolGroup={() => {
             createCarpoolGroup();
-            addPoints(30, 'carpool-create');
-            showConfetti();
+            if (gamificationEnabled) {
+              addPoints(30, 'carpool-create');
+              showConfetti();
+            }
           }}
           resetForm={resetForm}
         />
@@ -876,15 +1059,6 @@ export default function CalendarPage() {
         /* Dark mode transitions */
         .dark * {
           transition: background-color 0.3s ease, color 0.3s ease;
-        }
-        
-        /* Focus mode glow */
-        @keyframes focus-glow {
-          0%, 100% { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
-          50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.8); }
-        }
-        .focus-mode-glow {
-          animation: focus-glow 2s infinite;
         }
       `}</style>
     </div>
