@@ -1,6 +1,6 @@
 // app/(protected)/calendar/hooks/useSwipeGestures.ts
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface SwipeHandlers {
   onSwipeLeft?: () => void;
@@ -10,50 +10,56 @@ interface SwipeHandlers {
 }
 
 export function useSwipeGestures(handlers: SwipeHandlers) {
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const touchEndX = useRef(0);
-  const touchEndY = useRef(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.changedTouches[0].screenX;
-    touchStartY.current = e.changedTouches[0].screenY;
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchEndX.current = null;
+    touchEndY.current = null;
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    touchEndX.current = e.changedTouches[0].screenX;
-    touchEndY.current = e.changedTouches[0].screenY;
-    handleSwipe();
+  const onTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+    touchEndY.current = e.targetTouches[0].clientY;
   };
 
-  const handleSwipe = () => {
-    const deltaX = touchEndX.current - touchStartX.current;
-    const deltaY = touchEndY.current - touchStartY.current;
-    const minSwipeDistance = 50;
+  const onTouchEnd = () => {
+    if (!touchStartX.current || !touchStartY.current || !touchEndX.current || !touchEndY.current) {
+      return;
+    }
 
-    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-      // Horizontal swipe
-      if (Math.abs(deltaX) > minSwipeDistance) {
-        if (deltaX > 0 && handlers.onSwipeRight) {
-          handlers.onSwipeRight();
-        } else if (deltaX < 0 && handlers.onSwipeLeft) {
-          handlers.onSwipeLeft();
-        }
+    const distanceX = touchStartX.current - touchEndX.current;
+    const distanceY = touchStartY.current - touchEndY.current;
+    const isLeftSwipe = distanceX > minSwipeDistance;
+    const isRightSwipe = distanceX < -minSwipeDistance;
+    const isUpSwipe = distanceY > minSwipeDistance;
+    const isDownSwipe = distanceY < -minSwipeDistance;
+
+    // Prioritize horizontal swipes over vertical
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (isRightSwipe && handlers.onSwipeRight) {
+        handlers.onSwipeRight();
+      } else if (isLeftSwipe && handlers.onSwipeLeft) {
+        handlers.onSwipeLeft();
       }
     } else {
-      // Vertical swipe
-      if (Math.abs(deltaY) > minSwipeDistance) {
-        if (deltaY > 0 && handlers.onSwipeDown) {
-          handlers.onSwipeDown();
-        } else if (deltaY < 0 && handlers.onSwipeUp) {
-          handlers.onSwipeUp();
-        }
+      if (isDownSwipe && handlers.onSwipeDown) {
+        handlers.onSwipeDown();
+      } else if (isUpSwipe && handlers.onSwipeUp) {
+        handlers.onSwipeUp();
       }
     }
   };
 
   return {
-    onTouchStart: handleTouchStart,
-    onTouchEnd: handleTouchEnd
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd
   };
 }
