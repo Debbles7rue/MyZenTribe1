@@ -854,6 +854,64 @@ export default function CalendarModals({
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Wellness Templates */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Meditation Session</h3>
+                <span className="text-xs bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 px-2 py-1 rounded">Wellness</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Mindfulness and relaxation practice</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>🧘 Mindful</span>
+                <span>⏰ 20 min</span>
+                <span>🎯 Focus</span>
+              </div>
+              <button 
+                onClick={() => {
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Meditation Session',
+                    description: 'Mindfulness practice - breathing exercises, body scan, and relaxation',
+                    duration: 20
+                  }));
+                  setShowTemplates(false);
+                  setOpenCreate(true);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-cyan-500 text-white rounded text-sm hover:bg-cyan-600"
+              >
+                Use Template
+              </button>
+            </div>
+
+            {/* Gratitude Journal */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Gratitude Journal</h3>
+                <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">Reflection</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Daily gratitude practice & reflection</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>📝 Journal</span>
+                <span>⏰ 15 min</span>
+                <span>🌟 Daily</span>
+              </div>
+              <button 
+                onClick={() => {
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Gratitude Journal',
+                    description: 'Write 3 things I\'m grateful for today + reflection',
+                    duration: 15
+                  }));
+                  setShowTemplates(false);
+                  setOpenCreate(true);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
+              >
+                Use Template
+              </button>
+            </div>
+
             {/* Work Templates */}
             <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
               <div className="flex items-start justify-between mb-2">
