@@ -54,69 +54,18 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
 });
 
 export default function CalendarPage() {
-  // ===== CORE STATE WITH PERSISTENCE =====
-  const [mode, setMode] = useState<Mode>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('calendar-mode') as Mode) || 'my';
-    }
-    return 'my';
-  });
-
+  // ===== CORE STATE =====
+  const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
-
-  const [view, setView] = useState<View>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('calendar-view') as View) || 'month';
-    }
-    return 'month';
-  });
-
-  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('calendar-theme') as CalendarTheme) || 'default';
-    }
-    return 'default';
-  });
-
-  const [showMoon, setShowMoon] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('show-moon') === 'true';
-    }
-    return true;
-  });
-
-  const [showWeather, setShowWeather] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('show-weather') === 'true';
-    }
-    return false;
-  });
-
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dark-mode');
-      if (saved !== null) {
-        return saved === 'true';
-      }
-      // Default to system preference
-      const hour = new Date().getHours();
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      return prefersDark || (hour >= 18 || hour < 6);
-    }
-    return false;
-  });
-
-  const [focusMode, setFocusMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('focus-mode') === 'true';
-    }
-    return false;
-  });
-
-  // Regular state without persistence
+  const [view, setView] = useState<View>("month");
+  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
+  const [showMoon, setShowMoon] = useState(true);
+  const [showWeather, setShowWeather] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const [showMemories, setShowMemories] = useState(false);
   const [showMoodTracker, setShowMoodTracker] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
@@ -142,79 +91,6 @@ export default function CalendarPage() {
   const [showTodosList, setShowTodosList] = useState(true);
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
-
-  // ===== PERSIST PREFERENCES TO LOCAL STORAGE =====
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('calendar-mode', mode);
-    }
-  }, [mode]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('calendar-view', view);
-    }
-  }, [view]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('calendar-theme', calendarTheme);
-    }
-  }, [calendarTheme]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('show-moon', String(showMoon));
-    }
-  }, [showMoon]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('show-weather', String(showWeather));
-    }
-  }, [showWeather]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dark-mode', String(darkMode));
-    }
-  }, [darkMode]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('focus-mode', String(focusMode));
-    }
-  }, [focusMode]);
-
-  // ===== APPLY THEME STYLES =====
-  useEffect(() => {
-    // Apply the theme class to the calendar
-    const root = document.documentElement;
-    
-    // Remove all theme classes
-    root.classList.remove('theme-default', 'theme-spring', 'theme-summer', 
-                         'theme-autumn', 'theme-winter', 'theme-nature', 'theme-ocean');
-    
-    // Add current theme class
-    root.classList.add(`theme-${calendarTheme}`);
-    
-    // Apply theme-specific styles
-    const themeColors = {
-      default: { primary: '#8B5CF6', secondary: '#EC4899' },
-      spring: { primary: '#10B981', secondary: '#F59E0B' },
-      summer: { primary: '#F59E0B', secondary: '#3B82F6' },
-      autumn: { primary: '#DC2626', secondary: '#F97316' },
-      winter: { primary: '#60A5FA', secondary: '#C084FC' },
-      nature: { primary: '#059669', secondary: '#84CC16' },
-      ocean: { primary: '#0EA5E9', secondary: '#06B6D4' }
-    };
-    
-    const colors = themeColors[calendarTheme];
-    if (colors) {
-      root.style.setProperty('--theme-primary', colors.primary);
-      root.style.setProperty('--theme-secondary', colors.secondary);
-    }
-  }, [calendarTheme]);
 
   // ===== REFS FOR MOBILE INTERACTIONS =====
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -317,14 +193,10 @@ export default function CalendarPage() {
     };
     
     const checkDarkMode = () => {
-      // Only auto-update if user hasn't manually set a preference
-      const savedPreference = localStorage.getItem('dark-mode');
-      if (savedPreference === null) {
-        const hour = new Date().getHours();
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const isEvening = hour >= 18 || hour < 6;
-        setDarkMode(prefersDark || isEvening);
-      }
+      const hour = new Date().getHours();
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isEvening = hour >= 18 || hour < 6;
+      setDarkMode(prefersDark || isEvening);
     };
     
     checkMobile();
@@ -469,32 +341,28 @@ export default function CalendarPage() {
     }
   }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, addPoints]);
 
-  // ===== CALENDAR NAVIGATION - FIXED VERSION =====
+  // ===== CALENDAR NAVIGATION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
     if (batchMode) return; // Disable slot selection in batch mode
     
     vibrate();
     
-    // In month view, clicking a day should navigate to day view
-    if (view === 'month') {
+    if (view === 'month' && isMobile) {
       setDate(slotInfo.start);
       setView('day');
       return;
     }
+
+    const start = slotInfo.start || new Date();
+    const end = slotInfo.end || new Date(start.getTime() + 3600000);
     
-    // In week or day view, clicking a time slot should open the create modal
-    if (view === 'week' || view === 'day') {
-      const start = slotInfo.start || new Date();
-      const end = slotInfo.end || new Date(start.getTime() + 3600000);
-      
-      setForm(prev => ({
-        ...prev,
-        start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-        end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-      }));
-      setOpenCreate(true);
-    }
-  }, [view, batchMode, setForm, vibrate]);
+    setForm(prev => ({
+      ...prev,
+      start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+      end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    }));
+    setOpenCreate(true);
+  }, [view, isMobile, batchMode, setForm, vibrate]);
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
@@ -517,12 +385,12 @@ export default function CalendarPage() {
       return;
     }
     
-    // Normal event selection - show details
+    // Normal event selection
     if (r?.id) {
       setSelected(r);
       setDetailsOpen(true);
     }
-  }, [batchMode, setSelected, vibrate]);
+  }, [batchMode, selectedBatchEvents, setSelected, vibrate]);
 
   // ===== BATCH ACTIONS =====
   const handleBatchDelete = useCallback(async () => {
@@ -699,19 +567,19 @@ export default function CalendarPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => handleBatchMove(1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600"
               >
                 Move +1 day
               </button>
               <button
                 onClick={() => handleBatchMove(-1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600"
               >
                 Move -1 day
               </button>
               <button
                 onClick={handleBatchDelete}
-                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
+                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
               >
                 Delete
               </button>
@@ -1017,49 +885,6 @@ export default function CalendarPage() {
         }
         .focus-mode-glow {
           animation: focus-glow 2s infinite;
-        }
-        
-        /* Theme-specific styles */
-        .theme-spring .rbc-today {
-          background-color: #D1FAE5 !important;
-        }
-        .theme-spring .rbc-event {
-          background-color: #10B981 !important;
-        }
-        
-        .theme-summer .rbc-today {
-          background-color: #FEF3C7 !important;
-        }
-        .theme-summer .rbc-event {
-          background-color: #F59E0B !important;
-        }
-        
-        .theme-autumn .rbc-today {
-          background-color: #FED7AA !important;
-        }
-        .theme-autumn .rbc-event {
-          background-color: #EA580C !important;
-        }
-        
-        .theme-winter .rbc-today {
-          background-color: #DBEAFE !important;
-        }
-        .theme-winter .rbc-event {
-          background-color: #3B82F6 !important;
-        }
-        
-        .theme-nature .rbc-today {
-          background-color: #D1FAE5 !important;
-        }
-        .theme-nature .rbc-event {
-          background-color: #059669 !important;
-        }
-        
-        .theme-ocean .rbc-today {
-          background-color: #CFFAFE !important;
-        }
-        .theme-ocean .rbc-event {
-          background-color: #0891B2 !important;
         }
       `}</style>
     </div>
