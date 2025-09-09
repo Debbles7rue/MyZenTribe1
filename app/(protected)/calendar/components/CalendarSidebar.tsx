@@ -1,6 +1,7 @@
 // app/(protected)/calendar/components/CalendarSidebar.tsx
+
 import React from 'react';
-import type { Friend, TodoReminder, CarpoolMatch } from '../types';
+import { TodoReminder, Friend, CarpoolMatch } from '../types';
 
 interface CalendarSidebarProps {
   carpoolMatches: CarpoolMatch[];
@@ -19,8 +20,8 @@ interface CalendarSidebarProps {
   onDragStart: (item: TodoReminder, type: 'reminder' | 'todo') => void;
   onDragEnd: () => void;
   onToggleComplete: (item: TodoReminder) => void;
-  onDeleteItem: (itemId: string) => void;
-  userStats?: any;
+  onDeleteItem: (id: string) => void;
+  userStats: any;
 }
 
 export default function CalendarSidebar({
@@ -44,351 +45,273 @@ export default function CalendarSidebar({
   userStats
 }: CalendarSidebarProps) {
   return (
-    <div className="w-64 shrink-0 hidden lg:block">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
-        
-        {/* User Stats Summary - if gamification enabled */}
-        {userStats && (
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-t-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Daily Progress</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {userStats.todayCompleted}/{userStats.weeklyGoal}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min((userStats.todayCompleted / userStats.weeklyGoal) * 100, 100)}%` }}
-              />
-            </div>
-            {userStats.streak > 0 && (
-              <div className="mt-2 text-xs text-center text-gray-600 dark:text-gray-400">
-                🔥 {userStats.streak} day streak!
-              </div>
-            )}
+    <div className="w-80 space-y-4 max-h-[680px] overflow-y-auto custom-scrollbar">
+      {/* Carpool Matches Section */}
+      {carpoolMatches.length > 0 && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-green-800 dark:text-green-300 flex items-center gap-2">
+              <span>🚗</span> Carpool Matches
+            </h3>
+            <span className="text-xs bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded-full">
+              {carpoolMatches.length} available
+            </span>
           </div>
-        )}
-
-        {/* Carpool Section */}
-        <CarpoolSection
-          carpoolMatches={carpoolMatches}
-          friends={friends}
-          openCarpoolChat={openCarpoolChat}
-        />
-
-        {/* Reminders Section */}
-        <RemindersSection
-          reminders={visibleReminders}
-          showRemindersList={showRemindersList}
-          setShowRemindersList={setShowRemindersList}
-          showCompletedItems={showCompletedItems}
-          setShowCompletedItems={setShowCompletedItems}
-          onAdd={() => {
-            setQuickModalType('reminder');
-            setQuickModalOpen(true);
-          }}
-          onDragStart={(item) => onDragStart(item, 'reminder')}
-          onDragEnd={onDragEnd}
-          onToggleComplete={onToggleComplete}
-          onDelete={onDeleteItem}
-        />
-
-        {/* To-dos Section */}
-        <TodosSection
-          todos={visibleTodos}
-          showTodosList={showTodosList}
-          setShowTodosList={setShowTodosList}
-          showCompletedItems={showCompletedItems}
-          onAdd={() => {
-            setQuickModalType('todo');
-            setQuickModalOpen(true);
-          }}
-          onDragStart={(item) => onDragStart(item, 'todo')}
-          onDragEnd={onDragEnd}
-          onToggleComplete={onToggleComplete}
-          onDelete={onDeleteItem}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ===== CarpoolSection.tsx =====
-export function CarpoolSection({ carpoolMatches, friends, openCarpoolChat }: any) {
-  return (
-    <div className="border-b border-gray-200 dark:border-gray-700">
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-700 dark:text-gray-300">Carpool</h3>
-          <button
-            onClick={() => openCarpoolChat()}
-            className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600
-                     transform hover:scale-105 active:scale-95 transition-all duration-200"
-          >
-            + Start
-          </button>
-        </div>
-
-        {/* Carpool Matches */}
-        {carpoolMatches.length > 0 ? (
-          <div className="space-y-2 mb-3">
-            {carpoolMatches.slice(0, 3).map((match: any, idx: number) => (
+          <div className="space-y-2">
+            {carpoolMatches.slice(0, 3).map((match) => (
               <div
-                key={idx}
-                className="p-2 border border-green-500 bg-gradient-to-br from-white to-green-50 dark:from-gray-800 dark:to-green-900/20 rounded-lg cursor-pointer hover:shadow-md
-                         transform hover:scale-[1.02] transition-all duration-200"
-                onClick={() => openCarpoolChat(match.event)}
+                key={match.id}
+                className="bg-white/80 dark:bg-gray-800/80 rounded-lg p-3 cursor-pointer hover:shadow-md transition-all"
+                onClick={() => openCarpoolChat(match)}
               >
-                <div className="text-xs font-medium text-green-800 dark:text-green-300">
-                  {match.event.title}
-                </div>
-                <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                  {match.friends.length} friend{match.friends.length > 1 ? 's' : ''} going
-                </div>
-                {match.savings && (
-                  <div className="text-xs text-green-500 mt-1">
-                    Save ${match.savings.amount} • {match.savings.co2Saved.toFixed(1)}kg CO₂
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="font-medium text-sm text-gray-800 dark:text-gray-200">
+                      {match.friendName}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {match.destination} • {match.time}
+                    </div>
                   </div>
-                )}
+                  <div className="text-green-600 dark:text-green-400 font-semibold text-sm">
+                    Save {match.savings}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        ) : friends.length === 0 ? (
-          <div className="text-center py-3">
-            <p className="text-xs text-gray-400 mb-2">No friends added yet</p>
-            <button className="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600
-                             transform hover:scale-105 active:scale-95 transition-all duration-200">
-              Invite Friends
-            </button>
-          </div>
-        ) : (
-          <p className="text-xs text-gray-400 italic mb-3">
-            No carpool matches found
-          </p>
-        )}
+          <button
+            onClick={() => openCarpoolChat()}
+            className="mt-3 w-full text-center text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium"
+          >
+            View all matches →
+          </button>
+        </div>
+      )}
 
-        {/* Manual Carpool Button */}
-        <button
-          onClick={() => openCarpoolChat()}
-          className="w-full text-xs px-3 py-2 border border-blue-300 dark:border-blue-600 bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg
-                   hover:shadow-md transition-all flex items-center justify-center gap-2
-                   transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <span>🚗</span>
-          <span>Manual Carpool Setup</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ===== RemindersSection.tsx =====
-export function RemindersSection({ 
-  reminders, 
-  showRemindersList, 
-  setShowRemindersList,
-  showCompletedItems,
-  setShowCompletedItems,
-  onAdd,
-  onDragStart,
-  onDragEnd,
-  onToggleComplete,
-  onDelete 
-}: any) {
-  const incompleteCount = reminders.filter((r: any) => !r.completed).length;
-  
-  return (
-    <div className="border-b border-gray-200 dark:border-gray-700">
-      <div className="p-4">
+      {/* Reminders Section */}
+      <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <button
             onClick={() => setShowRemindersList(!showRemindersList)}
-            className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+            className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
           >
-            <span className="transform transition-transform duration-200">
-              {showRemindersList ? '▼' : '▶'}
+            <span className={`transform transition-transform ${showRemindersList ? 'rotate-90' : ''}`}>
+              ▶
             </span>
-            <span>Reminders</span>
-            {incompleteCount > 0 && (
-              <span className="px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full">
-                {incompleteCount}
-              </span>
-            )}
+            <span>🔔</span>
+            Reminders
+            <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full ml-2">
+              {visibleReminders.length}
+            </span>
           </button>
           <button
-            onClick={onAdd}
-            className="text-xs px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600
-                     transform hover:scale-105 active:scale-95 transition-all duration-200"
+            onClick={() => {
+              setQuickModalType('reminder');
+              setQuickModalOpen(true);
+            }}
+            className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+            title="Add Reminder"
           >
-            + Add
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
           </button>
         </div>
-
+        
         {showRemindersList && (
-          <>
-            <div className="mb-2">
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showCompletedItems}
-                  onChange={(e) => setShowCompletedItems(e.target.checked)}
-                  className="rounded accent-amber-500"
-                />
-                Show completed
-              </label>
-            </div>
-
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {reminders.length === 0 ? (
-                <p className="text-xs text-gray-400 italic p-2">No reminders yet</p>
-              ) : (
-                reminders.map((r: any) => (
-                  <div
-                    key={r.id}
-                    className={`group p-2 border border-amber-400 dark:border-amber-600 bg-gradient-to-br from-white to-amber-50 dark:from-gray-800 dark:to-amber-900/20 rounded-lg flex items-center gap-2
-                              hover:shadow-md transition-all duration-200
-                              transform hover:scale-[1.02] ${
-                      r.completed ? 'opacity-50' : ''
-                    }`}
-                    draggable={true}
-                    onDragStart={() => onDragStart(r)}
-                    onDragEnd={onDragEnd}
-                  >
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {visibleReminders.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 italic">No reminders</p>
+            ) : (
+              visibleReminders.map((reminder) => (
+                <div
+                  key={reminder.id}
+                  draggable
+                  onDragStart={() => onDragStart(reminder, 'reminder')}
+                  onDragEnd={onDragEnd}
+                  className={`p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg cursor-move hover:shadow-md transition-all ${
+                    reminder.completed ? 'opacity-50' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
-                      checked={r.completed || false}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        onToggleComplete(r);
-                      }}
-                      className="rounded-sm cursor-pointer accent-amber-500"
+                      checked={reminder.completed}
+                      onChange={() => onToggleComplete(reminder)}
+                      className="mt-1 cursor-pointer"
                     />
-                    <span className={`flex-1 text-sm text-amber-800 dark:text-amber-300 cursor-move ${
-                      r.completed ? 'line-through' : ''
-                    }`}>
-                      {r.title}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-medium ${
+                        reminder.completed ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-200'
+                      }`}>
+                        {reminder.title}
+                      </div>
+                      {reminder.description && (
+                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                          {reminder.description}
+                        </div>
+                      )}
+                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {new Date(reminder.date).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDelete(r.id);
+                        onDeleteItem(reminder.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700
-                               text-xs transition-opacity transform hover:scale-110"
+                      className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
-                      ✕
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
-                ))
-              )}
-            </div>
-
-            {reminders.length > 0 && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
-                Drag items to calendar to schedule
-              </p>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ===== TodosSection.tsx =====
-export function TodosSection({ 
-  todos, 
-  showTodosList, 
-  setShowTodosList,
-  showCompletedItems,
-  onAdd,
-  onDragStart,
-  onDragEnd,
-  onToggleComplete,
-  onDelete 
-}: any) {
-  const incompleteCount = todos.filter((t: any) => !t.completed).length;
-  
-  return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={() => setShowTodosList(!showTodosList)}
-          className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-        >
-          <span className="transform transition-transform duration-200">
-            {showTodosList ? '▼' : '▶'}
-          </span>
-          <span>To-dos</span>
-          {incompleteCount > 0 && (
-            <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">
-              {incompleteCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={onAdd}
-          className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600
-                   transform hover:scale-105 active:scale-95 transition-all duration-200"
-        >
-          + Add
-        </button>
-      </div>
-
-      {showTodosList && (
-        <>
-          <div className="space-y-1 max-h-48 overflow-y-auto">
-            {todos.length === 0 ? (
-              <p className="text-xs text-gray-400 italic p-2">No to-dos yet</p>
-            ) : (
-              todos.map((t: any) => (
-                <div
-                  key={t.id}
-                  className={`group p-2 border border-green-400 dark:border-green-600 bg-gradient-to-br from-white to-green-50 dark:from-gray-800 dark:to-green-900/20 rounded-lg flex items-center gap-2
-                            hover:shadow-md transition-all duration-200
-                            transform hover:scale-[1.02] ${
-                    t.completed ? 'opacity-50' : ''
-                  }`}
-                  draggable={true}
-                  onDragStart={() => onDragStart(t)}
-                  onDragEnd={onDragEnd}
-                >
-                  <input
-                    type="checkbox"
-                    checked={t.completed || false}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      onToggleComplete(t);
-                    }}
-                    className="rounded-sm cursor-pointer accent-green-500"
-                  />
-                  <span className={`flex-1 text-sm text-green-700 dark:text-green-300 cursor-move ${
-                    t.completed ? 'line-through' : ''
-                  }`}>
-                    {t.title}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(t.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700
-                             text-xs transition-opacity transform hover:scale-110"
-                  >
-                    ✕
-                  </button>
                 </div>
               ))
             )}
           </div>
+        )}
+      </div>
 
-          {todos.length > 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
-              Drag items to calendar to schedule
-            </p>
-          )}
-        </>
+      {/* To-dos Section */}
+      <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => setShowTodosList(!showTodosList)}
+            className="flex items-center gap-2 font-semibold text-gray-800 dark:text-gray-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+          >
+            <span className={`transform transition-transform ${showTodosList ? 'rotate-90' : ''}`}>
+              ▶
+            </span>
+            <span>✅</span>
+            To-dos
+            <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-0.5 rounded-full ml-2">
+              {visibleTodos.length}
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              setQuickModalType('todo');
+              setQuickModalOpen(true);
+            }}
+            className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+            title="Add To-do"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+        
+        {showTodosList && (
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {visibleTodos.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 italic">No to-dos</p>
+            ) : (
+              visibleTodos.map((todo) => (
+                <div
+                  key={todo.id}
+                  draggable
+                  onDragStart={() => onDragStart(todo, 'todo')}
+                  onDragEnd={onDragEnd}
+                  className={`p-2 bg-green-50 dark:bg-green-900/20 rounded-lg cursor-move hover:shadow-md transition-all ${
+                    todo.completed ? 'opacity-50' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={todo.completed}
+                      onChange={() => onToggleComplete(todo)}
+                      className="mt-1 cursor-pointer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-medium ${
+                        todo.completed ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-200'
+                      }`}>
+                        {todo.title}
+                      </div>
+                      {todo.description && (
+                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                          {todo.description}
+                        </div>
+                      )}
+                      <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        Due: {new Date(todo.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteItem(todo.id);
+                      }}
+                      className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        
+        {/* Show Completed Toggle */}
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="show-completed"
+            checked={showCompletedItems}
+            onChange={(e) => setShowCompletedItems(e.target.checked)}
+            className="cursor-pointer"
+          />
+          <label htmlFor="show-completed" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+            Show completed items
+          </label>
+        </div>
+      </div>
+
+      {/* Progress Stats */}
+      {userStats && (
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4">
+          <h3 className="font-semibold text-purple-800 dark:text-purple-300 mb-3">Today's Progress</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Events</span>
+              <span className="text-sm font-medium">0 / 5</span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full" style={{ width: '0%' }}></div>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">To-dos</span>
+              <span className="text-sm font-medium">
+                {visibleTodos.filter(t => t.completed).length} / {visibleTodos.length}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div 
+                className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all" 
+                style={{ 
+                  width: `${visibleTodos.length > 0 ? (visibleTodos.filter(t => t.completed).length / visibleTodos.length * 100) : 0}%` 
+                }}
+              ></div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
