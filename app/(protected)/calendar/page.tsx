@@ -63,7 +63,7 @@ export default function CalendarPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true); // Always dark mode!
   const [showMoodTracker, setShowMoodTracker] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
