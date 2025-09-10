@@ -5,22 +5,25 @@ export type Post = {
   id: string;
   user_id: string;
   body: string;
+  images: any[] | null;  // jsonb field
   image_url: string | null;
   video_url: string | null;
   gif_url: string | null;
   media_type: 'image' | 'video' | 'gif' | null;
-  privacy: "public" | "friends" | "private";
+  visibility: string;  // Required field
+  privacy: "public" | "friends" | "private";  // Nullable field
   allow_share: boolean;
   co_creators: string[] | null;
   shared_from_id: string | null;
   created_at: string;
   edited_at: string | null;
+  like_count: number;
+  comment_count: number;
+  updated_at: string | null;
   author?: { id: string; full_name: string | null; avatar_url: string | null };
   co_authors?: Array<{ id: string; full_name: string | null; avatar_url: string | null }>;
   original_post?: Post | null;
-  like_count?: number;
   liked_by_me?: boolean;
-  comment_count?: number;
   share_count?: number;
   comments?: Array<{
     id: string;
@@ -36,24 +39,12 @@ export async function me() {
   return data.user?.id ?? null;
 }
 
-// Upload media to Supabase storage
 export async function uploadMedia(file: File, type: 'image' | 'video' | 'gif') {
   const uid = await me();
   if (!uid) return { url: null, error: "Not signed in" };
 
-  const bucketName = `post-${type}s`; // post-images, post-videos, post-gifs
+  const bucketName = `post-${type}s`;
   const fileName = `${uid}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`;
-
-  // First ensure bucket exists or create it
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const bucketExists = buckets?.some(b => b.name === bucketName);
-  
-  if (!bucketExists) {
-    await supabase.storage.createBucket(bucketName, {
-      public: true,
-      fileSizeLimit: type === 'video' ? 52428800 : 10485760, // 50MB for videos, 10MB for others
-    });
-  }
 
   const { data, error } = await supabase.storage
     .from(bucketName)
@@ -80,18 +71,14 @@ export async function listHomeFeed(limit = 20, before?: string) {
 
   let q = supabase
     .from("posts")
-    .select(`
-      *,
-      original_post:shared_from_id(
-        *,
-        author:user_id(id, full_name, avatar_url)
-      )
-    `)
-    .or(`user_id.eq.${uid},privacy.eq.public`)
+    .select("*")
+    .or(`user_id.eq.${uid},visibility.eq.public,privacy.eq.public`)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (before) q = q.lt("created_at", before);
+
+  console.log("Fetching posts for user:", uid);
 
   const { data: posts, error } = await q;
   
@@ -101,13 +88,15 @@ export async function listHomeFeed(limit = 20, before?: string) {
   }
   
   if (!posts?.length) {
+    console.log("No posts found");
     return { rows: [], error: null };
   }
 
-  const ids = posts.map((p: any) => p.id);
-  const authorIds = [...new Set(posts.flatMap((p: any) => [p.user_id, ...(p.co_creators || [])]))];
+  console.log(`Found ${posts.length} posts`);
 
-  // Hydrate all data in parallel
+  const ids = posts.map((p: any) => p.id);
+  const authorIds = [...new Set(posts.flatMap((p: any) => [p.user_id, ...(p.co_creators || [])].filter(Boolean)))];
+
   const [
     { data: profs },
     { data: likeCounts },
@@ -119,7 +108,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
     supabase.from("post_likes").select("post_id").in("post_id", ids),
     supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
     supabase.from("post_comments")
-      .select("*, author:user_id(id, full_name, avatar_url)")
+      .select("*")
       .in("post_id", ids)
       .order("created_at", { ascending: true }),
     supabase.from("posts").select("id").in("shared_from_id", ids)
@@ -137,14 +126,25 @@ export async function listHomeFeed(limit = 20, before?: string) {
     ids.map(id => [id, (shareCounts ?? []).filter((s: any) => s.shared_from_id === id).length])
   );
 
+  const commentAuthorIds = [...new Set((commentData ?? []).map((c: any) => c.user_id))];
+  const { data: commentAuthors } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", commentAuthorIds);
+  const commentAuthorById = Object.fromEntries((commentAuthors ?? []).map((p: any) => [p.id, p]));
+
+  const commentsWithAuthors = (commentData ?? []).map((c: any) => ({
+    ...c,
+    author: commentAuthorById[c.user_id] || { id: c.user_id, full_name: "Anonymous", avatar_url: null }
+  }));
+
   const rows: Post[] = posts.map((p: any) => ({
     ...p,
+    privacy: p.privacy || p.visibility,  // Use privacy if set, otherwise visibility
     author: byId[p.user_id] || { id: p.user_id, full_name: "Anonymous", avatar_url: null },
     co_authors: (p.co_creators || []).map((id: string) => byId[id] || { id, full_name: "Anonymous", avatar_url: null }),
-    like_count: likeCountBy[p.id] ?? 0,
     liked_by_me: myLikeSet.has(p.id),
-    comment_count: commentsByPost[p.id]?.length ?? 0,
-    comments: commentsByPost[p.id] ?? [],
+    comments: commentsWithAuthors.filter((c: any) => c.post_id === p.id),
     share_count: shareCountBy[p.id] ?? 0,
   }));
 
@@ -165,20 +165,33 @@ export async function createPost(
   }
 ) {
   const uid = await me();
-  if (!uid) return { ok: false, error: "Not signed in" };
+  if (!uid) {
+    console.error("Cannot create post: Not signed in");
+    return { ok: false, error: "Not signed in" };
+  }
   
-  const postData = {
+  const postData: any = {
     user_id: uid,
-    body,
-    privacy,
-    image_url: options?.image_url || null,
-    video_url: options?.video_url || null,
-    gif_url: options?.gif_url || null,
-    media_type: options?.media_type || null,
-    allow_share: options?.allow_share !== false,
-    co_creators: options?.co_creators || null,
-    shared_from_id: options?.shared_from_id || null,
+    visibility: privacy,  // visibility is required
+    privacy: privacy,     // also set privacy field
+    body: body || null,
   };
+
+  // Handle images array if we have an image_url
+  if (options?.image_url) {
+    postData.images = [{ url: options.image_url }];
+    postData.image_url = options.image_url;
+  }
+
+  // Add optional fields
+  if (options?.video_url) postData.video_url = options.video_url;
+  if (options?.gif_url) postData.gif_url = options.gif_url;
+  if (options?.media_type) postData.media_type = options.media_type;
+  if (options?.allow_share !== undefined) postData.allow_share = options.allow_share;
+  if (options?.co_creators) postData.co_creators = options.co_creators;
+  if (options?.shared_from_id) postData.shared_from_id = options.shared_from_id;
+  
+  console.log("Creating post with data:", postData);
   
   const { data, error } = await supabase
     .from("posts")
@@ -187,10 +200,11 @@ export async function createPost(
     .single();
   
   if (error) {
-    console.error("Error creating post:", error);
+    console.error("Supabase error creating post:", error);
     return { ok: false, error: error.message };
   }
   
+  console.log("Post created successfully:", data);
   return { ok: true, error: null, data };
 }
 
@@ -198,7 +212,6 @@ export async function updatePost(postId: string, updates: { body?: string; priva
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
   
-  // Check if user is author or co-creator
   const { data: post } = await supabase
     .from("posts")
     .select("user_id, co_creators")
@@ -210,9 +223,17 @@ export async function updatePost(postId: string, updates: { body?: string; priva
   const isAuthorized = post.user_id === uid || (post.co_creators || []).includes(uid);
   if (!isAuthorized) return { ok: false, error: "Not authorized" };
   
+  const updateData: any = {};
+  if (updates.body !== undefined) updateData.body = updates.body;
+  if (updates.privacy !== undefined) {
+    updateData.visibility = updates.privacy;
+    updateData.privacy = updates.privacy;
+  }
+  updateData.edited_at = new Date().toISOString();
+  
   const { error } = await supabase
     .from("posts")
-    .update({ ...updates, edited_at: new Date().toISOString() })
+    .update(updateData)
     .eq("id", postId);
     
   return { ok: !error, error: error?.message || null };
@@ -244,7 +265,6 @@ export async function sharePost(postId: string, target: 'feed' | 'calendar', bod
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
   
-  // Check if post allows sharing
   const { data: post } = await supabase
     .from("posts")
     .select("allow_share")
@@ -256,11 +276,8 @@ export async function sharePost(postId: string, target: 'feed' | 'calendar', bod
   }
   
   if (target === 'feed') {
-    // Share to feed as a new post
     return createPost(body || "Shared a post", "friends", { shared_from_id: postId });
   } else {
-    // Share to calendar - you'll implement this based on your calendar system
-    // For now, just return success
     return { ok: true, error: null, message: "Added to calendar" };
   }
 }
