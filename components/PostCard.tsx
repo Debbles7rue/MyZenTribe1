@@ -14,6 +14,7 @@ export default function PostCard({ post, onChanged }: { post: Post; onChanged?: 
   const [shareMessage, setShareMessage] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
+  const [showCoCreators, setShowCoCreators] = useState(false);
 
   useEffect(() => {
     me().then(setCurrentUserId);
@@ -22,6 +23,9 @@ export default function PostCard({ post, onChanged }: { post: Post; onChanged?: 
   const isCreator = currentUserId && (post.user_id === currentUserId || (post.co_creators || []).includes(currentUserId));
   const canEdit = isCreator;
   const canDelete = currentUserId && post.user_id === currentUserId;
+
+  // Get co-creator names
+  const coCreatorNames = post.co_authors?.map(ca => ca.full_name || "Friend").join(", ") || "";
 
   async function like() {
     if (busy) return;
@@ -101,23 +105,34 @@ export default function PostCard({ post, onChanged }: { post: Post; onChanged?: 
                 height={42}
                 className="rounded-full object-cover ring-2 ring-purple-100"
               />
-              {post.co_creators && post.co_creators.length > 0 && (
+              {post.co_authors && post.co_authors.length > 0 && (
                 <div className="absolute -bottom-1 -right-1 bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  +{post.co_creators.length}
+                  +{post.co_authors.length}
                 </div>
               )}
             </div>
-            <div>
-              <div className="font-medium text-gray-900 flex items-center gap-2">
+            <div className="flex-1">
+              <div className="font-medium text-gray-900">
                 {post.author?.full_name || "Member"}
-                {post.co_creators && post.co_creators.length > 0 && (
-                  <span className="text-xs text-purple-600">& {post.co_creators.length} others</span>
+                {post.co_authors && post.co_authors.length > 0 && (
+                  <>
+                    <span className="text-gray-600 font-normal"> with </span>
+                    <button
+                      onClick={() => setShowCoCreators(!showCoCreators)}
+                      className="text-purple-600 hover:text-purple-700 hover:underline"
+                    >
+                      {post.co_authors.length === 1 
+                        ? coCreatorNames
+                        : `${post.co_authors.length} co-creators`
+                      }
+                    </button>
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <span>{timeAgo(post.created_at)}</span>
                 {post.edited_at && <span>• edited</span>}
-                <span>• {post.privacy === 'public' ? '🌍' : post.privacy === 'friends' ? '🤝' : '🔒'}</span>
+                <span>• {post.privacy === 'public' ? '🌍 Everyone' : post.privacy === 'friends' ? '🤝 Friends' : '🔒 Only me'}</span>
               </div>
             </div>
           </div>
@@ -131,6 +146,21 @@ export default function PostCard({ post, onChanged }: { post: Post; onChanged?: 
             </button>
           )}
         </div>
+
+        {/* Co-creators Dropdown */}
+        {showCoCreators && post.co_authors && post.co_authors.length > 1 && (
+          <div className="mt-2 p-2 bg-purple-50 rounded-lg">
+            <div className="text-sm text-purple-700 font-medium mb-1">Co-creators:</div>
+            <div className="space-y-1">
+              {post.co_authors.map((coAuthor, index) => (
+                <div key={coAuthor.id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="text-purple-600">•</span>
+                  {coAuthor.full_name || "Friend"}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Action Menu */}
         {showActions && canEdit && (
