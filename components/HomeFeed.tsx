@@ -248,12 +248,9 @@ export default function HomeFeed() {
           {/* Co-creators Section */}
           {showCoCreators && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-              <FriendSelector
+              <SimpleFriendDropdown
                 value={coCreators}
                 onChange={setCoCreators}
-                multiple={true}
-                placeholder="Type to search friends..."
-                label="Add co-creators to this post"
               />
             </div>
           )}
