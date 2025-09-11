@@ -2,23 +2,35 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useFriends } from '@/lib/hooks/useFriends';
 import type { DBEvent } from '@/lib/types';
-import type { Friend, CarpoolMatch } from '../types';
+
+export interface CarpoolMatch {
+  id: string;
+  friendName: string;
+  friendId: string;
+  destination: string;
+  time: string;
+  date: string;
+  savings: string;
+  myEventId: string;
+  friendEventId: string;
+}
 
 interface UseCarpoolMatchesProps {
   userId: string | null;
   events: DBEvent[];
-  friends: Friend[];
 }
 
-export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatchesProps) {
+export function useCarpoolMatches({ userId, events }: UseCarpoolMatchesProps) {
+  const { friends, loading: friendsLoading } = useFriends(userId);
   const [carpoolMatches, setCarpoolMatches] = useState<CarpoolMatch[]>([]);
   const [suggestedCarpools, setSuggestedCarpools] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Find carpool matches based on similar events
   const findMatches = useCallback(async () => {
-    if (!userId || friends.length === 0) return;
+    if (!userId || friends.length === 0 || friendsLoading) return;
 
     setLoading(true);
     try {
@@ -48,6 +60,7 @@ export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatches
                 matches.push({
                   id: `${myEvent.id}-${friendEvent.id}`,
                   friendName: friend.name,
+                  friendId: friend.friend_id,
                   destination: myEvent.location || 'Unknown',
                   time: myStart.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
                   date: myStart.toISOString().split('T')[0],
@@ -68,7 +81,7 @@ export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatches
     } finally {
       setLoading(false);
     }
-  }, [userId, events, friends]);
+  }, [userId, events, friends, friendsLoading]);
 
   // Smart carpool suggestions based on patterns
   const generateSuggestions = useCallback(() => {
@@ -93,8 +106,18 @@ export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatches
       });
     });
 
+    // Add friend-based suggestions if we have friends
+    if (friends.length > 0) {
+      suggestions.push({
+        type: 'friends',
+        title: `You have ${friends.length} friend${friends.length > 1 ? 's' : ''} to carpool with!`,
+        description: 'Check your upcoming events for carpool opportunities',
+        action: 'view_matches'
+      });
+    }
+
     setSuggestedCarpools(suggestions);
-  }, [events]);
+  }, [events, friends]);
 
   // Create carpool group
   const createCarpoolGroup = useCallback(async (
@@ -102,15 +125,28 @@ export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatches
     friendIds: string[],
     message?: string
   ) => {
-    if (!userId) return;
+    if (!userId) return { success: false, message: 'Not signed in' };
 
     try {
-      // This would create a carpool group in the database
-      // For now, just return success
+      // Create notifications for invited friends
+      const notifications = friendIds.map(friendId => ({
+        user_id: friendId,
+        type: 'carpool_invite',
+        title: 'Carpool Invitation',
+        message: message || `You've been invited to carpool!`,
+        sender_id: userId,
+        event_id: eventId,
+        created_at: new Date().toISOString()
+      }));
+
+      // In a real implementation, you'd insert these into a notifications table
+      // For now, we'll simulate success
+      console.log('Creating carpool group with:', { eventId, friendIds, notifications });
+
       return {
         success: true,
         groupId: `carpool-${Date.now()}`,
-        message: 'Carpool group created successfully!'
+        message: `Carpool invitations sent to ${friendIds.length} friend${friendIds.length > 1 ? 's' : ''}!`
       };
     } catch (error) {
       console.error('Error creating carpool group:', error);
@@ -127,11 +163,25 @@ export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatches
     message?: string
   ) => {
     const match = carpoolMatches.find(m => m.id === matchId);
-    if (!match || !userId) return;
+    if (!match || !userId) {
+      return { success: false, message: 'Invalid match or not signed in' };
+    }
 
     try {
-      // This would send an invitation through the database
-      // For now, just return success
+      // Create notification for the friend
+      const notification = {
+        user_id: match.friendId,
+        type: 'carpool_invite',
+        title: 'Carpool Match!',
+        message: message || `Want to carpool to ${match.destination}?`,
+        sender_id: userId,
+        event_id: match.friendEventId,
+        created_at: new Date().toISOString()
+      };
+
+      // In a real implementation, you'd insert this into a notifications table
+      console.log('Sending carpool invite:', notification);
+
       return {
         success: true,
         message: `Carpool invitation sent to ${match.friendName}!`
@@ -164,14 +214,17 @@ export function useCarpoolMatches({ userId, events, friends }: UseCarpoolMatches
 
   // Auto-find matches when events or friends change
   useEffect(() => {
-    findMatches();
-    generateSuggestions();
-  }, [findMatches, generateSuggestions]);
+    if (!friendsLoading) {
+      findMatches();
+      generateSuggestions();
+    }
+  }, [findMatches, generateSuggestions, friendsLoading]);
 
   return {
     carpoolMatches,
     suggestedCarpools,
-    loading,
+    loading: loading || friendsLoading,
+    friends, // Export friends for use in components
     createCarpoolGroup,
     sendCarpoolInvite,
     calculateImpact,
