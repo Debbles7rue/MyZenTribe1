@@ -69,42 +69,30 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Get my friends list using your existing friends_view
+  // Get friends first
   const { data: friendsData } = await supabase
     .from("friends_view")
     .select("friend_id");
-  
+
   const friendIds = (friendsData || []).map((f: any) => f.friend_id);
   console.log(`User has ${friendIds.length} friends`);
 
-  // Build query to get posts that are:
-  // 1. My own posts (any visibility)
-  // 2. Public posts from anyone
-  // 3. Friends posts where privacy/visibility = 'friends' and the poster is my friend
-  let orConditions = [
-    `user_id.eq.${uid}`,  // My posts
-    `visibility.eq.public`,  // Public posts
-    `privacy.eq.public`  // Public posts (using privacy field)
-  ];
-
-  // If user has friends, include friends' posts
+  // Build query with friends
+  let orConditions = `user_id.eq.${uid},visibility.eq.public,privacy.eq.public`;
   if (friendIds.length > 0) {
-    // Add friends' posts with friends visibility
-    orConditions.push(
-      `and(user_id.in.(${friendIds.join(',')}),or(visibility.eq.friends,privacy.eq.friends))`
-    );
+    orConditions += `,and(user_id.in.(${friendIds.join(',')}),or(visibility.eq.friends,privacy.eq.friends))`;
   }
 
   let q = supabase
     .from("posts")
     .select("*")
-    .or(orConditions.join(','))
+    .or(orConditions)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (before) q = q.lt("created_at", before);
 
-  console.log("Fetching posts with friends filter");
+  console.log("Fetching posts for user:", uid);
 
   const { data: posts, error } = await q;
   
@@ -118,7 +106,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
     return { rows: [], error: null };
   }
 
-  console.log(`Found ${posts.length} posts (including friends' posts)`);
+  console.log(`Found ${posts.length} posts`);
 
   const ids = posts.map((p: any) => p.id);
   const authorIds = [...new Set(posts.flatMap((p: any) => [p.user_id, ...(p.co_creators || [])].filter(Boolean)))];
