@@ -69,44 +69,73 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Get friends first
-  const { data: friendsData } = await supabase
-    .from("friends_view")
-    .select("friend_id");
+  // Get friends list first - using the correct table structure
+  const { data: friendships } = await supabase
+    .from("friendships")
+    .select("user_id, friend_id")
+    .or(`user_id.eq.${uid},friend_id.eq.${uid}`)
+    .eq("status", "accepted");
 
-  const friendIds = (friendsData || []).map((f: any) => f.friend_id);
-  console.log(`User has ${friendIds.length} friends`);
+  // Extract friend IDs
+  const friendIds = new Set<string>();
+  (friendships || []).forEach(f => {
+    if (f.user_id === uid) {
+      friendIds.add(f.friend_id);
+    } else {
+      friendIds.add(f.user_id);
+    }
+  });
+  
+  const friendIdsArray = Array.from(friendIds);
+  console.log(`User ${uid} has ${friendIdsArray.length} friends:`, friendIdsArray);
 
-  // Build query with friends
-  let orConditions = `user_id.eq.${uid},visibility.eq.public,privacy.eq.public`;
-  if (friendIds.length > 0) {
-    orConditions += `,and(user_id.in.(${friendIds.join(',')}),or(visibility.eq.friends,privacy.eq.friends))`;
-  }
-
+  // Build the query properly - fetch all posts then filter client-side if needed
   let q = supabase
     .from("posts")
     .select("*")
-    .or(orConditions)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (before) q = q.lt("created_at", before);
 
-  console.log("Fetching posts for user:", uid);
-
-  const { data: posts, error } = await q;
+  const { data: allPosts, error } = await q;
   
   if (error) {
     console.error("Error fetching posts:", error);
     return { rows: [], error: error.message };
   }
   
-  if (!posts?.length) {
+  if (!allPosts?.length) {
     console.log("No posts found");
     return { rows: [], error: null };
   }
 
-  console.log(`Found ${posts.length} posts`);
+  // Filter posts based on visibility rules
+  const posts = allPosts.filter(post => {
+    // User's own posts
+    if (post.user_id === uid) return true;
+    
+    // Public posts
+    if (post.visibility === "public" || post.privacy === "public") return true;
+    
+    // Friends' posts (if visibility or privacy is set to friends)
+    if (friendIdsArray.includes(post.user_id)) {
+      if (post.visibility === "friends" || post.privacy === "friends") {
+        return true;
+      }
+    }
+    
+    // Co-creator posts
+    if (post.co_creators && post.co_creators.includes(uid)) return true;
+    
+    return false;
+  });
+
+  console.log(`Filtered ${posts.length} posts from ${allPosts.length} total`);
+
+  if (!posts.length) {
+    return { rows: [], error: null };
+  }
 
   const ids = posts.map((p: any) => p.id);
   const authorIds = [...new Set(posts.flatMap((p: any) => [p.user_id, ...(p.co_creators || [])].filter(Boolean)))];
