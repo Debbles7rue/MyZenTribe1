@@ -1,184 +1,132 @@
-// components/FriendSelector.tsx
+// components/SimpleFriendDropdown.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type Friend = {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  email: string | null;
-};
-
-interface FriendSelectorProps {
-  value: string[];
-  onChange: (friendIds: string[]) => void;
-  multiple?: boolean;
-  placeholder?: string;
-  className?: string;
-  label?: string;
-}
-
-export default function FriendSelector({
-  value,
-  onChange,
-  multiple = true,
-  placeholder = "Click to select friends...",
-  className = "",
-  label
-}: FriendSelectorProps) {
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+export default function SimpleFriendDropdown({ value, onChange }) {
+  const [friends, setFriends] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadFriends();
   }, []);
 
   async function loadFriends() {
-    setLoading(true);
     try {
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setFriends([]);
         setLoading(false);
         return;
       }
 
-      // Query friendships table directly (simpler approach)
-      const { data: friendships } = await supabase
+      // Get friendships - simple direct query
+      const { data: friendships1 } = await supabase
         .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .select("friend_id")
+        .eq("user_id", user.id)
         .eq("status", "accepted");
 
-      if (!friendships || friendships.length === 0) {
-        setFriends([]);
-        setLoading(false);
-        return;
-      }
+      const { data: friendships2 } = await supabase
+        .from("friendships")
+        .select("user_id")
+        .eq("friend_id", user.id)
+        .eq("status", "accepted");
 
-      // Extract friend IDs
-      const friendIds: string[] = [];
-      friendships.forEach(f => {
-        if (f.user_id === user.id && f.friend_id) {
-          friendIds.push(f.friend_id);
-        } else if (f.friend_id === user.id && f.user_id) {
-          friendIds.push(f.user_id);
-        }
-      });
+      // Combine friend IDs
+      const friendIds = [
+        ...(friendships1 || []).map(f => f.friend_id),
+        ...(friendships2 || []).map(f => f.user_id)
+      ];
 
-      // Get friend profiles
       if (friendIds.length > 0) {
+        // Get friend names
         const { data: profiles } = await supabase
           .from("profiles")
-          .select("id, full_name, avatar_url, email")
+          .select("id, full_name")
           .in("id", friendIds);
 
         setFriends(profiles || []);
       }
     } catch (error) {
       console.error("Error loading friends:", error);
-      setFriends([]);
     }
     setLoading(false);
   }
 
-  function toggleFriend(friendId: string) {
-    if (value.includes(friendId)) {
-      onChange(value.filter(id => id !== friendId));
-    } else {
-      onChange([...value, friendId]);
-    }
-  }
-
-  // Get selected friend details
-  const selectedFriends = friends.filter(f => value.includes(f.id));
+  // Get names of selected friends
+  const selectedNames = friends
+    .filter(f => value.includes(f.id))
+    .map(f => f.full_name || "Friend")
+    .join(", ");
 
   return (
-    <div className={`relative ${className}`}>
-      {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {label}
-        </label>
-      )}
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Add co-creators to this post
+      </label>
       
-      {/* Selected Friends Display */}
-      {selectedFriends.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {selectedFriends.map(friend => (
-            <div
-              key={friend.id}
-              className="inline-flex items-center gap-2 px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm"
-            >
-              <span>{friend.full_name || friend.email || "Friend"}</span>
-              <button
-                onClick={() => toggleFriend(friend.id)}
-                className="text-purple-600 hover:text-purple-800 font-bold"
-                type="button"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+      {/* Display selected friends */}
+      {selectedNames && (
+        <div className="mb-2 p-2 bg-purple-50 rounded text-sm text-purple-700">
+          Selected: {selectedNames}
         </div>
       )}
 
-      {/* Dropdown Toggle Button */}
+      {/* Simple dropdown button */}
       <button
         type="button"
-        onClick={() => setShowDropdown(!showDropdown)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-left focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg hover:border-purple-400 focus:outline-none focus:border-purple-500"
       >
-        {loading ? "Loading friends..." : placeholder}
+        {loading ? "Loading..." : "Click to select friends"}
       </button>
-      
-      {/* Dropdown */}
-      {showDropdown && !loading && (
-        <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+
+      {/* Friend list dropdown */}
+      {isOpen && !loading && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
           {friends.length === 0 ? (
-            <div className="p-3 text-center text-gray-500">
-              No friends yet. Add some friends first!
+            <div className="p-3 text-gray-500 text-center">
+              No friends yet
             </div>
           ) : (
-            friends.map(friend => {
-              const isSelected = value.includes(friend.id);
-              return (
-                <button
+            <div className="max-h-48 overflow-y-auto">
+              {friends.map(friend => (
+                <label
                   key={friend.id}
-                  type="button"
-                  className={`w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-50 text-left ${
-                    isSelected ? "bg-purple-50" : ""
-                  }`}
-                  onClick={() => toggleFriend(friend.id)}
+                  className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
                 >
                   <input
                     type="checkbox"
-                    checked={isSelected}
-                    onChange={() => {}}
-                    className="pointer-events-none"
+                    checked={value.includes(friend.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onChange([...value, friend.id]);
+                      } else {
+                        onChange(value.filter(id => id !== friend.id));
+                      }
+                    }}
+                    className="mr-3"
                   />
-                  
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-800">
-                      {friend.full_name || "Friend"}
-                    </div>
-                    {friend.email && (
-                      <div className="text-xs text-gray-500">{friend.email}</div>
-                    )}
-                  </div>
-                </button>
-              );
-            })
+                  <span className="text-gray-800">
+                    {friend.full_name || "Friend"}
+                  </span>
+                </label>
+              ))}
+            </div>
           )}
+          
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="w-full p-2 text-sm text-gray-600 hover:bg-gray-50 border-t"
+          >
+            Done
+          </button>
         </div>
       )}
-      
-      {/* Help text */}
-      <p className="mt-1 text-xs text-gray-500">
-        Click to select friends as co-creators
-      </p>
     </div>
   );
 }
