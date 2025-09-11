@@ -8,7 +8,7 @@ export default function DonatePage() {
 
   // Your actual Stripe Payment Links
   const stripeLinks = {
-    5: "https://buy.stripe.com/cNi5kCgLfeQA2CseDI6wE06",
+    5: "https://buy.stripe.com/28E14m3YtfUEa4U1QW6wE00",  // FIXED - was showing candle link
     10: "https://buy.stripe.com/eVq28q52xfUE2Cs5386wE01",
     25: "https://buy.stripe.com/aFaeVceD74bW1yoeDI6wE02",
     50: "https://buy.stripe.com/6oUaEWcuZbEo0uk67c6wE03",
