@@ -109,252 +109,266 @@ export default function HomeFeed() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6">
-      {/* Community Guidelines Disclaimer */}
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">🕊️</span>
-          <div className="flex-1">
-            <h3 className="font-semibold text-purple-900 mb-1">Welcome to Your Peaceful Space</h3>
-            <p className="text-sm text-purple-700">
-              This is a sanctuary free from political discourse and divisive content. 
-              We're bombarded with terrible news everywhere else—here we celebrate only good news and positive moments. 
-              Share your joy, gratitude, and uplifting experiences with your tribe. 💜
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Enhanced Composer - Mobile Optimized */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-5">
-        {/* Mood Check-in */}
-        <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
-          <p className="text-sm text-gray-600 mb-2">How are you feeling today?</p>
-          <div className="flex gap-2 flex-wrap">
-            {['😌 Peaceful', '😊 Grateful', '💪 Energized', '😔 Struggling', '🤗 Loved'].map(mood => (
-              <button
-                key={mood}
-                className="px-3 py-1 bg-white rounded-full text-sm hover:bg-purple-100 transition-colors"
-                onClick={() => setBody(`Feeling ${mood} today. ${body}`)}
-              >
-                {mood}
-              </button>
-            ))}
+    <>
+      {/* Main Content Area - Added padding bottom for fixed nav */}
+      <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-24">
+        {/* Community Guidelines Disclaimer */}
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🕊️</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-purple-900 mb-1">Welcome to Your Peaceful Space</h3>
+              <p className="text-sm text-purple-700">
+                This is a sanctuary free from political discourse and divisive content. 
+                We're bombarded with terrible news everywhere else—here we celebrate only good news and positive moments. 
+                Share your joy, gratitude, and uplifting experiences with your tribe. 💜
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="relative">
-          <textarea
-            className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base pr-12"
-            rows={3}
-            placeholder="Share your journey, gratitude, or intention..."
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-          <button
-            className="absolute right-2 top-2 text-2xl hover:scale-110 transition-transform"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          >
-            🧘
-          </button>
-          
-          {/* Emoji Picker */}
-          {showEmojiPicker && (
-            <div className="absolute right-0 top-12 bg-white border rounded-lg shadow-lg p-3 z-10">
-              <div className="grid grid-cols-5 gap-2">
-                {zenEmojis.map(emoji => (
-                  <button
-                    key={emoji}
-                    className="text-2xl hover:bg-purple-100 rounded p-1 transition-colors"
-                    onClick={() => insertEmoji(emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+        {/* Enhanced Composer - Mobile Optimized */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-5">
+          {/* Mood Check-in */}
+          <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-2">How are you feeling today?</p>
+            <div className="flex gap-2 flex-wrap">
+              {['😌 Peaceful', '😊 Grateful', '💪 Energized', '😔 Struggling', '🤗 Loved'].map(mood => (
+                <button
+                  key={mood}
+                  className="px-3 py-1 bg-white rounded-full text-sm hover:bg-purple-100 transition-colors"
+                  onClick={() => setBody(`Feeling ${mood} today. ${body}`)}
+                >
+                  {mood}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <textarea
+              className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base pr-12"
+              rows={3}
+              placeholder="Share your journey, gratitude, or intention..."
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+            <button
+              className="absolute right-2 top-2 text-2xl hover:scale-110 transition-transform"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            >
+              🧘
+            </button>
+            
+            {/* Emoji Picker */}
+            {showEmojiPicker && (
+              <div className="absolute right-0 top-12 bg-white border rounded-lg shadow-lg p-3 z-10">
+                <div className="grid grid-cols-5 gap-2">
+                  {zenEmojis.map(emoji => (
+                    <button
+                      key={emoji}
+                      className="text-2xl hover:bg-purple-100 rounded p-1 transition-colors"
+                      onClick={() => insertEmoji(emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
+            )}
+          </div>
+          
+          {/* Media Preview */}
+          {mediaPreview && (
+            <div className="mt-3 relative">
+              <button
+                onClick={removeMedia}
+                className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 z-10"
+              >
+                ×
+              </button>
+              {mediaPreview.type === 'image' && (
+                <img src={mediaPreview.url} alt="Preview" className="w-full rounded-lg max-h-64 object-cover" />
+              )}
+              {mediaPreview.type === 'video' && (
+                <video src={mediaPreview.url} controls className="w-full rounded-lg max-h-64" />
+              )}
+              {uploadingMedia && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                  <div className="text-white">Uploading...</div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-        
-        {/* Media Preview */}
-        {mediaPreview && (
-          <div className="mt-3 relative">
+          
+          {/* Media Upload Section - NO GIF */}
+          <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
             <button
-              onClick={removeMedia}
-              className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 z-10"
+              type="button"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 rounded-lg transition-all"
+              onClick={() => document.getElementById('photo-upload')?.click()}
+              disabled={uploadingMedia}
             >
-              ×
+              📷 Photo
             </button>
-            {mediaPreview.type === 'image' && (
-              <img src={mediaPreview.url} alt="Preview" className="w-full rounded-lg max-h-64 object-cover" />
-            )}
-            {mediaPreview.type === 'video' && (
-              <video src={mediaPreview.url} controls className="w-full rounded-lg max-h-64" />
-            )}
-            {uploadingMedia && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                <div className="text-white">Uploading...</div>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Media Upload Section - NO GIF */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 rounded-lg transition-all"
-            onClick={() => document.getElementById('photo-upload')?.click()}
-            disabled={uploadingMedia}
-          >
-            📷 Photo
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-lg transition-all"
-            onClick={() => document.getElementById('video-upload')?.click()}
-            disabled={uploadingMedia}
-          >
-            🎥 Video
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-lg transition-all"
-            onClick={() => setShowCoCreators(!showCoCreators)}
-          >
-            👥 Co-creators
-          </button>
-          
-          {/* Hidden file inputs */}
-          <input
-            ref={fileInputRef}
-            id="photo-upload"
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={(e) => handleMediaSelect(e, 'image')}
-          />
-          <input
-            id="video-upload"
-            type="file"
-            accept="video/*"
-            style={{ display: 'none' }}
-            onChange={(e) => handleMediaSelect(e, 'video')}
-          />
-        </div>
-
-        {/* Co-creators Section */}
-        {showCoCreators && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-2">Add co-creators (enter user IDs, separated by commas):</p>
+            <button
+              type="button"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-lg transition-all"
+              onClick={() => document.getElementById('video-upload')?.click()}
+              disabled={uploadingMedia}
+            >
+              🎥 Video
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-lg transition-all"
+              onClick={() => setShowCoCreators(!showCoCreators)}
+            >
+              👥 Co-creators
+            </button>
+            
+            {/* Hidden file inputs */}
             <input
-              type="text"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              placeholder="user-id-1, user-id-2"
-              value={coCreators.join(', ')}
-              onChange={(e) => setCoCreators(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              ref={fileInputRef}
+              id="photo-upload"
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => handleMediaSelect(e, 'image')}
+            />
+            <input
+              id="video-upload"
+              type="file"
+              accept="video/*"
+              style={{ display: 'none' }}
+              onChange={(e) => handleMediaSelect(e, 'video')}
             />
           </div>
-        )}
-        
-        {/* Post Options */}
-        <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <select 
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
-            value={privacy} 
-            onChange={(e) => setPrivacy(e.target.value as any)}
-          >
-            <option value="friends">🤝 Friends Only</option>
-            <option value="public">🌍 Everyone</option>
-            <option value="private">🔒 Only Me</option>
-          </select>
-          
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={allowShare}
-              onChange={(e) => setAllowShare(e.target.checked)}
-              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-            />
-            <span className="text-sm">Allow others to share</span>
-          </label>
-          
-          <button 
-            className="sm:ml-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 text-base min-h-[44px] hover:scale-105 active:scale-95"
-            onClick={post} 
-            disabled={saving || uploadingMedia || (!body.trim() && !uploadedMedia)}
-          >
-            {saving ? (
-              <span className="flex items-center gap-2">
-                <span className="animate-spin">⏳</span> Posting…
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                ✨ Post
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
 
-      {/* Daily Intention Card */}
-      <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 mb-5">
-        <h3 className="font-semibold text-purple-800 mb-2">✨ Daily Intention</h3>
-        <p className="text-purple-700 text-sm italic">"Today I choose peace, presence, and compassion."</p>
-        <button className="mt-2 text-xs text-purple-600 hover:underline">Set your intention →</button>
-      </div>
-
-      {/* Feed */}
-      {loading ? (
-        <div className="text-center py-8">
-          <div className="inline-flex items-center gap-3">
-            <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-            <span className="text-gray-500">Loading your tribe's moments...</span>
+          {/* Co-creators Section */}
+          {showCoCreators && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Add co-creators (enter user IDs, separated by commas):</p>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                placeholder="user-id-1, user-id-2"
+                value={coCreators.join(', ')}
+                onChange={(e) => setCoCreators(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              />
+            </div>
+          )}
+          
+          {/* Post Options */}
+          <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <select 
+              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
+              value={privacy} 
+              onChange={(e) => setPrivacy(e.target.value as any)}
+            >
+              <option value="friends">🤝 Friends Only</option>
+              <option value="public">🌍 Everyone</option>
+              <option value="private">🔒 Only Me</option>
+            </select>
+            
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allowShare}
+                onChange={(e) => setAllowShare(e.target.checked)}
+                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+              />
+              <span className="text-sm">Allow others to share</span>
+            </label>
+            
+            <button 
+              className="sm:ml-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 text-base min-h-[44px] hover:scale-105 active:scale-95"
+              onClick={post} 
+              disabled={saving || uploadingMedia || (!body.trim() && !uploadedMedia)}
+            >
+              {saving ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin">⏳</span> Posting…
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  ✨ Post
+                </span>
+              )}
+            </button>
           </div>
         </div>
-      ) : rows.length ? (
-        <div className="space-y-4">
-          {rows.map((p) => (
-            <PostCard key={p.id} post={p} onChanged={load} />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <div className="text-6xl mb-4">🧘</div>
-          <div className="text-xl font-semibold text-gray-700">Your feed awaits</div>
-          <div className="text-gray-500 mt-2">Share your first moment of mindfulness above.</div>
-        </div>
-      )}
 
-      {/* Bottom Action Buttons */}
-      <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 mb-20">
-        <a 
-          href="/contact" 
-          className="group px-4 py-3 bg-white border-2 border-purple-200 text-purple-700 rounded-xl font-medium hover:bg-purple-50 hover:border-purple-300 transition-all text-center shadow-sm hover:shadow-md"
-        >
-          <span className="group-hover:scale-110 inline-block transition-transform">📧</span> Contact
-        </a>
-        <a 
-          href="/suggestions" 
-          className="group px-4 py-3 bg-white border-2 border-green-200 text-green-700 rounded-xl font-medium hover:bg-green-50 hover:border-green-300 transition-all text-center shadow-sm hover:shadow-md"
-        >
-          <span className="group-hover:scale-110 inline-block transition-transform">💡</span> Suggestions
-        </a>
-        <a 
-          href="/donate" 
-          className="group px-4 py-3 bg-white border-2 border-blue-200 text-blue-700 rounded-xl font-medium hover:bg-blue-50 hover:border-blue-300 transition-all text-center shadow-sm hover:shadow-md"
-        >
-          <span className="group-hover:scale-110 inline-block transition-transform">💝</span> Donations
-        </a>
-        <a 
-          href="/safety" 
-          className="group px-4 py-3 bg-white border-2 border-red-200 text-red-700 rounded-xl font-medium hover:bg-red-50 hover:border-red-300 transition-all text-center shadow-sm hover:shadow-md"
-        >
-          <span className="group-hover:scale-110 inline-block transition-transform">🆘</span> SOS Setup
-        </a>
+        {/* Daily Intention Card */}
+        <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 mb-5">
+          <h3 className="font-semibold text-purple-800 mb-2">✨ Daily Intention</h3>
+          <p className="text-purple-700 text-sm italic">"Today I choose peace, presence, and compassion."</p>
+          <button className="mt-2 text-xs text-purple-600 hover:underline">Set your intention →</button>
+        </div>
+
+        {/* Feed */}
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="inline-flex items-center gap-3">
+              <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+              <span className="text-gray-500">Loading your tribe's moments...</span>
+            </div>
+          </div>
+        ) : rows.length ? (
+          <div className="space-y-4">
+            {rows.map((p) => (
+              <PostCard key={p.id} post={p} onChanged={load} />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <div className="text-6xl mb-4">🧘</div>
+            <div className="text-xl font-semibold text-gray-700">Your feed awaits</div>
+            <div className="text-gray-500 mt-2">Share your first moment of mindfulness above.</div>
+          </div>
+        )}
+      </div>
+
+      {/* Fixed Bottom Navigation Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+        <div className="max-w-2xl mx-auto px-4 py-2">
+          <div className="grid grid-cols-4 gap-1">
+            <a 
+              href="/contact" 
+              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all"
+            >
+              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">📧</span>
+              <span className="text-xs text-gray-600 group-hover:text-purple-700">Contact</span>
+            </a>
+            <a 
+              href="/suggestions" 
+              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-green-50 rounded-lg transition-all"
+            >
+              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💡</span>
+              <span className="text-xs text-gray-600 group-hover:text-green-700">Suggest</span>
+            </a>
+            <a 
+              href="/donate" 
+              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-blue-50 rounded-lg transition-all"
+            >
+              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💝</span>
+              <span className="text-xs text-gray-600 group-hover:text-blue-700">Donate</span>
+            </a>
+            <a 
+              href="/safety" 
+              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-red-50 rounded-lg transition-all"
+            >
+              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🆘</span>
+              <span className="text-xs text-gray-600 group-hover:text-red-700">Safety</span>
+            </a>
+          </div>
+        </div>
+        
+        {/* Optional: Add a subtle gradient or decoration */}
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
       </div>
 
       <SOSFloatingButton />
-    </div>
+    </>
   );
 }
