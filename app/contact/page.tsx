@@ -159,11 +159,12 @@ export default function ContactPage() {
           </form>
 
           <div className="mt-8 p-6 bg-white rounded-lg shadow-sm">
-            <h2 className="text-lg font-semibold mb-3">Other Ways to Reach Us</h2>
+            <h2 className="text-lg font-semibold mb-3">How Contact Messages Work</h2>
             <div className="space-y-2 text-gray-600">
-              <p>📧 Email: support@myzentribe.com</p>
+              <p>💬 Messages are sent directly through the app to our admin team</p>
               <p>📱 Response time: Within 24-48 hours</p>
               <p>🌟 For urgent matters, please indicate in your subject line</p>
+              <p>🔒 All messages are kept private and secure within MyZenTribe</p>
             </div>
           </div>
         </div>
