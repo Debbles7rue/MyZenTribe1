@@ -5,7 +5,6 @@ import { useEffect, useState, useRef } from "react";
 import { createPost, listHomeFeed, Post, uploadMedia } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
 import SOSFloatingButton from "@/components/SOSFloatingButton";
-import FriendSelector from "@/components/FriendSelector";
 
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
@@ -249,13 +248,12 @@ export default function HomeFeed() {
           {/* Co-creators Section */}
           {showCoCreators && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-2">Add co-creators (enter user IDs, separated by commas):</p>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                placeholder="user-id-1, user-id-2"
-                value={coCreators.join(', ')}
-                onChange={(e) => setCoCreators(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              <FriendSelector
+                value={coCreators}
+                onChange={setCoCreators}
+                multiple={true}
+                placeholder="Type to search friends..."
+                label="Add co-creators to this post"
               />
             </div>
           )}
