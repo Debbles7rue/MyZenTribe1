@@ -153,10 +153,14 @@ export default function PostCard({ post, onChanged }: { post: Post; onChanged?: 
             <div className="text-sm text-purple-700 font-medium mb-1">Co-creators:</div>
             <div className="space-y-1">
               {post.co_authors.map((coAuthor, index) => (
-                <div key={coAuthor.id} className="flex items-center gap-2 text-sm text-gray-700">
+                <a 
+                  key={coAuthor.id} 
+                  href={`/profile/${coAuthor.id}`}
+                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-purple-600 hover:underline"
+                >
                   <span className="text-purple-600">•</span>
                   {coAuthor.full_name || "Friend"}
-                </div>
+                </a>
               ))}
             </div>
           </div>
