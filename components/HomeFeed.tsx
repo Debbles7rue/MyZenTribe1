@@ -338,8 +338,8 @@ export default function HomeFeed() {
         )}
       </div>
 
-      {/* Fixed Bottom Navigation Bar - Shows on mobile only */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40 sm:hidden">
+      {/* Fixed Bottom Navigation Bar - Shows on both mobile and desktop */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
         <div className="max-w-2xl mx-auto px-4 py-2">
           <div className="grid grid-cols-4 gap-1">
             <a 
