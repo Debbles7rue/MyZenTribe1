@@ -338,7 +338,7 @@ export default function HomeFeed() {
         )}
       </div>
 
-      {/* Fixed Bottom Navigation Bar - Mobile only */}
+      {/* Fixed Bottom Navigation Bar - Shows on mobile only */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40 sm:hidden">
         <div className="max-w-2xl mx-auto px-4 py-2">
           <div className="grid grid-cols-4 gap-1">
@@ -377,35 +377,7 @@ export default function HomeFeed() {
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
       </div>
 
-      {/* Quick Action Buttons for Desktop - Contact, Suggest, Donate */}
-      <div className="hidden sm:flex fixed bottom-4 left-4 gap-2 z-30">
-        <a 
-          href="/contact" 
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-purple-200 rounded-lg hover:bg-purple-50 shadow-sm transition-all"
-        >
-          <span className="text-lg">📧</span>
-          <span className="text-sm font-medium">Contact</span>
-        </a>
-        <a 
-          href="/suggestions" 
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-green-200 rounded-lg hover:bg-green-50 shadow-sm transition-all"
-        >
-          <span className="text-lg">💡</span>
-          <span className="text-sm font-medium">Suggest</span>
-        </a>
-        <a 
-          href="/donate" 
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 shadow-sm transition-all"
-        >
-          <span className="text-lg">💝</span>
-          <span className="text-sm font-medium">Donate</span>
-        </a>
-      </div>
-
-      {/* SOS Button - Always visible, positioned differently for mobile/desktop */}
-      <div className="fixed bottom-20 right-4 sm:bottom-4 sm:right-4 z-30">
-        <SOSFloatingButton />
-      </div>
+      <SOSFloatingButton />
     </>
   );
 }
