@@ -69,7 +69,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Get friends list first - using the correct table structure
+  // Get friends list first
   const { data: friendships } = await supabase
     .from("friendships")
     .select("user_id, friend_id")
@@ -89,12 +89,12 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const friendIdsArray = Array.from(friendIds);
   console.log(`User ${uid} has ${friendIdsArray.length} friends:`, friendIdsArray);
 
-  // Build the query properly - fetch all posts then filter client-side if needed
+  // Build the query - fetch all posts then filter client-side
   let q = supabase
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(limit * 2); // Get more posts since we'll filter
 
   if (before) q = q.lt("created_at", before);
 
@@ -110,26 +110,29 @@ export async function listHomeFeed(limit = 20, before?: string) {
     return { rows: [], error: null };
   }
 
-  // Filter posts based on visibility rules
+  // Filter posts based on visibility rules - FIXED to include co-creator posts
   const posts = allPosts.filter(post => {
     // User's own posts
     if (post.user_id === uid) return true;
+    
+    // Posts where user is a co-creator - THIS IS THE KEY FIX
+    if (post.co_creators && Array.isArray(post.co_creators) && post.co_creators.includes(uid)) {
+      console.log(`User ${uid} is co-creator on post ${post.id}`);
+      return true;
+    }
     
     // Public posts
     if (post.visibility === "public" || post.privacy === "public") return true;
     
     // Friends' posts (if visibility or privacy is set to friends)
     if (friendIdsArray.includes(post.user_id)) {
-      if (post.visibility === "friends" || post.privacy === "friends") {
+      if (post.visibility === "friends" || post.privacy === "friends" || !post.privacy) {
         return true;
       }
     }
     
-    // Co-creator posts
-    if (post.co_creators && post.co_creators.includes(uid)) return true;
-    
     return false;
-  });
+  }).slice(0, limit); // Take only the limit amount after filtering
 
   console.log(`Filtered ${posts.length} posts from ${allPosts.length} total`);
 
@@ -138,7 +141,16 @@ export async function listHomeFeed(limit = 20, before?: string) {
   }
 
   const ids = posts.map((p: any) => p.id);
-  const authorIds = [...new Set(posts.flatMap((p: any) => [p.user_id, ...(p.co_creators || [])].filter(Boolean)))];
+  
+  // Get all user IDs including co-creators
+  const allUserIds = new Set<string>();
+  posts.forEach((p: any) => {
+    allUserIds.add(p.user_id);
+    if (p.co_creators && Array.isArray(p.co_creators)) {
+      p.co_creators.forEach((id: string) => allUserIds.add(id));
+    }
+  });
+  const authorIds = Array.from(allUserIds);
 
   const [
     { data: profs },
@@ -181,15 +193,25 @@ export async function listHomeFeed(limit = 20, before?: string) {
     author: commentAuthorById[c.user_id] || { id: c.user_id, full_name: "Anonymous", avatar_url: null }
   }));
 
-  const rows: Post[] = posts.map((p: any) => ({
-    ...p,
-    privacy: p.privacy || p.visibility,  // Use privacy if set, otherwise visibility
-    author: byId[p.user_id] || { id: p.user_id, full_name: "Anonymous", avatar_url: null },
-    co_authors: (p.co_creators || []).map((id: string) => byId[id] || { id, full_name: "Anonymous", avatar_url: null }),
-    liked_by_me: myLikeSet.has(p.id),
-    comments: commentsWithAuthors.filter((c: any) => c.post_id === p.id),
-    share_count: shareCountBy[p.id] ?? 0,
-  }));
+  // Build the final posts with co-author information
+  const rows: Post[] = posts.map((p: any) => {
+    // Get co-author details
+    const coAuthors = (p.co_creators || [])
+      .filter((id: string) => id !== p.user_id) // Don't include main author in co-authors
+      .map((id: string) => byId[id] || { id, full_name: "Anonymous", avatar_url: null });
+    
+    return {
+      ...p,
+      privacy: p.privacy || p.visibility,
+      author: byId[p.user_id] || { id: p.user_id, full_name: "Anonymous", avatar_url: null },
+      co_authors: coAuthors,
+      like_count: likeCountBy[p.id] ?? 0,
+      liked_by_me: myLikeSet.has(p.id),
+      comments: commentsWithAuthors.filter((c: any) => c.post_id === p.id),
+      comment_count: commentsByPost[p.id]?.length ?? 0,
+      share_count: shareCountBy[p.id] ?? 0,
+    };
+  });
 
   return { rows, error: null };
 }
@@ -231,7 +253,10 @@ export async function createPost(
   if (options?.gif_url) postData.gif_url = options.gif_url;
   if (options?.media_type) postData.media_type = options.media_type;
   if (options?.allow_share !== undefined) postData.allow_share = options.allow_share;
-  if (options?.co_creators) postData.co_creators = options.co_creators;
+  if (options?.co_creators && options.co_creators.length > 0) {
+    postData.co_creators = options.co_creators;
+    console.log("Creating post with co-creators:", options.co_creators);
+  }
   if (options?.shared_from_id) postData.shared_from_id = options.shared_from_id;
   
   console.log("Creating post with data:", postData);
