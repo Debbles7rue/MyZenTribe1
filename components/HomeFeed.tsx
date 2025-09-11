@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPost, listHomeFeed, Post, uploadMedia } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
 import SOSFloatingButton from "@/components/SOSFloatingButton";
+import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
 
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
@@ -91,6 +92,7 @@ export default function HomeFeed() {
     setMediaPreview(null);
     setUploadedMedia(null);
     setCoCreators([]);
+    setShowCoCreators(false);
     setSaving(false);
     await load();
   }
@@ -111,7 +113,7 @@ export default function HomeFeed() {
   return (
     <>
       {/* Main Content Area - Added padding bottom for fixed nav */}
-      <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-24">
+      <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-20">
         {/* Community Guidelines Disclaimer */}
         <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
           <div className="flex items-start gap-3">
@@ -224,7 +226,7 @@ export default function HomeFeed() {
               className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-lg transition-all"
               onClick={() => setShowCoCreators(!showCoCreators)}
             >
-              👥 Co-creators
+              👥 Co-creators {coCreators.length > 0 && `(${coCreators.length})`}
             </button>
             
             {/* Hidden file inputs */}
@@ -252,6 +254,17 @@ export default function HomeFeed() {
                 value={coCreators}
                 onChange={setCoCreators}
               />
+              {coCreators.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoCreators([]);
+                  }}
+                  className="mt-2 text-sm text-red-600 hover:text-red-700 hover:underline"
+                >
+                  Clear all selections
+                </button>
+              )}
             </div>
           )}
           
@@ -325,18 +338,10 @@ export default function HomeFeed() {
         )}
       </div>
 
-      {/* Fixed Bottom Navigation Bar */}
+      {/* Fixed Bottom Navigation Bar - 3 items only */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
         <div className="max-w-2xl mx-auto px-4 py-2">
-          <div className="grid grid-cols-4 gap-1">
-            <a 
-              href="/notifications" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all relative"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🔔</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Alerts</span>
-              {/* Add notification count badge here if needed */}
-            </a>
+          <div className="grid grid-cols-3 gap-1">
             <a 
               href="/contact" 
               className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all"
