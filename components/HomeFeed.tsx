@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPost, listHomeFeed, Post, uploadMedia } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
 import SOSFloatingButton from "@/components/SOSFloatingButton";
+import FriendSelector from "@/components/FriendSelector";
 
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
