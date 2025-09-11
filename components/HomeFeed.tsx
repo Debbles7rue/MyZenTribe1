@@ -14,8 +14,8 @@ export default function HomeFeed() {
   const [allowShare, setAllowShare] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: 'image' | 'video' | 'gif' } | null>(null);
-  const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: 'image' | 'video' | 'gif' } | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoCreators, setShowCoCreators] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>([]);
@@ -37,7 +37,7 @@ export default function HomeFeed() {
 
   useEffect(() => { load(); }, []);
 
-  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'gif') {
+  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -75,9 +75,6 @@ export default function HomeFeed() {
       } else if (uploadedMedia.type === 'video') {
         options.video_url = uploadedMedia.url;
         options.media_type = 'video';
-      } else if (uploadedMedia.type === 'gif') {
-        options.gif_url = uploadedMedia.url;
-        options.media_type = 'gif';
       }
     }
 
@@ -113,26 +110,18 @@ export default function HomeFeed() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6">
-      {/* Stories/Moments Bar - Mobile Optimized */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-5 overflow-x-auto">
-        <div className="flex gap-3 min-w-max">
-          <button className="flex flex-col items-center gap-1 min-w-[60px]">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 p-0.5">
-              <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-                <span className="text-2xl">+</span>
-              </div>
-            </div>
-            <span className="text-xs">Your Story</span>
-          </button>
-          {/* Placeholder for actual stories */}
-          {[1,2,3,4,5].map(i => (
-            <button key={i} className="flex flex-col items-center gap-1 min-w-[60px]">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 p-0.5">
-                <div className="w-full h-full rounded-full bg-gray-200"></div>
-              </div>
-              <span className="text-xs">User {i}</span>
-            </button>
-          ))}
+      {/* Community Guidelines Disclaimer */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">🕊️</span>
+          <div className="flex-1">
+            <h3 className="font-semibold text-purple-900 mb-1">Welcome to Your Peaceful Space</h3>
+            <p className="text-sm text-purple-700">
+              This is a sanctuary free from political discourse and divisive content. 
+              We're bombarded with terrible news everywhere else—here we celebrate only good news and positive moments. 
+              Share your joy, gratitude, and uplifting experiences with your tribe. 💜
+            </p>
+          </div>
         </div>
       </div>
 
@@ -202,9 +191,6 @@ export default function HomeFeed() {
             {mediaPreview.type === 'video' && (
               <video src={mediaPreview.url} controls className="w-full rounded-lg max-h-64" />
             )}
-            {mediaPreview.type === 'gif' && (
-              <img src={mediaPreview.url} alt="GIF Preview" className="w-full rounded-lg max-h-64 object-contain" />
-            )}
             {uploadingMedia && (
               <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
                 <div className="text-white">Uploading...</div>
@@ -213,7 +199,7 @@ export default function HomeFeed() {
           </div>
         )}
         
-        {/* Enhanced Media Upload Section */}
+        {/* Media Upload Section - NO GIF */}
         <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
           <button
             type="button"
@@ -230,14 +216,6 @@ export default function HomeFeed() {
             disabled={uploadingMedia}
           >
             🎥 Video
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-green-50 to-yellow-50 hover:from-green-100 hover:to-yellow-100 rounded-lg transition-all"
-            onClick={() => document.getElementById('gif-upload')?.click()}
-            disabled={uploadingMedia}
-          >
-            ✨ GIF
           </button>
           <button
             type="button"
@@ -263,13 +241,6 @@ export default function HomeFeed() {
             style={{ display: 'none' }}
             onChange={(e) => handleMediaSelect(e, 'video')}
           />
-          <input
-            id="gif-upload"
-            type="file"
-            accept="image/gif"
-            style={{ display: 'none' }}
-            onChange={(e) => handleMediaSelect(e, 'gif')}
-          />
         </div>
 
         {/* Co-creators Section */}
@@ -293,9 +264,9 @@ export default function HomeFeed() {
             value={privacy} 
             onChange={(e) => setPrivacy(e.target.value as any)}
           >
-            <option value="friends">🤝 Friends</option>
-            <option value="public">🌍 Public</option>
-            <option value="private">🔒 Only me</option>
+            <option value="friends">🤝 Friends Only</option>
+            <option value="public">🌍 Everyone</option>
+            <option value="private">🔒 Only Me</option>
           </select>
           
           <label className="flex items-center gap-2 cursor-pointer">
@@ -355,7 +326,7 @@ export default function HomeFeed() {
         </div>
       )}
 
-      {/* Bottom Action Buttons - Enhanced */}
+      {/* Bottom Action Buttons */}
       <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 mb-20">
         <a 
           href="/contact" 
@@ -383,7 +354,6 @@ export default function HomeFeed() {
         </a>
       </div>
 
-      {/* Floating SOS Button */}
       <SOSFloatingButton />
     </div>
   );
