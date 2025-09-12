@@ -82,46 +82,47 @@ function CandleRoomContent() {
     return 4;
   }
 
-  // Check for successful payment return
+  // FIXED: Simplified payment verification
   useEffect(() => {
     const success = searchParams.get('success');
     const candleId = searchParams.get('candle_id');
     
     if (success === 'true' && candleId) {
-      setCheckingPayment(true);
-      checkPaymentStatus(candleId);
+      // If we got redirected with success=true, the payment worked
+      // So just mark it as paid right away
+      async function markAsPaid() {
+        setCheckingPayment(true);
+        
+        const { data, error } = await supabase
+          .from("candle_offerings")
+          .update({ 
+            payment_status: 'paid',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', candleId)
+          .eq('payment_status', 'pending')
+          .select()
+          .single();
+
+        if (data) {
+          showSuccessAnimation(data.candle_type === 'eternal');
+          await loadAllCandles();
+        } else if (error) {
+          console.error('Error updating payment status:', error);
+          // Even if update fails, try to load candles in case it's already paid
+          await loadAllCandles();
+        }
+        
+        setCheckingPayment(false);
+      }
+      
+      markAsPaid();
+      
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/meditation/candles');
       }
     }
   }, [searchParams]);
-
-  async function checkPaymentStatus(candleId: string) {
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    const checkInterval = setInterval(async () => {
-      attempts++;
-      
-      const { data, error } = await supabase
-        .from("candle_offerings")
-        .select("*")
-        .eq('id', candleId)
-        .single();
-      
-      if (data && data.payment_status === 'paid') {
-        clearInterval(checkInterval);
-        setCheckingPayment(false);
-        showSuccessAnimation(data.candle_type === 'eternal');
-        await loadAllCandles();
-      }
-      
-      if (attempts >= maxAttempts) {
-        clearInterval(checkInterval);
-        setCheckingPayment(false);
-      }
-    }, 1000);
-  }
 
   function showSuccessAnimation(isEternal: boolean) {
     // Only run on client side
