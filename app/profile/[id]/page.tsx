@@ -105,11 +105,11 @@ export default function PublicProfilePage() {
   }
 
   async function loadStats() {
-    // Get friends count
+    // Get friends count - FIXED: Changed from a.eq/b.eq to user_id.eq/friend_id.eq
     const { count: friends } = await supabase
       .from("friendships")
       .select("*", { count: "exact", head: true })
-      .or(`a.eq.${profileId},b.eq.${profileId}`);
+      .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
     
     setFriendsCount(friends || 0);
 
@@ -125,17 +125,19 @@ export default function PublicProfilePage() {
   async function checkRelationshipStatus() {
     if (!currentUserId || !profileId) return;
 
-    // Check if friends
+    // Check if friends - FIXED: Changed from a.eq/b.eq to user_id.eq/friend_id.eq
+    // FIXED: Changed from relationship_type to relationship (to match your DB column)
     const { data: friendship } = await supabase
       .from("friendships")
-      .select("relationship_type")
-      .or(`and(a.eq.${currentUserId},b.eq.${profileId}),and(a.eq.${profileId},b.eq.${currentUserId})`)
+      .select("relationship")
+      .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
       .single();
 
     if (friendship) {
       setFriendStatus("friends");
       // Check relationship type (friend, acquaintance, restricted)
-      setRelationshipType(friendship.relationship_type || 'friend');
+      // FIXED: Changed from relationship_type to relationship
+      setRelationshipType(friendship.relationship || 'friend');
     } else {
       // Check for pending request
       const { data: pending } = await supabase
@@ -210,10 +212,11 @@ export default function PublicProfilePage() {
     if (!currentUserId || !profileId) return;
 
     try {
+      // FIXED: Changed from a.eq/b.eq to user_id.eq/friend_id.eq
       const { error } = await supabase
         .from("friendships")
         .delete()
-        .or(`and(a.eq.${currentUserId},b.eq.${profileId}),and(a.eq.${profileId},b.eq.${currentUserId})`);
+        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`);
 
       if (!error) {
         setFriendStatus("none");
