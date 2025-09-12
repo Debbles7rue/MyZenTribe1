@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import NotificationBell from "@/components/NotificationBell";
 
 export default function SiteHeader() {
   const pathname = usePathname();
@@ -17,28 +16,9 @@ export default function SiteHeader() {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
       // Check if user is admin - adjust this based on your admin system
-      // Option 1: Check user metadata (set during sign-up or in admin panel)
-      // Option 2: Check against a list of admin email addresses
-      // Option 3: Query a 'user_roles' table in your database
       if (data.user) {
-        // Example implementations:
-        
         // If using user metadata:
         setIsAdmin(data.user.user_metadata?.role === 'admin');
-        
-        // If using email list:
-        // const adminEmails = ['admin@example.com', 'owner@example.com'];
-        // setIsAdmin(adminEmails.includes(data.user.email || ''));
-        
-        // If using database table (recommended for production):
-        // supabase
-        //   .from('user_roles')
-        //   .select('role')
-        //   .eq('user_id', data.user.id)
-        //   .single()
-        //   .then(({ data: roleData }) => {
-        //     setIsAdmin(roleData?.role === 'admin');
-        //   });
       }
     });
   }, []);
@@ -206,8 +186,7 @@ export default function SiteHeader() {
             </nav>
 
             <div className="header-actions">
-              {/* Notifications */}
-              <NotificationBell href="/notifications" />
+              {/* REMOVED NOTIFICATION BELL FROM HERE - It's in the bottom nav instead */}
               
               {/* Admin (if applicable) */}
               {isAdmin && (
