@@ -394,35 +394,58 @@ function MeditationLoungeContent() {
             
             {!showScheduler ? (
               <button
-                onClick={() => setShowScheduler(true)}
+                onClick={() => {
+                  if (!currentUser) {
+                    alert('Please sign in to schedule a session');
+                    return;
+                  }
+                  setShowScheduler(true);
+                  // Set default date to tomorrow
+                  const tomorrow = new Date();
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  setScheduledDate(tomorrow.toISOString().split('T')[0]);
+                }}
                 className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3 rounded-lg hover:from-indigo-700 hover:to-blue-700 transition-all"
               >
                 📅 Schedule a Session
               </button>
             ) : (
               <div className="space-y-3">
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <input
-                  type="time"
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <label className="block">
+                  <span className="text-xs text-white/70 mb-1 block">Select Date</span>
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-white/70 mb-1 block">Select Time</span>
+                  <input
+                    type="time"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </label>
                 <div className="flex gap-2">
                   <button
                     onClick={scheduleSession}
                     className="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                    disabled={!scheduledDate || !scheduledTime}
                   >
                     Confirm
                   </button>
                   <button
-                    onClick={() => setShowScheduler(false)}
+                    onClick={() => {
+                      setShowScheduler(false);
+                      setScheduledDate('');
+                      setScheduledTime('');
+                    }}
                     className="px-4 py-2 border border-white/20 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                   >
                     Cancel
