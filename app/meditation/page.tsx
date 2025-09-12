@@ -1,4 +1,4 @@
-// app/meditation/page.tsx - Prayer/Meditation Lobby (Main Entry)
+// app/meditation/page.tsx - Prayer/Meditation Lobby with Side-by-Side Layout
 "use client";
 
 import { useEffect, useState, Suspense } from 'react';
@@ -34,16 +34,10 @@ function MeditationLobbyContent() {
 
   const initializeLobby = async () => {
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-
-      // Calculate tribe pulse (24h meditation coverage)
       await calculateTribePulse();
-      
-      // Get current active participants
       await getActiveParticipants();
-
     } catch (error) {
       console.error('Lobby initialization error:', error);
     } finally {
@@ -61,9 +55,8 @@ function MeditationLobbyContent() {
         .gte('joined_at', twentyFourHoursAgo);
 
       if (sessions) {
-        // Calculate coverage percentage
         const totalMinutes = 24 * 60;
-        const coveredMinutes = sessions.length * 15; // Assume average 15 min sessions
+        const coveredMinutes = sessions.length * 15;
         const coverage = Math.min((coveredMinutes / totalMinutes) * 100, 100);
         setTribePulse(Math.round(coverage));
       }
@@ -94,7 +87,6 @@ function MeditationLobbyContent() {
       return;
     }
 
-    // Create calendar event
     const eventDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
     
     try {
@@ -124,9 +116,12 @@ function MeditationLobbyContent() {
       alert('Please sign in to join the prayer/meditation room');
       return;
     }
-
-    // Redirect to meditation room
     window.location.href = `/meditation/room?eventId=${eventId || ''}`;
+  };
+
+  const goToCandleRoom = () => {
+    // Try different possible paths for candle room
+    window.location.href = '/candles';
   };
 
   if (isLoading) {
@@ -156,9 +151,9 @@ function MeditationLobbyContent() {
         }}
       />
       
-      {/* Header with Tribe Pulse */}
+      {/* Header */}
       <div className="relative z-10 p-4 md:p-6">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="text-center mb-4">
             <h1 className="text-3xl md:text-4xl font-bold mb-2 text-amber-900">
               🙏 Prayer & Meditation Lobby
@@ -179,141 +174,153 @@ function MeditationLobbyContent() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 pb-8">
+      {/* Main Content - Grid Layout */}
+      <div className="max-w-7xl mx-auto px-4 pb-8">
         
-        {/* Mission Statement */}
+        {/* Mission Statement - Full Width */}
         <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg mb-6">
-          <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
+          <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2 justify-center">
             ✨ The Power of Collective Prayer
           </h3>
-          <p className="text-amber-700 text-sm mb-3">
+          <p className="text-amber-700 text-sm text-center mb-3">
             When we meditate and pray together, even from different locations, we create a powerful field of healing energy that radiates across the world.
           </p>
-          <p className="text-amber-700 text-sm">
-            <strong>Our Mission:</strong> To maintain continuous 24/7 prayer and meditation coverage, ensuring someone is always holding space for healing, peace, and love on our planet.
-          </p>
-          <div className="mt-4 bg-amber-100/50 rounded-lg p-3 text-amber-800 text-sm">
-            <p className="font-semibold">📊 Current Coverage: {tribePulse}%</p>
-            <p className="text-xs mt-1">Help us reach 100% coverage by joining or scheduling a session!</p>
+          <div className="bg-amber-100/50 rounded-lg p-3 text-amber-800 text-sm text-center">
+            <p className="font-semibold">Our Mission: To maintain continuous 24/7 prayer and meditation coverage</p>
+            <p className="text-xs mt-1">Current Coverage: {tribePulse}% | Active Now: {activeParticipants} souls</p>
           </div>
         </div>
 
-        {/* Quick Schedule */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg mb-6">
-          <h3 className="text-amber-900 font-semibold mb-4">📅 Schedule Your Session</h3>
+        {/* Grid of Boxes - 2x2 on desktop, 1 column on mobile */}
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
           
-          {!showScheduler ? (
-            <button
-              onClick={() => setShowScheduler(true)}
-              className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 px-6 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all font-medium"
+          {/* Quick Schedule Box */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4">📅 Schedule Your Session</h3>
+            
+            {!showScheduler ? (
+              <button
+                onClick={() => setShowScheduler(true)}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 px-6 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all font-medium"
+              >
+                Schedule a Session
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <input
+                  type="time"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={scheduleSession}
+                    className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                  >
+                    Add to Calendar
+                  </button>
+                  <button
+                    onClick={() => setShowScheduler(false)}
+                    className="px-4 py-2 border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            <a
+              href="/meditation/schedule"
+              className="block mt-3 text-center text-amber-600 hover:text-amber-700 text-sm"
             >
-              Schedule a Session
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <input
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-              <input
-                type="time"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={scheduleSession}
-                  className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors text-sm"
-                >
-                  Add to Calendar
-                </button>
-                <button
-                  onClick={() => setShowScheduler(false)}
-                  className="px-4 py-2 border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors text-sm"
-                >
-                  Cancel
-                </button>
+              Advanced scheduling options →
+            </a>
+          </div>
+
+          {/* Enter Sacred Space Box */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4">🕉️ Enter Sacred Space</h3>
+            
+            <div className="space-y-4">
+              <label className="flex items-center text-amber-800 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showAnonymous}
+                  onChange={(e) => setShowAnonymous(e.target.checked)}
+                  className="mr-2 rounded accent-amber-500"
+                />
+                Join anonymously
+              </label>
+              
+              <button
+                onClick={beginMeditation}
+                disabled={!currentUser}
+                className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {!currentUser 
+                  ? 'Sign in to Join' 
+                  : 'Enter Prayer/Meditation Room'
+                }
+              </button>
+              
+              <div className="pt-3 border-t border-amber-200">
+                <p className="text-amber-700 text-sm text-center">
+                  {activeParticipants} {activeParticipants === 1 ? 'soul' : 'souls'} currently in prayer/meditation
+                </p>
               </div>
             </div>
-          )}
-          
-          <a
-            href="/meditation/schedule"
-            className="block mt-3 text-center text-amber-600 hover:text-amber-700 text-sm"
-          >
-            Advanced scheduling options →
-          </a>
-        </div>
+          </div>
 
-        {/* Enter Sacred Space */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg mb-6">
-          <h3 className="text-amber-900 font-semibold mb-4">Enter Sacred Space</h3>
-          
-          <div className="space-y-4">
-            <label className="flex items-center text-amber-800 text-sm">
-              <input
-                type="checkbox"
-                checked={showAnonymous}
-                onChange={(e) => setShowAnonymous(e.target.checked)}
-                className="mr-2 rounded accent-amber-500"
-              />
-              Join anonymously
-            </label>
-            
+          {/* Candle Room Box */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
+              🕯️ Candle Room
+            </h3>
+            <p className="text-amber-700 text-sm mb-4">
+              Light a candle in loving memory of a lost loved one, or send healing light to someone who needs support
+            </p>
             <button
-              onClick={beginMeditation}
-              disabled={!currentUser}
-              className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={goToCandleRoom}
+              className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium"
             >
-              {!currentUser 
-                ? 'Sign in to Join' 
-                : 'Enter Prayer/Meditation Room'
-              }
+              🕯️ Visit Candle Room
             </button>
           </div>
-          
-          <div className="mt-4 pt-4 border-t border-amber-200">
-            <p className="text-amber-700 text-sm">
-              {activeParticipants} {activeParticipants === 1 ? 'soul' : 'souls'} currently in prayer/meditation
+
+          {/* Community Lounge Box */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+            <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
+              💬 Community Lounge
+            </h3>
+            <p className="text-amber-700 text-sm mb-4">
+              Connect with other souls before or after your meditation practice
             </p>
+            <a
+              href="/meditation/lounge"
+              className="block w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-6 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all font-medium text-center"
+            >
+              Enter Community Lounge
+            </a>
           </div>
         </div>
 
-        {/* Candle Room Link - FIXED PATH */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg mb-6">
-          <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
-            🕯️ Candle Room
-          </h3>
-          <p className="text-amber-700 text-sm mb-4">
-            Light a candle in loving memory of a lost loved one, or send healing light to someone who needs support
-          </p>
-          <a
-            href="/meditation/candles"
-            className="block w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium text-center"
-          >
-            🕯️ Visit Candle Room
-          </a>
-        </div>
-
-        {/* Community Lounge Link */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg mb-6">
-          <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
-            💬 Community Lounge
-          </h3>
-          <p className="text-amber-700 text-sm mb-4">
-            Connect with other souls before or after your meditation practice
-          </p>
-          <a
-            href="/meditation/lounge"
-            className="block w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-6 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all font-medium text-center"
-          >
-            Enter Community Lounge
-          </a>
+        {/* Prayer Tips - Full Width */}
+        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
+          <h3 className="text-amber-900 font-semibold mb-4">Prayer & Meditation Tips</h3>
+          <div className="grid md:grid-cols-4 gap-4 text-amber-700 text-sm">
+            <div>• Begin with deep breathing</div>
+            <div>• Set an intention for healing</div>
+            <div>• Send love to those who need it</div>
+            <div>• You're contributing to global peace</div>
+          </div>
         </div>
 
         {/* Footer */}
