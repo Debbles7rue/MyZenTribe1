@@ -393,19 +393,19 @@ function MeditationLobbyContent() {
             </div>
           </div>
 
-          {/* Light a Candle Link */}
+          {/* Light a Candle Link - UPDATED WITH CORRECT PATH */}
           <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
             <h3 className="text-amber-900 font-semibold mb-4 flex items-center gap-2">
-              🕯️ Light a Candle
+              🕯️ Candle Room
             </h3>
             <p className="text-amber-700 text-sm mb-4">
               Light a candle in loving memory of a lost loved one, or send healing light to someone who needs support
             </p>
             <a
-              href="/candles"
+              href="/meditation/candles"
               className="block w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 px-6 rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium text-center"
             >
-              Visit Candle Room
+              🕯️ Visit Candle Room
             </a>
           </div>
         </div>
