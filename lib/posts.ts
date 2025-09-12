@@ -69,14 +69,15 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Get current user's friends list first
+  console.log(`Loading feed for user: ${uid}`);
+
+  // Get current user's friends
   const { data: friendships } = await supabase
     .from("friendships")
     .select("user_id, friend_id")
     .or(`user_id.eq.${uid},friend_id.eq.${uid}`)
     .eq("status", "accepted");
 
-  // Extract friend IDs
   const friendIds = new Set<string>();
   (friendships || []).forEach(f => {
     if (f.user_id === uid) {
@@ -87,14 +88,14 @@ export async function listHomeFeed(limit = 20, before?: string) {
   });
   
   const friendIdsArray = Array.from(friendIds);
-  console.log(`User ${uid} has ${friendIdsArray.length} friends:`, friendIdsArray);
+  console.log(`User has ${friendIdsArray.length} friends:`, friendIdsArray);
 
-  // Build the query - fetch more posts to account for filtering
+  // Fetch posts from social_posts table (NOTE: Changed from 'posts' to 'social_posts')
   let q = supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(limit * 5); // Increased limit to ensure we get enough posts after filtering
+    .limit(limit * 3);
 
   if (before) q = q.lt("created_at", before);
 
@@ -110,146 +111,131 @@ export async function listHomeFeed(limit = 20, before?: string) {
     return { rows: [], error: null };
   }
 
-  console.log(`Fetched ${allPosts.length} total posts to filter`);
+  console.log(`Fetched ${allPosts.length} posts from database`);
 
-  // Filter posts based on visibility rules
-  const posts = allPosts.filter(post => {
-    // RULE 1: User's own posts - always visible
+  // Filter posts based on visibility
+  const visiblePosts = allPosts.filter(post => {
+    // User's own posts
     if (post.user_id === uid) {
-      console.log(`Post ${post.id}: User's own post - VISIBLE`);
+      console.log(`Post ${post.id}: Own post - VISIBLE`);
       return true;
     }
     
-    // RULE 2: Posts where user is a co-creator - always visible
-    if (post.co_creators && Array.isArray(post.co_creators) && post.co_creators.includes(uid)) {
-      console.log(`Post ${post.id}: User is co-creator - VISIBLE`);
+    // Posts where user is a co-creator
+    if (post.co_creators?.includes(uid)) {
+      console.log(`Post ${post.id}: Co-creator - VISIBLE`);
       return true;
     }
     
-    // RULE 3: Public posts - always visible
-    if (post.visibility === "public" || post.privacy === "public") {
-      console.log(`Post ${post.id}: Public post - VISIBLE`);
+    // Public posts
+    if (post.visibility === "public") {
+      console.log(`Post ${post.id}: Public - VISIBLE`);
       return true;
     }
     
-    // RULE 4: Private posts - only visible to creator and co-creators (already handled above)
-    if (post.visibility === "private" || post.privacy === "private") {
-      console.log(`Post ${post.id}: Private post and user not creator/co-creator - HIDDEN`);
+    // Private posts - skip unless creator/co-creator
+    if (post.visibility === "private") {
+      console.log(`Post ${post.id}: Private - HIDDEN`);
       return false;
     }
     
-    // RULE 5: Friends visibility - check multiple conditions
-    const isFriendsPost = post.visibility === "friends" || post.privacy === "friends" || (!post.visibility && !post.privacy);
-    
-    if (isFriendsPost) {
-      // Check if user is friends with the post creator
+    // Friends posts - check if user is friends with creator OR any co-creator
+    if (post.visibility === "friends") {
+      // Check creator
       if (friendIdsArray.includes(post.user_id)) {
-        console.log(`Post ${post.id}: User is friends with creator ${post.user_id} - VISIBLE`);
+        console.log(`Post ${post.id}: Friend's post - VISIBLE`);
         return true;
       }
       
-      // Check if user is friends with ANY co-creator
-      if (post.co_creators && Array.isArray(post.co_creators)) {
-        for (const coCreatorId of post.co_creators) {
-          if (friendIdsArray.includes(coCreatorId)) {
-            console.log(`Post ${post.id}: User is friends with co-creator ${coCreatorId} - VISIBLE`);
-            return true;
-          }
+      // Check co-creators
+      if (post.co_creators?.length) {
+        const isFriendWithCoCreator = post.co_creators.some(id => friendIdsArray.includes(id));
+        if (isFriendWithCoCreator) {
+          console.log(`Post ${post.id}: Friend is co-creator - VISIBLE`);
+          return true;
         }
       }
       
-      // IMPORTANT: Also check if any of user's friends are co-creators
-      // This ensures if Friend A creates a post with Friend B as co-creator,
-      // and you're friends with either A or B, you see the post
-      const postCreatorAndCoCreators = [post.user_id, ...(post.co_creators || [])];
-      const hasConnectionToPost = postCreatorAndCoCreators.some(id => friendIdsArray.includes(id));
-      
-      if (hasConnectionToPost) {
-        console.log(`Post ${post.id}: User has connection to post creators - VISIBLE`);
-        return true;
-      }
+      console.log(`Post ${post.id}: Not friends with any creator - HIDDEN`);
+      return false;
     }
     
-    console.log(`Post ${post.id}: No visibility criteria met - HIDDEN`);
     return false;
-  }).slice(0, limit); // Take only the limit amount after filtering
+  }).slice(0, limit);
 
-  console.log(`Filtered ${posts.length} posts from ${allPosts.length} total`);
+  console.log(`Showing ${visiblePosts.length} posts after filtering`);
 
-  if (!posts.length) {
+  if (!visiblePosts.length) {
     return { rows: [], error: null };
   }
 
-  const ids = posts.map((p: any) => p.id);
-  
-  // Get all user IDs including co-creators
+  // Get all the additional data
+  const postIds = visiblePosts.map(p => p.id);
   const allUserIds = new Set<string>();
-  posts.forEach((p: any) => {
+  
+  visiblePosts.forEach(p => {
     allUserIds.add(p.user_id);
-    if (p.co_creators && Array.isArray(p.co_creators)) {
-      p.co_creators.forEach((id: string) => allUserIds.add(id));
-    }
+    p.co_creators?.forEach(id => allUserIds.add(id));
   });
-  const authorIds = Array.from(allUserIds);
 
   const [
-    { data: profs },
-    { data: likeCounts },
+    { data: profiles },
+    { data: likes },
     { data: myLikes },
-    { data: commentData },
-    { data: shareCounts }
+    { data: comments },
+    { data: shares }
   ] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, avatar_url").in("id", authorIds),
-    supabase.from("post_likes").select("post_id").in("post_id", ids),
-    supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
-    supabase.from("post_comments")
-      .select("*")
-      .in("post_id", ids)
-      .order("created_at", { ascending: true }),
-    supabase.from("posts").select("id").in("shared_from_id", ids)
+    supabase.from("profiles").select("id, full_name, avatar_url").in("id", Array.from(allUserIds)),
+    supabase.from("post_likes").select("post_id").in("post_id", postIds),
+    supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", postIds),
+    supabase.from("post_comments").select("*").in("post_id", postIds).order("created_at"),
+    supabase.from("social_posts").select("id").in("shared_from_id", postIds)  // CHANGED TO social_posts
   ]);
 
-  const byId = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
-  const likeCountBy = Object.fromEntries(
-    ids.map(id => [id, (likeCounts ?? []).filter((l: any) => l.post_id === id).length])
-  );
-  const myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
-  const commentsByPost = Object.fromEntries(
-    ids.map(id => [id, (commentData ?? []).filter((c: any) => c.post_id === id)])
-  );
-  const shareCountBy = Object.fromEntries(
-    ids.map(id => [id, (shareCounts ?? []).filter((s: any) => s.shared_from_id === id).length])
-  );
+  // Build lookup maps
+  const profilesById = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+  const likesByPost = postIds.reduce((acc, id) => {
+    acc[id] = (likes || []).filter(l => l.post_id === id).length;
+    return acc;
+  }, {} as Record<string, number>);
+  const myLikedPosts = new Set((myLikes || []).map(l => l.post_id));
+  const sharesByPost = postIds.reduce((acc, id) => {
+    acc[id] = (shares || []).filter(s => s.shared_from_id === id).length;
+    return acc;
+  }, {} as Record<string, number>);
 
-  const commentAuthorIds = [...new Set((commentData ?? []).map((c: any) => c.user_id))];
+  // Get comment authors
+  const commentAuthorIds = [...new Set((comments || []).map(c => c.user_id))];
   const { data: commentAuthors } = await supabase
     .from("profiles")
     .select("id, full_name, avatar_url")
     .in("id", commentAuthorIds);
-  const commentAuthorById = Object.fromEntries((commentAuthors ?? []).map((p: any) => [p.id, p]));
+  
+  const commentAuthorsById = Object.fromEntries((commentAuthors || []).map(p => [p.id, p]));
 
-  const commentsWithAuthors = (commentData ?? []).map((c: any) => ({
-    ...c,
-    author: commentAuthorById[c.user_id] || { id: c.user_id, full_name: "Anonymous", avatar_url: null }
-  }));
+  // Build final post objects
+  const rows: Post[] = visiblePosts.map(post => {
+    const postComments = (comments || [])
+      .filter(c => c.post_id === post.id)
+      .map(c => ({
+        ...c,
+        author: commentAuthorsById[c.user_id] || { id: c.user_id, full_name: "Anonymous", avatar_url: null }
+      }));
 
-  // Build the final posts with co-author information
-  const rows: Post[] = posts.map((p: any) => {
-    // Get co-author details
-    const coAuthors = (p.co_creators || [])
-      .filter((id: string) => id !== p.user_id) // Don't include main author in co-authors
-      .map((id: string) => byId[id] || { id, full_name: "Anonymous", avatar_url: null });
-    
+    const coAuthors = (post.co_creators || [])
+      .filter(id => id !== post.user_id)
+      .map(id => profilesById[id] || { id, full_name: "Anonymous", avatar_url: null });
+
     return {
-      ...p,
-      privacy: p.privacy || p.visibility,
-      author: byId[p.user_id] || { id: p.user_id, full_name: "Anonymous", avatar_url: null },
+      ...post,
+      privacy: post.privacy || post.visibility,
+      author: profilesById[post.user_id] || { id: post.user_id, full_name: "Anonymous", avatar_url: null },
       co_authors: coAuthors,
-      like_count: likeCountBy[p.id] ?? 0,
-      liked_by_me: myLikeSet.has(p.id),
-      comments: commentsWithAuthors.filter((c: any) => c.post_id === p.id),
-      comment_count: commentsByPost[p.id]?.length ?? 0,
-      share_count: shareCountBy[p.id] ?? 0,
+      like_count: likesByPost[post.id] || 0,
+      liked_by_me: myLikedPosts.has(post.id),
+      comment_count: postComments.length,
+      comments: postComments,
+      share_count: sharesByPost[post.id] || 0
     };
   });
 
@@ -277,68 +263,58 @@ export async function createPost(
   
   const postData: any = {
     user_id: uid,
-    visibility: privacy,  // visibility is required
-    privacy: privacy,     // also set privacy field
+    visibility: privacy,
+    privacy: privacy,
     body: body || null,
+    allow_share: options?.allow_share ?? true,
+    co_creators: options?.co_creators || []
   };
 
-  // Handle images array if we have an image_url
+  // Add media fields
   if (options?.image_url) {
     postData.images = [{ url: options.image_url }];
     postData.image_url = options.image_url;
   }
-
-  // Add optional fields
   if (options?.video_url) postData.video_url = options.video_url;
   if (options?.gif_url) postData.gif_url = options.gif_url;
   if (options?.media_type) postData.media_type = options.media_type;
-  if (options?.allow_share !== undefined) postData.allow_share = options.allow_share;
-  if (options?.co_creators && options.co_creators.length > 0) {
-    postData.co_creators = options.co_creators;
-    console.log("Creating post with co-creators:", options.co_creators);
-  }
   if (options?.shared_from_id) postData.shared_from_id = options.shared_from_id;
   
   console.log("Creating post with data:", postData);
   
+  // Insert into social_posts table (CHANGED FROM posts)
   const { data, error } = await supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .insert(postData)
     .select()
     .single();
   
   if (error) {
-    console.error("Supabase error creating post:", error);
+    console.error("Error creating post:", error);
     return { ok: false, error: error.message };
   }
   
   console.log("Post created successfully:", data);
   
-  // ENHANCEMENT: Send notifications to co-creators when they're added to a post
-  if (options?.co_creators && options.co_creators.length > 0) {
-    // Get the creator's name for the notification
+  // Send notifications to co-creators
+  if (options?.co_creators?.length) {
     const { data: creatorProfile } = await supabase
       .from("profiles")
       .select("full_name")
       .eq("id", uid)
       .single();
     
-    const creatorName = creatorProfile?.full_name || "Someone";
-    
-    // Create notifications for each co-creator
     const notifications = options.co_creators.map(coCreatorId => ({
       user_id: coCreatorId,
       type: 'co_creator_added',
       title: 'You were added as a co-creator!',
-      body: `${creatorName} added you as a co-creator on their post`,
+      body: `${creatorProfile?.full_name || "Someone"} added you as a co-creator on their post`,
       related_post_id: data.id,
       from_user_id: uid,
       read: false
     }));
     
-    // Insert notifications (ignore errors as they're not critical)
     await supabase.from("notifications").insert(notifications);
-    console.log(`Sent notifications to ${options.co_creators.length} co-creators`);
   }
   
   return { ok: true, error: null, data };
@@ -349,7 +325,7 @@ export async function updatePost(postId: string, updates: { body?: string; priva
   if (!uid) return { ok: false, error: "Not signed in" };
   
   const { data: post } = await supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .select("user_id, co_creators")
     .eq("id", postId)
     .single();
@@ -359,16 +335,19 @@ export async function updatePost(postId: string, updates: { body?: string; priva
   const isAuthorized = post.user_id === uid || (post.co_creators || []).includes(uid);
   if (!isAuthorized) return { ok: false, error: "Not authorized" };
   
-  const updateData: any = {};
+  const updateData: any = {
+    edited_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  
   if (updates.body !== undefined) updateData.body = updates.body;
   if (updates.privacy !== undefined) {
     updateData.visibility = updates.privacy;
     updateData.privacy = updates.privacy;
   }
-  updateData.edited_at = new Date().toISOString();
   
   const { error } = await supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .update(updateData)
     .eq("id", postId);
     
@@ -380,7 +359,7 @@ export async function deletePost(postId: string) {
   if (!uid) return { ok: false, error: "Not signed in" };
   
   const { data: post } = await supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .select("user_id")
     .eq("id", postId)
     .single();
@@ -390,7 +369,7 @@ export async function deletePost(postId: string) {
   }
   
   const { error } = await supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .delete()
     .eq("id", postId);
     
@@ -402,7 +381,7 @@ export async function sharePost(postId: string, target: 'feed' | 'calendar', bod
   if (!uid) return { ok: false, error: "Not signed in" };
   
   const { data: post } = await supabase
-    .from("posts")
+    .from("social_posts")  // CHANGED TO social_posts
     .select("allow_share")
     .eq("id", postId)
     .single();
