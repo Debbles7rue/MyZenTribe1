@@ -69,7 +69,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Get friends list first
+  // Get current user's friends list first
   const { data: friendships } = await supabase
     .from("friendships")
     .select("user_id, friend_id")
@@ -89,12 +89,12 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const friendIdsArray = Array.from(friendIds);
   console.log(`User ${uid} has ${friendIdsArray.length} friends:`, friendIdsArray);
 
-  // Build the query - fetch all posts then filter client-side
+  // Build the query - fetch more posts to account for filtering
   let q = supabase
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(limit * 2); // Get more posts since we'll filter
+    .limit(limit * 5); // Increased limit to ensure we get enough posts after filtering
 
   if (before) q = q.lt("created_at", before);
 
@@ -110,27 +110,67 @@ export async function listHomeFeed(limit = 20, before?: string) {
     return { rows: [], error: null };
   }
 
-  // Filter posts based on visibility rules - FIXED to include co-creator posts
+  console.log(`Fetched ${allPosts.length} total posts to filter`);
+
+  // Filter posts based on visibility rules
   const posts = allPosts.filter(post => {
-    // User's own posts
-    if (post.user_id === uid) return true;
-    
-    // Posts where user is a co-creator - THIS IS THE KEY FIX
-    if (post.co_creators && Array.isArray(post.co_creators) && post.co_creators.includes(uid)) {
-      console.log(`User ${uid} is co-creator on post ${post.id}`);
+    // RULE 1: User's own posts - always visible
+    if (post.user_id === uid) {
+      console.log(`Post ${post.id}: User's own post - VISIBLE`);
       return true;
     }
     
-    // Public posts
-    if (post.visibility === "public" || post.privacy === "public") return true;
+    // RULE 2: Posts where user is a co-creator - always visible
+    if (post.co_creators && Array.isArray(post.co_creators) && post.co_creators.includes(uid)) {
+      console.log(`Post ${post.id}: User is co-creator - VISIBLE`);
+      return true;
+    }
     
-    // Friends' posts (if visibility or privacy is set to friends)
-    if (friendIdsArray.includes(post.user_id)) {
-      if (post.visibility === "friends" || post.privacy === "friends" || !post.privacy) {
+    // RULE 3: Public posts - always visible
+    if (post.visibility === "public" || post.privacy === "public") {
+      console.log(`Post ${post.id}: Public post - VISIBLE`);
+      return true;
+    }
+    
+    // RULE 4: Private posts - only visible to creator and co-creators (already handled above)
+    if (post.visibility === "private" || post.privacy === "private") {
+      console.log(`Post ${post.id}: Private post and user not creator/co-creator - HIDDEN`);
+      return false;
+    }
+    
+    // RULE 5: Friends visibility - check multiple conditions
+    const isFriendsPost = post.visibility === "friends" || post.privacy === "friends" || (!post.visibility && !post.privacy);
+    
+    if (isFriendsPost) {
+      // Check if user is friends with the post creator
+      if (friendIdsArray.includes(post.user_id)) {
+        console.log(`Post ${post.id}: User is friends with creator ${post.user_id} - VISIBLE`);
+        return true;
+      }
+      
+      // Check if user is friends with ANY co-creator
+      if (post.co_creators && Array.isArray(post.co_creators)) {
+        for (const coCreatorId of post.co_creators) {
+          if (friendIdsArray.includes(coCreatorId)) {
+            console.log(`Post ${post.id}: User is friends with co-creator ${coCreatorId} - VISIBLE`);
+            return true;
+          }
+        }
+      }
+      
+      // IMPORTANT: Also check if any of user's friends are co-creators
+      // This ensures if Friend A creates a post with Friend B as co-creator,
+      // and you're friends with either A or B, you see the post
+      const postCreatorAndCoCreators = [post.user_id, ...(post.co_creators || [])];
+      const hasConnectionToPost = postCreatorAndCoCreators.some(id => friendIdsArray.includes(id));
+      
+      if (hasConnectionToPost) {
+        console.log(`Post ${post.id}: User has connection to post creators - VISIBLE`);
         return true;
       }
     }
     
+    console.log(`Post ${post.id}: No visibility criteria met - HIDDEN`);
     return false;
   }).slice(0, limit); // Take only the limit amount after filtering
 
@@ -273,6 +313,34 @@ export async function createPost(
   }
   
   console.log("Post created successfully:", data);
+  
+  // ENHANCEMENT: Send notifications to co-creators when they're added to a post
+  if (options?.co_creators && options.co_creators.length > 0) {
+    // Get the creator's name for the notification
+    const { data: creatorProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", uid)
+      .single();
+    
+    const creatorName = creatorProfile?.full_name || "Someone";
+    
+    // Create notifications for each co-creator
+    const notifications = options.co_creators.map(coCreatorId => ({
+      user_id: coCreatorId,
+      type: 'co_creator_added',
+      title: 'You were added as a co-creator!',
+      body: `${creatorName} added you as a co-creator on their post`,
+      related_post_id: data.id,
+      from_user_id: uid,
+      read: false
+    }));
+    
+    // Insert notifications (ignore errors as they're not critical)
+    await supabase.from("notifications").insert(notifications);
+    console.log(`Sent notifications to ${options.co_creators.length} co-creators`);
+  }
+  
   return { ok: true, error: null, data };
 }
 
