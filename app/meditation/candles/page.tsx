@@ -38,10 +38,10 @@ export default function CandleRoomPage() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-pulse text-5xl mb-4">🕯️</div>
-          <p className="text-amber-700">Loading sacred space...</p>
+          <p className="text-amber-200">Preparing sacred space...</p>
         </div>
       </div>
     );
@@ -116,13 +116,13 @@ function CandleRoomContent() {
     if (typeof window === 'undefined') return;
     
     const elem = document.createElement('div');
-    elem.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40';
+    elem.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60';
     elem.innerHTML = `
-      <div class="bg-white rounded-2xl p-8 shadow-2xl max-w-sm w-full animate-fadeIn">
+      <div class="bg-slate-800 border border-amber-600/30 rounded-2xl p-8 shadow-2xl max-w-sm w-full animate-fadeIn">
         <div class="text-center">
           <div class="text-6xl mb-4">${isEternal ? '✨' : '🕯️'}</div>
-          <h3 class="text-2xl font-bold text-amber-900 mb-2">${isEternal ? 'Eternal Flame Lit' : 'Candle Lit'}</h3>
-          <p class="text-amber-700">${isEternal ? 'Your memorial will burn forever' : 'Your light brings comfort'}</p>
+          <h3 class="text-2xl font-bold text-amber-200 mb-2">${isEternal ? 'Eternal Flame Lit' : 'Candle Lit'}</h3>
+          <p class="text-amber-200/70">${isEternal ? 'Your memorial will burn forever' : 'Your light brings comfort'}</p>
         </div>
       </div>
     `;
@@ -203,9 +203,40 @@ function CandleRoomContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 relative overflow-hidden">
+      {/* Sacred atmosphere backgrounds */}
+      <div className="fixed inset-0 opacity-30">
+        <div className="absolute inset-0 bg-gradient-to-t from-amber-900/20 via-transparent to-purple-900/20"></div>
+      </div>
+      
+      {/* Floating particles/stars */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute animate-float"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 20}s`,
+              animationDuration: `${20 + Math.random() * 20}s`
+            }}
+          >
+            <div className="w-1 h-1 bg-amber-200 rounded-full opacity-60 blur-[0.5px]"></div>
+          </div>
+        ))}
+      </div>
+
       {/* Candle Animation Styles */}
       <style jsx global>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0.6; }
+          33% { transform: translateY(-30px) translateX(10px); opacity: 0.8; }
+          66% { transform: translateY(20px) translateX(-10px); opacity: 0.4; }
+        }
+        .animate-float {
+          animation: float 20s infinite ease-in-out;
+        }
         @keyframes flicker {
           0% { transform: rotate(-1deg) translateY(0px) scaleY(1.02); filter: drop-shadow(0 0 6px rgba(255, 180, 70, .35)); }
           25% { transform: rotate(1.2deg) translateY(-1px) scaleY(0.98); filter: drop-shadow(0 0 10px rgba(255, 200, 90, .5)); }
@@ -235,23 +266,23 @@ function CandleRoomContent() {
       `}</style>
 
       {/* Mobile-Optimized Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-amber-200">
+      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-amber-600/20">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/meditation" className="p-2 -ml-2 text-amber-800 hover:bg-amber-100 rounded-lg md:hidden">
+              <Link href="/meditation" className="p-2 -ml-2 text-amber-200 hover:bg-amber-600/20 rounded-lg md:hidden">
                 ←
               </Link>
-              <h1 className="text-lg md:text-2xl font-bold text-amber-900">Candle Room</h1>
+              <h1 className="text-lg md:text-2xl font-bold text-amber-200">Sacred Candle Sanctuary</h1>
             </div>
             
             <div className="hidden md:flex gap-3">
-              <Link href="/meditation" className="px-4 py-2 bg-white/60 text-amber-800 rounded-lg hover:bg-white/80 transition-colors border border-amber-200">
+              <Link href="/meditation" className="px-4 py-2 bg-slate-800/60 text-amber-200 rounded-lg hover:bg-slate-800/80 transition-colors border border-amber-600/30">
                 ← Back
               </Link>
               <button 
                 onClick={() => setShowAdd(true)}
-                className="px-6 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium shadow-lg"
+                className="px-6 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 transition-all font-medium shadow-lg shadow-amber-900/50"
               >
                 + Light Candle
               </button>
@@ -259,17 +290,17 @@ function CandleRoomContent() {
 
             <button 
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 text-amber-800 hover:bg-amber-100 rounded-lg md:hidden"
+              className="p-2 text-amber-200 hover:bg-amber-600/20 rounded-lg md:hidden"
             >
               ⋮
             </button>
           </div>
 
           {mobileMenuOpen && (
-            <div className="absolute right-4 top-14 bg-white rounded-lg shadow-xl border border-amber-200 p-2 min-w-[150px] md:hidden">
+            <div className="absolute right-4 top-14 bg-slate-900 rounded-lg shadow-xl border border-amber-600/30 p-2 min-w-[150px] md:hidden">
               <Link 
                 href="/meditation" 
-                className="block px-4 py-2 text-amber-800 hover:bg-amber-50 rounded"
+                className="block px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 ← Back to Meditation
@@ -279,7 +310,7 @@ function CandleRoomContent() {
                   setShowAdd(true);
                   setMobileMenuOpen(false);
                 }}
-                className="block w-full text-left px-4 py-2 text-amber-800 hover:bg-amber-50 rounded"
+                className="block w-full text-left px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
               >
                 + Light a Candle
               </button>
@@ -288,27 +319,27 @@ function CandleRoomContent() {
         </div>
 
         <div className="px-4 pb-3 md:hidden">
-          <p className="text-sm text-amber-700">
-            Light eternal flames or temporary candles for loved ones
+          <p className="text-sm text-amber-200/70">
+            A shared sacred space for memories and prayers
           </p>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="p-4 md:p-6 max-w-7xl mx-auto">
-        <div className="hidden md:block mb-6">
-          <p className="text-amber-700 max-w-2xl">
-            Light a candle in memory, for healing, or for hope. Each candle is beautifully rendered with care and reverence.
+      <div className="relative z-10 p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="hidden md:block mb-8 text-center">
+          <p className="text-amber-200/80 max-w-3xl mx-auto text-lg italic">
+            "Each flame carries a prayer, each light holds a memory, each candle bridges heaven and earth."
           </p>
         </div>
 
         {checkingPayment && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm w-full">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-800 border border-amber-600/30 rounded-2xl p-8 shadow-2xl max-w-sm w-full">
               <div className="text-center">
                 <div className="animate-pulse text-5xl mb-4">🕯️</div>
-                <h3 className="text-xl font-bold text-amber-900 mb-2">Lighting Your Candle...</h3>
-                <p className="text-amber-700">Please wait while we confirm</p>
+                <h3 className="text-xl font-bold text-amber-200 mb-2">Lighting Your Candle...</h3>
+                <p className="text-amber-200/70">Please wait while we confirm</p>
               </div>
             </div>
           </div>
@@ -316,16 +347,20 @@ function CandleRoomContent() {
 
         {/* Eternal Memorial Garden */}
         {eternalCandles.length > 0 && (
-          <section className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-xl md:text-2xl font-bold text-amber-900">Eternal Garden</h2>
-              <span className="text-xs md:text-sm text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
-                ✨ Forever
-              </span>
+          <section className="mb-12 relative">
+            <div className="flex items-center gap-3 mb-6 justify-center">
+              <div className="h-px bg-gradient-to-r from-transparent via-amber-600/50 to-transparent flex-1"></div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl md:text-2xl font-bold text-amber-200">Eternal Memorial Garden</h2>
+                <span className="text-xs md:text-sm text-amber-300 bg-amber-900/30 px-3 py-1 rounded-full border border-amber-600/30">
+                  ✨ Forever Burning
+                </span>
+              </div>
+              <div className="h-px bg-gradient-to-r from-transparent via-amber-600/50 to-transparent flex-1"></div>
             </div>
             
-            <div className="bg-gradient-to-br from-amber-100/40 to-orange-100/40 backdrop-blur-sm rounded-xl md:rounded-2xl p-6 md:p-8 border border-amber-300 shadow-xl">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8 md:gap-10">
+            <div className="mx-auto max-w-6xl bg-gradient-to-br from-amber-900/10 to-orange-900/10 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 border border-amber-600/20 shadow-2xl shadow-amber-900/20">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] place-items-center gap-6 md:gap-8">
                 {eternalCandles.map((c) => (
                   <div key={c.id} className="flex flex-col items-center">
                     <BeautifulCandle 
@@ -344,16 +379,20 @@ function CandleRoomContent() {
 
         {/* Active Renewable Candles */}
         {activeCandles.length > 0 && (
-          <section className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-lg md:text-xl font-bold text-amber-900">Active Prayers</h2>
-              <span className="text-xs md:text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                Renewable
-              </span>
+          <section className="mb-12 relative">
+            <div className="flex items-center gap-3 mb-6 justify-center">
+              <div className="h-px bg-gradient-to-r from-transparent via-amber-600/50 to-transparent flex-1"></div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg md:text-xl font-bold text-amber-200">Active Prayers</h2>
+                <span className="text-xs md:text-sm text-amber-300/80 bg-slate-800/50 px-3 py-1 rounded-full border border-amber-600/20">
+                  Renewable Lights
+                </span>
+              </div>
+              <div className="h-px bg-gradient-to-r from-transparent via-amber-600/50 to-transparent flex-1"></div>
             </div>
             
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl md:rounded-2xl p-4 md:p-6 border border-amber-200 shadow-lg">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6 md:gap-8">
+            <div className="mx-auto max-w-5xl bg-slate-800/30 backdrop-blur-sm rounded-2xl md:rounded-3xl p-4 md:p-6 border border-amber-600/10 shadow-xl">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] place-items-center gap-5 md:gap-6">
                 {activeCandles.map((c) => (
                   <div key={c.id} className="flex flex-col items-center">
                     <BeautifulCandle 
@@ -372,16 +411,20 @@ function CandleRoomContent() {
 
         {/* Memory Orbs */}
         {memoryOrbs.length > 0 && (
-          <section className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-lg md:text-xl font-bold text-purple-800">Memory Garden</h2>
-              <span className="text-xs md:text-sm text-purple-600 bg-purple-50/50 px-2 py-1 rounded-full">
-                Transformed
-              </span>
+          <section className="mb-12 relative">
+            <div className="flex items-center gap-3 mb-6 justify-center">
+              <div className="h-px bg-gradient-to-r from-transparent via-purple-600/50 to-transparent flex-1"></div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg md:text-xl font-bold text-purple-300">Memory Garden</h2>
+                <span className="text-xs md:text-sm text-purple-300/80 bg-purple-900/30 px-3 py-1 rounded-full border border-purple-600/20">
+                  Transformed Lights
+                </span>
+              </div>
+              <div className="h-px bg-gradient-to-r from-transparent via-purple-600/50 to-transparent flex-1"></div>
             </div>
             
-            <div className="bg-gradient-to-br from-purple-50/30 to-blue-50/30 backdrop-blur-sm rounded-xl md:rounded-2xl p-6 md:p-8 border border-purple-200/30 shadow-lg">
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-6 md:gap-8">
+            <div className="mx-auto max-w-6xl bg-gradient-to-br from-purple-900/10 to-blue-900/10 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 border border-purple-600/10 shadow-xl">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))] place-items-center gap-4 md:gap-6">
                 {memoryOrbs.map((c) => (
                   <div key={c.id} className="flex flex-col items-center">
                     <BeautifulMemoryOrb 
@@ -397,9 +440,9 @@ function CandleRoomContent() {
         )}
 
         {loading && activeCandles.length === 0 && eternalCandles.length === 0 && memoryOrbs.length === 0 && (
-          <div className="text-center text-amber-700 py-16">
+          <div className="text-center text-amber-200/70 py-16">
             <div className="animate-pulse text-4xl mb-4">🕯️</div>
-            Loading candles...
+            Preparing sacred space...
           </div>
         )}
       </div>
@@ -439,7 +482,7 @@ function CandleRoomContent() {
   );
 }
 
-// Beautiful SVG Candle Component
+// Beautiful SVG Candle Component with Golden Nameplate
 function BeautifulCandle({
   name,
   colorKey,
@@ -458,10 +501,10 @@ function BeautifulCandle({
   const flameSize = fadeStage === 1 ? 1 : fadeStage === 2 ? 0.9 : fadeStage === 3 ? 0.75 : 0.6;
 
   return (
-    <div className="relative group">
+    <div className="relative group flex flex-col items-center">
       <svg
-        viewBox="0 0 300 420"
-        className="w-32 md:w-36 h-auto"
+        viewBox="0 0 300 380"
+        className="w-32 md:w-40 h-auto"
         style={{ opacity }}
       >
         <defs>
@@ -515,12 +558,12 @@ function BeautifulCandle({
         </defs>
 
         {/* Shadow */}
-        <ellipse cx="150" cy="400" rx="70" ry="12" fill="#cbbda8" opacity="0.25" />
+        <ellipse cx="150" cy="360" rx="70" ry="12" fill="#cbbda8" opacity="0.25" />
 
         {/* Candle body */}
-        <rect x="90" y="120" width="120" height="220" rx="18" fill={`url(#wax-${colorKey})`} />
+        <rect x="90" y="120" width="120" height="200" rx="18" fill={`url(#wax-${colorKey})`} />
         <ellipse cx="150" cy="120" rx="60" ry="18" fill={`url(#wax-${colorKey})`} />
-        <rect x="90" y="120" width="120" height="220" rx="18" fill={`url(#shade-${colorKey})`} />
+        <rect x="90" y="120" width="120" height="200" rx="18" fill={`url(#shade-${colorKey})`} />
         
         {/* Melted wax drips */}
         <path 
@@ -546,16 +589,16 @@ function BeautifulCandle({
           <ellipse className="glow" cx="150" cy="95" rx="65" ry="40" fill="url(#glowGrad)" filter="url(#softBlur)" />
         )}
 
-        {/* Base */}
-        <g transform="translate(0, 320)">
-          <ellipse cx="150" cy="28" rx="72" ry="14" fill={`url(#base-${colorKey})`} />
-          <rect x="82" y="8" width="136" height="28" rx="10" fill={`url(#base-${colorKey})`} />
-          <ellipse cx="150" cy="8" rx="64" ry="10" fill={isEternal ? "#F3E4B0" : "#e8d9b8"} />
+        {/* Golden Base with Nameplate */}
+        <g transform="translate(0, 300)">
+          <ellipse cx="150" cy="28" rx="76" ry="14" fill={`url(#base-${colorKey})`} />
+          <rect x="78" y="8" width="144" height="32" rx="10" fill={`url(#base-${colorKey})`} />
+          <ellipse cx="150" cy="8" rx="66" ry="10" fill={isEternal ? "#F3E4B0" : "#e8d9b8"} />
 
-          {/* Nameplate */}
-          <rect x="95" y="10" width="110" height="24" rx="8" fill={`url(#gold-${colorKey})`} stroke="#9f8852" strokeWidth="1" />
-          <text x="150" y="26" textAnchor="middle" fontFamily="Georgia, serif" fontSize="11" fill="#4a3b1d">
-            {name.slice(0, 15)}
+          {/* Golden Nameplate */}
+          <rect x="85" y="12" width="130" height="26" rx="8" fill={`url(#gold-${colorKey})`} stroke="#9f8852" strokeWidth="1" />
+          <text x="150" y="28" textAnchor="middle" fontFamily="Georgia, serif" fontSize="12" fill="#4a3b1d" fontWeight="600">
+            {name.length > 18 ? name.slice(0, 17) + '...' : name}
           </text>
         </g>
 
@@ -564,12 +607,21 @@ function BeautifulCandle({
           <text x="150" y="50" textAnchor="middle" fontSize="20" fill="#F3E4B0">✨</text>
         )}
       </svg>
-
-      {/* Tooltip */}
+      
+      {/* Message displayed below candle */}
       {message && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-40 p-2 bg-white rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-          <div className="text-xs text-amber-900 font-semibold">{name}</div>
-          <div className="text-xs text-amber-700 mt-1">{message}</div>
+        <div className="text-center mt-2 px-2 max-w-[150px]">
+          <p className="text-xs text-amber-200/70 italic line-clamp-2">
+            "{message}"
+          </p>
+        </div>
+      )}
+
+      {/* Tooltip for full message on hover */}
+      {message && message.length > 50 && (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-3 bg-slate-800 border border-amber-600/30 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+          <div className="text-xs text-amber-200 font-semibold mb-1">{name}</div>
+          <div className="text-xs text-amber-200/70">{message}</div>
         </div>
       )}
     </div>
@@ -614,23 +666,23 @@ function BeautifulMemoryOrb({
       </svg>
 
       <div className="text-center mt-1">
-        <div className="text-xs text-purple-800 font-medium truncate max-w-20">
+        <div className="text-xs text-purple-300 font-medium truncate max-w-20">
           {name.slice(0, 12)}
         </div>
       </div>
 
       {/* Tooltip */}
       {message && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-32 p-2 bg-white rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-          <div className="text-xs text-purple-900 font-semibold">{name}</div>
-          <div className="text-xs text-purple-700 mt-1">{message}</div>
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-32 p-2 bg-slate-800 border border-purple-600/30 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+          <div className="text-xs text-purple-300 font-semibold">{name}</div>
+          <div className="text-xs text-purple-300/70 mt-1">{message}</div>
         </div>
       )}
     </div>
   );
 }
 
-// Modal Components (keeping your existing ones but with updated payment URLs)
+// Modal Components
 function CandleTypeModal({
   onClose,
   onSelectType,
@@ -639,39 +691,43 @@ function CandleTypeModal({
   onSelectType: (type: 'eternal' | 'renewable') => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
-      <div className="bg-white rounded-t-3xl md:rounded-2xl p-6 md:p-8 w-full md:max-w-2xl md:mx-4 shadow-2xl animate-slideUp md:animate-fadeIn">
-        <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6 md:hidden" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
+      <div className="bg-slate-800 border border-amber-600/30 rounded-t-3xl md:rounded-2xl p-6 md:p-8 w-full md:max-w-2xl md:mx-4 shadow-2xl animate-slideUp md:animate-fadeIn">
+        <div className="w-12 h-1 bg-amber-600/30 rounded-full mx-auto mb-6 md:hidden" />
         
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl md:text-2xl font-bold text-amber-900">Choose Your Candle</h3>
-          <button onClick={onClose} className="p-2 -mr-2 text-amber-600 hover:text-amber-800 text-2xl">×</button>
+          <h3 className="text-xl md:text-2xl font-bold text-amber-200">Choose Your Candle</h3>
+          <button onClick={onClose} className="p-2 -mr-2 text-amber-200 hover:text-amber-400 text-2xl">×</button>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
           <button
             onClick={() => onSelectType('eternal')}
-            className="text-left p-5 md:p-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-amber-200 hover:border-amber-400 transition-all hover:shadow-lg"
+            className="text-left p-5 md:p-6 bg-gradient-to-br from-amber-900/30 to-orange-900/30 rounded-xl border-2 border-amber-600/30 hover:border-amber-600/50 transition-all hover:shadow-lg"
           >
             <div className="text-3xl mb-3">✨</div>
-            <h4 className="text-lg font-bold text-amber-900 mb-2">Eternal Memorial</h4>
-            <p className="text-sm text-amber-700 mb-3">Burns forever in loving memory</p>
+            <h4 className="text-lg font-bold text-amber-200 mb-2">Eternal Memorial</h4>
+            <p className="text-sm text-amber-200/70 mb-3">
+              Burns forever in loving memory
+            </p>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-amber-600">Never expires</span>
-              <span className="font-bold text-amber-900 text-lg">$5.00</span>
+              <span className="text-xs text-amber-300">Never expires</span>
+              <span className="font-bold text-amber-200 text-lg">$5.00</span>
             </div>
           </button>
 
           <button
             onClick={() => onSelectType('renewable')}
-            className="text-left p-5 md:p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 hover:border-blue-400 transition-all hover:shadow-lg"
+            className="text-left p-5 md:p-6 bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl border-2 border-blue-600/30 hover:border-blue-600/50 transition-all hover:shadow-lg"
           >
             <div className="text-3xl mb-3">🕯️</div>
-            <h4 className="text-lg font-bold text-blue-900 mb-2">Renewable Light</h4>
-            <p className="text-sm text-blue-700 mb-3">For prayers & healing intentions</p>
+            <h4 className="text-lg font-bold text-blue-200 mb-2">Renewable Light</h4>
+            <p className="text-sm text-blue-200/70 mb-3">
+              For prayers & healing intentions
+            </p>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-blue-600">Becomes memory</span>
-              <span className="font-bold text-blue-900 text-lg">$0.99</span>
+              <span className="text-xs text-blue-300">Becomes memory</span>
+              <span className="font-bold text-blue-200 text-lg">$0.99</span>
             </div>
           </button>
         </div>
@@ -743,23 +799,23 @@ function AddEternalCandleModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
-      <div className="bg-white rounded-t-3xl md:rounded-2xl p-6 w-full md:max-w-lg md:mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4 md:hidden" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
+      <div className="bg-slate-800 border border-amber-600/30 rounded-t-3xl md:rounded-2xl p-6 w-full md:max-w-lg md:mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="w-12 h-1 bg-amber-600/30 rounded-full mx-auto mb-4 md:hidden" />
         
         <div className="flex justify-between items-center mb-4 md:mb-6">
           <div>
-            <h3 className="text-lg md:text-xl font-bold text-amber-900">Light an Eternal Flame</h3>
-            <p className="text-xs md:text-sm text-amber-700 mt-1">This memorial will burn forever</p>
+            <h3 className="text-lg md:text-xl font-bold text-amber-200">Light an Eternal Flame</h3>
+            <p className="text-xs md:text-sm text-amber-200/70 mt-1">This memorial will burn forever</p>
           </div>
-          <button onClick={onClose} className="p-2 -mr-2 text-amber-600 hover:text-amber-800 text-xl md:text-2xl">×</button>
+          <button onClick={onClose} className="p-2 -mr-2 text-amber-200 hover:text-amber-400 text-xl md:text-2xl">×</button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-amber-800 mb-2">In loving memory of</label>
+            <label className="block text-sm font-medium text-amber-200 mb-2">In loving memory of</label>
             <input
-              className="w-full px-3 md:px-4 py-3 text-base md:text-sm border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-amber-600/30 text-amber-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Grandma Rose"
@@ -768,9 +824,9 @@ function AddEternalCandleModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-amber-800 mb-2">Personal message (optional)</label>
+            <label className="block text-sm font-medium text-amber-200 mb-2">Personal message (optional)</label>
             <textarea
-              className="w-full px-3 md:px-4 py-3 text-base md:text-sm border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-amber-600/30 text-amber-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               rows={3}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -780,7 +836,7 @@ function AddEternalCandleModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-amber-800 mb-2">Candle color</label>
+            <label className="block text-sm font-medium text-amber-200 mb-2">Candle color</label>
             <div className="grid grid-cols-6 gap-2">
               {COLOR_PRESETS.map((c) => (
                 <button
@@ -788,7 +844,7 @@ function AddEternalCandleModal({
                   type="button"
                   title={c.label}
                   className={`h-12 md:h-10 rounded-lg border-2 transition-all ${
-                    color === c.key ? "border-amber-500 ring-2 ring-amber-400/50" : "border-amber-200 hover:border-amber-300"
+                    color === c.key ? "border-amber-500 ring-2 ring-amber-400/50" : "border-amber-600/30 hover:border-amber-600/50"
                   }`}
                   style={{ background: c.wax }}
                   onClick={() => setColor(c.key)}
@@ -802,7 +858,7 @@ function AddEternalCandleModal({
           <button 
             onClick={onClose} 
             disabled={saving}
-            className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            className="flex-1 px-4 py-3 bg-slate-700/50 text-amber-200 rounded-lg hover:bg-slate-700/70 transition-colors font-medium border border-amber-600/30"
           >
             Cancel
           </button>
@@ -872,23 +928,23 @@ function AddRenewableCandleModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
-      <div className="bg-white rounded-t-3xl md:rounded-2xl p-6 w-full md:max-w-lg md:mx-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-        <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4 md:hidden" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
+      <div className="bg-slate-800 border border-blue-600/30 rounded-t-3xl md:rounded-2xl p-6 w-full md:max-w-lg md:mx-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+        <div className="w-12 h-1 bg-blue-600/30 rounded-full mx-auto mb-4 md:hidden" />
         
         <div className="flex justify-between items-center mb-4 md:mb-6">
           <div>
-            <h3 className="text-lg md:text-xl font-bold text-blue-900">Light a Renewable Candle</h3>
-            <p className="text-xs md:text-sm text-blue-700 mt-1">For prayers, healing, and intentions</p>
+            <h3 className="text-lg md:text-xl font-bold text-blue-200">Light a Renewable Candle</h3>
+            <p className="text-xs md:text-sm text-blue-200/70 mt-1">For prayers, healing, and intentions</p>
           </div>
-          <button onClick={onClose} className="p-2 -mr-2 text-blue-600 hover:text-blue-800 text-xl md:text-2xl">×</button>
+          <button onClick={onClose} className="p-2 -mr-2 text-blue-200 hover:text-blue-400 text-xl md:text-2xl">×</button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-blue-800 mb-2">Light this candle for</label>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Light this candle for</label>
             <input
-              className="w-full px-3 md:px-4 py-3 text-base md:text-sm border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-blue-600/30 text-blue-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Healing for Mom"
@@ -897,9 +953,9 @@ function AddRenewableCandleModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-blue-800 mb-2">Your prayer or intention (optional)</label>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Your prayer or intention (optional)</label>
             <textarea
-              className="w-full px-3 md:px-4 py-3 text-base md:text-sm border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-blue-600/30 text-blue-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={3}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -909,7 +965,7 @@ function AddRenewableCandleModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-blue-800 mb-2">Candle color</label>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Candle color</label>
             <div className="grid grid-cols-6 gap-2">
               {COLOR_PRESETS.map((c) => (
                 <button
@@ -917,7 +973,7 @@ function AddRenewableCandleModal({
                   type="button"
                   title={c.label}
                   className={`h-12 md:h-10 rounded-lg border-2 transition-all ${
-                    color === c.key ? "border-blue-500 ring-2 ring-blue-400/50" : "border-blue-200 hover:border-blue-300"
+                    color === c.key ? "border-blue-500 ring-2 ring-blue-400/50" : "border-blue-600/30 hover:border-blue-600/50"
                   }`}
                   style={{ background: c.wax }}
                   onClick={() => setColor(c.key)}
@@ -931,7 +987,7 @@ function AddRenewableCandleModal({
           <button 
             onClick={onClose} 
             disabled={saving}
-            className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            className="flex-1 px-4 py-3 bg-slate-700/50 text-blue-200 rounded-lg hover:bg-slate-700/70 transition-colors font-medium border border-blue-600/30"
           >
             Cancel
           </button>
