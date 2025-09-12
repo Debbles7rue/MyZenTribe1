@@ -359,19 +359,21 @@ function CandleRoomContent() {
               <div className="h-px bg-gradient-to-r from-transparent via-amber-600/50 to-transparent flex-1"></div>
             </div>
             
-            <div className="mx-auto max-w-6xl bg-gradient-to-br from-amber-900/10 to-orange-900/10 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 border border-amber-600/20 shadow-2xl shadow-amber-900/20">
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] place-items-center gap-6 md:gap-8">
-                {eternalCandles.map((c) => (
-                  <div key={c.id} className="flex flex-col items-center">
-                    <BeautifulCandle 
-                      name={c.name} 
-                      colorKey={c.color || 'gold'} 
-                      message={c.message}
-                      isEternal={true}
-                      fadeStage={1}
-                    />
-                  </div>
-                ))}
+            <div className="flex justify-center">
+              <div className="bg-gradient-to-br from-amber-900/10 to-orange-900/10 backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 border border-amber-600/20 shadow-2xl shadow-amber-900/20">
+                <div className={`grid ${eternalCandles.length === 1 ? 'grid-cols-1' : eternalCandles.length === 2 ? 'grid-cols-2' : 'grid-cols-[repeat(auto-fit,minmax(160px,1fr))]'} place-items-center gap-6 md:gap-8`}>
+                  {eternalCandles.map((c) => (
+                    <div key={c.id} className="flex flex-col items-center">
+                      <BeautifulCandle 
+                        name={c.name} 
+                        colorKey={c.color || 'gold'} 
+                        message={c.message}
+                        isEternal={true}
+                        fadeStage={1}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
