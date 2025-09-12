@@ -1,4 +1,4 @@
-// app/meditation/room/page.tsx - Simplified Meditation Room
+// app/meditation/room/page.tsx - Updated Prayer/Meditation Room with Working Audio
 "use client";
 
 import { useEffect, useState, useRef, Suspense } from 'react';
@@ -45,13 +45,18 @@ const MEDITATION_BACKGROUNDS = [
   },
 ];
 
-// Ambient sounds (using simple oscillator tones)
+// Ambient sounds using actual audio files
 const AMBIENT_SOUNDS = [
-  { name: 'Silent', freq: 0, description: 'Pure silence' },
-  { name: 'Deep Om', freq: 136.1, description: 'Earth frequency' },
-  { name: 'Heart', freq: 528, description: 'Love frequency' },
-  { name: 'Third Eye', freq: 852, description: 'Intuition' },
-  { name: 'Crown', freq: 963, description: 'Higher consciousness' },
+  { name: 'Silent', file: '', description: 'Pure silence' },
+  { name: 'Ocean Waves', file: '/audio/beach_waves.mp3', description: 'Calming ocean sounds' },
+  { name: 'Forest Creek', file: '/audio/forest_creek.mp3', description: 'Peaceful water flow' },
+  { name: 'Forest Birds', file: '/audio/forest_birds.mp3', description: 'Nature sounds' },
+  { name: 'Lake Waters', file: '/audio/lake_softwater.mp3', description: 'Gentle lake sounds' },
+  { name: 'Sacred Chant', file: '/audio/candle_room_chant.mp3', description: 'Spiritual chanting' },
+  { name: '432 Hz Tone', file: '/audio/tone_432.mp3', description: 'Healing frequency' },
+  { name: '528 Hz Love', file: '/audio/tone_528.mp3', description: 'Love frequency' },
+  { name: '639 Hz Heart', file: '/audio/tone_639.mp3', description: 'Connection frequency' },
+  { name: '963 Hz Crown', file: '/audio/tone_963.mp3', description: 'Divine frequency' },
 ];
 
 function MeditationRoomContent() {
@@ -62,18 +67,22 @@ function MeditationRoomContent() {
   const [sessionDuration, setSessionDuration] = useState(0);
   const [sessionStart, setSessionStart] = useState<Date | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [selectedSound, setSelectedSound] = useState(0);
+  const [selectedSound, setSelectedSound] = useState('');
   const [volume, setVolume] = useState(0.3);
+  const [isLoading, setIsLoading] = useState(false);
   
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentBg = MEDITATION_BACKGROUNDS.find(bg => bg.id === selectedBg) || MEDITATION_BACKGROUNDS[0];
 
   useEffect(() => {
     checkUser();
+    // Initialize audio element
+    audioRef.current = new Audio();
+    audioRef.current.loop = true;
+    audioRef.current.volume = volume;
+    
     return () => {
       stopSound();
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -97,50 +106,24 @@ function MeditationRoomContent() {
     setCurrentUser(user);
   };
 
-  const initAudio = () => {
-    if (!audioContextRef.current && typeof window !== 'undefined') {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      gainNodeRef.current = audioContextRef.current.createGain();
-      gainNodeRef.current.connect(audioContextRef.current.destination);
-      gainNodeRef.current.gain.value = volume;
-    }
-  };
-
   const startSound = async () => {
-    if (!selectedSound || !audioContextRef.current) return;
+    if (!audioRef.current || !selectedSound) return;
     
-    stopSound();
-    
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
+    try {
+      setIsLoading(true);
+      audioRef.current.src = selectedSound;
+      await audioRef.current.play();
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      setIsLoading(false);
     }
-    
-    oscillatorRef.current = audioContextRef.current.createOscillator();
-    oscillatorRef.current.type = 'sine';
-    oscillatorRef.current.frequency.setValueAtTime(selectedSound, audioContextRef.current.currentTime);
-    
-    // Add a subtle wobble for more organic sound
-    const lfo = audioContextRef.current.createOscillator();
-    lfo.frequency.setValueAtTime(0.2, audioContextRef.current.currentTime);
-    const lfoGain = audioContextRef.current.createGain();
-    lfoGain.gain.setValueAtTime(2, audioContextRef.current.currentTime);
-    lfo.connect(lfoGain);
-    lfoGain.connect(oscillatorRef.current.frequency);
-    
-    oscillatorRef.current.connect(gainNodeRef.current!);
-    oscillatorRef.current.start();
-    lfo.start();
   };
 
   const stopSound = () => {
-    if (oscillatorRef.current) {
-      try {
-        oscillatorRef.current.stop();
-        oscillatorRef.current.disconnect();
-        oscillatorRef.current = null;
-      } catch (e) {
-        // Already stopped
-      }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
   };
 
@@ -148,49 +131,85 @@ function MeditationRoomContent() {
     const newEnabled = !soundEnabled;
     setSoundEnabled(newEnabled);
     
-    if (newEnabled && selectedSound > 0) {
-      initAudio();
+    if (newEnabled && selectedSound) {
       startSound();
     } else {
       stopSound();
     }
   };
 
-  const changeSound = (freq: number) => {
-    setSelectedSound(freq);
-    if (soundEnabled && freq > 0) {
-      initAudio();
+  const changeSound = (file: string) => {
+    setSelectedSound(file);
+    if (soundEnabled && file) {
+      stopSound();
       startSound();
-    } else if (freq === 0) {
+    } else if (!file) {
       stopSound();
     }
   };
 
   const changeVolume = (newVolume: number) => {
     setVolume(newVolume);
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = newVolume;
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
     }
   };
 
-  const startMeditation = () => {
+  const startMeditation = async () => {
     setSessionStart(new Date());
     setIsActive(true);
     
-    if (soundEnabled && selectedSound > 0) {
-      initAudio();
-      startSound();
+    if (soundEnabled && selectedSound) {
+      await startSound();
+    }
+    
+    // Track session start in database
+    if (currentUser) {
+      try {
+        await supabase
+          .from('meditation_presence')
+          .insert({
+            user_id: currentUser.id,
+            joined_at: new Date().toISOString()
+          });
+      } catch (error) {
+        console.error('Error tracking session:', error);
+      }
     }
   };
 
-  const endMeditation = () => {
+  const endMeditation = async () => {
     setIsActive(false);
     stopSound();
     
     if (sessionDuration > 0) {
       const minutes = Math.floor(sessionDuration / 60);
       const seconds = sessionDuration % 60;
-      alert(`Beautiful session! You meditated for ${minutes}:${seconds.toString().padStart(2, '0')}`);
+      
+      // Update session end in database
+      if (currentUser) {
+        try {
+          const { data } = await supabase
+            .from('meditation_presence')
+            .select('id')
+            .eq('user_id', currentUser.id)
+            .is('left_at', null)
+            .order('joined_at', { ascending: false })
+            .limit(1)
+            .single();
+            
+          if (data) {
+            await supabase
+              .from('meditation_presence')
+              .update({ left_at: new Date().toISOString() })
+              .eq('id', data.id);
+          }
+        } catch (error) {
+          console.error('Error updating session:', error);
+        }
+      }
+      
+      alert(`Beautiful session! You prayed/meditated for ${minutes}:${seconds.toString().padStart(2, '0')}`);
     }
     
     setSessionDuration(0);
@@ -207,16 +226,16 @@ function MeditationRoomContent() {
     <div className={`min-h-screen bg-gradient-to-br ${currentBg.gradient} transition-all duration-1000`}>
       {/* Header */}
       <div className="bg-black/20 backdrop-blur-sm text-white p-4">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold">Meditation Room</h1>
+            <h1 className="text-xl font-bold">Prayer/Meditation Room</h1>
             <p className="text-sm opacity-75">{currentBg.description}</p>
           </div>
           <a
             href="/meditation"
-            className="px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+            className="mt-2 md:mt-0 px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
           >
-            ← Back
+            ← Back to Lobby
           </a>
         </div>
       </div>
@@ -227,8 +246,8 @@ function MeditationRoomContent() {
           {/* Timer Display */}
           {isActive && (
             <div className="text-center text-white mb-8">
-              <div className="text-6xl font-light mb-2">{formatTime(sessionDuration)}</div>
-              <div className="text-lg opacity-75">In meditation</div>
+              <div className="text-5xl md:text-6xl font-light mb-2">{formatTime(sessionDuration)}</div>
+              <div className="text-lg opacity-75">In prayer/meditation</div>
             </div>
           )}
 
@@ -237,13 +256,13 @@ function MeditationRoomContent() {
             {!isActive ? (
               <div className="text-center">
                 <div className="w-32 h-32 mx-auto bg-white/20 rounded-full flex items-center justify-center text-5xl mb-6">
-                  🧘
+                  🙏
                 </div>
                 <h2 className="text-2xl font-bold mb-4">Ready to Begin?</h2>
                 
                 {/* Background Selection */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium mb-2">Choose Your Space</label>
+                  <label className="block text-sm font-medium mb-2">Choose Your Sacred Space</label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {MEDITATION_BACKGROUNDS.map(bg => (
                       <button
@@ -255,7 +274,7 @@ function MeditationRoomContent() {
                             : 'bg-white/10 border-2 border-transparent hover:bg-white/20'
                         }`}
                       >
-                        <div className="font-medium">{bg.name}</div>
+                        <div className="font-medium text-sm md:text-base">{bg.name}</div>
                         <div className="text-xs opacity-75">{bg.description}</div>
                       </button>
                     ))}
@@ -269,7 +288,7 @@ function MeditationRoomContent() {
                       type="checkbox"
                       checked={soundEnabled}
                       onChange={toggleSound}
-                      className="w-5 h-5"
+                      className="w-5 h-5 rounded"
                     />
                     <span>Enable Ambient Sound</span>
                   </label>
@@ -278,11 +297,11 @@ function MeditationRoomContent() {
                     <div className="space-y-3 ml-8">
                       <select
                         value={selectedSound}
-                        onChange={(e) => changeSound(Number(e.target.value))}
-                        className="w-full p-2 bg-white/20 rounded-lg border border-white/30 text-white"
+                        onChange={(e) => changeSound(e.target.value)}
+                        className="w-full p-2 bg-white/20 rounded-lg border border-white/30 text-white [&>option]:text-gray-800"
                       >
                         {AMBIENT_SOUNDS.map(sound => (
-                          <option key={sound.freq} value={sound.freq} className="text-gray-800">
+                          <option key={sound.file} value={sound.file}>
                             {sound.name} - {sound.description}
                           </option>
                         ))}
@@ -300,6 +319,10 @@ function MeditationRoomContent() {
                           className="w-full"
                         />
                       </div>
+                      
+                      {isLoading && (
+                        <div className="text-sm opacity-75">Loading audio...</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -308,7 +331,7 @@ function MeditationRoomContent() {
                   onClick={startMeditation}
                   className="w-full py-4 bg-white/30 rounded-xl hover:bg-white/40 transition-all text-lg font-medium"
                 >
-                  Begin Meditation
+                  Begin Prayer/Meditation
                 </button>
               </div>
             ) : (
@@ -320,8 +343,8 @@ function MeditationRoomContent() {
                   <div className="absolute inset-0 border-2 border-white/50 rounded-full animate-ping"></div>
                 </div>
                 
-                <h2 className="text-2xl font-bold mb-2">In Meditation</h2>
-                <p className="opacity-75 mb-6">Breathe deeply and find your center</p>
+                <h2 className="text-2xl font-bold mb-2">In Sacred Space</h2>
+                <p className="opacity-75 mb-6">Breathe deeply and connect with the divine</p>
                 
                 <button
                   onClick={endMeditation}
@@ -331,6 +354,18 @@ function MeditationRoomContent() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Prayer/Meditation Tips */}
+          <div className="mt-6 bg-white/10 backdrop-blur-md rounded-2xl p-6 text-white">
+            <h3 className="font-semibold mb-3">Prayer & Meditation Tips</h3>
+            <ul className="space-y-2 text-sm opacity-90">
+              <li>• Begin with deep breathing to center yourself</li>
+              <li>• Set an intention for healing, peace, or gratitude</li>
+              <li>• Allow thoughts to come and go without judgment</li>
+              <li>• Send loving energy to those who need it</li>
+              <li>• Remember: your presence here contributes to global healing</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -344,7 +379,7 @@ export default function MeditationRoomPage() {
       <div className="min-h-screen bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center">
         <div className="text-white text-center">
           <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <p>Loading meditation room...</p>
+          <p>Loading prayer/meditation room...</p>
         </div>
       </div>
     }>
