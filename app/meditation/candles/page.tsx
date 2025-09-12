@@ -276,7 +276,30 @@ function CandleRoomContent() {
               <h1 className="text-lg md:text-2xl font-bold text-amber-200">Sacred Candle Sanctuary</h1>
             </div>
             
-            <div className="hidden md:flex gap-3">
+            <div className="hidden md:flex gap-3 items-center">
+              {/* Audio Control */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/60 rounded-lg border border-amber-600/30">
+                <button 
+                  onClick={toggleAudio}
+                  className={`p-1.5 rounded transition-colors ${audioEnabled ? 'text-amber-300' : 'text-amber-200/50'}`}
+                  title={audioEnabled ? 'Sacred sounds on' : 'Sacred sounds off'}
+                >
+                  {audioEnabled ? '🔊' : '🔇'}
+                </button>
+                {audioEnabled && (
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.5"
+                    step="0.05"
+                    value={audioVolume}
+                    onChange={(e) => changeVolume(Number(e.target.value))}
+                    className="w-20 accent-amber-600"
+                    title="Volume"
+                  />
+                )}
+              </div>
+              
               <Link href="/meditation" className="px-4 py-2 bg-slate-800/60 text-amber-200 rounded-lg hover:bg-slate-800/80 transition-colors border border-amber-600/30">
                 ← Back
               </Link>
@@ -298,6 +321,12 @@ function CandleRoomContent() {
 
           {mobileMenuOpen && (
             <div className="absolute right-4 top-14 bg-slate-900 rounded-lg shadow-xl border border-amber-600/30 p-2 min-w-[150px] md:hidden">
+              <button 
+                onClick={toggleAudio}
+                className="block w-full text-left px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
+              >
+                {audioEnabled ? '🔊 Sacred Sounds On' : '🔇 Sacred Sounds Off'}
+              </button>
               <Link 
                 href="/meditation" 
                 className="block px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
@@ -318,10 +347,17 @@ function CandleRoomContent() {
           )}
         </div>
 
-        <div className="px-4 pb-3 md:hidden">
+        <div className="px-4 pb-3 md:hidden flex items-center justify-between">
           <p className="text-sm text-amber-200/70">
             A shared sacred space for memories and prayers
           </p>
+          {/* Mobile Audio Control */}
+          <button 
+            onClick={toggleAudio}
+            className={`p-1.5 rounded ${audioEnabled ? 'text-amber-300' : 'text-amber-200/50'}`}
+          >
+            {audioEnabled ? '🔊' : '🔇'}
+          </button>
         </div>
       </header>
 
@@ -901,6 +937,9 @@ function AddRenewableCandleModal({
 
     setSaving(true);
 
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { data, error } = await supabase
       .from("candle_offerings")
       .insert([{ 
@@ -910,7 +949,8 @@ function AddRenewableCandleModal({
         candle_type: 'renewable',
         payment_status: 'pending',
         amount_paid: 99,
-        fade_stage: 1
+        fade_stage: 1,
+        user_id: user?.id  // Track who lit this candle
       }])
       .select("*")
       .single();
