@@ -270,38 +270,15 @@ function CandleRoomContent() {
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/meditation" className="p-2 -ml-2 text-amber-200 hover:bg-amber-600/20 rounded-lg md:hidden">
+              <Link href="/meditation/lounge" className="p-2 -ml-2 text-amber-200 hover:bg-amber-600/20 rounded-lg md:hidden">
                 ←
               </Link>
               <h1 className="text-lg md:text-2xl font-bold text-amber-200">Sacred Candle Sanctuary</h1>
             </div>
             
             <div className="hidden md:flex gap-3 items-center">
-              {/* Audio Control */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/60 rounded-lg border border-amber-600/30">
-                <button 
-                  onClick={toggleAudio}
-                  className={`p-1.5 rounded transition-colors ${audioEnabled ? 'text-amber-300' : 'text-amber-200/50'}`}
-                  title={audioEnabled ? 'Sacred sounds on' : 'Sacred sounds off'}
-                >
-                  {audioEnabled ? '🔊' : '🔇'}
-                </button>
-                {audioEnabled && (
-                  <input
-                    type="range"
-                    min="0"
-                    max="0.5"
-                    step="0.05"
-                    value={audioVolume}
-                    onChange={(e) => changeVolume(Number(e.target.value))}
-                    className="w-20 accent-amber-600"
-                    title="Volume"
-                  />
-                )}
-              </div>
-              
-              <Link href="/meditation" className="px-4 py-2 bg-slate-800/60 text-amber-200 rounded-lg hover:bg-slate-800/80 transition-colors border border-amber-600/30">
-                ← Back
+              <Link href="/meditation/lounge" className="px-4 py-2 bg-slate-800/60 text-amber-200 rounded-lg hover:bg-slate-800/80 transition-colors border border-amber-600/30">
+                ← Back to Lounge
               </Link>
               <button 
                 onClick={() => setShowAdd(true)}
@@ -321,18 +298,12 @@ function CandleRoomContent() {
 
           {mobileMenuOpen && (
             <div className="absolute right-4 top-14 bg-slate-900 rounded-lg shadow-xl border border-amber-600/30 p-2 min-w-[150px] md:hidden">
-              <button 
-                onClick={toggleAudio}
-                className="block w-full text-left px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
-              >
-                {audioEnabled ? '🔊 Sacred Sounds On' : '🔇 Sacred Sounds Off'}
-              </button>
               <Link 
-                href="/meditation" 
+                href="/meditation/lounge" 
                 className="block px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                ← Back to Meditation
+                ← Back to Lounge
               </Link>
               <button 
                 onClick={() => {
@@ -434,7 +405,7 @@ function CandleRoomContent() {
                 {activeCandles.map((c) => (
                   <div key={c.id} className="flex flex-col items-center">
                     <BeautifulCandle 
-                      name={c.name} 
+                        name={c.name} 
                       colorKey={c.color || 'white'} 
                       message={c.message}
                       isEternal={false}
