@@ -313,9 +313,9 @@ function MeditationLobbyContent() {
         </div>
 
         {/* Prayer Tips - Full Width */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-amber-200 shadow-lg">
-          <h3 className="text-amber-900 font-semibold mb-4">Prayer & Meditation Tips</h3>
-          <div className="grid md:grid-cols-4 gap-4 text-amber-700 text-sm">
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-indigo-200 shadow-sm">
+          <h3 className="text-indigo-900 font-semibold mb-4">Prayer & Meditation Tips</h3>
+          <div className="grid md:grid-cols-4 gap-4 text-indigo-700 text-sm">
             <div>• Begin with deep breathing</div>
             <div>• Set an intention for healing</div>
             <div>• Send love to those who need it</div>
@@ -327,7 +327,7 @@ function MeditationLobbyContent() {
         <div className="text-center mt-8">
           <a 
             href="/calendar"
-            className="inline-flex items-center gap-2 text-amber-700 hover:text-amber-900 transition-colors"
+            className="inline-flex items-center gap-2 text-indigo-700 hover:text-indigo-900 transition-colors"
           >
             ← Back to Calendar
           </a>
