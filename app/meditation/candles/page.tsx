@@ -352,8 +352,8 @@ function CandleRoomContent() {
               </span>
             </div>
             
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl md:rounded-2xl p-6 md:p-8 border border-amber-200 shadow-lg">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8 md:gap-10">
+            <div className="bg-white/60 backdrop-blur-sm rounded-xl md:rounded-2xl p-4 md:p-6 border border-amber-200 shadow-lg">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6 md:gap-8">
                 {activeCandles.map((c) => (
                   <div key={c.id} className="flex flex-col items-center">
                     <BeautifulCandle 
