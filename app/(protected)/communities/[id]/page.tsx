@@ -122,37 +122,63 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
       }
     }
 
-    // Load members - Fixed: changed status filter from "approved" to "member"
-    const { data: membersData } = await supabase
+    // Load members - Fixed: simplified query without foreign key join
+    const { data: membersData, error: membersError } = await supabase
       .from("community_members")
-      .select(`
-        *,
-        user:profiles!user_id (
-          full_name,
-          avatar_url
-        )
-      `)
+      .select("*")
       .eq("community_id", params.id)
-      .eq("status", "member")  // Fixed: changed from "approved" to "member"
+      .eq("status", "member")
       .order("role", { ascending: true });
 
-    setMembers(membersData || []);
+    if (membersData && !membersError) {
+      // Load user profiles separately
+      const memberProfiles = await Promise.all(
+        membersData.map(async (member) => {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("user_id", member.user_id)
+            .single();
+          
+          return {
+            ...member,
+            user: profile || { full_name: null, avatar_url: null }
+          };
+        })
+      );
+      setMembers(memberProfiles);
+    } else {
+      setMembers([]);
+    }
 
-    // Load posts
-    const { data: postsData } = await supabase
+    // Load posts - Fixed: simplified query without foreign key join
+    const { data: postsData, error: postsError } = await supabase
       .from("community_posts")
-      .select(`
-        *,
-        author:profiles!author_id (
-          full_name,
-          avatar_url
-        )
-      `)
+      .select("*")
       .eq("community_id", params.id)
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false });
 
-    setPosts(postsData || []);
+    if (postsData && !postsError) {
+      // Load author profiles separately
+      const postsWithAuthors = await Promise.all(
+        postsData.map(async (post) => {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("user_id", post.author_id)
+            .single();
+          
+          return {
+            ...post,
+            author: profile || null
+          };
+        })
+      );
+      setPosts(postsWithAuthors);
+    } else {
+      setPosts([]);
+    }
     setLoading(false);
   }
 
