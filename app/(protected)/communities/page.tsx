@@ -677,76 +677,86 @@ export default function CommunitiesPage() {
                 key={community.id}
                 className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow"
               >
-                {/* Cover Image - Smaller on mobile */}
-                <div className="h-24 sm:h-32 relative">
-                  {community.cover_url || community.photo_url ? (
-                    <img
-                      src={community.cover_url || community.photo_url || ""}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-purple-400 to-pink-400" />
-                  )}
-                  {community.visibility === "private" && (
-                    <span className="absolute top-2 right-2 px-2 py-1 bg-black/50 text-white text-xs rounded-full">
-                      Private
-                    </span>
-                  )}
-                </div>
-
-                {/* Community Info - Optimized for mobile */}
+                {/* Community header with small image */}
                 <div className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                    {community.title}
-                  </h3>
+                  <div className="flex items-start gap-4">
+                    {/* Small profile image */}
+                    <div className="flex-shrink-0">
+                      {community.photo_url || community.cover_url ? (
+                        <img
+                          src={community.photo_url || community.cover_url || ""}
+                          alt={community.title}
+                          className="w-16 h-16 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-400 to-pink-400" />
+                      )}
+                    </div>
 
-                  {/* Category & Location on same line */}
-                  <div className="flex items-center gap-2 mb-2 text-sm">
-                    {community.category && (
-                      <span className="text-purple-600">
-                        {community.category}
-                      </span>
-                    )}
-                    {community.category && community.zip && (
-                      <span className="text-gray-400">•</span>
-                    )}
-                    {community.zip && (
-                      <span className="text-gray-600">
-                        📍 {community.zip}
-                      </span>
-                    )}
-                  </div>
+                    {/* Community Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-800 mb-1">
+                            {community.title}
+                          </h3>
+                          
+                          {/* Category & Location */}
+                          <div className="flex items-center gap-2 mb-2 text-sm">
+                            {community.category && (
+                              <span className="text-purple-600">
+                                {community.category}
+                              </span>
+                            )}
+                            {community.category && community.zip && (
+                              <span className="text-gray-400">•</span>
+                            )}
+                            {community.zip && (
+                              <span className="text-gray-600">
+                                📍 {community.zip}
+                              </span>
+                            )}
+                          </div>
 
-                  {/* About - Show less on mobile */}
-                  {community.about && (
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                      {community.about}
-                    </p>
-                  )}
+                          {/* About */}
+                          {community.about && (
+                            <p className="text-gray-600 text-sm line-clamp-2">
+                              {community.about}
+                            </p>
+                          )}
+                        </div>
 
-                  {/* Members and Action - Side by side */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">
-                      {community.member_count || 0} members
-                    </span>
-                    
-                    {userMemberships.has(community.id) ? (
-                      <Link
-                        href={`/communities/${community.id}`}
-                        className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-full font-medium text-sm"
-                      >
-                        View
-                      </Link>
-                    ) : (
-                      <button
-                        onClick={() => joinCommunity(community.id, community.visibility)}
-                        className="px-6 py-2.5 bg-purple-600 text-white rounded-full font-medium text-sm hover:bg-purple-700 transition"
-                      >
-                        {community.visibility === "private" ? "Request" : "Join"}
-                      </button>
-                    )}
+                        {/* Privacy badge */}
+                        {community.visibility === "private" && (
+                          <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                            Private
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Members and Action */}
+                      <div className="flex items-center justify-between mt-3">
+                        <span className="text-sm text-gray-500">
+                          {community.member_count || 0} members
+                        </span>
+                        
+                        {userMemberships.has(community.id) ? (
+                          <Link
+                            href={`/communities/${community.id}`}
+                            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-full font-medium text-sm"
+                          >
+                            View
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() => joinCommunity(community.id, community.visibility)}
+                            className="px-6 py-2 bg-purple-600 text-white rounded-full font-medium text-sm hover:bg-purple-700 transition"
+                          >
+                            {community.visibility === "private" ? "Request" : "Join"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
