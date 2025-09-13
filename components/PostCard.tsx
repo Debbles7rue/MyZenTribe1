@@ -1,31 +1,34 @@
 // components/PostCard.tsx
 "use client";
-import { Post, toggleLike, addComment, deleteComment, timeAgo, updatePost, deletePost, sharePost, me } from "@/lib/posts";
-import { useState, useEffect } from "react";
 
-export default function PostCard({ post, onChanged }: { post: Post; onChanged?: () => void }) {
+import { useState, useRef } from "react";
+import { Post, toggleLike, addComment, timeAgo, updatePost, addMediaToPost, uploadMedia, deletePost } from "@/lib/posts";
+import Link from "next/link";
+
+interface PostCardProps {
+  post: Post;
+  onChanged?: () => void;
+  currentUserId?: string;
+}
+
+export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
-  const [showComments, setShowComments] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editBody, setEditBody] = useState(post.body);
-  const [editPrivacy, setEditPrivacy] = useState(post.privacy);
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [shareMessage, setShareMessage] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [showActions, setShowActions] = useState(false);
-  const [showCoCreators, setShowCoCreators] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [showAllMedia, setShowAllMedia] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    me().then(setCurrentUserId);
-  }, []);
+  // Check if current user can edit (is creator or co-creator)
+  const canEdit = currentUserId && (
+    post.user_id === currentUserId || 
+    (post.co_creators && post.co_creators.includes(currentUserId))
+  );
 
-  const isCreator = currentUserId && (post.user_id === currentUserId || (post.co_creators || []).includes(currentUserId));
-  const canEdit = isCreator;
+  // Check if current user is the original creator (can delete)
   const canDelete = currentUserId && post.user_id === currentUserId;
-
-  // Get co-creator names
-  const coCreatorNames = post.co_authors?.map(ca => ca.full_name || "Friend").join(", ") || "";
 
   async function like() {
     if (busy) return;
@@ -44,331 +47,321 @@ export default function PostCard({ post, onChanged }: { post: Post; onChanged?: 
     onChanged?.();
   }
 
-  async function removeComment(commentId: string) {
-    if (busy) return;
-    setBusy(true);
-    await deleteComment(commentId);
-    setBusy(false);
-    onChanged?.();
-  }
-
   async function saveEdit() {
-    if (busy) return;
+    if (busy || !editBody.trim()) return;
     setBusy(true);
-    const result = await updatePost(post.id, { body: editBody, privacy: editPrivacy });
+    const result = await updatePost(post.id, { body: editBody });
     if (result.ok) {
       setIsEditing(false);
+      onChanged?.();
     } else {
-      alert("Failed to update post");
+      alert("Failed to update post. Please try again.");
     }
     setBusy(false);
-    onChanged?.();
   }
 
-  async function removePost() {
-    if (!confirm("Are you sure you want to delete this post?")) return;
-    setBusy(true);
-    const result = await deletePost(post.id);
-    if (!result.ok) {
-      alert("Failed to delete post");
-    }
-    setBusy(false);
-    onChanged?.();
-  }
-
-  async function share(target: 'feed' | 'calendar') {
+  async function handleDelete() {
     if (busy) return;
     setBusy(true);
-    const result = await sharePost(post.id, target, shareMessage);
+    const result = await deletePost(post.id);
     if (result.ok) {
-      alert(target === 'calendar' ? 'Added to your calendar!' : 'Shared to your feed!');
-      setShowShareMenu(false);
-      setShareMessage("");
+      onChanged?.();
     } else {
-      alert(result.error || 'Failed to share');
+      alert("Failed to delete post. Please try again.");
     }
     setBusy(false);
+    setShowDeleteConfirm(false);
+  }
+
+  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingMedia(true);
+    
+    for (const file of files) {
+      const isVideo = file.type.startsWith('video');
+      const { url, error } = await uploadMedia(file, isVideo ? 'video' : 'image');
+      
+      if (error) {
+        alert(`Failed to upload ${file.name}. Please try again.`);
+        continue;
+      }
+
+      if (url) {
+        await addMediaToPost(post.id, url, isVideo ? 'video' : 'image');
+      }
+    }
+    
+    setUploadingMedia(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     onChanged?.();
   }
+
+  // Combine all media (original + additional)
+  const allMedia = [
+    ...(post.image_url ? [{ url: post.image_url, type: 'image' as const }] : []),
+    ...(post.video_url ? [{ url: post.video_url, type: 'video' as const }] : []),
+    ...(post.additional_media || [])
+  ];
+
+  const displayedMedia = showAllMedia ? allMedia : allMedia.slice(0, 4);
+  const remainingCount = allMedia.length - displayedMedia.length;
 
   return (
     <article className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       {/* Header */}
-      <div className="p-4 pb-0">
+      <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <img
-                src={(post.author?.avatar_url || "/default-avatar.png") + "?t=1"}
-                alt=""
-                width={42}
-                height={42}
-                className="rounded-full object-cover ring-2 ring-purple-100"
-              />
-              {post.co_authors && post.co_authors.length > 0 && (
-                <div className="absolute -bottom-1 -right-1 bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  +{post.co_authors.length}
-                </div>
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="font-medium text-gray-900">
-                {post.author?.full_name || "Member"}
-                {post.co_authors && post.co_authors.length > 0 && (
+            <img
+              src={(post.author?.avatar_url || "/default-avatar.png") + "?t=1"}
+              alt=""
+              className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-100"
+            />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link href={`/profile/${post.user_id}`} className="font-semibold text-gray-900 hover:text-purple-600 transition-colors">
+                  {post.author?.full_name || "Member"}
+                </Link>
+                
+                {/* Co-creators */}
+                {post.co_creators && post.co_creators.length > 0 && (
                   <>
-                    <span className="text-gray-600 font-normal"> with </span>
-                    <button
-                      onClick={() => setShowCoCreators(!showCoCreators)}
-                      className="text-purple-600 hover:text-purple-700 hover:underline"
-                    >
-                      {post.co_authors.length === 1 
-                        ? coCreatorNames
-                        : `${post.co_authors.length} co-creators`
-                      }
-                    </button>
+                    <span className="text-gray-500 text-sm">with</span>
+                    {post.co_creators_info?.map((coCreator, index) => (
+                      <span key={coCreator.id} className="text-sm">
+                        <Link 
+                          href={`/profile/${coCreator.id}`}
+                          className="font-medium text-purple-600 hover:text-purple-700 transition-colors"
+                        >
+                          {coCreator.full_name || "Member"}
+                        </Link>
+                        {index < post.co_creators.length - 1 && <span className="text-gray-500">, </span>}
+                      </span>
+                    ))}
                   </>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              
+              <div className="flex items-center gap-2 text-sm text-gray-500">
                 <span>{timeAgo(post.created_at)}</span>
-                {post.edited_at && <span>• edited</span>}
-                <span>• {post.privacy === 'public' ? '🌍 Everyone' : post.privacy === 'friends' ? '🤝 Friends' : '🔒 Only me'}</span>
+                <span>•</span>
+                <span className="capitalize">{post.privacy}</span>
               </div>
             </div>
           </div>
-          
+
+          {/* Action Menu */}
           {canEdit && (
-            <button
-              onClick={() => setShowActions(!showActions)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              ⋮
-            </button>
+            <div className="flex items-center gap-2">
+              {!isEditing && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+                  title="Edit post"
+                >
+                  ✏️
+                </button>
+              )}
+              {canDelete && !isEditing && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title="Delete post"
+                >
+                  🗑️
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Co-creators Dropdown */}
-        {showCoCreators && post.co_authors && post.co_authors.length > 1 && (
-          <div className="mt-2 p-2 bg-purple-50 rounded-lg">
-            <div className="text-sm text-purple-700 font-medium mb-1">Co-creators:</div>
-            <div className="space-y-1">
-              {post.co_authors.map((coAuthor, index) => (
-                <a 
-                  key={coAuthor.id} 
-                  href={`/profile/${coAuthor.id}`}
-                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-purple-600 hover:underline"
+        {/* Content */}
+        <div className="mt-3">
+          {isEditing ? (
+            <div className="space-y-3">
+              <textarea
+                className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                rows={3}
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={saveEdit}
+                  disabled={busy || !editBody.trim()}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
                 >
-                  <span className="text-purple-600">•</span>
-                  {coAuthor.full_name || "Friend"}
-                </a>
+                  {busy ? "Saving..." : "Save"}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditBody(post.body);
+                  }}
+                  disabled={busy}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-gray-800">{post.body}</p>
+          )}
+        </div>
+
+        {/* Media Gallery */}
+        {allMedia.length > 0 && (
+          <div className="mt-3">
+            <div className={`grid gap-2 ${allMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {displayedMedia.map((media, index) => (
+                <div key={index} className="relative rounded-lg overflow-hidden bg-gray-100">
+                  {media.type === 'image' ? (
+                    <img 
+                      src={media.url} 
+                      alt="" 
+                      className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
+                      onClick={() => window.open(media.url, '_blank')}
+                    />
+                  ) : (
+                    <video 
+                      src={media.url} 
+                      controls 
+                      className="w-full h-full"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  
+                  {/* Show remaining count on last visible item */}
+                  {!showAllMedia && remainingCount > 0 && index === displayedMedia.length - 1 && (
+                    <button
+                      onClick={() => setShowAllMedia(true)}
+                      className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center text-white hover:bg-opacity-70 transition-all"
+                    >
+                      <span className="text-3xl font-bold">+{remainingCount}</span>
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Action Menu */}
-        {showActions && canEdit && (
-          <div className="absolute right-4 mt-1 bg-white border rounded-lg shadow-lg py-1 z-10">
-            <button
-              onClick={() => { setIsEditing(true); setShowActions(false); }}
-              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
-            >
-              ✏️ Edit
-            </button>
-            {canDelete && (
+            
+            {showAllMedia && allMedia.length > 4 && (
               <button
-                onClick={() => { removePost(); setShowActions(false); }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm text-red-600"
+                onClick={() => setShowAllMedia(false)}
+                className="mt-2 text-sm text-purple-600 hover:text-purple-700"
               >
-                🗑️ Delete
+                Show less
               </button>
             )}
           </div>
         )}
+
+        {/* Add Media Button (for co-creators when editing) */}
+        {canEdit && !isEditing && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingMedia}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+            >
+              {uploadingMedia ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <span>📸</span>
+                  Add photos/videos
+                </>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              style={{ display: 'none' }}
+              onChange={handleMediaSelect}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Shared Post Indicator */}
-      {post.original_post && (
-        <div className="mx-4 mt-2 p-2 bg-purple-50 rounded-lg text-sm">
-          <span className="text-purple-700">↻ Shared from {post.original_post.author?.full_name}</span>
+      {/* Engagement Bar */}
+      <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-4">
+        <button
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+            post.liked_by_me 
+              ? 'bg-purple-100 text-purple-600 hover:bg-purple-200' 
+              : 'hover:bg-gray-100 text-gray-600'
+          }`}
+          onClick={like}
+          disabled={busy}
+        >
+          <span>{post.liked_by_me ? '💜' : '🤍'}</span>
+          <span className="text-sm font-medium">{post.like_count || 0}</span>
+        </button>
+        
+        <div className="flex items-center gap-2 text-gray-500">
+          <span>💬</span>
+          <span className="text-sm">{post.comment_count || 0} comments</span>
         </div>
-      )}
 
-      {/* Body */}
-      <div className="p-4">
-        {isEditing ? (
-          <div className="space-y-3">
-            <textarea
-              className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500"
-              rows={3}
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-            />
+        {post.allow_share && (
+          <button className="ml-auto text-gray-500 hover:text-purple-600 transition-colors">
+            <span>🔄</span>
+          </button>
+        )}
+      </div>
+
+      {/* Comment Section */}
+      <div className="px-4 pb-4">
+        <div className="flex gap-2">
+          <input
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            placeholder="Write a comment..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendComment()}
+          />
+          <button
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            onClick={sendComment}
+            disabled={busy || !comment.trim()}
+          >
+            Post
+          </button>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-3">Delete Post?</h3>
+            <p className="text-gray-600 mb-4">This action cannot be undone. The post and all associated media will be permanently deleted.</p>
             <div className="flex gap-2">
-              <select
-                className="px-3 py-2 border border-gray-200 rounded-lg"
-                value={editPrivacy}
-                onChange={(e) => setEditPrivacy(e.target.value as any)}
-              >
-                <option value="friends">Friends</option>
-                <option value="public">Public</option>
-                <option value="private">Only me</option>
-              </select>
               <button
-                onClick={saveEdit}
+                onClick={handleDelete}
                 disabled={busy}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
-                Save
+                {busy ? "Deleting..." : "Delete"}
               </button>
               <button
-                onClick={() => { setIsEditing(false); setEditBody(post.body); }}
-                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={busy}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
               >
                 Cancel
               </button>
             </div>
           </div>
-        ) : (
-          <div className="whitespace-pre-wrap text-gray-800">{post.body}</div>
-        )}
-
-        {/* Media Display */}
-        {post.image_url && (
-          <div className="mt-3 rounded-lg overflow-hidden">
-            <img src={post.image_url} alt="" className="w-full" />
-          </div>
-        )}
-        {post.video_url && (
-          <div className="mt-3 rounded-lg overflow-hidden">
-            <video src={post.video_url} controls className="w-full" />
-          </div>
-        )}
-        {post.gif_url && (
-          <div className="mt-3 rounded-lg overflow-hidden">
-            <img src={post.gif_url} alt="" className="w-full" />
-          </div>
-        )}
-      </div>
-
-      {/* Actions Bar */}
-      <div className="px-4 py-3 border-t border-gray-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <button
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
-                post.liked_by_me 
-                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-                  : 'hover:bg-gray-100'
-              }`}
-              onClick={like}
-              disabled={busy}
-            >
-              <span className={post.liked_by_me ? 'animate-pulse' : ''}>
-                {post.liked_by_me ? '💜' : '🤍'}
-              </span>
-              <span className="text-sm font-medium">{post.like_count || 0}</span>
-            </button>
-            
-            <button
-              className="px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-all flex items-center gap-2"
-              onClick={() => setShowComments(!showComments)}
-            >
-              💬 <span className="text-sm font-medium">{post.comment_count || 0}</span>
-            </button>
-            
-            {post.allow_share && (
-              <button
-                className="px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-all flex items-center gap-2"
-                onClick={() => setShowShareMenu(!showShareMenu)}
-              >
-                ↗️ <span className="text-sm font-medium">{post.share_count || 0}</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Share Menu */}
-        {showShareMenu && post.allow_share && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
-            <input
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              placeholder="Add a message (optional)..."
-              value={shareMessage}
-              onChange={(e) => setShareMessage(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => share('feed')}
-                disabled={busy}
-                className="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm"
-              >
-                📢 Share to Feed
-              </button>
-              <button
-                onClick={() => share('calendar')}
-                disabled={busy}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
-              >
-                📅 Add to Calendar
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Comments Section */}
-      {showComments && (
-        <div className="px-4 pb-4 space-y-3">
-          {/* Comment Input */}
-          <div className="flex gap-2">
-            <input
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-              placeholder="Share your thoughts..."
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendComment()}
-            />
-            <button
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm"
-              onClick={sendComment}
-              disabled={busy || !comment.trim()}
-            >
-              Send
-            </button>
-          </div>
-
-          {/* Comments List */}
-          {post.comments && post.comments.length > 0 && (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {post.comments.map((c) => (
-                <div key={c.id} className="flex gap-2 p-2 bg-gray-50 rounded-lg">
-                  <img
-                    src={(c.author?.avatar_url || "/default-avatar.png") + "?t=1"}
-                    alt=""
-                    width={28}
-                    height={28}
-                    className="rounded-full object-cover"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{c.author?.full_name || "Member"}</span>
-                      <span className="text-xs text-gray-500">{timeAgo(c.created_at)}</span>
-                      {c.user_id === currentUserId && (
-                        <button
-                          onClick={() => removeComment(c.id)}
-                          className="ml-auto text-xs text-red-500 hover:text-red-700"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-700 mt-1">{c.body}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </article>
