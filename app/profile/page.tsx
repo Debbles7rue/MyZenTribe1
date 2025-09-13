@@ -421,6 +421,16 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* My Sacred Candles Link Section */}
+      <div className="card candles-card">
+        <div className="candles-icon">🕯️</div>
+        <h3 className="candles-title">My Sacred Candles</h3>
+        <p className="candles-description">View your eternal memorials and prayer candles</p>
+        <Link href="/profile/candles" className="btn btn-candles">
+          View My Candles ✨
+        </Link>
+      </div>
+
       {/* Photos Feed - This is the main content! */}
       <PhotosFeed userId={userId} />
 
@@ -754,6 +764,70 @@ export default function ProfilePage() {
           justify-content: center;
           color: white;
           font-size: 0.875rem;
+        }
+
+        /* Sacred Candles Card Styles */
+        .candles-card {
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(254,243,199,0.1));
+          backdrop-filter: blur(5px);
+          border: 1px solid rgba(245,158,11,0.2);
+          border-radius: 0.75rem;
+          text-align: center;
+          transition: all 0.3s ease;
+        }
+
+        .candles-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(245,158,11,0.15);
+          background: linear-gradient(135deg, rgba(255,255,255,1), rgba(254,243,199,0.15));
+        }
+
+        .candles-icon {
+          font-size: 2rem;
+          margin-bottom: 0.5rem;
+          animation: flicker 2s ease-in-out infinite;
+        }
+
+        @keyframes flicker {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        .candles-title {
+          margin: 0 0 0.5rem 0;
+          color: #78350f;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+
+        .candles-description {
+          margin: 0 0 1rem 0;
+          color: #92400e;
+          opacity: 0.8;
+          font-size: 0.875rem;
+        }
+
+        .btn-candles {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          color: white;
+          padding: 0.75rem 1.5rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          text-decoration: none;
+          font-size: 16px; /* Prevents zoom on iOS */
+          border: none;
+        }
+
+        .btn-candles:hover {
+          background: linear-gradient(135deg, #d97706, #b45309);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(245,158,11,0.3);
         }
 
         .edit-form {
