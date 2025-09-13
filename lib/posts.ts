@@ -264,7 +264,7 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
 
   const fileExt = file.name.split('.').pop();
   const fileName = `${uid}/${Date.now()}.${fileExt}`;
-  const bucketName = type === 'image' ? 'post-photos' : 'post-videos';
+  const bucketName = type === 'image' ? 'post-images' : 'post-videos';
 
   const { data, error } = await supabase.storage
     .from(bucketName)
