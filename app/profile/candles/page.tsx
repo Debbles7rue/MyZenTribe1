@@ -18,6 +18,9 @@ type Candle = {
   amount_paid?: number;
   fade_stage?: number;
   user_id?: string;
+  recipient_id?: string;
+  created_for?: string;
+  created_by?: string;
 };
 
 // Beautiful Candle Display Component
@@ -162,6 +165,8 @@ export default function MyCandlesPage() {
   const [myCandles, setMyCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'eternal' | 'renewable'>('all');
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -175,14 +180,90 @@ export default function MyCandlesPage() {
     
     setLoading(true);
     try {
-      const { data } = await supabase
+      // Debug: First, let's see ALL candles related to this user in any way
+      const debugQueries = await Promise.all([
+        // Query 1: Candles where user_id matches
+        supabase
+          .from("candle_offerings")
+          .select("*")
+          .eq('user_id', userId),
+        
+        // Query 2: Candles where recipient_id matches (if field exists)
+        supabase
+          .from("candle_offerings")
+          .select("*")
+          .eq('recipient_id', userId),
+        
+        // Query 3: Candles where created_for matches (if field exists)
+        supabase
+          .from("candle_offerings")
+          .select("*")
+          .eq('created_for', userId),
+        
+        // Query 4: Candles where created_by matches (if field exists)
+        supabase
+          .from("candle_offerings")
+          .select("*")
+          .eq('created_by', userId),
+          
+        // Query 5: ALL candles for this user without payment_status filter
+        supabase
+          .from("candle_offerings")
+          .select("*")
+          .or(`user_id.eq.${userId},recipient_id.eq.${userId},created_for.eq.${userId},created_by.eq.${userId}`)
+      ]);
+
+      // Store debug info
+      setDebugInfo({
+        userId,
+        byUserId: debugQueries[0].data,
+        byRecipientId: debugQueries[1].data,
+        byCreatedFor: debugQueries[2].data,
+        byCreatedBy: debugQueries[3].data,
+        allRelated: debugQueries[4].data,
+        errors: debugQueries.map((q, i) => ({ query: i, error: q.error }))
+      });
+
+      // Main query - try multiple approaches
+      // First try the original query
+      let { data: originalData } = await supabase
         .from("candle_offerings")
         .select("*")
         .eq('user_id', userId)
         .eq('payment_status', 'paid')
         .order('created_at', { ascending: false });
+
+      // If no results, try without payment_status filter
+      if (!originalData || originalData.length === 0) {
+        const { data: withoutPaymentFilter } = await supabase
+          .from("candle_offerings")
+          .select("*")
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        
+        if (withoutPaymentFilter && withoutPaymentFilter.length > 0) {
+          console.log("Found candles without payment_status filter:", withoutPaymentFilter);
+          setMyCandles(withoutPaymentFilter);
+          return;
+        }
+      }
+
+      // If still no results, try looking for candles created FOR this user
+      if (!originalData || originalData.length === 0) {
+        const { data: forUserData } = await supabase
+          .from("candle_offerings")
+          .select("*")
+          .or(`user_id.eq.${userId},recipient_id.eq.${userId},created_for.eq.${userId}`)
+          .order('created_at', { ascending: false });
+        
+        if (forUserData && forUserData.length > 0) {
+          console.log("Found candles using broader search:", forUserData);
+          setMyCandles(forUserData);
+          return;
+        }
+      }
       
-      setMyCandles(data || []);
+      setMyCandles(originalData || []);
     } catch (error) {
       console.error('Error loading candles:', error);
     } finally {
@@ -235,6 +316,67 @@ export default function MyCandlesPage() {
           Visit Sanctuary →
         </Link>
       </header>
+
+      {/* Debug Toggle - Only show if no candles found */}
+      {myCandles.length === 0 && !loading && (
+        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            style={{
+              padding: '0.5rem 1rem',
+              background: 'rgba(255,255,255,0.1)',
+              color: '#fbbf24',
+              border: '1px solid rgba(251,191,36,0.3)',
+              borderRadius: '0.5rem',
+              cursor: 'pointer'
+            }}
+          >
+            {showDebug ? 'Hide' : 'Show'} Debug Info
+          </button>
+        </div>
+      )}
+
+      {/* Debug Info */}
+      {showDebug && debugInfo && (
+        <div style={{
+          background: 'rgba(0,0,0,0.5)',
+          color: '#fde68a',
+          padding: '1rem',
+          borderRadius: '0.5rem',
+          marginBottom: '2rem',
+          fontSize: '0.75rem',
+          fontFamily: 'monospace',
+          maxHeight: '400px',
+          overflow: 'auto'
+        }}>
+          <h3>Debug Information</h3>
+          <p>User ID: {debugInfo.userId}</p>
+          <details>
+            <summary>Candles by user_id ({debugInfo.byUserId?.length || 0})</summary>
+            <pre>{JSON.stringify(debugInfo.byUserId, null, 2)}</pre>
+          </details>
+          <details>
+            <summary>Candles by recipient_id ({debugInfo.byRecipientId?.length || 0})</summary>
+            <pre>{JSON.stringify(debugInfo.byRecipientId, null, 2)}</pre>
+          </details>
+          <details>
+            <summary>Candles by created_for ({debugInfo.byCreatedFor?.length || 0})</summary>
+            <pre>{JSON.stringify(debugInfo.byCreatedFor, null, 2)}</pre>
+          </details>
+          <details>
+            <summary>Candles by created_by ({debugInfo.byCreatedBy?.length || 0})</summary>
+            <pre>{JSON.stringify(debugInfo.byCreatedBy, null, 2)}</pre>
+          </details>
+          <details>
+            <summary>All related candles ({debugInfo.allRelated?.length || 0})</summary>
+            <pre>{JSON.stringify(debugInfo.allRelated, null, 2)}</pre>
+          </details>
+          <details>
+            <summary>Errors</summary>
+            <pre>{JSON.stringify(debugInfo.errors, null, 2)}</pre>
+          </details>
+        </div>
+      )}
 
       {/* Stats Overview */}
       <div className="stats-overview">
