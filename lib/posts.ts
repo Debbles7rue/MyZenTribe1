@@ -115,6 +115,7 @@ export async function createPost(
     media_type?: 'image' | 'video';
     allow_share?: boolean;
     co_creators?: string[] | null;
+    media?: Array<{ url: string; type: 'image' | 'video' }>;
   }
 ) {
   const uid = await me();
@@ -123,17 +124,27 @@ export async function createPost(
   const postData: any = {
     user_id: uid,
     body,
-    privacy,
+    visibility: privacy,  // Database expects 'visibility', not 'privacy'
     allow_share: options?.allow_share ?? true,
     co_creators: options?.co_creators || null,
   };
 
-  // Handle media
+  // Handle single media for backward compatibility
   if (options?.image_url) {
     postData.image_url = options.image_url;
   }
   if (options?.video_url) {
     postData.video_url = options.video_url;
+  }
+
+  // If we have multiple media, use the first one as the main image/video
+  if (options?.media && options.media.length > 0) {
+    const firstMedia = options.media[0];
+    if (firstMedia.type === 'image') {
+      postData.image_url = firstMedia.url;
+    } else {
+      postData.video_url = firstMedia.url;
+    }
   }
 
   const { data, error } = await supabase
@@ -143,7 +154,27 @@ export async function createPost(
     .single();
 
   if (error) {
+    console.error("Error creating post:", error);
     return { ok: false, error: error.message };
+  }
+
+  // Add additional media to post_media table if we have more than one
+  if (options?.media && options.media.length > 1) {
+    const additionalMedia = options.media.slice(1).map(m => ({
+      post_id: data.id,
+      url: m.url,
+      media_type: m.type,
+      uploaded_by: uid
+    }));
+
+    const { error: mediaError } = await supabase
+      .from("post_media")
+      .insert(additionalMedia);
+
+    if (mediaError) {
+      console.error("Error adding additional media:", mediaError);
+      // Don't fail the whole post, just log the error
+    }
   }
 
   // Send notifications to co-creators
