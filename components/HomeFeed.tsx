@@ -7,6 +7,12 @@ import PostCard from "@/components/PostCard";
 import SOSFloatingButton from "@/components/SOSFloatingButton";
 import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
 
+type MediaUpload = {
+  url: string;
+  type: 'image' | 'video';
+  preview: string;
+};
+
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,14 +21,14 @@ export default function HomeFeed() {
   const [allowShare, setAllowShare] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [mediaPreview, setMediaPreview] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
-  const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [uploadedMedia, setUploadedMedia] = useState<MediaUpload[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoCreators, setShowCoCreators] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Meditation-themed emojis
   const zenEmojis = ['🧘', '🙏', '✨', '💜', '🌸', '☮️', '🕉️', '💫', '🌟', '🤲', '🧘‍♀️', '🧘‍♂️', '🌺', '🍃', '🌿'];
@@ -45,70 +51,103 @@ export default function HomeFeed() {
   useEffect(() => { load(); }, []);
 
   async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    // Create preview
-    const url = URL.createObjectURL(file);
-    setMediaPreview({ url, type });
-
-    // Upload to Supabase
     setUploadingMedia(true);
-    const { url: uploadedUrl, error } = await uploadMedia(file, type);
-    setUploadingMedia(false);
+    const newMedia: MediaUpload[] = [];
 
-    if (error) {
-      alert(`Failed to upload ${type}. Please try again.`);
-      setMediaPreview(null);
-      return;
-    }
+    // Process all selected files
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      
+      // Upload to Supabase
+      const { url: uploadedUrl, error } = await uploadMedia(file, type);
+      
+      if (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        alert(`Failed to upload ${file.name}. ${error}`);
+        continue;
+      }
 
-    setUploadedMedia({ url: uploadedUrl!, type });
-  }
-
-  async function post() {
-    if (!body.trim() && !uploadedMedia) return;
-    setSaving(true);
-    
-    const options: any = {
-      allow_share: allowShare,
-      co_creators: coCreators.length > 0 ? coCreators : null,
-    };
-
-    if (uploadedMedia) {
-      if (uploadedMedia.type === 'image') {
-        options.image_url = uploadedMedia.url;
-        options.media_type = 'image';
-      } else if (uploadedMedia.type === 'video') {
-        options.video_url = uploadedMedia.url;
-        options.media_type = 'video';
+      if (uploadedUrl) {
+        newMedia.push({
+          url: uploadedUrl,
+          type,
+          preview: previewUrl
+        });
       }
     }
 
-    const result = await createPost(body.trim() || "Shared a moment", privacy, options);
+    // Add all successfully uploaded media to state
+    setUploadedMedia([...uploadedMedia, ...newMedia]);
+    setUploadingMedia(false);
     
-    if (!result.ok) {
-      alert("Unable to post right now. Please try again.");
-      setSaving(false);
+    // Clear the file input
+    if (e.target) {
+      e.target.value = '';
+    }
+  }
+
+  async function post() {
+    if (!body.trim() && uploadedMedia.length === 0) {
+      alert("Please add some text or media to your post");
       return;
     }
     
-    // Reset form
-    setBody("");
-    setMediaPreview(null);
-    setUploadedMedia(null);
-    setCoCreators([]);
-    setShowCoCreators(false);
-    setSaving(false);
-    await load();
+    setSaving(true);
+    
+    try {
+      // Prepare media arrays
+      const mediaItems = uploadedMedia.map(m => ({
+        url: m.url,
+        type: m.type
+      }));
+
+      const result = await createPost(body.trim() || "Shared a moment", privacy, {
+        allow_share: allowShare,
+        co_creators: coCreators.length > 0 ? coCreators : null,
+        media: mediaItems  // Pass all media as an array
+      });
+      
+      if (!result.ok) {
+        console.error("Post error:", result.error);
+        alert(`Unable to post: ${result.error || 'Unknown error'}`);
+        setSaving(false);
+        return;
+      }
+      
+      // Reset form
+      setBody("");
+      setUploadedMedia([]);
+      setCoCreators([]);
+      setShowCoCreators(false);
+      setSaving(false);
+      
+      // Clean up preview URLs
+      uploadedMedia.forEach(m => {
+        if (m.preview.startsWith('blob:')) {
+          URL.revokeObjectURL(m.preview);
+        }
+      });
+      
+      await load();
+    } catch (error) {
+      console.error("Error posting:", error);
+      alert("Failed to create post. Please try again.");
+      setSaving(false);
+    }
   }
 
-  function removeMedia() {
-    setMediaPreview(null);
-    setUploadedMedia(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  function removeMedia(index: number) {
+    const media = uploadedMedia[index];
+    if (media.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(media.preview);
     }
+    setUploadedMedia(uploadedMedia.filter((_, i) => i !== index));
   }
 
   function insertEmoji(emoji: string) {
@@ -186,46 +225,64 @@ export default function HomeFeed() {
             )}
           </div>
           
-          {/* Media Preview */}
-          {mediaPreview && (
-            <div className="mt-3 relative">
-              <button
-                onClick={removeMedia}
-                className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 z-10"
-              >
-                ×
-              </button>
-              {mediaPreview.type === 'image' && (
-                <img src={mediaPreview.url} alt="Preview" className="w-full rounded-lg max-h-64 object-cover" />
-              )}
-              {mediaPreview.type === 'video' && (
-                <video src={mediaPreview.url} controls className="w-full rounded-lg max-h-64" />
-              )}
+          {/* Media Preview Grid */}
+          {uploadedMedia.length > 0 && (
+            <div className="mt-3">
+              <div className={`grid gap-2 ${
+                uploadedMedia.length === 1 ? 'grid-cols-1' : 
+                uploadedMedia.length === 2 ? 'grid-cols-2' : 
+                'grid-cols-3'
+              }`}>
+                {uploadedMedia.map((media, index) => (
+                  <div key={index} className="relative rounded-lg overflow-hidden bg-gray-100">
+                    {media.type === 'image' ? (
+                      <img 
+                        src={media.preview} 
+                        alt={`Upload ${index + 1}`} 
+                        className="w-full h-32 object-cover"
+                      />
+                    ) : (
+                      <video 
+                        src={media.preview} 
+                        className="w-full h-32 object-cover"
+                      />
+                    )}
+                    <button
+                      onClick={() => removeMedia(index)}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
               {uploadingMedia && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                  <div className="text-white">Uploading...</div>
+                <div className="mt-2 text-sm text-gray-500">
+                  Uploading media...
                 </div>
               )}
             </div>
           )}
           
-          {/* Media Upload Section - NO GIF */}
+          {/* Media Upload Section */}
           <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
             <button
               type="button"
               className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 rounded-lg transition-all"
-              onClick={() => document.getElementById('photo-upload')?.click()}
+              onClick={() => fileInputRef.current?.click()}
               disabled={uploadingMedia}
             >
-              📷 Photo
+              📷 Photos {uploadedMedia.filter(m => m.type === 'image').length > 0 && 
+                `(${uploadedMedia.filter(m => m.type === 'image').length})`}
             </button>
             <button
               type="button"
               className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-lg transition-all"
-              onClick={() => document.getElementById('video-upload')?.click()}
+              onClick={() => videoInputRef.current?.click()}
               disabled={uploadingMedia}
             >
-              🎥 Video
+              🎥 Videos {uploadedMedia.filter(m => m.type === 'video').length > 0 && 
+                `(${uploadedMedia.filter(m => m.type === 'video').length})`}
             </button>
             <button
               type="button"
@@ -235,18 +292,21 @@ export default function HomeFeed() {
               👥 Co-creators {coCreators.length > 0 && `(${coCreators.length})`}
             </button>
             
-            {/* Hidden file inputs */}
+            {/* Hidden file inputs with multiple attribute */}
             <input
               ref={fileInputRef}
               id="photo-upload"
               type="file"
+              multiple
               accept="image/*"
               style={{ display: 'none' }}
               onChange={(e) => handleMediaSelect(e, 'image')}
             />
             <input
+              ref={videoInputRef}
               id="video-upload"
               type="file"
+              multiple
               accept="video/*"
               style={{ display: 'none' }}
               onChange={(e) => handleMediaSelect(e, 'video')}
@@ -302,7 +362,7 @@ export default function HomeFeed() {
             <button 
               className="sm:ml-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 text-base min-h-[44px] hover:scale-105 active:scale-95"
               onClick={post} 
-              disabled={saving || uploadingMedia || (!body.trim() && !uploadedMedia)}
+              disabled={saving || uploadingMedia || (!body.trim() && uploadedMedia.length === 0)}
             >
               {saving ? (
                 <span className="flex items-center gap-2">
