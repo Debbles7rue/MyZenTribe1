@@ -111,17 +111,20 @@ function MeditationLoungeContent() {
 
   const loadUserFriends = async (userId: string) => {
     try {
-      // This assumes you have a friends/connections table
-      // Adjust based on your actual schema
+      // Check if you have a friends/connections table
+      // If not, we'll search from profiles when the user types
       const { data: friends } = await supabase
         .from('profiles')
-        .select('id, display_name, avatar_url')
+        .select('id, display_name, avatar_url, email')
         .neq('id', userId)
-        .limit(50); // Get some initial users, you might want to filter by actual friends
+        .not('display_name', 'is', null)
+        .limit(20);
       
       setFriendsList(friends || []);
     } catch (error) {
       console.error('Error loading friends:', error);
+      // Don't show initial friends if there's an error
+      setFriendsList([]);
     }
   };
 
@@ -801,10 +804,10 @@ function MeditationLoungeContent() {
                   </button>
                   <button
                     onClick={scheduleSession}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
-                    disabled={!scheduledDate || !scheduledTime || createdEventId !== null}
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!scheduledDate || !scheduledTime || (sessionType === 'group' && createdEventId !== null)}
                   >
-                    {createdEventId ? 'Session Created' : 'Create Session'}
+                    {sessionType === 'solo' ? 'Create Session' : (createdEventId ? 'Session Created' : 'Create Session')}
                   </button>
                 </div>
               </div>
