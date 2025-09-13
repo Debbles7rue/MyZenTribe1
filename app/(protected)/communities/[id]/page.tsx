@@ -8,20 +8,22 @@ import { isUserCommunityAdmin } from "@/lib/admin-utils";
 
 interface Community {
   id: string;
-  name: string;
-  description: string | null;
-  owner_id: string;
-  is_private: boolean;
-  region: string | null;
-  tags: string[] | null;
+  title: string;
+  about: string | null;
+  category: string | null;
+  zip: string | null;
+  visibility: string;
+  photo_url: string | null;
+  cover_url: string | null;
   created_at: string;
+  created_by: string;
 }
 
 interface Member {
   id: string;
   user_id: string;
-  role: "owner" | "moderator" | "member";
-  status: "approved" | "pending" | "banned";
+  role: "admin" | "member";  // Fixed: changed from "owner" | "moderator" | "member"
+  status: "member" | "pending" | "banned";  // Fixed: changed from "approved"
   joined_at: string;
   user: {
     full_name: string | null;
@@ -51,8 +53,9 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<"owner" | "moderator" | "member" | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "member" | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
   const [activeTab, setActiveTab] = useState<"discussions" | "members" | "events" | "admin">("discussions");
   
   // Moderation modals
@@ -94,29 +97,32 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
 
     setCommunity(communityData);
 
-    // Check if user is admin
+    // Check if user is the creator or admin
     if (user) {
-      const adminStatus = await isUserCommunityAdmin(user.id, params.id);
-      setIsAdmin(adminStatus);
+      // Check if user created this community
+      setIsCreator(communityData.created_by === user.id);
 
       // Get user's role in community
       const { data: memberData } = await supabase
         .from("community_members")
-        .select("role")
+        .select("role, status")
         .eq("community_id", params.id)
         .eq("user_id", user.id)
         .single();
 
       if (memberData) {
         setUserRole(memberData.role);
-      } else if (communityData.owner_id === user.id) {
-        // Owner might not be in members table
-        setUserRole("owner");
+        // User is admin if they have admin role OR if they created the community
+        setIsAdmin(memberData.role === "admin" || communityData.created_by === user.id);
+      } else if (communityData.created_by === user.id) {
+        // Creator might not be in members table yet
+        setUserRole("admin");
         setIsAdmin(true);
+        setIsCreator(true);
       }
     }
 
-    // Load members
+    // Load members - Fixed: changed status filter from "approved" to "member"
     const { data: membersData } = await supabase
       .from("community_members")
       .select(`
@@ -127,7 +133,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
         )
       `)
       .eq("community_id", params.id)
-      .eq("status", "approved")
+      .eq("status", "member")  // Fixed: changed from "approved" to "member"
       .order("role", { ascending: true });
 
     setMembers(membersData || []);
@@ -160,7 +166,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
         user_id: selectedUser.user_id,
         type: "warning",
         title: "Community Warning",
-        message: `You have received a warning in ${community?.name}: ${moderationReason}`,
+        message: `You have received a warning in ${community?.title}: ${moderationReason}`,
         community_id: params.id
       });
 
@@ -225,15 +231,15 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
     }
   }
 
-  async function handlePromoteToModerator(member: Member) {
+  async function handlePromoteToAdmin(member: Member) {
     const { error } = await supabase
       .from("community_members")
-      .update({ role: "moderator" })
+      .update({ role: "admin" })
       .eq("community_id", params.id)
       .eq("user_id", member.user_id);
 
     if (!error) {
-      alert(`${member.user.full_name || "User"} is now a moderator`);
+      alert(`${member.user.full_name || "User"} is now an admin`);
       loadCommunityData();
     }
   }
@@ -288,25 +294,38 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">{community.name}</h1>
-              {community.description && (
-                <p className="text-gray-600">{community.description}</p>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">{community.title}</h1>
+              {community.about && (
+                <p className="text-gray-600">{community.about}</p>
               )}
               <div className="flex gap-2 mt-3">
-                {community.tags?.map(tag => (
-                  <span key={tag} className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
-                    {tag}
+                {community.category && (
+                  <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
+                    {community.category}
                   </span>
-                ))}
+                )}
+                {community.zip && (
+                  <span className="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                    📍 {community.zip}
+                  </span>
+                )}
               </div>
             </div>
             {isAdmin && (
-              <Link
-                href={`/communities/${params.id}/settings`}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-              >
-                Settings
-              </Link>
+              <div className="flex gap-2">
+                <Link
+                  href={`/communities/${params.id}/edit`}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  Edit
+                </Link>
+                <Link
+                  href={`/communities/${params.id}/settings`}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Settings
+                </Link>
+              </div>
             )}
           </div>
 
@@ -408,6 +427,25 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
           <div className="bg-white rounded-xl shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">Members ({members.length})</h2>
             <div className="space-y-3">
+              {/* Show creator first if they're not in the members list */}
+              {isCreator && !members.some(m => m.user_id === community.created_by) && (
+                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-200 rounded-full flex items-center justify-center">
+                      👑
+                    </div>
+                    <div>
+                      <div className="font-medium text-purple-700">
+                        You (Creator)
+                      </div>
+                      <div className="text-sm text-purple-600">
+                        Community Founder
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {members.map(member => (
                 <div key={member.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
@@ -428,21 +466,21 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
                         {member.user.full_name || "Anonymous"}
                       </Link>
                       <div className="text-sm text-gray-500">
-                        {member.role === "owner" && "👑 Owner"}
-                        {member.role === "moderator" && "⚡ Moderator"}
+                        {member.user_id === community.created_by && "👑 Creator • "}
+                        {member.role === "admin" && "⚡ Admin"}
                         {member.role === "member" && "Member"}
                       </div>
                     </div>
                   </div>
 
-                  {isAdmin && member.role === "member" && (
+                  {isAdmin && member.role === "member" && member.user_id !== userId && (
                     <div className="flex gap-2">
-                      {userRole === "owner" && (
+                      {isCreator && (
                         <button
-                          onClick={() => handlePromoteToModerator(member)}
+                          onClick={() => handlePromoteToAdmin(member)}
                           className="text-sm text-purple-600 hover:text-purple-700"
                         >
-                          Make Moderator
+                          Make Admin
                         </button>
                       )}
                       <button
@@ -487,9 +525,9 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="text-2xl font-bold">
-                  {members.filter(m => m.role === "moderator").length}
+                  {members.filter(m => m.role === "admin").length}
                 </div>
-                <div className="text-gray-600">Moderators</div>
+                <div className="text-gray-600">Admins</div>
               </div>
             </div>
 
