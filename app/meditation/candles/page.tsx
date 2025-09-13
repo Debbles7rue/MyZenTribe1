@@ -61,204 +61,6 @@ function CandleRoomContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const searchParams = useSearchParams();
 
-  // Audio states and controls
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [audioVolume, setAudioVolume] = useState(0.3);
-  const [selectedFrequency, setSelectedFrequency] = useState('528');
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const noiseNodeRef = useRef<AudioBufferSourceNode | null>(null);
-
-  // Healing frequency options
-  const FREQUENCY_OPTIONS = [
-    { id: '528', label: '528 Hz - Love & DNA Repair', frequency: 528 },
-    { id: '432', label: '432 Hz - Universal Harmony', frequency: 432 },
-    { id: '639', label: '639 Hz - Relationships', frequency: 639 },
-    { id: '741', label: '741 Hz - Consciousness', frequency: 741 },
-    { id: '852', label: '852 Hz - Intuition', frequency: 852 },
-    { id: '396', label: '396 Hz - Release Fear', frequency: 396 },
-    { id: '417', label: '417 Hz - Clear Negativity', frequency: 417 },
-    { id: '174', label: '174 Hz - Pain Relief', frequency: 174 },
-    { id: '285', label: '285 Hz - Healing Tissue', frequency: 285 },
-    { id: 'candle', label: 'Candle Ambiance', frequency: 0 },
-  ];
-
-  // Create candle crackling sound effect
-  const createCandleSound = (audioContext: AudioContext) => {
-    const bufferSize = 2 * audioContext.sampleRate;
-    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-
-    // Generate brown noise (more bass-heavy, like fire)
-    let lastOut = 0.0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      output[i] = (lastOut + (0.02 * white)) / 1.02;
-      lastOut = output[i];
-      output[i] *= 3.5;
-    }
-
-    const noiseNode = audioContext.createBufferSource();
-    noiseNode.buffer = noiseBuffer;
-    noiseNode.loop = true;
-
-    // Create filters to shape the sound like crackling fire
-    const bandpass = audioContext.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.value = 1000;
-    bandpass.Q.value = 0.5;
-
-    const highpass = audioContext.createBiquadFilter();
-    highpass.type = 'highpass';
-    highpass.frequency.value = 400;
-    highpass.Q.value = 0.7;
-
-    const lowpass = audioContext.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.value = 3000;
-    lowpass.Q.value = 0.7;
-
-    // Create gain node for crackling effect
-    const crackleGain = audioContext.createGain();
-    crackleGain.gain.value = 0.05;
-
-    // Add some randomness to simulate crackling
-    const lfo = audioContext.createOscillator();
-    lfo.frequency.value = 2;
-    const lfoGain = audioContext.createGain();
-    lfoGain.gain.value = 0.03;
-    
-    lfo.connect(lfoGain);
-    lfoGain.connect(crackleGain.gain);
-    lfo.start();
-
-    // Connect the nodes
-    noiseNode.connect(bandpass);
-    bandpass.connect(highpass);
-    highpass.connect(lowpass);
-    lowpass.connect(crackleGain);
-
-    noiseNode.start(0);
-    return { noiseNode, outputGain: crackleGain };
-  };
-
-  // Initialize or stop audio
-  const toggleAudio = () => {
-    if (audioEnabled) {
-      // Stop audio
-      if (oscillatorRef.current) {
-        oscillatorRef.current.stop();
-        oscillatorRef.current = null;
-      }
-      if (noiseNodeRef.current) {
-        noiseNodeRef.current.stop();
-        noiseNodeRef.current = null;
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      setAudioEnabled(false);
-    } else {
-      // Start audio
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        audioContextRef.current = new AudioContextClass();
-        
-        const selected = FREQUENCY_OPTIONS.find(f => f.id === selectedFrequency);
-        if (!selected) return;
-
-        gainNodeRef.current = audioContextRef.current.createGain();
-        gainNodeRef.current.gain.value = audioVolume;
-        
-        // Add reverb for more pleasant sound
-        const convolver = audioContextRef.current.createConvolver();
-        const reverbTime = 2;
-        const sampleRate = audioContextRef.current.sampleRate;
-        const length = sampleRate * reverbTime;
-        const impulse = audioContextRef.current.createBuffer(2, length, sampleRate);
-        
-        for (let channel = 0; channel < 2; channel++) {
-          const channelData = impulse.getChannelData(channel);
-          for (let i = 0; i < length; i++) {
-            channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
-          }
-        }
-        
-        convolver.buffer = impulse;
-        const wetGain = audioContextRef.current.createGain();
-        wetGain.gain.value = 0.2; // Subtle reverb
-        
-        // Connect reverb
-        convolver.connect(wetGain);
-        wetGain.connect(audioContextRef.current.destination);
-        gainNodeRef.current.connect(convolver);
-        gainNodeRef.current.connect(audioContextRef.current.destination);
-
-        if (selected.frequency === 0) {
-          // Create candle sound
-          const { noiseNode, outputGain } = createCandleSound(audioContextRef.current);
-          noiseNodeRef.current = noiseNode;
-          outputGain.connect(gainNodeRef.current);
-        } else {
-          // Create beautiful musical frequency
-          const { oscillators, gains } = createMusicalFrequency(
-            audioContextRef.current, 
-            selected.frequency, 
-            selected.id
-          );
-          
-          // Connect all gains to the main gain node
-          gains.forEach(gain => gain.connect(gainNodeRef.current));
-          
-          // Store reference (we'll just track the first oscillator for stopping)
-          oscillatorRef.current = oscillators[0];
-        }
-        
-        setAudioEnabled(true);
-      } catch (error) {
-        console.error('Audio initialization failed:', error);
-        alert('Audio requires user interaction. Please try again.');
-      }
-    }
-  };
-
-  // Change frequency
-  const changeFrequency = (frequencyId: string) => {
-    setSelectedFrequency(frequencyId);
-    if (audioEnabled) {
-      // Restart with new frequency
-      setAudioEnabled(false);
-      setTimeout(() => {
-        toggleAudio();
-      }, 100);
-    }
-  };
-
-  // Change volume
-  const changeVolume = (newVolume: number) => {
-    setAudioVolume(newVolume);
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = newVolume;
-    }
-  };
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (oscillatorRef.current) {
-        oscillatorRef.current.stop();
-      }
-      if (noiseNodeRef.current) {
-        noiseNodeRef.current.stop();
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
-
   function calculateFadeStage(candle: Candle): number {
     if (candle.candle_type === 'eternal') return 1;
     
@@ -400,66 +202,6 @@ function CandleRoomContent() {
     };
   }, []);
 
-  // Audio Controls Component
-  const AudioControls = () => (
-    <div className="fixed bottom-20 left-6 z-30 bg-slate-900/90 backdrop-blur-md rounded-2xl p-4 border border-amber-600/30 shadow-xl max-w-xs">
-      <div className="space-y-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium text-amber-200">Sacred Frequencies</h4>
-          <button 
-            onClick={toggleAudio}
-            className={`p-2 rounded-lg transition-all ${
-              audioEnabled 
-                ? 'bg-amber-600/20 text-amber-300 hover:bg-amber-600/30' 
-                : 'bg-slate-800/50 text-amber-200/50 hover:bg-slate-800/70'
-            }`}
-            title={audioEnabled ? 'Pause' : 'Play'}
-          >
-            {audioEnabled ? '🔊' : '🔇'}
-          </button>
-        </div>
-
-        {/* Frequency Selector */}
-        <select
-          value={selectedFrequency}
-          onChange={(e) => changeFrequency(e.target.value)}
-          className="w-full bg-slate-800/50 text-amber-200 px-3 py-2 rounded-lg border border-amber-600/30 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-        >
-          {FREQUENCY_OPTIONS.map(freq => (
-            <option key={freq.id} value={freq.id}>
-              {freq.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Volume Slider */}
-        <div className="flex items-center gap-3">
-          <span className="text-amber-200/50 text-xs">Vol</span>
-          <input
-            type="range"
-            min="0"
-            max="0.5"
-            step="0.05"
-            value={audioVolume}
-            onChange={(e) => changeVolume(parseFloat(e.target.value))}
-            className="flex-1 accent-amber-600 h-1"
-          />
-          <span className="text-amber-200/50 text-xs w-8 text-right">
-            {Math.round(audioVolume * 100)}%
-          </span>
-        </div>
-
-        {/* Info text */}
-        {audioEnabled && selectedFrequency !== 'candle' && (
-          <p className="text-xs text-amber-200/60 italic">
-            Healing frequency active
-          </p>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 relative overflow-hidden">
       {/* Sacred atmosphere backgrounds */}
@@ -528,15 +270,15 @@ function CandleRoomContent() {
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/meditation/lounge" className="p-2 -ml-2 text-amber-200 hover:bg-amber-600/20 rounded-lg md:hidden">
+              <Link href="/meditation" className="p-2 -ml-2 text-amber-200 hover:bg-amber-600/20 rounded-lg md:hidden">
                 ←
               </Link>
               <h1 className="text-lg md:text-2xl font-bold text-amber-200">Sacred Candle Sanctuary</h1>
             </div>
             
             <div className="hidden md:flex gap-3 items-center">
-              <Link href="/meditation/lounge" className="px-4 py-2 bg-slate-800/60 text-amber-200 rounded-lg hover:bg-slate-800/80 transition-colors border border-amber-600/30">
-                ← Back to Lounge
+              <Link href="/meditation" className="px-4 py-2 bg-slate-800/60 text-amber-200 rounded-lg hover:bg-slate-800/80 transition-colors border border-amber-600/30">
+                ← Back
               </Link>
               <button 
                 onClick={() => setShowAdd(true)}
@@ -557,11 +299,11 @@ function CandleRoomContent() {
           {mobileMenuOpen && (
             <div className="absolute right-4 top-14 bg-slate-900 rounded-lg shadow-xl border border-amber-600/30 p-2 min-w-[150px] md:hidden">
               <Link 
-                href="/meditation/lounge" 
+                href="/meditation" 
                 className="block px-4 py-2 text-amber-200 hover:bg-amber-600/20 rounded"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                ← Back to Lounge
+                ← Back to Meditation
               </Link>
               <button 
                 onClick={() => {
@@ -576,32 +318,10 @@ function CandleRoomContent() {
           )}
         </div>
 
-        <div className="px-4 pb-3 md:hidden flex items-center justify-between">
-          <p className="text-sm text-amber-200/70 flex-1">
-            A shared sacred space
+        <div className="px-4 pb-3 md:hidden">
+          <p className="text-sm text-amber-200/70">
+            A shared sacred space for memories and prayers
           </p>
-          {/* Enhanced Mobile Audio Controls */}
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedFrequency}
-              onChange={(e) => changeFrequency(e.target.value)}
-              className="text-xs bg-slate-800/50 text-amber-200 px-2 py-1 rounded border border-amber-600/30 focus:outline-none"
-            >
-              <option value="528">528Hz</option>
-              <option value="432">432Hz</option>
-              <option value="639">639Hz</option>
-              <option value="741">741Hz</option>
-              <option value="852">852Hz</option>
-              <option value="396">396Hz</option>
-              <option value="candle">Candle</option>
-            </select>
-            <button 
-              onClick={toggleAudio}
-              className={`p-1.5 rounded ${audioEnabled ? 'text-amber-300' : 'text-amber-200/50'}`}
-            >
-              {audioEnabled ? '🔊' : '🔇'}
-            </button>
-          </div>
         </div>
       </header>
 
@@ -728,9 +448,6 @@ function CandleRoomContent() {
           </div>
         )}
       </div>
-
-      {/* Audio Controls */}
-      {!loading && <AudioControls />}
 
       <button 
         onClick={() => setShowAdd(true)}
@@ -1055,6 +772,9 @@ function AddEternalCandleModal({
 
     setSaving(true);
 
+    // Get current user - THIS FIX WAS ADDED!
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { data, error } = await supabase
       .from("candle_offerings")
       .insert([{ 
@@ -1064,7 +784,8 @@ function AddEternalCandleModal({
         expires_at: null,
         candle_type: 'eternal',
         payment_status: 'pending',
-        amount_paid: 500
+        amount_paid: 500,
+        user_id: user?.id  // NOW TRACKING WHO LIT THIS ETERNAL CANDLE!
       }])
       .select("*")
       .single();
