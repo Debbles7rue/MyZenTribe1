@@ -13,12 +13,17 @@ export default function SiteHeader() {
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       setUserId(data.user?.id ?? null);
-      // Check if user is admin - adjust this based on your admin system
+      // Check admin table instead of unreliable metadata
       if (data.user) {
-        // If using user metadata:
-        setIsAdmin(data.user.user_metadata?.role === 'admin');
+        const { data: adminRecord } = await supabase
+          .from('admins')
+          .select('user_id')
+          .eq('user_id', data.user.id)
+          .single();
+        
+        setIsAdmin(!!adminRecord);
       }
     });
   }, []);
