@@ -99,21 +99,52 @@ export default function SOSButton({
         return;
       }
 
+      // Check if on mobile device
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
       // Send based on method
       if (contact.emergency_contact_method === "sms") {
+        // Ensure phone number has + prefix for international format
+        let phoneNumber = contact.emergency_contact_value;
+        if (!phoneNumber.startsWith('+')) {
+          phoneNumber = '+' + phoneNumber;
+        }
+        
+        if (!isMobile) {
+          // On desktop - can't send SMS
+          alert("⚠️ SMS cannot be sent from a computer.\n\nPlease use your mobile phone to send SOS messages, or change your emergency contact method to email in settings.");
+          setShowConfirm(false);
+          return;
+        }
+        
         // Open SMS app with pre-filled message
-        const smsUrl = `sms:${contact.emergency_contact_value}?body=${encodeURIComponent(finalMessage)}`;
-        window.open(smsUrl, '_blank');
+        const smsUrl = `sms:${phoneNumber}?body=${encodeURIComponent(finalMessage)}`;
+        window.location.href = smsUrl;
+        
+        // Show accurate message about what happened
+        setTimeout(() => {
+          alert("📱 SMS app opened with your emergency message.\n\n⚠️ IMPORTANT: You must press SEND in your Messages app to notify your emergency contact!");
+        }, 500);
+        
       } else if (contact.emergency_contact_method === "email") {
         // Open email app with pre-filled message
         const subject = encodeURIComponent("🆘 EMERGENCY SOS ALERT");
         const body = encodeURIComponent(finalMessage);
         const mailtoUrl = `mailto:${contact.emergency_contact_value}?subject=${subject}&body=${body}`;
-        window.open(mailtoUrl, '_blank');
+        
+        if (isMobile) {
+          window.location.href = mailtoUrl;
+        } else {
+          window.open(mailtoUrl, '_blank');
+        }
+        
+        // Show accurate message about what happened
+        setTimeout(() => {
+          alert("📧 Email app opened with your emergency message.\n\n⚠️ IMPORTANT: You must press SEND in your email app to notify your emergency contact!");
+        }, 500);
       }
 
       setShowConfirm(false);
-      alert("SOS alert sent successfully! Your emergency contact has been notified.");
     } catch (e: any) {
       alert(`Could not send SOS. ${e?.message ?? "Unknown error"}`);
     } finally {
@@ -173,7 +204,7 @@ export default function SOSButton({
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">Send Emergency SOS?</h2>
                   <p className="text-gray-600">
-                    This will immediately notify:
+                    This will prepare an emergency message for:
                   </p>
                   <p className="font-semibold text-gray-800 mt-2">
                     {contact?.emergency_contact_name || "Your emergency contact"}
@@ -184,6 +215,9 @@ export default function SOSButton({
                       "{contact.emergency_message}"
                     </div>
                   )}
+                  <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                    Note: You'll need to press SEND in your {contact?.emergency_contact_method === 'sms' ? 'Messages' : 'Email'} app
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -199,10 +233,10 @@ export default function SOSButton({
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Sending...
+                        Preparing...
                       </span>
                     ) : (
-                      "Yes - Send SOS"
+                      "Yes - Open SOS Message"
                     )}
                   </button>
 
