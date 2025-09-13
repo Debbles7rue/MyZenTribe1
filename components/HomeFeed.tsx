@@ -1,457 +1,443 @@
-// components/HomeFeed.tsx
-"use client";
+// lib/posts.ts
+import { supabase } from "@/lib/supabaseClient";
 
-import { useEffect, useState, useRef } from "react";
-import { createPost, listHomeFeed, Post, uploadMedia, me } from "@/lib/posts";
-import PostCard from "@/components/PostCard";
-import SOSFloatingButton from "@/components/SOSFloatingButton";
-import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
-
-type MediaUpload = {
+export type MediaItem = {
   url: string;
   type: 'image' | 'video';
-  preview: string;
 };
 
-export default function HomeFeed() {
-  const [rows, setRows] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [body, setBody] = useState("");
-  const [privacy, setPrivacy] = useState<Post["privacy"]>("friends");
-  const [allowShare, setAllowShare] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [uploadedMedia, setUploadedMedia] = useState<MediaUpload[]>([]);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showCoCreators, setShowCoCreators] = useState(false);
-  const [coCreators, setCoCreators] = useState<string[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+export type Post = {
+  id: string;
+  user_id: string;
+  body: string;
+  image_url: string | null;
+  video_url: string | null;
+  additional_media?: MediaItem[];
+  privacy: "public" | "friends" | "private";
+  created_at: string;
+  allow_share: boolean;
+  co_creators?: string[] | null;
+  co_creators_info?: Array<{
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  }>;
+  author?: { 
+    id: string; 
+    full_name: string | null; 
+    avatar_url: string | null 
+  };
+  like_count?: number;
+  liked_by_me?: boolean;
+  comment_count?: number;
+};
+
+export async function me() {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+
+export async function listHomeFeed(limit = 20, before?: string) {
+  const uid = await me();
+  if (!uid) return { rows: [], error: "Not signed in" as const };
+
+  // Simple query first - just get posts
+  let q = supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (before) q = q.lt("created_at", before);
+
+  const { data: posts, error } = await q;
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
-
-  // Meditation-themed emojis
-  const zenEmojis = ['🧘', '🙏', '✨', '💜', '🌸', '☮️', '🕉️', '💫', '🌟', '🤲', '🧘‍♀️', '🧘‍♂️', '🌺', '🍃', '🌿'];
-
-  async function load() {
-    setLoading(true);
-    
-    // Get current user ID
-    const userId = await me();
-    setCurrentUserId(userId);
-    
-    const { rows, error } = await listHomeFeed();
-    if (error) {
-      console.error("Error loading posts:", error);
-    }
-    setRows(rows);
-    setLoading(false);
+  if (error) {
+    console.error("Error fetching posts:", error);
+    return { rows: [], error: error.message };
+  }
+  
+  if (!posts || posts.length === 0) {
+    return { rows: [], error: null };
   }
 
-  useEffect(() => { load(); }, []);
+  const ids = posts.map((p: any) => p.id);
+  const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
 
-  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // Get author profiles
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", authorIds);
 
-    setUploadingMedia(true);
-    const newMedia: MediaUpload[] = [];
+  const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
 
-    // Process all selected files
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(file);
-      
-      // Upload to Supabase
-      const { url: uploadedUrl, error } = await uploadMedia(file, type);
-      
-      if (error) {
-        console.error(`Failed to upload ${file.name}:`, error);
-        alert(`Failed to upload ${file.name}. ${error}`);
-        continue;
-      }
-
-      if (uploadedUrl) {
-        newMedia.push({
-          url: uploadedUrl,
-          type,
-          preview: previewUrl
-        });
-      }
-    }
-
-    // Add all successfully uploaded media to state
-    setUploadedMedia([...uploadedMedia, ...newMedia]);
-    setUploadingMedia(false);
-    
-    // Clear the file input
-    if (e.target) {
-      e.target.value = '';
-    }
+  // Get co-creator info if they exist
+  const coCreatorIds = posts
+    .filter((p: any) => p.co_creators && p.co_creators.length > 0)
+    .flatMap((p: any) => p.co_creators);
+  
+  let coCreatorProfiles: any[] = [];
+  if (coCreatorIds.length > 0) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", coCreatorIds);
+    coCreatorProfiles = data || [];
   }
-
-  async function post() {
-    if (!body.trim() && uploadedMedia.length === 0) {
-      alert("Please add some text or media to your post");
-      return;
-    }
-    
-    setSaving(true);
-    
-    try {
-      // Prepare media arrays
-      const mediaItems = uploadedMedia.map(m => ({
-        url: m.url,
-        type: m.type
-      }));
-
-      const result = await createPost(body.trim() || "Shared a moment", privacy, {
-        allow_share: allowShare,
-        co_creators: coCreators.length > 0 ? coCreators : null,
-        media: mediaItems  // Pass all media as an array
-      });
-      
-      if (!result.ok) {
-        console.error("Post error:", result.error);
-        alert(`Unable to post: ${result.error || 'Unknown error'}`);
-        setSaving(false);
-        return;
-      }
-      
-      // Reset form
-      setBody("");
-      setUploadedMedia([]);
-      setCoCreators([]);
-      setShowCoCreators(false);
-      setSaving(false);
-      
-      // Clean up preview URLs
-      uploadedMedia.forEach(m => {
-        if (m.preview.startsWith('blob:')) {
-          URL.revokeObjectURL(m.preview);
-        }
-      });
-      
-      await load();
-    } catch (error) {
-      console.error("Error posting:", error);
-      alert("Failed to create post. Please try again.");
-      setSaving(false);
-    }
-  }
-
-  function removeMedia(index: number) {
-    const media = uploadedMedia[index];
-    if (media.preview.startsWith('blob:')) {
-      URL.revokeObjectURL(media.preview);
-    }
-    setUploadedMedia(uploadedMedia.filter((_, i) => i !== index));
-  }
-
-  function insertEmoji(emoji: string) {
-    setBody(body + emoji);
-    setShowEmojiPicker(false);
-  }
-
-  return (
-    <>
-      {/* Main Content Area - Added padding bottom for fixed nav and SOS button */}
-      <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-32">
-        {/* Community Guidelines Disclaimer */}
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🕊️</span>
-            <div className="flex-1">
-              <h3 className="font-semibold text-purple-900 mb-1">Welcome to Your Peaceful Space</h3>
-              <p className="text-sm text-purple-700">
-                This is a sanctuary free from political discourse and divisive content. 
-                We're bombarded with terrible news everywhere else—here we celebrate only good news and positive moments. 
-                Share your joy, gratitude, and uplifting experiences with your tribe. 💜
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Enhanced Composer - Mobile Optimized */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-5">
-          {/* Mood Check-in */}
-          <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-2">How are you feeling today?</p>
-            <div className="flex gap-2 flex-wrap">
-              {['😌 Peaceful', '😊 Grateful', '💪 Energized', '😔 Struggling', '🤗 Loved'].map(mood => (
-                <button
-                  key={mood}
-                  className="px-3 py-1 bg-white rounded-full text-sm hover:bg-purple-100 transition-colors"
-                  onClick={() => setBody(`Feeling ${mood} today. ${body}`)}
-                >
-                  {mood}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative">
-            <textarea
-              className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base pr-12"
-              rows={3}
-              placeholder="Share your journey, gratitude, or intention..."
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            <button
-              className="absolute right-2 top-2 text-2xl hover:scale-110 transition-transform"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            >
-              🧘
-            </button>
-            
-            {/* Emoji Picker */}
-            {showEmojiPicker && (
-              <div className="absolute right-0 top-12 bg-white border rounded-lg shadow-lg p-3 z-10">
-                <div className="grid grid-cols-5 gap-2">
-                  {zenEmojis.map(emoji => (
-                    <button
-                      key={emoji}
-                      className="text-2xl hover:bg-purple-100 rounded p-1 transition-colors"
-                      onClick={() => insertEmoji(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Media Preview Grid */}
-          {uploadedMedia.length > 0 && (
-            <div className="mt-3">
-              <div className={`grid gap-2 ${
-                uploadedMedia.length === 1 ? 'grid-cols-1' : 
-                uploadedMedia.length === 2 ? 'grid-cols-2' : 
-                'grid-cols-3'
-              }`}>
-                {uploadedMedia.map((media, index) => (
-                  <div key={index} className="relative rounded-lg overflow-hidden bg-gray-100">
-                    {media.type === 'image' ? (
-                      <img 
-                        src={media.preview} 
-                        alt={`Upload ${index + 1}`} 
-                        className="w-full h-32 object-cover"
-                      />
-                    ) : (
-                      <video 
-                        src={media.preview} 
-                        className="w-full h-32 object-cover"
-                      />
-                    )}
-                    <button
-                      onClick={() => removeMedia(index)}
-                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 text-xs"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {uploadingMedia && (
-                <div className="mt-2 text-sm text-gray-500">
-                  Uploading media...
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Media Upload Section */}
-          <div className="mt-3 flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
-            <button
-              type="button"
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 rounded-lg transition-all"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingMedia}
-            >
-              📷 Photos {uploadedMedia.filter(m => m.type === 'image').length > 0 && 
-                `(${uploadedMedia.filter(m => m.type === 'image').length})`}
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 rounded-lg transition-all"
-              onClick={() => videoInputRef.current?.click()}
-              disabled={uploadingMedia}
-            >
-              🎥 Videos {uploadedMedia.filter(m => m.type === 'video').length > 0 && 
-                `(${uploadedMedia.filter(m => m.type === 'video').length})`}
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-lg transition-all"
-              onClick={() => setShowCoCreators(!showCoCreators)}
-            >
-              👥 Co-creators {coCreators.length > 0 && `(${coCreators.length})`}
-            </button>
-            
-            {/* Hidden file inputs with multiple attribute */}
-            <input
-              ref={fileInputRef}
-              id="photo-upload"
-              type="file"
-              multiple
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={(e) => handleMediaSelect(e, 'image')}
-            />
-            <input
-              ref={videoInputRef}
-              id="video-upload"
-              type="file"
-              multiple
-              accept="video/*"
-              style={{ display: 'none' }}
-              onChange={(e) => handleMediaSelect(e, 'video')}
-            />
-          </div>
-
-          {/* Co-creators Section */}
-          {showCoCreators && (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-2">
-                <strong>👥 Add Co-creators:</strong> They'll be notified and can add their own photos & videos!
-              </p>
-              <SimpleFriendDropdown
-                value={coCreators}
-                onChange={setCoCreators}
-              />
-              {coCreators.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCoCreators([]);
-                  }}
-                  className="mt-2 text-sm text-red-600 hover:text-red-700 hover:underline"
-                >
-                  Clear all selections
-                </button>
-              )}
-            </div>
-          )}
-          
-          {/* Post Options */}
-          <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <select 
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
-              value={privacy} 
-              onChange={(e) => setPrivacy(e.target.value as any)}
-            >
-              <option value="friends">🤝 Friends Only</option>
-              <option value="public">🌍 Everyone</option>
-              <option value="private">🔒 Only Me</option>
-            </select>
-            
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allowShare}
-                onChange={(e) => setAllowShare(e.target.checked)}
-                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-              />
-              <span className="text-sm">Allow others to share</span>
-            </label>
-            
-            <button 
-              className="sm:ml-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 text-base min-h-[44px] hover:scale-105 active:scale-95"
-              onClick={post} 
-              disabled={saving || uploadingMedia || (!body.trim() && uploadedMedia.length === 0)}
-            >
-              {saving ? (
-                <span className="flex items-center gap-2">
-                  <span className="animate-spin">⏳</span> Posting…
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  ✨ Post
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Daily Intention Card */}
-        <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 mb-5">
-          <h3 className="font-semibold text-purple-800 mb-2">✨ Daily Intention</h3>
-          <p className="text-purple-700 text-sm italic">"Today I choose peace, presence, and compassion."</p>
-          <button className="mt-2 text-xs text-purple-600 hover:underline">Set your intention →</button>
-        </div>
-
-        {/* Feed */}
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="inline-flex items-center gap-3">
-              <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-              <span className="text-gray-500">Loading your tribe's moments...</span>
-            </div>
-          </div>
-        ) : rows.length ? (
-          <div className="space-y-4">
-            {rows.map((p) => (
-              <PostCard 
-                key={p.id} 
-                post={p} 
-                onChanged={load}
-                currentUserId={currentUserId || undefined}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <div className="text-6xl mb-4">🧘</div>
-            <div className="text-xl font-semibold text-gray-700">Your feed awaits</div>
-            <div className="text-gray-500 mt-2">Share your first moment of mindfulness above.</div>
-          </div>
-        )}
-      </div>
-
-      {/* Fixed Bottom Navigation Bar - Shows on both mobile and desktop */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
-        <div className="max-w-2xl mx-auto px-4 py-2">
-          <div className="grid grid-cols-4 gap-1">
-            <a 
-              href="/notifications" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all relative"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🔔</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Alerts</span>
-            </a>
-            <a 
-              href="/contact" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">📧</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Contact</span>
-            </a>
-            <a 
-              href="/suggestions" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-green-50 rounded-lg transition-all"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💡</span>
-              <span className="text-xs text-gray-600 group-hover:text-green-700">Suggest</span>
-            </a>
-            <a 
-              href="/donate" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-blue-50 rounded-lg transition-all"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💝</span>
-              <span className="text-xs text-gray-600 group-hover:text-blue-700">Donate</span>
-            </a>
-          </div>
-        </div>
-        
-        {/* Subtle gradient decoration */}
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
-      </div>
-
-      <SOSFloatingButton />
-    </>
+  
+  const coCreatorMap = Object.fromEntries(
+    coCreatorProfiles.map((p: any) => [p.id, p])
   );
+
+  // Try to get likes and comments (but don't fail if tables don't exist)
+  let likeCountBy: Record<string, number> = {};
+  let myLikeSet = new Set<string>();
+  let commentCountBy: Record<string, number> = {};
+
+  try {
+    const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
+      supabase.from("post_likes").select("post_id, count:user_id").in("post_id", ids).group("post_id"),
+      supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
+      supabase.from("post_comments").select("post_id, count:id").in("post_id", ids).group("post_id"),
+    ]);
+
+    likeCountBy = Object.fromEntries((likeCounts ?? []).map((r: any) => [r.post_id, Number(r.count)]));
+    myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
+    commentCountBy = Object.fromEntries((commentCounts ?? []).map((r: any) => [r.post_id, Number(r.count)]));
+  } catch (e) {
+    console.log("Likes/comments tables might not exist yet");
+  }
+
+  // Try to get additional media if table exists
+  let mediaByPost: Record<string, any[]> = {};
+  try {
+    const { data: media } = await supabase
+      .from("post_media")
+      .select("post_id, url, media_type")
+      .in("post_id", ids);
+    
+    if (media) {
+      media.forEach((m: any) => {
+        if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
+        mediaByPost[m.post_id].push({ url: m.url, type: m.media_type });
+      });
+    }
+  } catch (e) {
+    console.log("post_media table might not exist yet");
+  }
+
+  // Build the rows with all the data we have
+  const rows: Post[] = posts.map((p: any) => ({
+    id: p.id,
+    user_id: p.user_id,
+    body: p.body,
+    image_url: p.image_url,
+    video_url: p.video_url,
+    privacy: p.visibility || p.privacy || 'public', // Handle both column names
+    created_at: p.created_at,
+    allow_share: p.allow_share ?? true,
+    co_creators: p.co_creators || null,
+    author: profileMap[p.user_id] || null,
+    additional_media: mediaByPost[p.id] || [],
+    co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
+    like_count: likeCountBy[p.id] ?? 0,
+    liked_by_me: myLikeSet.has(p.id),
+    comment_count: commentCountBy[p.id] ?? 0,
+  }));
+
+  return { rows, error: null };
+}
+
+export async function createPost(
+  body: string, 
+  privacy: Post["privacy"] = "friends",
+  options?: {
+    image_url?: string;
+    video_url?: string;
+    media_type?: 'image' | 'video';
+    allow_share?: boolean;
+    co_creators?: string[] | null;
+    media?: Array<{ url: string; type: 'image' | 'video' }>;
+  }
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+  
+  const postData: any = {
+    user_id: uid,
+    body,
+    visibility: privacy,  // Database expects 'visibility', not 'privacy'
+    allow_share: options?.allow_share ?? true,
+    co_creators: options?.co_creators || null,
+  };
+
+  // Handle single media for backward compatibility
+  if (options?.image_url) {
+    postData.image_url = options.image_url;
+  }
+  if (options?.video_url) {
+    postData.video_url = options.video_url;
+  }
+
+  // If we have multiple media, use the first one as the main image/video
+  if (options?.media && options.media.length > 0) {
+    const firstMedia = options.media[0];
+    if (firstMedia.type === 'image') {
+      postData.image_url = firstMedia.url;
+    } else {
+      postData.video_url = firstMedia.url;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("posts")
+    .insert(postData)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating post:", error);
+    return { ok: false, error: error.message };
+  }
+
+  // Add additional media to post_media table if we have more than one
+  if (options?.media && options.media.length > 1) {
+    const additionalMedia = options.media.slice(1).map(m => ({
+      post_id: data.id,
+      url: m.url,
+      media_type: m.type,
+      uploaded_by: uid
+    }));
+
+    const { error: mediaError } = await supabase
+      .from("post_media")
+      .insert(additionalMedia);
+
+    if (mediaError) {
+      console.error("Error adding additional media:", mediaError);
+      // Don't fail the whole post, just log the error
+    }
+  }
+
+  // Send notifications to co-creators
+  if (options?.co_creators && options.co_creators.length > 0) {
+    await sendCoCreatorNotifications(data.id, uid, options.co_creators);
+  }
+
+  return { ok: true, error: null, data };
+}
+
+export async function updatePost(
+  postId: string,
+  updates: {
+    body?: string;
+    privacy?: Post["privacy"];
+    allow_share?: boolean;
+  }
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  // Check if user is creator or co-creator
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, co_creators")
+    .eq("id", postId)
+    .single();
+
+  if (!post) return { ok: false, error: "Post not found" };
+
+  const canEdit = post.user_id === uid || 
+    (post.co_creators && post.co_creators.includes(uid));
+
+  if (!canEdit) return { ok: false, error: "Not authorized to edit this post" };
+
+  const { error } = await supabase
+    .from("posts")
+    .update(updates)
+    .eq("id", postId);
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function deletePost(postId: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  // Only the original creator can delete
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id")
+    .eq("id", postId)
+    .single();
+
+  if (!post || post.user_id !== uid) {
+    return { ok: false, error: "Not authorized to delete this post" };
+  }
+
+  // Delete associated media first
+  await supabase.from("post_media").delete().eq("post_id", postId);
+  
+  // Delete the post (likes and comments should cascade delete)
+  const { error } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId);
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function addMediaToPost(
+  postId: string,
+  url: string,
+  mediaType: 'image' | 'video'
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  // Check if user can edit
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, co_creators")
+    .eq("id", postId)
+    .single();
+
+  if (!post) return { ok: false, error: "Post not found" };
+
+  const canEdit = post.user_id === uid || 
+    (post.co_creators && post.co_creators.includes(uid));
+
+  if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
+
+  // Add to post_media table
+  const { error } = await supabase
+    .from("post_media")
+    .insert({
+      post_id: postId,
+      url,
+      media_type: mediaType,
+      uploaded_by: uid
+    });
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function uploadMedia(file: File, type: 'image' | 'video') {
+  const uid = await me();
+  if (!uid) return { url: null, error: "Not signed in" };
+
+  // File validation
+  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 50 * 1024 * 1024; // 5MB for images, 50MB for videos
+  if (file.size > maxSize) {
+    return { 
+      url: null, 
+      error: `File too large. Max size: ${type === 'image' ? '5MB' : '50MB'}` 
+    };
+  }
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${uid}/${Date.now()}.${fileExt}`;
+  const bucketName = type === 'image' ? 'post-images' : 'post-videos';
+
+  const { data, error } = await supabase.storage
+    .from(bucketName)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (error) {
+    console.error('Upload error:', error);
+    return { url: null, error: error.message };
+  }
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucketName)
+    .getPublicUrl(fileName);
+
+  return { url: publicUrl, error: null };
+}
+
+export async function toggleLike(post_id: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  const { data: existing } = await supabase
+    .from("post_likes")
+    .select("post_id")
+    .eq("post_id", post_id)
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("post_likes")
+      .delete()
+      .eq("post_id", post_id)
+      .eq("user_id", uid);
+    return { ok: !error, liked: false, error: error?.message || null };
+  } else {
+    const { error } = await supabase
+      .from("post_likes")
+      .insert({ post_id, user_id: uid });
+    return { ok: !error, liked: true, error: error?.message || null };
+  }
+}
+
+export async function addComment(post_id: string, body: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+  
+  const { error } = await supabase
+    .from("post_comments")
+    .insert({ 
+      post_id, 
+      user_id: uid, 
+      body 
+    });
+    
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function sendCoCreatorNotifications(
+  postId: string,
+  creatorId: string,
+  coCreatorIds: string[]
+) {
+  // Get creator info
+  const { data: creator } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", creatorId)
+    .single();
+
+  const creatorName = creator?.full_name || "Someone";
+
+  // Send notifications to each co-creator
+  const notifications = coCreatorIds.map(userId => ({
+    user_id: userId,
+    type: 'co_creator_invite',
+    title: `${creatorName} tagged you in a post`,
+    message: `You've been tagged as a co-creator. You can now add your own photos and videos to this post!`,
+    link: `/post/${postId}`,
+    created_at: new Date().toISOString()
+  }));
+
+  await supabase.from("notifications").insert(notifications);
+}
+
+export function timeAgo(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  const w = Math.floor(d / 7);
+  if (w < 52) return `${w}w ago`;
+  return new Date(iso).toLocaleDateString();
 }
