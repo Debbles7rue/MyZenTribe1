@@ -4,6 +4,27 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import dynamic from "next/dynamic";
+
+// Dynamic import of map components to avoid SSR issues
+const MapExplorerClient = dynamic(
+  () => import("@/components/community/MapExplorerClient"),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="bg-gray-100 rounded-xl animate-pulse" style={{ height: 400 }}>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-gray-500">Loading map...</div>
+        </div>
+      </div>
+    )
+  }
+);
+
+const AddPinModal = dynamic(
+  () => import("@/components/community/AddPinModal"),
+  { ssr: false }
+);
 
 interface Community {
   id: string;
@@ -17,6 +38,19 @@ interface Community {
   created_at: string;
   created_by: string;
   member_count?: number;
+}
+
+interface MapPin {
+  id: string;
+  community_id: string;
+  name: string | null;
+  lat: number;
+  lng: number;
+  address: string | null;
+  categories?: string[] | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  website_url: string | null;
 }
 
 // Main categories with subcategories
@@ -92,14 +126,83 @@ export default function CommunitiesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userMemberships, setUserMemberships] = useState<Set<string>>(new Set());
   
+  // Map related state
+  const [mapPins, setMapPins] = useState<MapPin[]>([]);
+  const [userLocation, setUserLocation] = useState<[number, number]>([32.7767, -96.7970]); // Default Dallas
+  const [mapLoading, setMapLoading] = useState(true);
+  const [showAddPin, setShowAddPin] = useState(false);
+  
   // Mobile-specific states
   const [showFilters, setShowFilters] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [expandedMap, setExpandedMap] = useState(false);
 
   useEffect(() => {
     loadUser();
     loadCommunities();
+    loadMapData();
+    getUserLocation();
   }, []);
+
+  async function getUserLocation() {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation([position.coords.latitude, position.coords.longitude]);
+        },
+        (error) => {
+          console.log("Location access denied, using default");
+        }
+      );
+    }
+  }
+
+  async function loadMapData() {
+    setMapLoading(true);
+    
+    try {
+      // Load community circles (pins on the map)
+      const { data: circlesData, error: circlesError } = await supabase
+        .from("community_circles")
+        .select(`
+          id,
+          community_id,
+          name,
+          lat,
+          lng,
+          address,
+          categories,
+          contact_phone,
+          contact_email,
+          website_url
+        `)
+        .order("created_at", { ascending: false });
+
+      if (circlesError) {
+        console.error("Error loading circles:", circlesError);
+      }
+
+      // Transform data for the map
+      const pins: MapPin[] = (circlesData || []).map(circle => ({
+        id: circle.id,
+        community_id: circle.community_id || "",
+        name: circle.name,
+        lat: circle.lat,
+        lng: circle.lng,
+        address: circle.address,
+        categories: circle.categories,
+        contact_phone: circle.contact_phone,
+        contact_email: circle.contact_email,
+        website_url: circle.website_url,
+      }));
+
+      setMapPins(pins);
+    } catch (error) {
+      console.error("Error loading map data:", error);
+    } finally {
+      setMapLoading(false);
+    }
+  }
 
   async function loadUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -208,6 +311,38 @@ export default function CommunitiesPage() {
     return true;
   });
 
+  // Filter map pins based on same criteria
+  const filteredPins = mapPins.filter(pin => {
+    if (categoryFilter) {
+      const hasCategory = pin.categories?.some(cat => 
+        cat.toLowerCase().includes(categoryFilter.toLowerCase())
+      ) || pin.name?.toLowerCase().includes(categoryFilter.toLowerCase());
+      
+      if (!hasCategory) return false;
+    }
+
+    if (searchTerm) {
+      const query = searchTerm.toLowerCase();
+      return (
+        pin.name?.toLowerCase().includes(query) ||
+        pin.address?.toLowerCase().includes(query) ||
+        pin.categories?.some(cat => cat.toLowerCase().includes(query))
+      );
+    }
+
+    return true;
+  });
+
+  // Convert communities to map format
+  const communitiesById = communities.reduce((acc, comm) => {
+    acc[comm.id] = {
+      id: comm.id,
+      title: comm.title,
+      category: comm.category
+    };
+    return acc;
+  }, {} as Record<string, any>);
+
   // Check if any filters are active
   const hasActiveFilters = searchTerm || categoryFilter || zipFilter;
 
@@ -246,7 +381,7 @@ export default function CommunitiesPage() {
             <Link
               href="/communities/map"
               className="p-2 bg-white rounded-full shadow-sm"
-              aria-label="Map view"
+              aria-label="Full map view"
             >
               <span className="text-xl">🗺️</span>
             </Link>
@@ -433,18 +568,76 @@ export default function CommunitiesPage() {
           </div>
         )}
 
-        {/* Map Section - Smaller on mobile */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
-          <Link href="/communities/map" className="block">
-            <div className="relative bg-gradient-to-br from-purple-50 to-blue-50 p-8 sm:p-12" style={{ height: "150px" }}>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">🗺️</div>
-                  <p className="text-sm font-medium text-gray-700">Tap to view map</p>
-                </div>
+        {/* MAP SECTION - Connected below search */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+          <div className="p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold text-gray-800">Community Map</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddPin(true)}
+                  className="px-4 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition"
+                >
+                  + Add Pin
+                </button>
+                <button
+                  onClick={() => setExpandedMap(!expandedMap)}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+                >
+                  {expandedMap ? "Collapse" : "Expand"}
+                </button>
+                <Link
+                  href="/communities/map"
+                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+                >
+                  Full Map →
+                </Link>
               </div>
             </div>
-          </Link>
+
+            {/* Map Container */}
+            {mapLoading ? (
+              <div className="bg-gray-100 rounded-xl animate-pulse" style={{ height: expandedMap ? 500 : 300 }}>
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-gray-500">Loading map data...</div>
+                </div>
+              </div>
+            ) : filteredPins.length === 0 ? (
+              <div className="bg-gray-50 rounded-xl flex flex-col items-center justify-center" style={{ height: expandedMap ? 500 : 300 }}>
+                <div className="text-6xl mb-4">📍</div>
+                <div className="text-xl font-semibold mb-2">No locations on map</div>
+                <div className="text-sm text-gray-500 mb-4">
+                  {categoryFilter ? `No ${categoryFilter.toLowerCase()} locations found` : "Be the first to add a location!"}
+                </div>
+                <button
+                  onClick={() => setShowAddPin(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                >
+                  Add First Pin
+                </button>
+              </div>
+            ) : (
+              <MapExplorerClient
+                center={userLocation}
+                pins={filteredPins}
+                communitiesById={communitiesById}
+                height={expandedMap ? 500 : 300}
+              />
+            )}
+
+            {/* Map stats */}
+            <div className="mt-3 text-sm text-gray-600 flex justify-between">
+              <span>
+                {filteredPins.length} {filteredPins.length === 1 ? "location" : "locations"} on map
+              </span>
+              <button
+                onClick={() => setShowAddPin(true)}
+                className="text-purple-600 hover:text-purple-700"
+              >
+                Add your location
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Results Count */}
@@ -469,6 +662,12 @@ export default function CommunitiesPage() {
               <p className="text-sm text-gray-500 mb-6">
                 Be the first to create one in your area!
               </p>
+              <Link
+                href="/communities/new"
+                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-full font-medium"
+              >
+                Create Community
+              </Link>
             </div>
           </div>
         ) : (
@@ -476,7 +675,7 @@ export default function CommunitiesPage() {
             {filteredCommunities.map(community => (
               <div
                 key={community.id}
-                className="bg-white rounded-2xl shadow-sm overflow-hidden"
+                className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow"
               >
                 {/* Cover Image - Smaller on mobile */}
                 <div className="h-24 sm:h-32 relative">
@@ -543,7 +742,7 @@ export default function CommunitiesPage() {
                     ) : (
                       <button
                         onClick={() => joinCommunity(community.id, community.visibility)}
-                        className="px-6 py-2.5 bg-purple-600 text-white rounded-full font-medium text-sm"
+                        className="px-6 py-2.5 bg-purple-600 text-white rounded-full font-medium text-sm hover:bg-purple-700 transition"
                       >
                         {community.visibility === "private" ? "Request" : "Join"}
                       </button>
@@ -576,6 +775,23 @@ export default function CommunitiesPage() {
           Create Community
         </Link>
       </div>
+
+      {/* Add Pin Modal */}
+      {showAddPin && (
+        <AddPinModal
+          communities={communities.map(c => ({
+            id: c.id,
+            title: c.title,
+            category: c.category,
+            zip: c.zip
+          }))}
+          onClose={() => setShowAddPin(false)}
+          onSaved={() => {
+            setShowAddPin(false);
+            loadMapData(); // Refresh the map
+          }}
+        />
+      )}
     </div>
   );
 }
