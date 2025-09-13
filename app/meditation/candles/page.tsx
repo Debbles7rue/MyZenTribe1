@@ -171,6 +171,29 @@ function CandleRoomContent() {
 
         gainNodeRef.current = audioContextRef.current.createGain();
         gainNodeRef.current.gain.value = audioVolume;
+        
+        // Add reverb for more pleasant sound
+        const convolver = audioContextRef.current.createConvolver();
+        const reverbTime = 2;
+        const sampleRate = audioContextRef.current.sampleRate;
+        const length = sampleRate * reverbTime;
+        const impulse = audioContextRef.current.createBuffer(2, length, sampleRate);
+        
+        for (let channel = 0; channel < 2; channel++) {
+          const channelData = impulse.getChannelData(channel);
+          for (let i = 0; i < length; i++) {
+            channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+          }
+        }
+        
+        convolver.buffer = impulse;
+        const wetGain = audioContextRef.current.createGain();
+        wetGain.gain.value = 0.2; // Subtle reverb
+        
+        // Connect reverb
+        convolver.connect(wetGain);
+        wetGain.connect(audioContextRef.current.destination);
+        gainNodeRef.current.connect(convolver);
         gainNodeRef.current.connect(audioContextRef.current.destination);
 
         if (selected.frequency === 0) {
@@ -179,24 +202,18 @@ function CandleRoomContent() {
           noiseNodeRef.current = noiseNode;
           outputGain.connect(gainNodeRef.current);
         } else {
-          // Create healing frequency
-          oscillatorRef.current = audioContextRef.current.createOscillator();
-          oscillatorRef.current.frequency.value = selected.frequency;
-          oscillatorRef.current.type = 'sine';
+          // Create beautiful musical frequency
+          const { oscillators, gains } = createMusicalFrequency(
+            audioContextRef.current, 
+            selected.frequency, 
+            selected.id
+          );
           
-          // Add a subtle secondary harmonic for richness
-          const harmonic = audioContextRef.current.createOscillator();
-          harmonic.frequency.value = selected.frequency * 2;
-          harmonic.type = 'sine';
-          const harmonicGain = audioContextRef.current.createGain();
-          harmonicGain.gain.value = 0.05;
+          // Connect all gains to the main gain node
+          gains.forEach(gain => gain.connect(gainNodeRef.current));
           
-          oscillatorRef.current.connect(gainNodeRef.current);
-          harmonic.connect(harmonicGain);
-          harmonicGain.connect(gainNodeRef.current);
-          
-          oscillatorRef.current.start();
-          harmonic.start();
+          // Store reference (we'll just track the first oscillator for stopping)
+          oscillatorRef.current = oscillators[0];
         }
         
         setAudioEnabled(true);
