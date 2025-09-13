@@ -5,6 +5,15 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
+// Environment options for meditation sessions
+const MEDITATION_ENVS = [
+  { id: "sacred", label: "Sacred Room", icon: "🕉️" },
+  { id: "beach", label: "Stunning Beach", icon: "🏖️" },
+  { id: "creek", label: "Forest Creek", icon: "🌲" },
+  { id: "fire", label: "Crackling Fire", icon: "🔥" },
+  { id: "patterns", label: "Meditative Patterns", icon: "✨" },
+];
+
 function MeditationLoungeContent() {
   const searchParams = useSearchParams();
   const eventId = searchParams.get('eventId');
@@ -21,8 +30,24 @@ function MeditationLoungeContent() {
   
   // Scheduler states
   const [showScheduler, setShowScheduler] = useState(false);
+  const [sessionType, setSessionType] = useState<'solo' | 'group'>('solo');
+  const [sessionTitle, setSessionTitle] = useState('Meditation Session');
   const [scheduledTime, setScheduledTime] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [duration, setDuration] = useState(20);
+  const [environment, setEnvironment] = useState('sacred');
+  
+  // Group session specific states
+  const [inviteType, setInviteType] = useState<'communities' | 'friends' | 'public'>('communities');
+  const [selectedCommunities, setSelectedCommunities] = useState<Set<string>>(new Set());
+  const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
+  const [userCommunities, setUserCommunities] = useState<any[]>([]);
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [friendSearch, setFriendSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [createdEventId, setCreatedEventId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   useEffect(() => {
     initializeLounge();
@@ -32,9 +57,16 @@ function MeditationLoungeContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-      await calculateTribePulse();
-      await getActiveParticipants();
-      await loadChatMessages();
+      
+      if (user) {
+        await Promise.all([
+          calculateTribePulse(),
+          getActiveParticipants(),
+          loadChatMessages(),
+          loadUserCommunities(user.id),
+          loadUserFriends(user.id)
+        ]);
+      }
       
       // Set up real-time chat subscription
       const chatSubscription = supabase
@@ -52,6 +84,68 @@ function MeditationLoungeContent() {
       console.error('Lounge initialization error:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadUserCommunities = async (userId: string) => {
+    try {
+      // Get communities user belongs to
+      const { data: memberData } = await supabase
+        .from('community_members')
+        .select('community_id')
+        .eq('user_id', userId);
+      
+      if (memberData && memberData.length > 0) {
+        const communityIds = memberData.map(m => m.community_id);
+        const { data: communities } = await supabase
+          .from('communities')
+          .select('id, name, description')
+          .in('id', communityIds);
+        
+        setUserCommunities(communities || []);
+      }
+    } catch (error) {
+      console.error('Error loading communities:', error);
+    }
+  };
+
+  const loadUserFriends = async (userId: string) => {
+    try {
+      // This assumes you have a friends/connections table
+      // Adjust based on your actual schema
+      const { data: friends } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .neq('id', userId)
+        .limit(50); // Get some initial users, you might want to filter by actual friends
+      
+      setFriendsList(friends || []);
+    } catch (error) {
+      console.error('Error loading friends:', error);
+    }
+  };
+
+  const searchFriends = async (query: string) => {
+    setFriendSearch(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .neq('id', currentUser?.id)
+        .ilike('display_name', `%${query}%`)
+        .limit(20);
+      
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error searching friends:', error);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -136,27 +230,154 @@ function MeditationLoungeContent() {
     }
 
     const eventDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+    const endDateTime = new Date(eventDateTime.getTime() + duration * 60000);
+    const event_type = `meditation:${environment}`;
     
     try {
-      await supabase
-        .from('calendar_events')
-        .insert({
-          user_id: currentUser.id,
-          title: 'Prayer/Meditation Session',
-          start_time: eventDateTime.toISOString(),
-          duration_minutes: 30,
-          event_type: 'meditation',
-          is_public: !showAnonymous
-        });
+      if (sessionType === 'solo') {
+        // Simple solo session - just save to calendar
+        await supabase
+          .from('events')
+          .insert({
+            title: sessionTitle,
+            start_time: eventDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            created_by: currentUser.id,
+            event_type,
+            visibility: 'private',
+            source: 'personal'
+          });
 
-      alert('Session scheduled! You can view it in your calendar.');
-      setShowScheduler(false);
-      setScheduledDate('');
-      setScheduledTime('');
+        alert('Solo session scheduled! You can view it in your calendar.');
+        resetScheduler();
+        
+      } else {
+        // Group session - create event with invite code
+        const invite_code = crypto.randomUUID().slice(0, 8);
+        
+        const { data: eventData, error } = await supabase
+          .from('events')
+          .insert({
+            title: sessionTitle,
+            start_time: eventDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            created_by: currentUser.id,
+            event_type,
+            visibility: inviteType === 'public' ? 'public' : 'group',
+            source: 'personal',
+            invite_code,
+            rsvp_public: true
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        setCreatedEventId(eventData.id);
+        setShareUrl(`${window.location.origin}/meditation/join?code=${invite_code}`);
+        
+        // Send invites based on invite type
+        await sendInvites(eventData.id);
+      }
     } catch (error) {
       console.error('Error scheduling session:', error);
       alert('Failed to schedule session. Please try again.');
     }
+  };
+
+  const sendInvites = async (eventId: string) => {
+    if (!currentUser) return;
+    
+    try {
+      const invites: any[] = [];
+      
+      if (inviteType === 'communities') {
+        // Get all members from selected communities
+        for (const communityId of selectedCommunities) {
+          const { data: members } = await supabase
+            .from('community_members')
+            .select('user_id')
+            .eq('community_id', communityId)
+            .neq('user_id', currentUser.id);
+          
+          if (members) {
+            members.forEach(member => {
+              invites.push({
+                event_id: eventId,
+                invitee_user_id: member.user_id,
+                invited_by: currentUser.id,
+                source: 'community'
+              });
+            });
+          }
+        }
+      } else if (inviteType === 'friends') {
+        // Invite selected friends
+        selectedFriends.forEach(friendId => {
+          invites.push({
+            event_id: eventId,
+            invitee_user_id: friendId,
+            invited_by: currentUser.id,
+            source: 'direct'
+          });
+        });
+      }
+      
+      if (invites.length > 0) {
+        await supabase
+          .from('event_invites')
+          .upsert(invites, { onConflict: 'event_id,invitee_user_id' });
+      }
+      
+      if (inviteType === 'public') {
+        alert('Group session created! Share the link to invite others.');
+      } else {
+        alert(`Group session created! Invited ${invites.length} people.`);
+      }
+    } catch (error) {
+      console.error('Error sending invites:', error);
+    }
+  };
+
+  const resetScheduler = () => {
+    setShowScheduler(false);
+    setSessionTitle('Meditation Session');
+    setScheduledDate('');
+    setScheduledTime('');
+    setDuration(20);
+    setEnvironment('sacred');
+    setSessionType('solo');
+    setInviteType('communities');
+    setSelectedCommunities(new Set());
+    setSelectedFriends(new Set());
+    setCreatedEventId(null);
+    setShareUrl(null);
+    setFriendSearch('');
+    setSearchResults([]);
+  };
+
+  const toggleCommunity = (id: string) => {
+    setSelectedCommunities(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleFriend = (id: string) => {
+    setSelectedFriends(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
   if (isLoading) {
@@ -319,21 +540,21 @@ function MeditationLoungeContent() {
           </div>
         </div>
 
-        {/* Schedule Session Strip */}
-        <div className="mb-8">
-          <div className="bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-2xl">📅</span>
+        {/* Enhanced Schedule Session Section */}
+        <div className="mb-6 md:mb-8">
+          <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 md:p-6 border border-white/10">
+            {!showScheduler ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 md:gap-4 w-full sm:w-auto">
+                  <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                    <span className="text-xl md:text-2xl">📅</span>
+                  </div>
+                  <div className="flex-1 sm:flex-initial">
+                    <h3 className="text-base md:text-lg font-medium text-indigo-200">Schedule Your Session</h3>
+                    <p className="text-xs md:text-sm text-white/60">Plan your meditation practice ahead</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-medium text-indigo-200">Schedule Your Session</h3>
-                  <p className="text-sm text-white/60">Plan your meditation practice ahead</p>
-                </div>
-              </div>
-              
-              {!showScheduler ? (
+                
                 <button
                   onClick={() => {
                     if (!currentUser) {
@@ -345,47 +566,249 @@ function MeditationLoungeContent() {
                     tomorrow.setDate(tomorrow.getDate() + 1);
                     setScheduledDate(tomorrow.toISOString().split('T')[0]);
                   }}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl hover:from-indigo-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-indigo-500/25"
+                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl hover:from-indigo-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-indigo-500/25"
                 >
                   Schedule Session
                 </button>
-              ) : (
-                <div className="flex flex-wrap gap-3 items-center">
-                  <input
-                    type="date"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    required
-                  />
-                  <input
-                    type="time"
-                    value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
-                    className="px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    required
-                  />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Session Type Toggle */}
+                <div className="flex justify-center gap-2 p-1 bg-white/10 rounded-xl">
                   <button
-                    onClick={scheduleSession}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
-                    disabled={!scheduledDate || !scheduledTime}
+                    onClick={() => setSessionType('solo')}
+                    className={`flex-1 py-2 px-4 rounded-lg transition-all ${
+                      sessionType === 'solo' 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-white/70 hover:text-white'
+                    }`}
                   >
-                    Confirm
+                    Solo Session
                   </button>
                   <button
-                    onClick={() => {
-                      setShowScheduler(false);
-                      setScheduledDate('');
-                      setScheduledTime('');
-                    }}
+                    onClick={() => setSessionType('group')}
+                    className={`flex-1 py-2 px-4 rounded-lg transition-all ${
+                      sessionType === 'group' 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-white/70 hover:text-white'
+                    }`}
+                  >
+                    Group Session
+                  </button>
+                </div>
+
+                {/* Session Details */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-white/70 mb-2">Session Title</label>
+                    <input
+                      type="text"
+                      value={sessionTitle}
+                      onChange={(e) => setSessionTitle(e.target.value)}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Enter session title"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-white/70 mb-2">Environment</label>
+                    <select
+                      value={environment}
+                      onChange={(e) => setEnvironment(e.target.value)}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {MEDITATION_ENVS.map(env => (
+                        <option key={env.id} value={env.id}>
+                          {env.icon} {env.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-white/70 mb-2">Date</label>
+                    <input
+                      type="date"
+                      value={scheduledDate}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-white/70 mb-2">Time</label>
+                    <input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-white/70 mb-2">Duration</label>
+                    <select
+                      value={duration}
+                      onChange={(e) => setDuration(Number(e.target.value))}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {[10, 15, 20, 25, 30, 45, 60].map(min => (
+                        <option key={min} value={min}>{min} minutes</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Group Session Invite Options */}
+                {sessionType === 'group' && !createdEventId && (
+                  <div className="space-y-4">
+                    <h4 className="text-white/90 font-medium">Invite Options</h4>
+                    
+                    {/* Invite Type Tabs */}
+                    <div className="flex gap-2 p-1 bg-white/10 rounded-xl">
+                      <button
+                        onClick={() => setInviteType('communities')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-sm transition-all ${
+                          inviteType === 'communities' 
+                            ? 'bg-purple-600 text-white' 
+                            : 'text-white/70 hover:text-white'
+                        }`}
+                      >
+                        Communities
+                      </button>
+                      <button
+                        onClick={() => setInviteType('friends')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-sm transition-all ${
+                          inviteType === 'friends' 
+                            ? 'bg-purple-600 text-white' 
+                            : 'text-white/70 hover:text-white'
+                        }`}
+                      >
+                        Friends
+                      </button>
+                      <button
+                        onClick={() => setInviteType('public')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-sm transition-all ${
+                          inviteType === 'public' 
+                            ? 'bg-purple-600 text-white' 
+                            : 'text-white/70 hover:text-white'
+                        }`}
+                      >
+                        Public
+                      </button>
+                    </div>
+
+                    {/* Communities Selection */}
+                    {inviteType === 'communities' && (
+                      <div className="space-y-2">
+                        {userCommunities.length === 0 ? (
+                          <p className="text-white/50 text-sm">No communities found</p>
+                        ) : (
+                          <div className="max-h-40 overflow-y-auto space-y-2">
+                            {userCommunities.map(community => (
+                              <label 
+                                key={community.id}
+                                className="flex items-center gap-3 p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCommunities.has(community.id)}
+                                  onChange={() => toggleCommunity(community.id)}
+                                  className="w-4 h-4 rounded accent-purple-500"
+                                />
+                                <span className="text-white/80">{community.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Friends Selection */}
+                    {inviteType === 'friends' && (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={friendSearch}
+                          onChange={(e) => searchFriends(e.target.value)}
+                          placeholder="Search friends..."
+                          className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        
+                        <div className="max-h-40 overflow-y-auto space-y-2">
+                          {(friendSearch ? searchResults : friendsList).map(friend => (
+                            <label 
+                              key={friend.id}
+                              className="flex items-center gap-3 p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-all"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedFriends.has(friend.id)}
+                                onChange={() => toggleFriend(friend.id)}
+                                className="w-4 h-4 rounded accent-purple-500"
+                              />
+                              <span className="text-white/80">{friend.display_name || 'Anonymous'}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Public Info */}
+                    {inviteType === 'public' && (
+                      <p className="text-white/60 text-sm">
+                        This session will be visible on the public feed. Anyone can join with the invite link.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Share URL if event created */}
+                {createdEventId && shareUrl && (
+                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                    <h4 className="text-emerald-300 font-medium mb-2">Session Created!</h4>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={shareUrl}
+                        readOnly
+                        className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm"
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(shareUrl);
+                          alert('Link copied!');
+                        }}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={resetScheduler}
                     className="px-4 py-2 border border-white/20 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all"
                   >
                     Cancel
                   </button>
+                  <button
+                    onClick={scheduleSession}
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
+                    disabled={!scheduledDate || !scheduledTime || createdEventId !== null}
+                  >
+                    {createdEventId ? 'Session Created' : 'Create Session'}
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
