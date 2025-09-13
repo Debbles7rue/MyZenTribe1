@@ -133,10 +133,10 @@ export default function MeditationEntryPage() {
               </div>
             </div>
 
-            {/* Center sacred symbol */}
+            {/* Center sacred symbol - Now a simple glowing orb */}
             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-amber-400 via-yellow-300 to-amber-400 flex items-center justify-center shadow-2xl relative">
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-400 via-yellow-300 to-amber-400 animate-pulse opacity-50"></div>
-              <span className="text-6xl relative z-10">🕉️</span>
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/30 to-amber-200/30 relative z-10"></div>
             </div>
           </div>
         </div>
@@ -198,13 +198,6 @@ export default function MeditationEntryPage() {
               </p>
             )}
           </div>
-        </div>
-
-        {/* Bottom quote */}
-        <div className="absolute bottom-8 left-0 right-0 text-center">
-          <p className="text-white/40 text-sm italic">
-            "Be still and know that I am God" - Psalm 46:10
-          </p>
         </div>
       </div>
     </div>
