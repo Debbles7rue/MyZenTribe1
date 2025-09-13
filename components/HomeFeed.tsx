@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { createPost, listHomeFeed, Post, uploadMedia } from "@/lib/posts";
+import { createPost, listHomeFeed, Post, uploadMedia, me } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
 import SOSFloatingButton from "@/components/SOSFloatingButton";
 import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
@@ -20,6 +20,7 @@ export default function HomeFeed() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoCreators, setShowCoCreators] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -28,6 +29,11 @@ export default function HomeFeed() {
 
   async function load() {
     setLoading(true);
+    
+    // Get current user ID
+    const userId = await me();
+    setCurrentUserId(userId);
+    
     const { rows, error } = await listHomeFeed();
     if (error) {
       console.error("Error loading posts:", error);
@@ -250,6 +256,9 @@ export default function HomeFeed() {
           {/* Co-creators Section */}
           {showCoCreators && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">
+                <strong>👥 Add Co-creators:</strong> They'll be notified and can add their own photos & videos!
+              </p>
               <SimpleFriendDropdown
                 value={coCreators}
                 onChange={setCoCreators}
@@ -326,7 +335,12 @@ export default function HomeFeed() {
         ) : rows.length ? (
           <div className="space-y-4">
             {rows.map((p) => (
-              <PostCard key={p.id} post={p} onChanged={load} />
+              <PostCard 
+                key={p.id} 
+                post={p} 
+                onChanged={load}
+                currentUserId={currentUserId || undefined}
+              />
             ))}
           </div>
         ) : (
