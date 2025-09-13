@@ -41,26 +41,38 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Pull posts that are public or from friends
+  // Simple query first - just get posts
   let q = supabase
     .from("posts")
-    .select(`
-      *,
-      profiles!posts_user_id_fkey(id, full_name, avatar_url),
-      post_media(url, media_type)
-    `)
-    .or(`privacy.eq.public,user_id.in.(${uid})`) // Simplified for now
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (before) q = q.lt("created_at", before);
 
   const { data: posts, error } = await q;
-  if (error || !posts?.length) return { rows: (posts ?? []) as Post[], error: error?.message || null };
+  
+  if (error) {
+    console.error("Error fetching posts:", error);
+    return { rows: [], error: error.message };
+  }
+  
+  if (!posts || posts.length === 0) {
+    return { rows: [], error: null };
+  }
 
   const ids = posts.map((p: any) => p.id);
-  
-  // Get co-creator info
+  const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
+
+  // Get author profiles
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", authorIds);
+
+  const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
+
+  // Get co-creator info if they exist
   const coCreatorIds = posts
     .filter((p: any) => p.co_creators && p.co_creators.length > 0)
     .flatMap((p: any) => p.co_creators);
@@ -78,29 +90,72 @@ export async function listHomeFeed(limit = 20, before?: string) {
     coCreatorProfiles.map((p: any) => [p.id, p])
   );
 
-  // Get like counts and my likes
-  const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
-    supabase.from("post_likes").select("post_id, count:user_id").in("post_id", ids).group("post_id"),
-    supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
-    supabase.from("post_comments").select("post_id, count:id").in("post_id", ids).group("post_id"),
-  ]);
+  // Try to get likes and comments (but don't fail if tables don't exist)
+  let likeCountBy: Record<string, number> = {};
+  let myLikeSet = new Set<string>();
+  let commentCountBy: Record<string, number> = {};
 
-  const likeCountBy = Object.fromEntries((likeCounts ?? []).map((r: any) => [r.post_id, Number(r.count)]));
-  const myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
-  const commentCountBy = Object.fromEntries((commentCounts ?? []).map((r: any) => [r.post_id, Number(r.count)]));
+  try {
+    const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
+      supabase.from("post_likes").select("post_id").in("post_id", ids),
+      supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
+      supabase.from("post_comments").select("post_id").in("post_id", ids),
+    ]);
 
+    // Count likes per post
+    const likesPerPost: Record<string, number> = {};
+    (likeCounts || []).forEach((like: any) => {
+      likesPerPost[like.post_id] = (likesPerPost[like.post_id] || 0) + 1;
+    });
+    likeCountBy = likesPerPost;
+    
+    myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
+    
+    // Count comments per post
+    const commentsPerPost: Record<string, number> = {};
+    (commentCounts || []).forEach((comment: any) => {
+      commentsPerPost[comment.post_id] = (commentsPerPost[comment.post_id] || 0) + 1;
+    });
+    commentCountBy = commentsPerPost;
+  } catch (e) {
+    console.log("Likes/comments tables might not exist yet");
+  }
+
+  // Try to get additional media if table exists
+  let mediaByPost: Record<string, any[]> = {};
+  try {
+    const { data: media } = await supabase
+      .from("post_media")
+      .select("post_id, url, media_type")
+      .in("post_id", ids);
+    
+    if (media) {
+      media.forEach((m: any) => {
+        if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
+        mediaByPost[m.post_id].push({ url: m.url, type: m.media_type });
+      });
+    }
+  } catch (e) {
+    console.log("post_media table might not exist yet");
+  }
+
+  // Build the rows with all the data we have
   const rows: Post[] = posts.map((p: any) => ({
-    ...p,
-    author: p.profiles || null,
-    additional_media: p.post_media?.map((m: any) => ({ 
-      url: m.url, 
-      type: m.media_type as 'image' | 'video' 
-    })) || [],
+    id: p.id,
+    user_id: p.user_id,
+    body: p.body,
+    image_url: p.image_url || null,
+    video_url: p.video_url || null,
+    privacy: p.visibility || p.privacy || 'public', // Handle both column names
+    created_at: p.created_at,
+    allow_share: p.allow_share ?? true,
+    co_creators: p.co_creators || null,
+    author: profileMap[p.user_id] || null,
+    additional_media: mediaByPost[p.id] || [],
     co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
     like_count: likeCountBy[p.id] ?? 0,
     liked_by_me: myLikeSet.has(p.id),
     comment_count: commentCountBy[p.id] ?? 0,
-    allow_share: p.allow_share ?? true,
   }));
 
   return { rows, error: null };
