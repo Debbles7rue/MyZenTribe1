@@ -1,6 +1,9 @@
 // app/profile/page.tsx - REFACTORED MAIN ORCHESTRATOR
 "use client";
 
+// Force dynamic rendering since this page depends on authentication
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
