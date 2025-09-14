@@ -4,7 +4,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import dynamic from 'next/dynamic';
 
 // Import all the broken-down components  
 import ProfileAboutSection from "./components/ProfileAboutSection";
@@ -56,30 +55,30 @@ function AnimatedCounter({ value, label }: { value: number; label: string }) {
   );
 }
 
-function ProfilePageContent() {
+export default function ProfilePage() {
   // Core state
   const [userId, setUserId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [activeSection, setActiveSection] = useState<'about' | 'privacy' | 'social'>('about');
   const [inviteExpanded, setInviteExpanded] = useState(false);
+  const [mounted, setMounted] = useState(false);
   
   // File upload states
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   
-  // Custom hooks
+  // Custom hooks - pass userId only after mounting
   const isDesktop = useIsDesktop(1024);
-  const { profile, setProfile, loading, error, friendsCount, reload } = useProfileData(userId);
+  const { profile, setProfile, loading, error, friendsCount, reload } = useProfileData(mounted ? userId : null);
   const { save, saving, status, uploadImage } = useProfileSave();
 
   // Get user on mount
-  useEffect(() => { 
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
+  useEffect(() => {
+    setMounted(true);
+    supabase.auth.getUser().then(({ data }) => {
       const user = data.user;
       setUserId(user?.id ?? null);
-    };
-    getUser();
+    });
   }, []);
 
   const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
@@ -135,6 +134,18 @@ function ProfilePageContent() {
   // Avatar change handler
   async function onAvatarChange(url: string) {
     handleProfileChange({ avatar_url: url });
+  }
+
+  // Don't render until mounted to avoid hydration issues
+  if (!mounted) {
+    return (
+      <div className="profile-page">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
   }
 
   // Loading state
@@ -252,13 +263,20 @@ function ProfilePageContent() {
                   />
                   <label htmlFor="avatar-upload" className="file-label">Change Photo</label>
                 </div>
-              ) : (
+              ) : userId ? (
                 <AvatarUploader 
                   userId={userId} 
                   value={profile?.avatar_url || null} 
                   onChange={onAvatarChange} 
                   label="Profile photo" 
                   size={160} 
+                />
+              ) : (
+                <img
+                  src={profile?.avatar_url || "/default-avatar.png"}
+                  alt="Profile"
+                  className="avatar-image"
+                  style={{ width: 160, height: 160 }}
                 />
               )}
               <div className="avatar-badge">✨</div>
@@ -547,7 +565,7 @@ function ProfilePageContent() {
             )}
 
             {/* Privacy Settings */}
-            {(isDesktop || activeSection === 'privacy') && (
+            {(isDesktop || activeSection === 'privacy') && profile && (
               <ProfilePrivacySettings
                 profile={profile}
                 onChange={handleProfileChange}
@@ -556,7 +574,7 @@ function ProfilePageContent() {
             )}
 
             {/* Social Links */}
-            {(isDesktop || activeSection === 'social') && (
+            {(isDesktop || activeSection === 'social') && profile && (
               <ProfileSocialLinks
                 profile={profile}
                 onChange={handleProfileChange}
@@ -577,7 +595,7 @@ function ProfilePageContent() {
         </div>
       ) : (
         /* View Mode */
-        <ProfileAboutSection profile={profile} isOwner={true} />
+        profile && <ProfileAboutSection profile={profile} isOwner={true} />
       )}
 
       {/* Candle Widget */}
@@ -687,16 +705,19 @@ function ProfilePageContent() {
           border-radius: 0.75rem;
           padding: 1rem;
           margin-bottom: 1.5rem;
+          text-align: center;
         }
 
         .error-title {
           font-weight: 600;
           color: #dc2626;
+          margin-bottom: 0.5rem;
         }
 
         .error-message {
           color: #b91c1c;
           font-size: 0.875rem;
+          margin-bottom: 1rem;
         }
 
         .profile-main-card {
@@ -1364,10 +1385,3 @@ function ProfilePageContent() {
     </div>
   );
 }
-
-// Use dynamic import to prevent SSR issues
-const ProfilePage = dynamic(() => Promise.resolve(ProfilePageContent), {
-  ssr: false
-});
-
-export default ProfilePage;
