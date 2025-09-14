@@ -25,62 +25,10 @@ type ProfileSocialLinksProps = {
   isEditing: boolean;
 };
 
-const styles = {
-  socialSettings: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '1rem',
-  },
-  sectionSubtitle: {
-    fontSize: '1rem',
-    fontWeight: 600,
-    color: '#1f2937',
-    margin: '1.5rem 0 1rem 0',
-    paddingTop: '1rem',
-    borderTop: '1px solid #e5e7eb',
-  },
-  formField: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '0.5rem',
-  },
-  formLabel: {
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    color: '#374151',
-  },
-  formInput: {
-    padding: '0.75rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '0.5rem',
-    background: 'rgba(255,255,255,0.9)',
-    transition: 'all 0.2s ease',
-    fontSize: '16px',
-  },
-  socialLinksDisplay: {
-    marginTop: '1rem',
-    paddingTop: '1rem',
-    borderTop: '1px solid #e5e7eb',
-  },
-  socialLinksList: {
-    display: 'flex',
-    gap: '0.75rem',
-    marginTop: '0.5rem',
-    flexWrap: 'wrap' as const,
-  },
-  socialLink: {
-    padding: '0.375rem 0.75rem',
-    background: 'rgba(139,92,246,0.1)',
-    borderRadius: '1rem',
-    color: 'var(--brand)',
-    textDecoration: 'none',
-    fontSize: '0.875rem',
-    transition: 'all 0.2s',
-  },
-};
-
 export default function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinksProps) {
-  if (!profile) return null;
+  if (!profile) {
+    return null;
+  }
 
   const updateSocialLink = (key: keyof SocialLinks, value: string) => {
     onChange({
@@ -91,74 +39,130 @@ export default function ProfileSocialLinks({ profile, onChange, isEditing }: Pro
     });
   };
 
+  // Edit mode
   if (isEditing) {
     return (
-      <div style={styles.socialSettings}>
-        <h4 style={styles.sectionSubtitle}>
+      <div className="social-settings">
+        <h4 className="section-subtitle">
           🌐 Social Links
         </h4>
-
         {SOCIAL_PLATFORMS.map(({ key, label, placeholder }) => (
-          <div key={key} style={styles.formField}>
-            <label style={styles.formLabel}>
+          <div key={key} className="form-field">
+            <label className="form-label">
               {label}
             </label>
             <input 
-              style={styles.formInput}
+              className="form-input"
+              type="url"
               value={profile.social_links?.[key] ?? ""} 
               onChange={(e) => updateSocialLink(key, e.target.value)} 
               placeholder={placeholder}
               autoComplete="off"
               inputMode="url"
-              onFocus={(e) => {
-                e.currentTarget.style.outline = 'none';
-                e.currentTarget.style.borderColor = 'var(--brand)';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(139,92,246,0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#d1d5db';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
             />
           </div>
         ))}
+        <style jsx>{`
+          .social-settings {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+          .section-subtitle {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 1.5rem 0 1rem 0;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+          }
+          .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+          .form-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+          }
+          .form-input {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            background: rgba(255,255,255,0.9);
+            transition: all 0.2s ease;
+            font-size: 16px;
+          }
+          .form-input:focus {
+            outline: none;
+            border-color: var(--brand);
+            box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+          }
+        `}</style>
       </div>
     );
   }
 
   // Display mode - show social links if they exist
-  const activeSocials = profile.social_links ? 
-    Object.entries(profile.social_links).filter(([_, value]) => value) : [];
+  const activeSocials: Array<[string, string]> = [];
   
-  if (activeSocials.length === 0) return null;
+  if (profile.social_links) {
+    Object.entries(profile.social_links).forEach(([key, value]) => {
+      if (value) {
+        activeSocials.push([key, value]);
+      }
+    });
+  }
+  
+  if (activeSocials.length === 0) {
+    return null;
+  }
 
   return (
-    <div style={styles.socialLinksDisplay}>
+    <div className="social-links-display">
       <strong>Connect:</strong>
-      <div style={styles.socialLinksList}>
+      <div className="social-links-list">
         {activeSocials.map(([key, value]) => (
           
             key={key}
             href={`https://${value}`}
             target="_blank"
             rel="noopener noreferrer"
-            style={styles.socialLink}
+            className="social-link"
             title={key}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--brand)';
-              e.currentTarget.style.color = 'white';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(139,92,246,0.1)';
-              e.currentTarget.style.color = 'var(--brand)';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
           >
             {key}
           </a>
         ))}
       </div>
+      <style jsx>{`
+        .social-links-display {
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid #e5e7eb;
+        }
+        .social-links-list {
+          display: flex;
+          gap: 0.75rem;
+          margin-top: 0.5rem;
+          flex-wrap: wrap;
+        }
+        .social-link {
+          padding: 0.375rem 0.75rem;
+          background: rgba(139,92,246,0.1);
+          border-radius: 1rem;
+          color: var(--brand);
+          text-decoration: none;
+          font-size: 0.875rem;
+          transition: all 0.2s;
+        }
+        .social-link:hover {
+          background: var(--brand);
+          color: white;
+          transform: translateY(-1px);
+        }
+      `}</style>
     </div>
   );
 }
