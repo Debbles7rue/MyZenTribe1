@@ -3,8 +3,7 @@
 
 // CRITICAL: Force dynamic rendering to prevent build errors
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-export const revalidate = 0;
+export const revalidate = false;
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
