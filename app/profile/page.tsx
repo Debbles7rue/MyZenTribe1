@@ -7,11 +7,9 @@ import { supabase } from "@/lib/supabaseClient";
 
 // Import all the broken-down components
 import ProfileHeader from "./components/ProfileHeader";
-import ProfileEditForm from "./components/ProfileEditForm";
 import ProfileAboutSection from "./components/ProfileAboutSection";
 import ProfilePrivacySettings from "./components/ProfilePrivacySettings";
 import ProfileSocialLinks from "./components/ProfileSocialLinks";
-import ProfileAnalytics from "./components/ProfileAnalytics";
 
 // Import existing components that work well
 import PhotosFeed from "@/components/PhotosFeed";
