@@ -25,12 +25,12 @@ interface ProfileSocialLinksProps {
   isEditing: boolean;
 }
 
-function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinksProps) {
+export default function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinksProps): JSX.Element | null {
   if (!profile) {
     return null;
   }
 
-  const updateSocialLink = (key: keyof SocialLinks, value: string) => {
+  const updateSocialLink = (key: keyof SocialLinks, value: string): void => {
     onChange({
       social_links: {
         ...profile.social_links,
@@ -40,30 +40,22 @@ function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinks
   };
 
   if (isEditing) {
-    return (
-      <div className="social-settings">
-        <h4 className="section-subtitle">
-          🌐 Social Links
-        </h4>
-        {SOCIAL_PLATFORMS.map(({ key, label, placeholder }) => {
-          return (
-            <div key={key} className="form-field">
-              <label className="form-label">
-                {label}
-              </label>
-              <input 
-                className="form-input"
-                type="url"
-                value={profile.social_links?.[key] ?? ""} 
-                onChange={(e) => updateSocialLink(key, e.target.value)} 
-                placeholder={placeholder}
-                autoComplete="off"
-                inputMode="url"
-              />
-            </div>
-          );
-        })}
-      </div>
+    return React.createElement('div', { className: 'social-settings' },
+      React.createElement('h4', { className: 'section-subtitle' }, '🌐 Social Links'),
+      SOCIAL_PLATFORMS.map(({ key, label, placeholder }) =>
+        React.createElement('div', { key, className: 'form-field' },
+          React.createElement('label', { className: 'form-label' }, label),
+          React.createElement('input', {
+            className: 'form-input',
+            type: 'url',
+            value: profile.social_links?.[key] ?? '',
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => updateSocialLink(key, e.target.value),
+            placeholder,
+            autoComplete: 'off',
+            inputMode: 'url'
+          })
+        )
+      )
     );
   }
 
@@ -81,29 +73,19 @@ function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinks
     return null;
   }
 
-  const socialLinksElement = (
-    <div className="social-links-display">
-      <strong>Connect:</strong>
-      <div className="social-links-list">
-        {activeSocials.map(([key, value]) => {
-          return (
-            
-              key={key}
-              href={`https://${value}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="social-link"
-              title={key}
-            >
-              {key}
-            </a>
-          );
-        })}
-      </div>
-    </div>
+  return React.createElement('div', { className: 'social-links-display' },
+    React.createElement('strong', null, 'Connect:'),
+    React.createElement('div', { className: 'social-links-list' },
+      activeSocials.map(([key, value]) =>
+        React.createElement('a', {
+          key,
+          href: `https://${value}`,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          className: 'social-link',
+          title: key
+        }, key)
+      )
+    )
   );
-
-  return socialLinksElement;
 }
-
-export default ProfileSocialLinks;
