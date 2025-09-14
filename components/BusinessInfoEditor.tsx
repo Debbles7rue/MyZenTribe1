@@ -1,4 +1,4 @@
-// components/BusinessInfoEditor.tsx - ENHANCED VERSION WITH ALL FEATURES
+// components/BusinessInfoEditor.tsx - MOBILE-OPTIMIZED VERSION
 "use client";
 
 import { useEffect, useState } from "react";
@@ -258,7 +258,7 @@ export default function BusinessInfoEditor({ userId }: Props) {
 
   if (loading) {
     return (
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-4 bg-gray-200 rounded w-1/4"></div>
           <div className="h-8 bg-gray-200 rounded"></div>
@@ -270,89 +270,101 @@ export default function BusinessInfoEditor({ userId }: Props) {
   }
 
   return (
-    <section className="card p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Business Profile Editor</h2>
-        <div className="flex items-center gap-3">
+    <section className="card p-4 sm:p-6 pb-24 sm:pb-6">
+      {/* Header - Mobile Optimized */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold">Business Profile</h2>
           {isOpenNow() && (
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+            <span className="inline-block mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
               Open Now
             </span>
           )}
-          <button
-            onClick={save}
-            disabled={saving || !name || !handle}
-            className="btn btn-brand"
-          >
-            {saving ? "Saving..." : "Save All Changes"}
-          </button>
         </div>
+        
+        {/* Desktop Save Button */}
+        <button
+          onClick={save}
+          disabled={saving || !name || !handle}
+          className="hidden sm:block btn btn-brand min-w-[120px]"
+        >
+          {saving ? "Saving..." : "Save Changes"}
+        </button>
       </div>
 
-      {/* Success/Error Messages */}
+      {/* Success/Error Messages - Mobile Friendly */}
       {success && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg">
+        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm sm:text-base">
           {success}
         </div>
       )}
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm sm:text-base">
           {error}
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 border-b">
-        {[
-          { id: 'basic', label: 'Basic Info' },
-          { id: 'contact', label: 'Contact & Location' },
-          { id: 'hours', label: 'Hours' },
-          { id: 'social', label: 'Social & Links' },
-          { id: 'gallery', label: 'Gallery' },
-          { id: 'settings', label: 'Settings' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Mobile-Optimized Tab Navigation */}
+      <div className="mb-6">
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+          {[
+            { id: 'basic', label: 'Basic', icon: '📝' },
+            { id: 'contact', label: 'Contact', icon: '📞' },
+            { id: 'hours', label: 'Hours', icon: '🕐' },
+            { id: 'social', label: 'Social', icon: '🔗' },
+            { id: 'gallery', label: 'Gallery', icon: '🖼️' },
+            { id: 'settings', label: 'Settings', icon: '⚙️' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`
+                flex flex-col sm:flex-row items-center gap-1 sm:gap-2
+                px-4 py-3 sm:px-4 sm:py-2
+                rounded-lg font-medium whitespace-nowrap
+                min-w-[80px] sm:min-w-0
+                transition-all
+                ${activeTab === tab.id
+                  ? 'bg-purple-600 text-white shadow-lg scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }
+              `}
+            >
+              <span className="text-lg sm:text-base">{tab.icon}</span>
+              <span className="text-xs sm:text-sm">{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content - Mobile Optimized */}
       <div className="space-y-6">
         {/* Basic Info Tab */}
         {activeTab === 'basic' && (
-          <>
-            {/* Handle */}
+          <div className="space-y-6">
+            {/* Handle - Mobile Optimized */}
             <div>
               <label className="block text-sm font-medium mb-2">
                 Business Handle <span className="text-red-500">*</span>
               </label>
               <div className="flex">
-                <span className="px-3 py-2 bg-gray-100 rounded-l-lg">@</span>
+                <span className="px-3 py-3 bg-gray-100 rounded-l-lg text-gray-600">@</span>
                 <input
                   type="text"
                   value={handle}
                   onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                   placeholder="tree-of-life"
-                  className="flex-1 px-3 py-2 border rounded-r-lg"
+                  className="flex-1 px-3 py-3 border rounded-r-lg text-base"
                   required
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Your unique URL: /business/{handle || 'your-handle'}
+                Your URL: /business/{handle || 'handle'}
               </p>
             </div>
 
-            {/* Name & Tagline */}
-            <div className="grid md:grid-cols-2 gap-4">
+            {/* Name & Tagline - Stack on Mobile */}
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Business Name <span className="text-red-500">*</span>
@@ -362,54 +374,58 @@ export default function BusinessInfoEditor({ userId }: Props) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="The Beautiful Healer"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-3 py-3 border rounded-lg text-base"
                   required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Tagline (80 chars)
+                  Tagline
                 </label>
                 <input
                   type="text"
                   value={tagline}
                   onChange={(e) => setTagline(e.target.value.slice(0, 80))}
                   placeholder="Holistic healing for mind, body & soul"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-3 py-3 border rounded-lg text-base"
                   maxLength={80}
                 />
-                <p className="text-xs text-gray-500 mt-1">{tagline.length}/80</p>
+                <p className="text-xs text-gray-500 mt-1">{tagline.length}/80 characters</p>
               </div>
             </div>
 
-            {/* Logos */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium mb-2">Logo</label>
-                <AvatarUploader
-                  userId={userId}
-                  value={logoUrl}
-                  onChange={setLogoUrl}
-                  label="Upload Logo"
-                  size={120}
-                />
+            {/* Logos - Mobile Centered */}
+            <div className="space-y-6">
+              <div className="text-center">
+                <label className="block text-sm font-medium mb-3">Business Logo</label>
+                <div className="flex justify-center">
+                  <AvatarUploader
+                    userId={userId}
+                    value={logoUrl}
+                    onChange={setLogoUrl}
+                    label="Upload Logo"
+                    size={120}
+                  />
+                </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium mb-2">Cover Image</label>
-                <AvatarUploader
-                  userId={userId}
-                  value={coverUrl}
-                  onChange={setCoverUrl}
-                  label="Upload Cover"
-                  size={120}
-                />
-                <p className="text-xs text-gray-500 mt-1">Recommended: 1920x400px</p>
+              <div className="text-center">
+                <label className="block text-sm font-medium mb-3">Cover Image</label>
+                <div className="flex justify-center">
+                  <AvatarUploader
+                    userId={userId}
+                    value={coverUrl}
+                    onChange={setCoverUrl}
+                    label="Upload Cover"
+                    size={120}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Recommended: 1920x400px</p>
               </div>
             </div>
 
-            {/* Description */}
+            {/* Description - Larger Touch Target */}
             <div>
               <label className="block text-sm font-medium mb-2">
                 About Your Business
@@ -417,15 +433,15 @@ export default function BusinessInfoEditor({ userId }: Props) {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell customers about your business, services, and what makes you unique..."
+                placeholder="Tell customers about your business..."
                 rows={6}
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
               />
             </div>
 
-            {/* Categories */}
+            {/* Categories - Touch Friendly Chips */}
             <div>
-              <label className="block text-sm font-medium mb-2">Categories</label>
+              <label className="block text-sm font-medium mb-3">Categories</label>
               <div className="flex flex-wrap gap-2">
                 {categoryOptions.map(cat => (
                   <button
@@ -438,11 +454,15 @@ export default function BusinessInfoEditor({ userId }: Props) {
                         setCategories([...categories, cat]);
                       }
                     }}
-                    className={`px-3 py-1 rounded-full text-sm ${
-                      categories.includes(cat)
-                        ? 'bg-purple-600 text-white'
+                    className={`
+                      px-4 py-2 rounded-full text-sm
+                      min-h-[44px] min-w-[80px]
+                      transition-all
+                      ${categories.includes(cat)
+                        ? 'bg-purple-600 text-white scale-105 shadow-md'
                         : 'bg-gray-100 hover:bg-gray-200'
-                    }`}
+                      }
+                    `}
                   >
                     {cat}
                   </button>
@@ -450,13 +470,13 @@ export default function BusinessInfoEditor({ userId }: Props) {
               </div>
             </div>
 
-            {/* Price Range */}
+            {/* Price Range - Large Touch Target */}
             <div>
               <label className="block text-sm font-medium mb-2">Price Range</label>
               <select
                 value={priceRange}
                 onChange={(e) => setPriceRange(e.target.value)}
-                className="px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
               >
                 <option value="$">$ - Budget</option>
                 <option value="$$">$$ - Moderate</option>
@@ -465,9 +485,9 @@ export default function BusinessInfoEditor({ userId }: Props) {
               </select>
             </div>
 
-            {/* Languages */}
+            {/* Languages - Touch Friendly */}
             <div>
-              <label className="block text-sm font-medium mb-2">Languages</label>
+              <label className="block text-sm font-medium mb-3">Languages</label>
               <div className="flex flex-wrap gap-2">
                 {languageOptions.map(lang => (
                   <button
@@ -480,11 +500,15 @@ export default function BusinessInfoEditor({ userId }: Props) {
                         setLanguages([...languages, lang]);
                       }
                     }}
-                    className={`px-3 py-1 rounded-full text-sm ${
-                      languages.includes(lang)
-                        ? 'bg-blue-600 text-white'
+                    className={`
+                      px-4 py-2 rounded-full text-sm
+                      min-h-[44px] min-w-[80px]
+                      transition-all
+                      ${languages.includes(lang)
+                        ? 'bg-blue-600 text-white scale-105 shadow-md'
                         : 'bg-gray-100 hover:bg-gray-200'
-                    }`}
+                      }
+                    `}
                   >
                     {lang}
                   </button>
@@ -492,9 +516,9 @@ export default function BusinessInfoEditor({ userId }: Props) {
               </div>
             </div>
 
-            {/* Amenities */}
+            {/* Amenities - Touch Friendly */}
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-3">
                 Amenities & Accessibility
               </label>
               <div className="flex flex-wrap gap-2">
@@ -509,23 +533,27 @@ export default function BusinessInfoEditor({ userId }: Props) {
                         setAmenities([...amenities, amenity]);
                       }
                     }}
-                    className={`px-3 py-1 rounded-full text-sm ${
-                      amenities.includes(amenity)
-                        ? 'bg-green-600 text-white'
+                    className={`
+                      px-4 py-2 rounded-full text-sm
+                      min-h-[44px]
+                      transition-all
+                      ${amenities.includes(amenity)
+                        ? 'bg-green-600 text-white scale-105 shadow-md'
                         : 'bg-gray-100 hover:bg-gray-200'
-                    }`}
+                      }
+                    `}
                   >
                     {amenity}
                   </button>
                 ))}
               </div>
             </div>
-          </>
+          </div>
         )}
 
-        {/* Contact & Location Tab */}
+        {/* Contact & Location Tab - Mobile Optimized */}
         {activeTab === 'contact' && (
-          <>
+          <div className="space-y-6">
             {/* Location */}
             <div>
               <label className="block text-sm font-medium mb-2">Location</label>
@@ -534,13 +562,14 @@ export default function BusinessInfoEditor({ userId }: Props) {
                 value={locationText}
                 onChange={(e) => setLocationText(e.target.value)}
                 placeholder="City, State, Country"
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
               />
-              <label className="flex items-center gap-2 mt-2">
+              <label className="flex items-center gap-3 mt-3 p-3 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
                   checked={locationPublic}
                   onChange={(e) => setLocationPublic(e.target.checked)}
+                  className="w-5 h-5"
                 />
                 <span className="text-sm">Show location publicly</span>
               </label>
@@ -554,13 +583,15 @@ export default function BusinessInfoEditor({ userId }: Props) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="(555) 123-4567"
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
+                inputMode="tel"
               />
-              <label className="flex items-center gap-2 mt-2">
+              <label className="flex items-center gap-3 mt-3 p-3 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
                   checked={phonePublic}
                   onChange={(e) => setPhonePublic(e.target.checked)}
+                  className="w-5 h-5"
                 />
                 <span className="text-sm">Show phone publicly</span>
               </label>
@@ -574,13 +605,15 @@ export default function BusinessInfoEditor({ userId }: Props) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="contact@business.com"
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
+                inputMode="email"
               />
-              <label className="flex items-center gap-2 mt-2">
+              <label className="flex items-center gap-3 mt-3 p-3 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
                   checked={emailPublic}
                   onChange={(e) => setEmailPublic(e.target.checked)}
+                  className="w-5 h-5"
                 />
                 <span className="text-sm">Show email publicly</span>
               </label>
@@ -594,7 +627,8 @@ export default function BusinessInfoEditor({ userId }: Props) {
                 value={websiteUrl}
                 onChange={(e) => setWebsiteUrl(e.target.value)}
                 placeholder="https://www.yourbusiness.com"
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
+                inputMode="url"
               />
             </div>
 
@@ -606,52 +640,55 @@ export default function BusinessInfoEditor({ userId }: Props) {
                 value={bookingUrl}
                 onChange={(e) => setBookingUrl(e.target.value)}
                 placeholder="https://calendly.com/yourbusiness"
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
+                inputMode="url"
               />
             </div>
-          </>
+          </div>
         )}
 
-        {/* Hours Tab */}
+        {/* Hours Tab - Mobile Optimized */}
         {activeTab === 'hours' && (
           <div className="space-y-3">
             <h3 className="font-semibold mb-3">Business Hours</h3>
             {Object.entries(hours).map(([day, dayHours]) => (
-              <div key={day} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-28 font-medium capitalize">{day}</div>
-                
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!dayHours.closed}
-                    onChange={(e) => updateHours(day as keyof BusinessHours, 'closed', !e.target.checked)}
-                  />
-                  <span className="text-sm">Open</span>
-                </label>
+              <div key={day} className="p-3 bg-gray-50 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium capitalize">{day}</span>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!dayHours.closed}
+                      onChange={(e) => updateHours(day as keyof BusinessHours, 'closed', !e.target.checked)}
+                      className="w-5 h-5"
+                    />
+                    <span className="text-sm">Open</span>
+                  </label>
+                </div>
                 
                 {!dayHours.closed && (
-                  <>
+                  <div className="flex items-center gap-2">
                     <input
                       type="time"
                       value={dayHours.open}
                       onChange={(e) => updateHours(day as keyof BusinessHours, 'open', e.target.value)}
-                      className="px-2 py-1 border rounded"
+                      className="flex-1 px-3 py-2 border rounded-lg"
                     />
-                    <span>to</span>
+                    <span className="text-sm">to</span>
                     <input
                       type="time"
                       value={dayHours.close}
                       onChange={(e) => updateHours(day as keyof BusinessHours, 'close', e.target.value)}
-                      className="px-2 py-1 border rounded"
+                      className="flex-1 px-3 py-2 border rounded-lg"
                     />
-                  </>
+                  </div>
                 )}
               </div>
             ))}
           </div>
         )}
 
-        {/* Social Links Tab */}
+        {/* Social Links Tab - Mobile Optimized */}
         {activeTab === 'social' && (
           <div className="space-y-4">
             <h3 className="font-semibold mb-3">Social Media Links</h3>
@@ -666,14 +703,14 @@ export default function BusinessInfoEditor({ userId }: Props) {
                   value={socialLinks[platform as keyof SocialLinks] || ''}
                   onChange={(e) => setSocialLinks({ ...socialLinks, [platform]: e.target.value })}
                   placeholder={`@yourbusiness or URL`}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-3 py-3 border rounded-lg text-base"
                 />
               </div>
             ))}
           </div>
         )}
 
-        {/* Gallery Tab */}
+        {/* Gallery Tab - Mobile Optimized */}
         {activeTab === 'gallery' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-4">
@@ -681,7 +718,7 @@ export default function BusinessInfoEditor({ userId }: Props) {
               <span className="text-sm text-gray-500">{gallery.length} items</span>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               {gallery.map(item => (
                 <div key={item.id} className="relative group">
                   <img
@@ -694,7 +731,7 @@ export default function BusinessInfoEditor({ userId }: Props) {
                     onChange={(e) => updateGalleryItem(item.id, { 
                       visibility: e.target.value as 'public' | 'unlisted' | 'private' 
                     })}
-                    className="absolute bottom-2 left-2 text-xs px-2 py-1 bg-white/90 rounded"
+                    className="absolute bottom-2 left-2 right-2 text-xs px-2 py-1 bg-white/90 rounded"
                   >
                     <option value="public">Public</option>
                     <option value="unlisted">Unlisted</option>
@@ -702,7 +739,7 @@ export default function BusinessInfoEditor({ userId }: Props) {
                   </select>
                   <button
                     onClick={() => removeGalleryItem(item.id)}
-                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center"
                   >
                     ✕
                   </button>
@@ -711,25 +748,22 @@ export default function BusinessInfoEditor({ userId }: Props) {
               
               <button
                 onClick={() => {
-                  // In production, this would open an upload dialog
                   const url = prompt('Enter image URL:');
                   if (url) addGalleryItem(url);
                 }}
-                className="aspect-square border-2 border-dashed rounded-lg flex items-center justify-center hover:bg-gray-50 cursor-pointer"
+                className="aspect-square border-2 border-dashed rounded-lg flex flex-col items-center justify-center hover:bg-gray-50"
               >
-                <div className="text-center">
-                  <div className="text-3xl mb-2">+</div>
-                  <div className="text-sm text-gray-500">Add Photo</div>
-                </div>
+                <div className="text-3xl mb-2">+</div>
+                <div className="text-xs text-gray-500">Add Photo</div>
               </button>
             </div>
           </div>
         )}
 
-        {/* Settings Tab */}
+        {/* Settings Tab - Mobile Optimized */}
         {activeTab === 'settings' && (
           <div className="space-y-6">
-            <h3 className="font-semibold mb-3">Visibility & Privacy Settings</h3>
+            <h3 className="font-semibold mb-3">Settings</h3>
             
             {/* Visibility */}
             <div>
@@ -737,70 +771,81 @@ export default function BusinessInfoEditor({ userId }: Props) {
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value as any)}
-                className="px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-3 border rounded-lg text-base"
               >
                 <option value="public">Public - Anyone can view</option>
-                <option value="unlisted">Unlisted - Only with direct link</option>
-                <option value="private">Private - Only you can view</option>
+                <option value="unlisted">Unlisted - Only with link</option>
+                <option value="private">Private - Only you</option>
               </select>
             </div>
 
-            {/* Toggle Settings */}
+            {/* Toggle Settings - Touch Friendly */}
             <div className="space-y-3">
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div>
                   <div className="font-medium">Discoverable</div>
-                  <div className="text-sm text-gray-500">Show in search results and feeds</div>
+                  <div className="text-xs text-gray-500">Show in search</div>
                 </div>
                 <input
                   type="checkbox"
                   checked={discoverable}
                   onChange={(e) => setDiscoverable(e.target.checked)}
-                  className="w-5 h-5"
+                  className="w-6 h-6"
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div>
                   <div className="font-medium">Allow Messages</div>
-                  <div className="text-sm text-gray-500">Let customers message you</div>
+                  <div className="text-xs text-gray-500">Customer inquiries</div>
                 </div>
                 <input
                   type="checkbox"
                   checked={allowMessages}
                   onChange={(e) => setAllowMessages(e.target.checked)}
-                  className="w-5 h-5"
+                  className="w-6 h-6"
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div>
                   <div className="font-medium">Allow Reviews</div>
-                  <div className="text-sm text-gray-500">Let customers leave reviews</div>
+                  <div className="text-xs text-gray-500">Customer feedback</div>
                 </div>
                 <input
                   type="checkbox"
                   checked={allowReviews}
                   onChange={(e) => setAllowReviews(e.target.checked)}
-                  className="w-5 h-5"
+                  className="w-6 h-6"
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div>
-                  <div className="font-medium">Allow Collaboration</div>
-                  <div className="text-sm text-gray-500">Let team members edit profile</div>
+                  <div className="font-medium">Team Access</div>
+                  <div className="text-xs text-gray-500">Allow collaboration</div>
                 </div>
                 <input
                   type="checkbox"
                   checked={allowCollaboration}
                   onChange={(e) => setAllowCollaboration(e.target.checked)}
-                  className="w-5 h-5"
+                  className="w-6 h-6"
                 />
               </label>
             </div>
           </div>
         )}
+      </div>
+
+      {/* Mobile Sticky Save Button */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg sm:hidden">
+        <button
+          onClick={save}
+          disabled={saving || !name || !handle}
+          className="w-full py-4 bg-purple-600 text-white rounded-xl font-medium text-base disabled:bg-gray-300"
+        >
+          {saving ? "Saving..." : "Save All Changes"}
+        </button>
       </div>
     </section>
   );
