@@ -8,38 +8,38 @@ export const revalidate = 0;
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 
 // Import types
 import type { Profile } from "./types/profile";
 
 // Lazy load all components that might use userId
-const ProfileAboutSection = dynamic(() => import("./components/ProfileAboutSection"), { 
+const ProfileAboutSection = dynamicImport(() => import("./components/ProfileAboutSection"), { 
   ssr: false,
   loading: () => <div>Loading...</div>
 });
-const ProfilePrivacySettings = dynamic(() => import("./components/ProfilePrivacySettings"), { 
+const ProfilePrivacySettings = dynamicImport(() => import("./components/ProfilePrivacySettings"), { 
   ssr: false,
   loading: () => <div>Loading...</div>
 });
-const ProfileSocialLinks = dynamic(() => import("./components/ProfileSocialLinks"), { 
+const ProfileSocialLinks = dynamicImport(() => import("./components/ProfileSocialLinks"), { 
   ssr: false,
   loading: () => <div>Loading...</div>
 });
-const PhotosFeed = dynamic(() => import("@/components/PhotosFeed"), { 
+const PhotosFeed = dynamicImport(() => import("@/components/PhotosFeed"), { 
   ssr: false,
   loading: () => <div>Loading photos...</div>
 });
-const ProfileInviteQR = dynamic(() => import("@/components/ProfileInviteQR"), { 
+const ProfileInviteQR = dynamicImport(() => import("@/components/ProfileInviteQR"), { 
   ssr: false,
   loading: () => <div>Loading QR...</div>
 });
-const ProfileCandleWidget = dynamic(() => import("@/components/ProfileCandleWidget"), { 
+const ProfileCandleWidget = dynamicImport(() => import("@/components/ProfileCandleWidget"), { 
   ssr: false,
   loading: () => <div>Loading candles...</div>
 });
-const AvatarUploader = dynamic(() => import("@/components/AvatarUploader"), { 
+const AvatarUploader = dynamicImport(() => import("@/components/AvatarUploader"), { 
   ssr: false,
   loading: () => <div>Loading avatar...</div>
 });
