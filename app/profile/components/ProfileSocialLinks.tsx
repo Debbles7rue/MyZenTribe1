@@ -19,13 +19,13 @@ const SOCIAL_PLATFORMS: Array<{
   { key: "discord", label: "Discord", placeholder: "discord username" },
 ];
 
-type ProfileSocialLinksProps = {
+interface ProfileSocialLinksProps {
   profile: Profile | null;
   onChange: (updates: Partial<Profile>) => void;
   isEditing: boolean;
-};
+}
 
-export default function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinksProps) {
+function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinksProps) {
   if (!profile) {
     return null;
   }
@@ -39,72 +39,34 @@ export default function ProfileSocialLinks({ profile, onChange, isEditing }: Pro
     });
   };
 
-  // Edit mode
   if (isEditing) {
     return (
       <div className="social-settings">
         <h4 className="section-subtitle">
           🌐 Social Links
         </h4>
-        {SOCIAL_PLATFORMS.map(({ key, label, placeholder }) => (
-          <div key={key} className="form-field">
-            <label className="form-label">
-              {label}
-            </label>
-            <input 
-              className="form-input"
-              type="url"
-              value={profile.social_links?.[key] ?? ""} 
-              onChange={(e) => updateSocialLink(key, e.target.value)} 
-              placeholder={placeholder}
-              autoComplete="off"
-              inputMode="url"
-            />
-          </div>
-        ))}
-        <style jsx>{`
-          .social-settings {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-          }
-          .section-subtitle {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #1f2937;
-            margin: 1.5rem 0 1rem 0;
-            padding-top: 1rem;
-            border-top: 1px solid #e5e7eb;
-          }
-          .form-field {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-          }
-          .form-label {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #374151;
-          }
-          .form-input {
-            padding: 0.75rem;
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            background: rgba(255,255,255,0.9);
-            transition: all 0.2s ease;
-            font-size: 16px;
-          }
-          .form-input:focus {
-            outline: none;
-            border-color: var(--brand);
-            box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
-          }
-        `}</style>
+        {SOCIAL_PLATFORMS.map(({ key, label, placeholder }) => {
+          return (
+            <div key={key} className="form-field">
+              <label className="form-label">
+                {label}
+              </label>
+              <input 
+                className="form-input"
+                type="url"
+                value={profile.social_links?.[key] ?? ""} 
+                onChange={(e) => updateSocialLink(key, e.target.value)} 
+                placeholder={placeholder}
+                autoComplete="off"
+                inputMode="url"
+              />
+            </div>
+          );
+        })}
       </div>
     );
   }
 
-  // Display mode - show social links if they exist
   const activeSocials: Array<[string, string]> = [];
   
   if (profile.social_links) {
@@ -119,50 +81,29 @@ export default function ProfileSocialLinks({ profile, onChange, isEditing }: Pro
     return null;
   }
 
-  return (
+  const socialLinksElement = (
     <div className="social-links-display">
       <strong>Connect:</strong>
       <div className="social-links-list">
-        {activeSocials.map(([key, value]) => (
-          
-            key={key}
-            href={`https://${value}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="social-link"
-            title={key}
-          >
-            {key}
-          </a>
-        ))}
+        {activeSocials.map(([key, value]) => {
+          return (
+            
+              key={key}
+              href={`https://${value}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-link"
+              title={key}
+            >
+              {key}
+            </a>
+          );
+        })}
       </div>
-      <style jsx>{`
-        .social-links-display {
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e5e7eb;
-        }
-        .social-links-list {
-          display: flex;
-          gap: 0.75rem;
-          margin-top: 0.5rem;
-          flex-wrap: wrap;
-        }
-        .social-link {
-          padding: 0.375rem 0.75rem;
-          background: rgba(139,92,246,0.1);
-          border-radius: 1rem;
-          color: var(--brand);
-          text-decoration: none;
-          font-size: 0.875rem;
-          transition: all 0.2s;
-        }
-        .social-link:hover {
-          background: var(--brand);
-          color: white;
-          transform: translateY(-1px);
-        }
-      `}</style>
     </div>
   );
+
+  return socialLinksElement;
 }
+
+export default ProfileSocialLinks;
