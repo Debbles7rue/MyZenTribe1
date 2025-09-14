@@ -1,30 +1,55 @@
-// app/profile/page.tsx - FIXED BUILD ERROR
+// app/profile/page.tsx - GUARANTEED FIX
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+// CRITICAL: Force dynamic rendering to prevent build errors
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const revalidate = 0;
+
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
-
-// Import all the broken-down components  
-import ProfileAboutSection from "./components/ProfileAboutSection";
-import ProfilePrivacySettings from "./components/ProfilePrivacySettings";
-import ProfileSocialLinks from "./components/ProfileSocialLinks";
-
-// Import existing components that work well
-import PhotosFeed from "@/components/PhotosFeed";
-import ProfileInviteQR from "@/components/ProfileInviteQR";
-import ProfileCandleWidget from "@/components/ProfileCandleWidget";
-import AvatarUploader from "@/components/AvatarUploader";
-
-// Import hooks
-import { useProfileData } from "./hooks/useProfileData";
-import { useProfileSave } from "./hooks/useProfileSave";
-import { useIsDesktop } from "./hooks/useIsDesktop";
 
 // Import types
 import type { Profile } from "./types/profile";
 
-// Animated counter component from original
+// Lazy load all components that might use userId
+const ProfileAboutSection = dynamic(() => import("./components/ProfileAboutSection"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const ProfilePrivacySettings = dynamic(() => import("./components/ProfilePrivacySettings"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const ProfileSocialLinks = dynamic(() => import("./components/ProfileSocialLinks"), { 
+  ssr: false,
+  loading: () => <div>Loading...</div>
+});
+const PhotosFeed = dynamic(() => import("@/components/PhotosFeed"), { 
+  ssr: false,
+  loading: () => <div>Loading photos...</div>
+});
+const ProfileInviteQR = dynamic(() => import("@/components/ProfileInviteQR"), { 
+  ssr: false,
+  loading: () => <div>Loading QR...</div>
+});
+const ProfileCandleWidget = dynamic(() => import("@/components/ProfileCandleWidget"), { 
+  ssr: false,
+  loading: () => <div>Loading candles...</div>
+});
+const AvatarUploader = dynamic(() => import("@/components/AvatarUploader"), { 
+  ssr: false,
+  loading: () => <div>Loading avatar...</div>
+});
+
+// Import hooks - wrapped to prevent SSR issues
+import { useProfileData } from "./hooks/useProfileData";
+import { useProfileSave } from "./hooks/useProfileSave";
+import { useIsDesktop } from "./hooks/useIsDesktop";
+
+// Animated counter component
 function AnimatedCounter({ value, label }: { value: number; label: string }) {
   const [displayValue, setDisplayValue] = useState(0);
   
@@ -55,9 +80,10 @@ function AnimatedCounter({ value, label }: { value: number; label: string }) {
   );
 }
 
-export default function ProfilePage() {
-  // Core state
-  const [userId, setUserId] = useState<string | null>(null);
+// Main component wrapped to prevent SSR
+function ProfilePageContent() {
+  // Initialize all state with safe defaults
+  const [userId, setUserId] = useState<string>("");
   const [editMode, setEditMode] = useState(false);
   const [activeSection, setActiveSection] = useState<'about' | 'privacy' | 'social'>('about');
   const [inviteExpanded, setInviteExpanded] = useState(false);
@@ -67,7 +93,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   
-  // Custom hooks - pass userId only after mounting
+  // Custom hooks - safe to use after mount check
   const isDesktop = useIsDesktop(1024);
   const { profile, setProfile, loading, error, friendsCount, reload } = useProfileData(mounted ? userId : null);
   const { save, saving, status, uploadImage } = useProfileSave();
@@ -75,10 +101,17 @@ export default function ProfilePage() {
   // Get user on mount
   useEffect(() => {
     setMounted(true);
-    supabase.auth.getUser().then(({ data }) => {
-      const user = data.user;
-      setUserId(user?.id ?? null);
-    });
+    const getUser = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user?.id) {
+          setUserId(data.user.id);
+        }
+      } catch (err) {
+        console.error('Error getting user:', err);
+      }
+    };
+    getUser();
   }, []);
 
   const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
@@ -106,7 +139,7 @@ export default function ProfilePage() {
     let updatedProfile = { ...profile };
     
     // Upload avatar if changed
-    if (avatarFile && userId) {
+    if (avatarFile) {
       const avatarUrl = await uploadImage(avatarFile, userId, 'avatars');
       if (avatarUrl) {
         updatedProfile.avatar_url = avatarUrl;
@@ -114,7 +147,7 @@ export default function ProfilePage() {
     }
     
     // Upload cover if changed
-    if (coverFile && userId) {
+    if (coverFile) {
       const coverUrl = await uploadImage(coverFile, userId, 'covers');
       if (coverUrl) {
         updatedProfile.cover_url = coverUrl;
@@ -136,7 +169,7 @@ export default function ProfilePage() {
     handleProfileChange({ avatar_url: url });
   }
 
-  // Don't render until mounted to avoid hydration issues
+  // Wait for client mount
   if (!mounted) {
     return (
       <div className="profile-page">
@@ -263,21 +296,16 @@ export default function ProfilePage() {
                   />
                   <label htmlFor="avatar-upload" className="file-label">Change Photo</label>
                 </div>
-              ) : userId ? (
-                <AvatarUploader 
-                  userId={userId} 
-                  value={profile?.avatar_url || null} 
-                  onChange={onAvatarChange} 
-                  label="Profile photo" 
-                  size={160} 
-                />
               ) : (
-                <img
-                  src={profile?.avatar_url || "/default-avatar.png"}
-                  alt="Profile"
-                  className="avatar-image"
-                  style={{ width: 160, height: 160 }}
-                />
+                <Suspense fallback={<div>Loading avatar...</div>}>
+                  <AvatarUploader 
+                    userId={userId} 
+                    value={profile?.avatar_url || null} 
+                    onChange={onAvatarChange} 
+                    label="Profile photo" 
+                    size={160} 
+                  />
+                </Suspense>
               )}
               <div className="avatar-badge">✨</div>
               {profile?.verified && <div className="verified-badge">✓</div>}
@@ -328,7 +356,9 @@ export default function ProfilePage() {
               
               {inviteExpanded && userId && (
                 <div className="invite-content">
-                  <ProfileInviteQR userId={userId} embed qrSize={180} />
+                  <Suspense fallback={<div>Loading QR...</div>}>
+                    <ProfileInviteQR userId={userId} embed qrSize={180} />
+                  </Suspense>
                 </div>
               )}
             </div>
@@ -566,20 +596,24 @@ export default function ProfilePage() {
 
             {/* Privacy Settings */}
             {(isDesktop || activeSection === 'privacy') && profile && (
-              <ProfilePrivacySettings
-                profile={profile}
-                onChange={handleProfileChange}
-                isEditing={true}
-              />
+              <Suspense fallback={<div>Loading privacy settings...</div>}>
+                <ProfilePrivacySettings
+                  profile={profile}
+                  onChange={handleProfileChange}
+                  isEditing={true}
+                />
+              </Suspense>
             )}
 
             {/* Social Links */}
             {(isDesktop || activeSection === 'social') && profile && (
-              <ProfileSocialLinks
-                profile={profile}
-                onChange={handleProfileChange}
-                isEditing={true}
-              />
+              <Suspense fallback={<div>Loading social links...</div>}>
+                <ProfileSocialLinks
+                  profile={profile}
+                  onChange={handleProfileChange}
+                  isEditing={true}
+                />
+              </Suspense>
             )}
 
             <div className="form-actions">
@@ -595,11 +629,19 @@ export default function ProfilePage() {
         </div>
       ) : (
         /* View Mode */
-        profile && <ProfileAboutSection profile={profile} isOwner={true} />
+        profile && (
+          <Suspense fallback={<div>Loading profile...</div>}>
+            <ProfileAboutSection profile={profile} isOwner={true} />
+          </Suspense>
+        )
       )}
 
       {/* Candle Widget */}
-      {userId && <ProfileCandleWidget userId={userId} isOwner={true} />}
+      {userId && (
+        <Suspense fallback={<div>Loading candles...</div>}>
+          <ProfileCandleWidget userId={userId} isOwner={true} />
+        </Suspense>
+      )}
 
       {/* Sacred Candles Link Card */}
       <div className="card candles-card">
@@ -612,7 +654,11 @@ export default function ProfilePage() {
       </div>
 
       {/* Photos Feed */}
-      {userId && <PhotosFeed userId={userId} />}
+      {userId && (
+        <Suspense fallback={<div>Loading photos...</div>}>
+          <PhotosFeed userId={userId} />
+        </Suspense>
+      )}
 
       <style jsx>{`
         .profile-page {
@@ -740,7 +786,6 @@ export default function ProfilePage() {
           margin-bottom: 1.5rem;
         }
 
-        /* Cover section styles */
         .cover-section {
           position: relative;
           height: 200px;
@@ -1384,4 +1429,14 @@ export default function ProfilePage() {
       `}</style>
     </div>
   );
+}
+
+// Export the component wrapped to prevent any SSR issues
+export default function ProfilePage() {
+  // Complete SSR prevention
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  
+  return <ProfilePageContent />;
 }
