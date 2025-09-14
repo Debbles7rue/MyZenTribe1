@@ -9,7 +9,6 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 // Import all the broken-down components
-import ProfileHeader from "./components/ProfileHeader";
 import ProfileAboutSection from "./components/ProfileAboutSection";
 import ProfilePrivacySettings from "./components/ProfilePrivacySettings";
 import ProfileSocialLinks from "./components/ProfileSocialLinks";
@@ -37,7 +36,11 @@ export default function ProfilePage() {
   // Custom hooks
   const isDesktop = useIsDesktop(1024);
   const { profile, setProfile, loading, error, friendsCount, reload } = useProfileData(userId);
-  const { save, saving, status } = useProfileSave();
+  const { save, saving, status, uploadImage } = useProfileSave();
+
+  // File upload states
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
 
   // Get user on mount
   useEffect(() => { 
@@ -47,13 +50,37 @@ export default function ProfilePage() {
     });
   }, []);
 
+  // Handle profile updates
+  const handleProfileChange = (updates: Partial<Profile>) => {
+    if (profile) {
+      setProfile({ ...profile, ...updates });
+    }
+  };
+
   // Handle save
   const handleSave = async () => {
     if (!userId || !profile) return;
     
+    // Upload images if needed
+    if (avatarFile && userId) {
+      const avatarUrl = await uploadImage(avatarFile, userId, 'avatars');
+      if (avatarUrl) {
+        profile.avatar_url = avatarUrl;
+      }
+    }
+    
+    if (coverFile && userId) {
+      const coverUrl = await uploadImage(coverFile, userId, 'covers');
+      if (coverUrl) {
+        profile.cover_url = coverUrl;
+      }
+    }
+    
     const success = await save(userId, profile);
     if (success) {
       setEditMode(false);
+      setAvatarFile(null);
+      setCoverFile(null);
       reload(); // Refresh data
     }
   };
@@ -110,17 +137,57 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Profile Header Component */}
-      <ProfileHeader
-        profile={profile}
-        userId={userId}
-        friendsCount={friendsCount}
-        editMode={editMode}
-        isDesktop={isDesktop}
-        onProfileChange={setProfile}
-        onSave={handleSave}
-        saving={saving}
-      />
+      {/* Profile Header Section - inline since we don't have ProfileHeader component */}
+      <div className="card profile-main-card">
+        <div className="profile-header">
+          <div className="avatar-section">
+            {editMode ? (
+              <div className="avatar-edit">
+                <img
+                  src={avatarFile ? URL.createObjectURL(avatarFile) : (profile?.avatar_url || "/default-avatar.png")}
+                  alt="Profile"
+                  className="avatar-image"
+                />
+                <input
+                  type="file"
+                  id="avatar-upload"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                />
+                <label htmlFor="avatar-upload" className="file-label">
+                  Change Photo
+                </label>
+              </div>
+            ) : (
+              <img
+                src={profile?.avatar_url || "/default-avatar.png"}
+                alt="Profile"
+                className="avatar-image"
+              />
+            )}
+          </div>
+          
+          <div className="profile-info">
+            <h2 className="profile-name">
+              {profile?.full_name || "Your Name"}
+              {profile?.username && <span className="username">@{profile.username}</span>}
+            </h2>
+            {profile?.tagline && <p className="tagline">{profile.tagline}</p>}
+            
+            <div className="stats-row">
+              <div className="stat-card">
+                <div className="stat-number">{friendsCount}</div>
+                <div className="stat-label">Friends</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-number">{profile?.posts_count || 0}</div>
+                <div className="stat-label">Posts</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Invite Friends Section */}
       <div className="card invite-card">
@@ -132,7 +199,7 @@ export default function ProfilePage() {
           <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
         </button>
         
-        {inviteExpanded && (
+        {inviteExpanded && userId && (
           <div className="invite-content">
             <ProfileInviteQR userId={userId} embed qrSize={180} />
           </div>
@@ -171,20 +238,67 @@ export default function ProfilePage() {
             Edit Your Information
           </h3>
           
-          {/* Edit Form Component */}
+          {/* Basic Profile Fields - inline since we don't have ProfileEditForm */}
           {(isDesktop || activeSection === 'about') && (
-            <ProfileEditForm 
-              profile={profile}
-              onProfileChange={setProfile}
-              isDesktop={isDesktop}
-            />
+            <div className="edit-form">
+              <div className="form-field">
+                <label className="form-label">Name</label>
+                <input 
+                  className="form-input"
+                  value={profile?.full_name || ""} 
+                  onChange={(e) => handleProfileChange({ full_name: e.target.value })} 
+                  placeholder="Your full name"
+                />
+              </div>
+              
+              <div className="form-field">
+                <label className="form-label">Username</label>
+                <input 
+                  className="form-input"
+                  value={profile?.username || ""} 
+                  onChange={(e) => handleProfileChange({ username: e.target.value })} 
+                  placeholder="username"
+                />
+              </div>
+              
+              <div className="form-field">
+                <label className="form-label">Bio</label>
+                <textarea 
+                  className="form-input textarea"
+                  rows={3} 
+                  value={profile?.bio || ""} 
+                  onChange={(e) => handleProfileChange({ bio: e.target.value })} 
+                  placeholder="Tell people about yourself..."
+                />
+              </div>
+              
+              <div className="form-field">
+                <label className="form-label">Location</label>
+                <input 
+                  className="form-input"
+                  value={profile?.location_text || ""} 
+                  onChange={(e) => handleProfileChange({ location_text: e.target.value })} 
+                  placeholder="City, State"
+                />
+              </div>
+              
+              <label className="checkbox-label">
+                <input 
+                  type="checkbox"
+                  checked={!!profile?.location_is_public} 
+                  onChange={(e) => handleProfileChange({ location_is_public: e.target.checked })} 
+                />
+                <span>Make location public</span>
+              </label>
+            </div>
           )}
           
           {/* Privacy Settings Component */}
           {(isDesktop || activeSection === 'privacy') && (
             <ProfilePrivacySettings
               profile={profile}
-              onProfileChange={setProfile}
+              onChange={handleProfileChange}
+              isEditing={true}
             />
           )}
           
@@ -192,7 +306,8 @@ export default function ProfilePage() {
           {(isDesktop || activeSection === 'social') && (
             <ProfileSocialLinks
               profile={profile}
-              onProfileChange={setProfile}
+              onChange={handleProfileChange}
+              isEditing={true}
             />
           )}
           
@@ -210,12 +325,7 @@ export default function ProfilePage() {
       ) : (
         <>
           {/* About Section Component (View Mode) */}
-          <ProfileAboutSection profile={profile} />
-          
-          {/* Analytics Component (if applicable) */}
-          {profile?.profile_views_30d !== undefined && (
-            <ProfileAnalytics profile={profile} />
-          )}
+          <ProfileAboutSection profile={profile} isOwner={true} />
         </>
       )}
 
@@ -233,7 +343,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Photos Feed */}
-      <PhotosFeed userId={userId} />
+      {userId && <PhotosFeed userId={userId} />}
 
       <style jsx>{`
         .profile-page {
@@ -314,6 +424,12 @@ export default function ProfilePage() {
           border: 1px solid #fecaca;
         }
 
+        .status-message.info {
+          background: #dbeafe;
+          color: #1e40af;
+          border: 1px solid #93c5fd;
+        }
+
         .card {
           background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
           backdrop-filter: blur(10px);
@@ -322,6 +438,106 @@ export default function ProfilePage() {
           border-radius: 0.75rem;
           padding: 1.5rem;
           margin-bottom: 1.5rem;
+        }
+
+        .profile-main-card {
+          padding: 0;
+          overflow: hidden;
+        }
+
+        .profile-header {
+          display: flex;
+          gap: 2rem;
+          padding: 2rem;
+          align-items: center;
+        }
+
+        @media (max-width: 640px) {
+          .profile-header {
+            flex-direction: column;
+            text-align: center;
+          }
+        }
+
+        .avatar-section {
+          flex-shrink: 0;
+        }
+
+        .avatar-image {
+          width: 120px;
+          height: 120px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 4px solid white;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .avatar-edit {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .file-label {
+          padding: 0.5rem 1rem;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .profile-info {
+          flex-grow: 1;
+        }
+
+        .profile-name {
+          font-size: 1.875rem;
+          font-weight: 700;
+          color: #1f2937;
+          margin: 0 0 0.5rem 0;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .username {
+          font-size: 1rem;
+          font-weight: 400;
+          color: #6b7280;
+        }
+
+        .tagline {
+          font-size: 0.875rem;
+          color: #9ca3af;
+          margin: 0 0 1rem 0;
+        }
+
+        .stats-row {
+          display: flex;
+          gap: 1rem;
+        }
+
+        .stat-card {
+          background: rgba(255,255,255,0.8);
+          border: 1px solid rgba(139,92,246,0.2);
+          border-radius: 0.75rem;
+          padding: 0.75rem 1.5rem;
+          text-align: center;
+        }
+
+        .stat-number {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: var(--brand);
+        }
+
+        .stat-label {
+          font-size: 0.75rem;
+          color: #6b7280;
         }
 
         .invite-card {
@@ -419,6 +635,59 @@ export default function ProfilePage() {
           justify-content: center;
           color: white;
           font-size: 0.875rem;
+        }
+
+        .edit-form {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .form-field {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .form-label {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: #374151;
+        }
+
+        .form-input {
+          padding: 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.5rem;
+          background: rgba(255,255,255,0.9);
+          transition: all 0.2s ease;
+          font-size: 16px;
+        }
+
+        .form-input:focus {
+          outline: none;
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+
+        .form-input.textarea {
+          resize: vertical;
+          min-height: 3rem;
+        }
+
+        .checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+          width: 1rem;
+          height: 1rem;
+          accent-color: var(--brand);
         }
 
         .form-actions {
