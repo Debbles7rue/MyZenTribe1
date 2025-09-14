@@ -126,13 +126,13 @@ export async function listHomeFeed(limit = 20, before?: string) {
   try {
     const { data: media } = await supabase
       .from("post_media")
-      .select("post_id, url, media_type")
+      .select("post_id, storage_path, type")  // Your actual column names
       .in("post_id", ids);
     
     if (media) {
       media.forEach((m: any) => {
         if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
-        mediaByPost[m.post_id].push({ url: m.url, type: m.media_type });
+        mediaByPost[m.post_id].push({ url: m.storage_path, type: m.type });  // Map to expected format
       });
     }
   } catch (e) {
