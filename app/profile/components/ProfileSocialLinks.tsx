@@ -2,9 +2,13 @@
 "use client";
 
 import React from 'react';
-import type { Profile } from '../types/profile';
+import type { Profile, SocialLinks } from '../types/profile';
 
-const SOCIAL_PLATFORMS = [
+const SOCIAL_PLATFORMS: Array<{
+  key: keyof SocialLinks;
+  label: string;
+  placeholder: string;
+}> = [
   { key: "instagram", label: "Instagram", placeholder: "instagram.com/username" },
   { key: "facebook", label: "Facebook", placeholder: "facebook.com/username" },
   { key: "tiktok", label: "TikTok", placeholder: "tiktok.com/@username" },
@@ -24,11 +28,11 @@ type ProfileSocialLinksProps = {
 export default function ProfileSocialLinks({ profile, onChange, isEditing }: ProfileSocialLinksProps) {
   if (!profile) return null;
 
-  const updateSocialLink = (key: string, value: string) => {
+  const updateSocialLink = (key: keyof SocialLinks, value: string) => {
     onChange({
       social_links: {
         ...profile.social_links,
-        [key]: value
+        [key]: value || null
       }
     });
   };
@@ -104,7 +108,8 @@ export default function ProfileSocialLinks({ profile, onChange, isEditing }: Pro
   }
 
   // Display mode - show social links if they exist
-  const activeSocials = Object.entries(profile.social_links || {}).filter(([_, value]) => value);
+  const activeSocials = profile.social_links ? 
+    Object.entries(profile.social_links).filter(([_, value]) => value) : [];
   
   if (activeSocials.length === 0) return null;
 
