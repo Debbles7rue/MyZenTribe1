@@ -1,12 +1,10 @@
-// app/profile/page.tsx - REFACTORED MAIN ORCHESTRATOR
+// app/profile/page.tsx - FIXED BUILD ERROR
 "use client";
-
-// Force dynamic rendering since this page depends on authentication
-export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import dynamic from 'next/dynamic';
 
 // Import all the broken-down components  
 import ProfileAboutSection from "./components/ProfileAboutSection";
@@ -58,7 +56,7 @@ function AnimatedCounter({ value, label }: { value: number; label: string }) {
   );
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   // Core state
   const [userId, setUserId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -76,10 +74,12 @@ export default function ProfilePage() {
 
   // Get user on mount
   useEffect(() => { 
-    supabase.auth.getUser().then(({ data }) => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
       const user = data.user;
       setUserId(user?.id ?? null);
-    });
+    };
+    getUser();
   }, []);
 
   const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
@@ -159,6 +159,21 @@ export default function ProfilePage() {
           <button onClick={reload} className="btn btn-primary">
             Retry
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in state
+  if (!userId) {
+    return (
+      <div className="profile-page">
+        <div className="error-banner">
+          <div className="error-title">Not Logged In</div>
+          <div className="error-message">Please log in to view your profile</div>
+          <Link href="/auth/login" className="btn btn-primary">
+            Log In
+          </Link>
         </div>
       </div>
     );
@@ -1349,3 +1364,10 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+// Use dynamic import to prevent SSR issues
+const ProfilePage = dynamic(() => Promise.resolve(ProfilePageContent), {
+  ssr: false
+});
+
+export default ProfilePage;
