@@ -105,7 +105,7 @@ export default function PublicProfilePage() {
   }
 
   async function loadStats() {
-    // Get friends count - FIXED: Changed from a.eq/b.eq to user_id.eq/friend_id.eq
+    // Get friends count
     const { count: friends } = await supabase
       .from("friendships")
       .select("*", { count: "exact", head: true })
@@ -125,8 +125,7 @@ export default function PublicProfilePage() {
   async function checkRelationshipStatus() {
     if (!currentUserId || !profileId) return;
 
-    // Check if friends - FIXED: Changed from a.eq/b.eq to user_id.eq/friend_id.eq
-    // FIXED: Changed from relationship_type to relationship (to match your DB column)
+    // Check if friends
     const { data: friendship } = await supabase
       .from("friendships")
       .select("relationship")
@@ -136,7 +135,6 @@ export default function PublicProfilePage() {
     if (friendship) {
       setFriendStatus("friends");
       // Check relationship type (friend, acquaintance, restricted)
-      // FIXED: Changed from relationship_type to relationship
       setRelationshipType(friendship.relationship || 'friend');
     } else {
       // Check for pending request
@@ -159,17 +157,15 @@ export default function PublicProfilePage() {
     setMemoriesLoading(true);
     try {
       const today = new Date();
-      const todayMonth = today.getMonth() + 1;
-      const todayDay = today.getDate();
-
-      // Get memories from this day in previous years
+      const dayMonth = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Get memories for this day/month from any year
       const { data, error } = await supabase
         .from("memories")
         .select("*")
         .eq("user_id", profileId)
-        .eq("memory_month", todayMonth)
-        .eq("memory_day", todayDay)
-        .order("memory_year", { ascending: false });
+        .like("date", `%${dayMonth}`)
+        .order("date", { ascending: false });
 
       if (error) throw error;
 
@@ -177,7 +173,7 @@ export default function PublicProfilePage() {
       const visibleMemories = data?.filter(memory => {
         if (memory.visibility === 'public') return true;
         if (memory.visibility === 'friends' && relationshipType === 'friend') return true;
-        if (currentUserId === profileId) return true; // Own memories
+        if (currentUserId === profileId) return true;
         return false;
       }) || [];
 
@@ -205,25 +201,6 @@ export default function PublicProfilePage() {
       }
     } catch (err) {
       console.error("Error sending friend request:", err);
-    }
-  }
-
-  async function removeFriend() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      // FIXED: Changed from a.eq/b.eq to user_id.eq/friend_id.eq
-      const { error } = await supabase
-        .from("friendships")
-        .delete()
-        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`);
-
-      if (!error) {
-        setFriendStatus("none");
-        setRelationshipType('none');
-      }
-    } catch (err) {
-      console.error("Error removing friend:", err);
     }
   }
 
@@ -300,321 +277,143 @@ export default function PublicProfilePage() {
 
           {/* Profile Info */}
           <div className="profile-info">
-            <h1 className="profile-name">{profile.full_name || "Member"}</h1>
+            <h1 className="profile-name">
+              {profile.full_name || "Anonymous User"}
+            </h1>
             
             {showLocation && (
-              <div className="location">
-                <span className="location-icon">📍</span>
-                {profile.location_text}
-              </div>
-            )}
-
-            {/* Relationship Badge */}
-            {relationshipType !== 'none' && (
-              <div className="relationship-badge">
-                {relationshipType === 'friend' && <span className="badge friend">👥 Friend</span>}
-                {relationshipType === 'acquaintance' && <span className="badge acquaintance">🤝 Acquaintance</span>}
-                {relationshipType === 'restricted' && <span className="badge restricted">🔒 Restricted</span>}
-              </div>
+              <p className="profile-location">📍 {profile.location_text}</p>
             )}
 
             {/* Stats */}
             <div className="stats-row">
               <div className="stat">
-                <span className="stat-number">{followersCount}</span>
-                <span className="stat-label">Followers</span>
-              </div>
-              <div className="stat">
                 <span className="stat-number">{friendsCount}</span>
                 <span className="stat-label">Friends</span>
               </div>
-              {canViewMemories && todayMemories.length > 0 && (
-                <div className="stat clickable" onClick={() => setShowMemories(true)}>
-                  <span className="stat-number">{todayMemories.length}</span>
-                  <span className="stat-label">Today's Memories</span>
-                </div>
-              )}
+              <div className="stat">
+                <span className="stat-number">{followersCount}</span>
+                <span className="stat-label">Followers</span>
+              </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="action-buttons">
-              {friendStatus === "none" && (
-                <>
-                  <button 
-                    className="btn btn-primary"
-                    onClick={sendFriendRequest}
-                  >
-                    <span className="btn-icon">➕</span>
+            {/* Actions */}
+            {currentUserId && currentUserId !== profileId && (
+              <div className="action-buttons">
+                {friendStatus === "none" && (
+                  <button onClick={sendFriendRequest} className="btn btn-primary">
                     Add Friend
                   </button>
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={followUser}
-                  >
-                    <span className="btn-icon">👁️</span>
-                    Follow
+                )}
+                {friendStatus === "pending" && (
+                  <button className="btn btn-secondary" disabled>
+                    Request Sent
                   </button>
-                </>
-              )}
-              
-              {friendStatus === "pending" && (
-                <button className="btn btn-neutral" disabled>
-                  <span className="btn-icon">⏳</span>
-                  Request Pending
+                )}
+                {friendStatus === "friends" && (
+                  <button className="btn btn-success" disabled>
+                    ✓ Friends
+                  </button>
+                )}
+                <button onClick={followUser} className="btn btn-secondary">
+                  Follow
                 </button>
-              )}
-              
-              {friendStatus === "friends" && (
-                <button 
-                  className="btn btn-success"
-                  onClick={removeFriend}
-                >
-                  <span className="btn-icon">✓</span>
-                  Friends
-                </button>
-              )}
+              </div>
+            )}
 
-              <Link 
-                href={`/messages/chat/${profileId}`}
-                className="btn btn-neutral"
-              >
-                <span className="btn-icon">💬</span>
-                Message
+            {/* Business Profile Link */}
+            {profile.has_creator_profile && (
+              <Link href={`/business/${profileId}`} className="business-link">
+                View Business Profile →
               </Link>
-
-              {profile.has_creator_profile && (
-                <Link 
-                  href={`/business/${profile.id}`}
-                  className="btn btn-special"
-                >
-                  <span className="btn-icon">✨</span>
-                  Creator Profile
-                </Link>
-              )}
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Bio Section */}
+        {profile.bio && (
+          <div className="bio-section">
+            <h3>About</h3>
+            <p>{profile.bio}</p>
+          </div>
+        )}
       </div>
 
-      {/* Memories Section - Only show if allowed */}
+      {/* Memories Section */}
       {canViewMemories && todayMemories.length > 0 && (
         <div className="card memories-card">
-          <div className="card-header">
-            <h3 className="card-title">
-              <span className="title-icon">📸</span>
-              Memories from Today
-            </h3>
-            <button 
-              className="view-all-btn"
-              onClick={() => setShowMemories(true)}
-            >
-              View All
-            </button>
-          </div>
-          
-          <div className="memories-preview">
-            {todayMemories.slice(0, isMobile ? 2 : 4).map((memory) => (
+          <h3>Today in Past Years</h3>
+          <div className="memories-grid">
+            {todayMemories.map(memory => (
               <div 
-                key={memory.id}
-                className="memory-thumbnail"
+                key={memory.id} 
+                className="memory-item"
                 onClick={() => setSelectedMemory(memory)}
               >
-                <img 
-                  src={memory.photo_url} 
-                  alt={memory.caption}
-                  className="memory-image"
-                />
-                <div className="memory-overlay">
-                  <span className="memory-year">
-                    {new Date(memory.date).getFullYear()}
-                  </span>
-                </div>
+                <img src={memory.photo_url} alt={memory.caption} />
+                <p>{memory.caption}</p>
+                <span className="memory-date">
+                  {new Date(memory.date).toLocaleDateString()}
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* About Section */}
-      {profile.bio && (
-        <div className="card about-card">
-          <h3 className="card-title">
-            <span className="title-icon">👤</span>
-            About
-          </h3>
-          <p className="bio-text">{profile.bio}</p>
-        </div>
+      {/* Photos Feed */}
+      {(canViewFriendContent || profile.id === currentUserId) && (
+        <PhotosFeed userId={profile.id} />
       )}
 
-      {/* Posts Section with Proper Visibility */}
-      <div className="posts-section">
-        <h3 className="section-title">
-          <span className="title-icon">📝</span>
-          Posts
-        </h3>
-        
-        {/* Privacy Notice */}
-        {relationshipType === 'none' && (
-          <div className="privacy-notice">
-            <span className="notice-icon">🔒</span>
-            <span>You can only see public posts. Connect as friends to see more.</span>
-          </div>
-        )}
-        
-        {relationshipType === 'restricted' && (
-          <div className="privacy-notice restricted">
-            <span className="notice-icon">🚫</span>
-            <span>Limited content visibility due to restricted connection.</span>
-          </div>
-        )}
-
-        <PhotosFeed 
-          userId={profileId} 
-          viewerUserId={currentUserId} 
-          isPublicView={true}
-          relationshipType={relationshipType}
-        />
-      </div>
-
-      {/* Full Memories Modal */}
-      {showMemories && (
-        <PhotoMemories 
-          date={new Date()} 
-          onClose={() => setShowMemories(false)}
-          userId={profileId}
-        />
-      )}
-
-      {/* Memory Detail Modal */}
+      {/* Memory Modal */}
       {selectedMemory && (
-        <div className="memory-modal" onClick={() => setSelectedMemory(null)}>
-          <div className="memory-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="modal-close"
-              onClick={() => setSelectedMemory(null)}
-            >
-              ✕
-            </button>
-            <img 
-              src={selectedMemory.photo_url} 
-              alt={selectedMemory.caption}
-              className="modal-image"
-            />
-            <div className="modal-info">
-              <div className="modal-date">
-                {new Date(selectedMemory.date).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </div>
-              {selectedMemory.event_title && (
-                <h4 className="modal-title">{selectedMemory.event_title}</h4>
-              )}
-              <p className="modal-caption">{selectedMemory.caption}</p>
-            </div>
-          </div>
-        </div>
+        <PhotoMemories
+          memories={[selectedMemory]}
+          onClose={() => setSelectedMemory(null)}
+          isMobile={isMobile}
+        />
       )}
 
       <style jsx>{`
         .profile-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
-          padding: 2rem 1rem;
-          padding-bottom: 4rem;
-        }
-
-        .loading-container, .error-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 50vh;
-          gap: 1rem;
-        }
-
-        .loading-spinner {
-          width: 2rem;
-          height: 2rem;
-          border: 3px solid #e5e7eb;
-          border-top: 3px solid #8b5cf6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+          padding: 1rem;
         }
 
         .page-header {
-          max-width: 800px;
-          margin: 0 auto 2rem;
+          margin-bottom: 1rem;
         }
 
         .back-link {
           color: #6b7280;
           text-decoration: none;
-          font-size: 0.875rem;
-          transition: color 0.2s;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.25rem;
-        }
-
-        .back-link:hover {
-          color: #8b5cf6;
         }
 
         .card {
           background: white;
-          border-radius: 1rem;
-          padding: 2rem;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-          max-width: 800px;
-          margin: 0 auto 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-          .card {
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-          }
+          border-radius: 0.75rem;
+          padding: 1.5rem;
+          margin-bottom: 1rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .profile-layout {
           display: flex;
-          gap: 2rem;
+          gap: 1.5rem;
           align-items: flex-start;
         }
 
-        @media (max-width: 640px) {
-          .profile-layout {
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            gap: 1.5rem;
-          }
-        }
-
         .avatar-section {
-          flex-shrink: 0;
           position: relative;
         }
 
         .avatar-image {
-          width: 150px;
-          height: 150px;
+          width: 120px;
+          height: 120px;
           border-radius: 50%;
           object-fit: cover;
-          border: 3px solid rgba(139,92,246,0.2);
-        }
-
-        @media (max-width: 640px) {
-          .avatar-image {
-            width: 120px;
-            height: 120px;
-          }
         }
 
         .status-indicator {
@@ -629,166 +428,64 @@ export default function PublicProfilePage() {
         }
 
         .profile-info {
-          flex-grow: 1;
-          min-width: 0;
+          flex: 1;
         }
 
         .profile-name {
-          font-size: 2rem;
+          font-size: 1.5rem;
           font-weight: 700;
-          color: #1f2937;
           margin: 0 0 0.5rem 0;
         }
 
-        @media (max-width: 640px) {
-          .profile-name {
-            font-size: 1.5rem;
-          }
-        }
-
-        .location {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
+        .profile-location {
           color: #6b7280;
-          margin-bottom: 0.75rem;
-          font-size: 0.875rem;
-        }
-
-        .location-icon {
-          font-size: 0.75rem;
-        }
-
-        .relationship-badge {
-          margin-bottom: 1rem;
-        }
-
-        .badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.25rem;
-          padding: 0.25rem 0.75rem;
-          border-radius: 999px;
-          font-size: 0.75rem;
-          font-weight: 500;
-        }
-
-        .badge.friend {
-          background: #dcfce7;
-          color: #166534;
-        }
-
-        .badge.acquaintance {
-          background: #fef3c7;
-          color: #92400e;
-        }
-
-        .badge.restricted {
-          background: #fee2e2;
-          color: #991b1b;
+          margin: 0 0 1rem 0;
         }
 
         .stats-row {
           display: flex;
           gap: 2rem;
-          margin-bottom: 1.5rem;
-          flex-wrap: wrap;
-        }
-
-        @media (max-width: 640px) {
-          .stats-row {
-            gap: 1.5rem;
-            justify-content: center;
-          }
+          margin-bottom: 1rem;
         }
 
         .stat {
           display: flex;
           flex-direction: column;
-          align-items: center;
-        }
-
-        .stat.clickable {
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .stat.clickable:hover {
-          transform: translateY(-2px);
         }
 
         .stat-number {
           font-size: 1.25rem;
-          font-weight: 700;
-          color: #8b5cf6;
+          font-weight: 600;
         }
 
         .stat-label {
-          font-size: 0.75rem;
           color: #6b7280;
+          font-size: 0.875rem;
         }
 
         .action-buttons {
           display: flex;
-          flex-wrap: wrap;
-          gap: 0.75rem;
-        }
-
-        @media (max-width: 640px) {
-          .action-buttons {
-            justify-content: center;
-            width: 100%;
-          }
+          gap: 0.5rem;
+          margin-bottom: 1rem;
         }
 
         .btn {
-          padding: 0.75rem 1.25rem;
+          padding: 0.5rem 1rem;
           border-radius: 0.5rem;
           border: none;
-          cursor: pointer;
           font-weight: 500;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
+          cursor: pointer;
           transition: all 0.2s;
-          font-size: 16px;
-        }
-
-        @media (max-width: 640px) {
-          .btn {
-            padding: 0.625rem 1rem;
-            font-size: 14px;
-            flex: 1;
-            min-width: 0;
-            justify-content: center;
-          }
-        }
-
-        .btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          background: #8b5cf6;
           color: white;
         }
 
         .btn-secondary {
-          background: linear-gradient(135deg, #6b7280, #4b5563);
-          color: white;
-        }
-
-        .btn-neutral {
-          background: white;
+          background: #e5e7eb;
           color: #374151;
-          border: 1px solid #e5e7eb;
-        }
-
-        .btn-special {
-          background: linear-gradient(135deg, #fbbf24, #f59e0b);
-          color: white;
         }
 
         .btn-success {
@@ -801,233 +498,95 @@ export default function PublicProfilePage() {
           cursor: not-allowed;
         }
 
-        .btn-icon {
-          font-size: 0.875rem;
+        .business-link {
+          color: #8b5cf6;
+          text-decoration: none;
+          font-weight: 500;
         }
 
-        /* Memories Card */
-        .memories-card {
-          padding: 1.5rem;
+        .bio-section {
+          margin-top: 1.5rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid #e5e7eb;
         }
 
-        .card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-        }
-
-        .card-title {
-          font-size: 1.125rem;
-          font-weight: 600;
+        .bio-section h3 {
+          margin: 0 0 0.5rem 0;
           color: #1f2937;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
         }
 
-        .title-icon {
-          font-size: 1rem;
+        .memories-card h3 {
+          margin: 0 0 1rem 0;
         }
 
-        .view-all-btn {
-          padding: 0.375rem 0.75rem;
-          background: #f3f4f6;
-          color: #6b7280;
-          border: none;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .view-all-btn:hover {
-          background: #e5e7eb;
-          color: #4b5563;
-        }
-
-        .memories-preview {
+        .memories-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
           gap: 1rem;
         }
 
-        @media (max-width: 640px) {
-          .memories-preview {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-          }
-        }
-
-        .memory-thumbnail {
-          position: relative;
-          aspect-ratio: 1;
-          border-radius: 0.5rem;
-          overflow: hidden;
+        .memory-item {
           cursor: pointer;
           transition: transform 0.2s;
         }
 
-        .memory-thumbnail:hover {
+        .memory-item:hover {
           transform: scale(1.05);
         }
 
-        .memory-image {
+        .memory-item img {
           width: 100%;
-          height: 100%;
+          height: 150px;
           object-fit: cover;
-        }
-
-        .memory-overlay {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-          padding: 0.5rem;
-          color: white;
-        }
-
-        .memory-year {
-          font-size: 0.75rem;
-          font-weight: 500;
-        }
-
-        /* About Card */
-        .about-card {
-          padding: 1.5rem;
-        }
-
-        .bio-text {
-          color: #4b5563;
-          line-height: 1.6;
-          white-space: pre-wrap;
-        }
-
-        /* Posts Section */
-        .posts-section {
-          max-width: 800px;
-          margin: 0 auto;
-        }
-
-        .section-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .privacy-notice {
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
           border-radius: 0.5rem;
-          padding: 1rem;
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          color: #6b7280;
+        }
+
+        .memory-item p {
+          margin: 0.5rem 0 0.25rem 0;
           font-size: 0.875rem;
         }
 
-        .privacy-notice.restricted {
-          background: #fef2f2;
-          border-color: #fecaca;
-          color: #b91c1c;
+        .memory-date {
+          color: #6b7280;
+          font-size: 0.75rem;
         }
 
-        .notice-icon {
-          font-size: 1rem;
-        }
-
-        /* Memory Modal */
-        .memory-modal {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.8);
+        .loading-container,
+        .error-container {
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-          z-index: 1000;
-          padding: 1rem;
+          min-height: 100vh;
+          gap: 1rem;
         }
 
-        .memory-modal-content {
-          background: white;
-          border-radius: 1rem;
-          max-width: 600px;
-          width: 100%;
-          max-height: 90vh;
-          overflow-y: auto;
-          position: relative;
-        }
-
-        @media (max-width: 640px) {
-          .memory-modal-content {
-            border-radius: 0.75rem;
-            max-height: 85vh;
-          }
-        }
-
-        .modal-close {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
-          width: 2rem;
-          height: 2rem;
-          background: white;
-          border: none;
+        .loading-spinner {
+          width: 3rem;
+          height: 3rem;
+          border: 3px solid #e5e7eb;
+          border-top: 3px solid #8b5cf6;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          font-size: 1.25rem;
-          z-index: 1;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          animation: spin 1s linear infinite;
         }
 
-        .modal-image {
-          width: 100%;
-          aspect-ratio: 4/3;
-          object-fit: cover;
-          border-radius: 1rem 1rem 0 0;
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
-        .modal-info {
-          padding: 1.5rem;
-        }
-
-        .modal-date {
-          color: #6b7280;
-          font-size: 0.875rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .modal-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 0.75rem 0;
-        }
-
-        .modal-caption {
-          color: #4b5563;
-          line-height: 1.6;
-        }
-
-        /* Mobile Touch Optimizations */
         @media (max-width: 640px) {
-          .btn, .view-all-btn, .memory-thumbnail {
-            -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          .profile-layout {
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
           }
-          
-          .memory-thumbnail {
-            touch-action: manipulation;
+
+          .stats-row {
+            justify-content: center;
+          }
+
+          .action-buttons {
+            justify-content: center;
           }
         }
       `}</style>
