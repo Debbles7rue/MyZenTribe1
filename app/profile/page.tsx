@@ -1,8 +1,8 @@
-// app/profile/page.tsx - GUARANTEED FIX
+// app/profile/page.tsx - UPDATED to import/use ProfileEditForm + ProfileAnalytics
 "use client";
 
 // CRITICAL: Force dynamic rendering to prevent build errors
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
@@ -13,33 +13,41 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Profile } from "./types/profile";
 
 // Lazy load all components that might use userId
-const ProfileAboutSection = dynamicImport(() => import("./components/ProfileAboutSection"), { 
+const ProfileAboutSection = dynamicImport(
+  () => import("./components/ProfileAboutSection"),
+  { ssr: false, loading: () => <div>Loading...</div> }
+);
+const ProfilePrivacySettings = dynamicImport(
+  () => import("./components/ProfilePrivacySettings"),
+  { ssr: false, loading: () => <div>Loading...</div> }
+);
+const ProfileSocialLinks = dynamicImport(
+  () => import("./components/ProfileSocialLinks"),
+  { ssr: false, loading: () => <div>Loading...</div> }
+);
+const ProfileEditForm = dynamicImport(
+  () => import("./components/ProfileEditForm"),
+  { ssr: false, loading: () => <div>Loading editor...</div> }
+);
+const ProfileAnalytics = dynamicImport(
+  () => import("./components/ProfileAnalytics"),
+  { ssr: false, loading: () => <div>Loading insights...</div> }
+);
+const PhotosFeed = dynamicImport(() => import("@/components/PhotosFeed"), {
   ssr: false,
-  loading: () => <div>Loading...</div>
+  loading: () => <div>Loading photos...</div>,
 });
-const ProfilePrivacySettings = dynamicImport(() => import("./components/ProfilePrivacySettings"), { 
+const ProfileInviteQR = dynamicImport(
+  () => import("@/components/ProfileInviteQR"),
+  { ssr: false, loading: () => <div>Loading QR...</div> }
+);
+const ProfileCandleWidget = dynamicImport(
+  () => import("@/components/ProfileCandleWidget"),
+  { ssr: false, loading: () => <div>Loading candles...</div> }
+);
+const AvatarUploader = dynamicImport(() => import("@/components/AvatarUploader"), {
   ssr: false,
-  loading: () => <div>Loading...</div>
-});
-const ProfileSocialLinks = dynamicImport(() => import("./components/ProfileSocialLinks"), { 
-  ssr: false,
-  loading: () => <div>Loading...</div>
-});
-const PhotosFeed = dynamicImport(() => import("@/components/PhotosFeed"), { 
-  ssr: false,
-  loading: () => <div>Loading photos...</div>
-});
-const ProfileInviteQR = dynamicImport(() => import("@/components/ProfileInviteQR"), { 
-  ssr: false,
-  loading: () => <div>Loading QR...</div>
-});
-const ProfileCandleWidget = dynamicImport(() => import("@/components/ProfileCandleWidget"), { 
-  ssr: false,
-  loading: () => <div>Loading candles...</div>
-});
-const AvatarUploader = dynamicImport(() => import("@/components/AvatarUploader"), { 
-  ssr: false,
-  loading: () => <div>Loading avatar...</div>
+  loading: () => <div>Loading avatar...</div>,
 });
 
 // Import hooks - wrapped to prevent SSR issues
@@ -50,13 +58,13 @@ import { useIsDesktop } from "./hooks/useIsDesktop";
 // Animated counter component
 function AnimatedCounter({ value, label }: { value: number; label: string }) {
   const [displayValue, setDisplayValue] = useState(0);
-  
+
   useEffect(() => {
     if (value === 0) return;
     let start = 0;
     const duration = 1000;
     const increment = value / (duration / 16);
-    
+
     const timer = setInterval(() => {
       start += increment;
       if (start >= value) {
@@ -66,7 +74,7 @@ function AnimatedCounter({ value, label }: { value: number; label: string }) {
         setDisplayValue(Math.floor(start));
       }
     }, 16);
-    
+
     return () => clearInterval(timer);
   }, [value]);
 
@@ -83,17 +91,20 @@ function ProfilePageContent() {
   // Initialize all state with safe defaults
   const [userId, setUserId] = useState<string>("");
   const [editMode, setEditMode] = useState(false);
-  const [activeSection, setActiveSection] = useState<'about' | 'privacy' | 'social'>('about');
+  const [activeSection, setActiveSection] = useState<
+    "about" | "privacy" | "social"
+  >("about");
   const [inviteExpanded, setInviteExpanded] = useState(false);
   const [mounted, setMounted] = useState(false);
-  
+
   // File upload states
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  
+
   // Custom hooks - safe to use after mount check
   const isDesktop = useIsDesktop(1024);
-  const { profile, setProfile, loading, error, friendsCount, reload } = useProfileData(mounted ? userId : null);
+  const { profile, setProfile, loading, error, friendsCount, reload } =
+    useProfileData(mounted ? userId : null);
   const { save, saving, status, uploadImage } = useProfileSave();
 
   // Get user on mount
@@ -106,13 +117,16 @@ function ProfilePageContent() {
           setUserId(data.user.id);
         }
       } catch (err) {
-        console.error('Error getting user:', err);
+        console.error("Error getting user:", err);
       }
     };
     getUser();
   }, []);
 
-  const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
+  const displayName = useMemo(
+    () => profile?.full_name || "Member",
+    [profile?.full_name]
+  );
 
   // Handle profile updates
   const handleProfileChange = (updates: Partial<Profile>) => {
@@ -121,11 +135,11 @@ function ProfilePageContent() {
     }
   };
 
-  // Toggle interest
+  // Toggle interest (kept for parity if used elsewhere)
   const toggleInterest = (interest: string) => {
     const interests = profile?.interests || [];
     const updated = interests.includes(interest)
-      ? interests.filter(i => i !== interest)
+      ? interests.filter((i) => i !== interest)
       : [...interests, interest];
     handleProfileChange({ interests: updated });
   };
@@ -133,25 +147,25 @@ function ProfilePageContent() {
   // Handle save with image uploads
   const handleSave = async () => {
     if (!userId || !profile) return;
-    
+
     let updatedProfile = { ...profile };
-    
+
     // Upload avatar if changed
     if (avatarFile) {
-      const avatarUrl = await uploadImage(avatarFile, userId, 'avatars');
+      const avatarUrl = await uploadImage(avatarFile, userId, "avatars");
       if (avatarUrl) {
         updatedProfile.avatar_url = avatarUrl;
       }
     }
-    
+
     // Upload cover if changed
     if (coverFile) {
-      const coverUrl = await uploadImage(coverFile, userId, 'covers');
+      const coverUrl = await uploadImage(coverFile, userId, "covers");
       if (coverUrl) {
         updatedProfile.cover_url = coverUrl;
       }
     }
-    
+
     const success = await save(userId, updatedProfile);
     if (success) {
       setEditMode(false);
@@ -230,7 +244,7 @@ function ProfilePageContent() {
           <Link href="/business" className="btn btn-neutral">
             Business Profile
           </Link>
-          <button 
+          <button
             className="btn btn-primary"
             onClick={() => setEditMode(!editMode)}
           >
@@ -241,9 +255,7 @@ function ProfilePageContent() {
 
       {/* Status Messages */}
       {status && (
-        <div className={`status-message ${status.type}`}>
-          {status.message}
-        </div>
+        <div className={`status-message ${status.type}`}>{status.message}</div>
       )}
 
       {/* Main Profile Card with Cover */}
@@ -255,10 +267,19 @@ function ProfilePageContent() {
           ) : (
             <div className="cover-gradient" />
           )}
-          
+
           {editMode && (
             <label className="cover-upload-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                 <circle cx="12" cy="13" r="4"></circle>
               </svg>
@@ -273,14 +294,18 @@ function ProfilePageContent() {
           )}
         </div>
 
-        <div className={`profile-layout ${isDesktop ? 'desktop' : 'mobile'}`}>
+        <div className={`profile-layout ${isDesktop ? "desktop" : "mobile"}`}>
           {/* Avatar Section */}
           <div className="avatar-section">
             <div className="avatar-wrapper">
               {editMode ? (
                 <div className="avatar-edit">
                   <img
-                    src={avatarFile ? URL.createObjectURL(avatarFile) : (profile?.avatar_url || "/default-avatar.png")}
+                    src={
+                      avatarFile
+                        ? URL.createObjectURL(avatarFile)
+                        : profile?.avatar_url || "/default-avatar.png"
+                    }
                     alt="Profile"
                     className="avatar-image"
                     style={{ width: 160, height: 160 }}
@@ -292,16 +317,18 @@ function ProfilePageContent() {
                     className="file-input"
                     id="avatar-upload"
                   />
-                  <label htmlFor="avatar-upload" className="file-label">Change Photo</label>
+                  <label htmlFor="avatar-upload" className="file-label">
+                    Change Photo
+                  </label>
                 </div>
               ) : (
                 <Suspense fallback={<div>Loading avatar...</div>}>
-                  <AvatarUploader 
-                    userId={userId} 
-                    value={profile?.avatar_url || null} 
-                    onChange={onAvatarChange} 
-                    label="Profile photo" 
-                    size={160} 
+                  <AvatarUploader
+                    userId={userId}
+                    value={profile?.avatar_url || null}
+                    onChange={onAvatarChange}
+                    label="Profile photo"
+                    size={160}
                   />
                 </Suspense>
               )}
@@ -314,12 +341,14 @@ function ProfilePageContent() {
           <div className="profile-info">
             <h2 className="profile-name">
               {displayName}
-              {profile?.username && <span className="username">@{profile.username}</span>}
+              {profile?.username && (
+                <span className="username">@{profile.username}</span>
+              )}
             </h2>
             {profile?.tagline && !editMode && (
               <p className="tagline">{profile.tagline}</p>
             )}
-            
+
             {/* Stats Row */}
             <div className="stats-row">
               <div className="stats-grid">
@@ -327,7 +356,7 @@ function ProfilePageContent() {
                 <AnimatedCounter value={0} label="Following" />
                 <AnimatedCounter value={friendsCount} label="Friends" />
               </div>
-              
+
               {/* Action Buttons */}
               <div className="profile-actions">
                 <Link href="/friends" className="btn btn-compact">
@@ -349,9 +378,13 @@ function ProfilePageContent() {
                 className="btn btn-special invite-button"
               >
                 🎉 Invite Friends
-                <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
+                <span
+                  className={`invite-arrow ${inviteExpanded ? "expanded" : ""}`}
+                >
+                  ▼
+                </span>
               </button>
-              
+
               {inviteExpanded && userId && (
                 <div className="invite-content">
                   <Suspense fallback={<div>Loading QR...</div>}>
@@ -371,229 +404,47 @@ function ProfilePageContent() {
             <span className="title-icon">✏️</span>
             Edit Your Information
           </h3>
-          
+
           {/* Tab navigation for mobile */}
           {!isDesktop && (
             <div className="edit-tabs">
               <button
-                className={`tab ${activeSection === 'about' ? 'active' : ''}`}
-                onClick={() => setActiveSection('about')}
+                className={`tab ${activeSection === "about" ? "active" : ""}`}
+                onClick={() => setActiveSection("about")}
               >
                 About
               </button>
               <button
-                className={`tab ${activeSection === 'privacy' ? 'active' : ''}`}
-                onClick={() => setActiveSection('privacy')}
+                className={`tab ${activeSection === "privacy" ? "active" : ""}`}
+                onClick={() => setActiveSection("privacy")}
               >
                 Privacy
               </button>
               <button
-                className={`tab ${activeSection === 'social' ? 'active' : ''}`}
-                onClick={() => setActiveSection('social')}
+                className={`tab ${activeSection === "social" ? "active" : ""}`}
+                onClick={() => setActiveSection("social")}
               >
                 Social
               </button>
             </div>
           )}
-          
+
           <div className="edit-form">
-            {/* About Section */}
-            {(isDesktop || activeSection === 'about') && (
-              <>
-                <div className="form-field">
-                  <label className="form-label">Name</label>
-                  <input 
-                    className="form-input"
-                    value={profile?.full_name || ""} 
-                    onChange={(e) => handleProfileChange({ full_name: e.target.value })} 
-                    placeholder="Your full name"
-                    autoComplete="name"
-                    inputMode="text"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">Username</label>
-                  <div className="username-input-group">
-                    <span className="username-prefix">@</span>
-                    <input 
-                      className="form-input"
-                      value={profile?.username || ""} 
-                      onChange={(e) => handleProfileChange({ username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} 
-                      placeholder="username"
-                      autoComplete="off"
-                      inputMode="text"
-                    />
-                  </div>
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">Tagline</label>
-                  <input 
-                    className="form-input"
-                    value={profile?.tagline || ""} 
-                    onChange={(e) => handleProfileChange({ tagline: e.target.value })} 
-                    placeholder="Short status or description"
-                    maxLength={100}
-                    autoComplete="off"
-                    inputMode="text"
-                  />
-                </div>
-
-                <div className={`form-row ${isDesktop ? 'desktop' : 'mobile'}`}>
-                  <div className="form-field flex-grow">
-                    <label className="form-label">Location</label>
-                    <input 
-                      className="form-input"
-                      value={profile?.location_text || ""} 
-                      onChange={(e) => handleProfileChange({ location_text: e.target.value })} 
-                      placeholder="City, State"
-                      autoComplete="address-level2"
-                      inputMode="text"
-                    />
-                  </div>
-                  <div className="form-field checkbox-field">
-                    <label className="checkbox-label compact">
-                      <input 
-                        type="checkbox"
-                        checked={!!profile?.location_is_public} 
-                        onChange={(e) => handleProfileChange({ location_is_public: e.target.checked })} 
-                      />
-                      <span>Public</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">Bio</label>
-                  <textarea 
-                    className="form-input textarea"
-                    rows={3} 
-                    value={profile?.bio || ""} 
-                    onChange={(e) => handleProfileChange({ bio: e.target.value })} 
-                    placeholder="Tell people about yourself..."
-                    inputMode="text"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">
-                    🌐 Website
-                  </label>
-                  <input 
-                    className="form-input"
-                    type="url"
-                    value={profile?.website_url || ""} 
-                    onChange={(e) => handleProfileChange({ website_url: e.target.value })} 
-                    placeholder="https://yourwebsite.com"
-                    autoComplete="url"
-                    inputMode="url"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">Languages</label>
-                  <input 
-                    className="form-input"
-                    value={profile?.languages?.join(", ") || ""} 
-                    onChange={(e) => handleProfileChange({ languages: e.target.value.split(",").map(l => l.trim()).filter(Boolean) })} 
-                    placeholder="English, Spanish, French"
-                    autoComplete="off"
-                    inputMode="text"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label">
-                    # Interests
-                  </label>
-                  <div className="interests-picker">
-                    {["Meditation", "Yoga", "Reiki", "Nature", "Music", "Art", "Travel", "Reading", "Cooking", "Photography"].map(interest => (
-                      <button
-                        key={interest}
-                        type="button"
-                        onClick={() => toggleInterest(interest)}
-                        className={`interest-chip ${profile?.interests?.includes(interest) ? 'active' : ''}`}
-                      >
-                        {interest}
-                      </button>
-                    ))}
-                  </div>
-                  <input 
-                    className="form-input"
-                    placeholder="Add custom interests (comma separated)"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        const input = e.currentTarget as HTMLInputElement;
-                        const newInterests = input.value.split(',').map(i => i.trim()).filter(Boolean);
-                        handleProfileChange({ interests: [...(profile?.interests || []), ...newInterests] });
-                        input.value = '';
-                      }
-                    }}
-                  />
-                </div>
-
-                <label className="checkbox-label">
-                  <input 
-                    type="checkbox"
-                    checked={!!profile?.show_mutuals} 
-                    onChange={(e) => handleProfileChange({ show_mutuals: e.target.checked })} 
-                  />
-                  <span>Show mutual friends</span>
-                </label>
-
-                {/* Private fields section */}
-                <div className="private-section">
-                  <h4 className="section-subtitle">
-                    🔒 Private Information (only you see this)
-                  </h4>
-                  
-                  <div className="form-field">
-                    <label className="form-label">
-                      📝 Personal Notes
-                    </label>
-                    <textarea 
-                      className="form-input textarea"
-                      rows={2} 
-                      value={profile?.internal_notes || ""} 
-                      onChange={(e) => handleProfileChange({ internal_notes: e.target.value })} 
-                      placeholder="Reminders, drafts, private thoughts..."
-                      inputMode="text"
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label className="form-label">
-                      📱 Phone Number
-                    </label>
-                    <input 
-                      className="form-input"
-                      type="tel"
-                      value={profile?.phone || ""} 
-                      onChange={(e) => handleProfileChange({ phone: e.target.value })} 
-                      placeholder="Your phone number"
-                      autoComplete="tel"
-                      inputMode="tel"
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label className="form-label">
-                      🎂 Birthday
-                    </label>
-                    <input 
-                      className="form-input"
-                      type="date"
-                      value={profile?.birthday || ""} 
-                      onChange={(e) => handleProfileChange({ birthday: e.target.value })} 
-                    />
-                  </div>
-                </div>
-              </>
+            {/* About Section (now uses ProfileEditForm) */}
+            {(isDesktop || activeSection === "about") && profile && (
+              <Suspense fallback={<div>Loading editor…</div>}>
+                <ProfileEditForm
+                  profile={profile}
+                  onChange={handleProfileChange}
+                  onSave={handleSave}
+                  saving={saving}
+                  isDesktop={isDesktop}
+                />
+              </Suspense>
             )}
 
             {/* Privacy Settings */}
-            {(isDesktop || activeSection === 'privacy') && profile && (
+            {(isDesktop || activeSection === "privacy") && profile && (
               <Suspense fallback={<div>Loading privacy settings...</div>}>
                 <ProfilePrivacySettings
                   profile={profile}
@@ -604,7 +455,7 @@ function ProfilePageContent() {
             )}
 
             {/* Social Links */}
-            {(isDesktop || activeSection === 'social') && profile && (
+            {(isDesktop || activeSection === "social") && profile && (
               <Suspense fallback={<div>Loading social links...</div>}>
                 <ProfileSocialLinks
                   profile={profile}
@@ -613,24 +464,20 @@ function ProfilePageContent() {
                 />
               </Suspense>
             )}
-
-            <div className="form-actions">
-              <button 
-                className="btn btn-primary save-button"
-                onClick={handleSave} 
-                disabled={saving}
-              >
-                {saving ? "💾 Saving..." : "✨ Save Changes"}
-              </button>
-            </div>
           </div>
         </div>
       ) : (
         /* View Mode */
         profile && (
-          <Suspense fallback={<div>Loading profile...</div>}>
-            <ProfileAboutSection profile={profile} isOwner={true} />
-          </Suspense>
+          <>
+            <Suspense fallback={<div>Loading profile...</div>}>
+              <ProfileAboutSection profile={profile} isOwner={true} />
+            </Suspense>
+
+            <Suspense fallback={<div>Loading insights…</div>}>
+              <ProfileAnalytics profile={profile} isOwner={true} />
+            </Suspense>
+          </>
         )
       )}
 
@@ -645,7 +492,9 @@ function ProfilePageContent() {
       <div className="card candles-card">
         <div className="candles-icon">🕯️</div>
         <h3 className="candles-title">My Sacred Candles</h3>
-        <p className="candles-description">View your eternal memorials and prayer candles</p>
+        <p className="candles-description">
+          View your eternal memorials and prayer candles
+        </p>
         <Link href="/profile/candles" className="btn btn-candles">
           View My Candles ✨
         </Link>
@@ -661,22 +510,41 @@ function ProfilePageContent() {
       <style jsx>{`
         .profile-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
+          background: linear-gradient(
+            135deg,
+            #f8fafc 0%,
+            #e2e8f0 20%,
+            #f1f5f9 40%,
+            #e0e7ff 60%,
+            #f3e8ff 80%,
+            #fdf4ff 100%
+          );
           padding: 2rem 1rem;
           position: relative;
         }
 
         .profile-page::before {
-          content: '';
+          content: "";
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
           bottom: 0;
-          background: 
-            radial-gradient(circle at 20% 30%, rgba(139,92,246,0.1) 0%, transparent 50%),
-            radial-gradient(circle at 80% 70%, rgba(245,158,11,0.08) 0%, transparent 50%),
-            radial-gradient(circle at 40% 80%, rgba(16,185,129,0.06) 0%, transparent 50%);
+          background: radial-gradient(
+              circle at 20% 30%,
+              rgba(139, 92, 246, 0.1) 0%,
+              transparent 50%
+            ),
+            radial-gradient(
+              circle at 80% 70%,
+              rgba(245, 158, 11, 0.08) 0%,
+              transparent 50%
+            ),
+            radial-gradient(
+              circle at 40% 80%,
+              rgba(16, 185, 129, 0.06) 0%,
+              transparent 50%
+            );
           pointer-events: none;
           z-index: 0;
         }
@@ -767,18 +635,26 @@ function ProfilePageContent() {
         .profile-main-card {
           padding: 0;
           margin-bottom: 1.5rem;
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.95),
+            rgba(248, 250, 252, 0.9)
+          );
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(255,255,255,0.6);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+          border: 1px solid rgba(255, 255, 255, 0.6);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
           overflow: hidden;
         }
 
         .card {
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.95),
+            rgba(248, 250, 252, 0.9)
+          );
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(255,255,255,0.6);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+          border: 1px solid rgba(255, 255, 255, 0.6);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
           border-radius: 0.75rem;
           padding: 1.5rem;
           margin-bottom: 1.5rem;
@@ -790,7 +666,8 @@ function ProfilePageContent() {
           width: 100%;
         }
 
-        .cover-image, .cover-gradient {
+        .cover-image,
+        .cover-gradient {
           width: 100%;
           height: 100%;
           object-fit: cover;
@@ -814,13 +691,13 @@ function ProfilePageContent() {
           gap: 0.5rem;
           font-size: 0.875rem;
           transition: all 0.2s;
-          border: 1px solid rgba(139,92,246,0.2);
+          border: 1px solid rgba(139, 92, 246, 0.2);
         }
 
         .cover-upload-btn:hover {
           background: rgba(255, 255, 255, 1);
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.2);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
         }
 
         .profile-layout {
@@ -864,7 +741,7 @@ function ProfilePageContent() {
           border-radius: 50%;
           object-fit: cover;
           border: 4px solid white;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .file-input {
@@ -897,7 +774,7 @@ function ProfilePageContent() {
           justify-content: center;
           font-size: 0.875rem;
           color: white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
         .verified-badge {
@@ -967,8 +844,8 @@ function ProfilePageContent() {
         }
 
         .stat-card {
-          background: rgba(255,255,255,0.8);
-          border: 1px solid rgba(139,92,246,0.2);
+          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(139, 92, 246, 0.2);
           border-radius: 0.75rem;
           padding: 0.75rem;
           text-align: center;
@@ -978,9 +855,9 @@ function ProfilePageContent() {
 
         .stat-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.2);
-          background: rgba(255,255,255,0.95);
-          border-color: rgba(139,92,246,0.3);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: rgba(139, 92, 246, 0.3);
         }
 
         .stat-number {
@@ -1028,7 +905,7 @@ function ProfilePageContent() {
         .btn.btn-special:hover {
           background: linear-gradient(135deg, #a78bfa, #9333ea);
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(196,132,252,0.4);
+          box-shadow: 0 4px 12px rgba(196, 132, 252, 0.4);
         }
 
         .invite-arrow {
@@ -1043,8 +920,8 @@ function ProfilePageContent() {
         .invite-content {
           margin-top: 1rem;
           padding: 1rem;
-          background: rgba(255,255,255,0.6);
-          border: 1px solid rgba(255,255,255,0.8);
+          background: rgba(255, 255, 255, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.8);
           border-radius: 0.75rem;
         }
 
@@ -1080,7 +957,7 @@ function ProfilePageContent() {
           gap: 0.5rem;
           margin-bottom: 1rem;
           padding: 0.25rem;
-          background: rgba(139,92,246,0.05);
+          background: rgba(139, 92, 246, 0.05);
           border-radius: 0.5rem;
         }
 
@@ -1099,15 +976,19 @@ function ProfilePageContent() {
         .tab.active {
           background: white;
           color: var(--brand);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .candles-card {
           padding: 1.5rem;
           margin-bottom: 1.5rem;
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(254,243,199,0.1));
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.95),
+            rgba(254, 243, 199, 0.1)
+          );
           backdrop-filter: blur(5px);
-          border: 1px solid rgba(245,158,11,0.2);
+          border: 1px solid rgba(245, 158, 11, 0.2);
           border-radius: 0.75rem;
           text-align: center;
           transition: all 0.3s ease;
@@ -1115,8 +996,12 @@ function ProfilePageContent() {
 
         .candles-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(245,158,11,0.15);
-          background: linear-gradient(135deg, rgba(255,255,255,1), rgba(254,243,199,0.15));
+          box-shadow: 0 8px 24px rgba(245, 158, 11, 0.15);
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 1),
+            rgba(254, 243, 199, 0.15)
+          );
         }
 
         .candles-icon {
@@ -1126,8 +1011,15 @@ function ProfilePageContent() {
         }
 
         @keyframes flicker {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.05); }
+          0%,
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.8;
+            transform: scale(1.05);
+          }
         }
 
         .candles-title {
@@ -1162,7 +1054,7 @@ function ProfilePageContent() {
         .btn-candles:hover {
           background: linear-gradient(135deg, #d97706, #b45309);
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(245,158,11,0.3);
+          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
         }
 
         .edit-form {
@@ -1211,7 +1103,7 @@ function ProfilePageContent() {
           padding: 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 0.5rem;
-          background: rgba(255,255,255,0.9);
+          background: rgba(255, 255, 255, 0.9);
           transition: all 0.2s ease;
           font-size: 16px;
           min-height: 44px;
@@ -1220,7 +1112,7 @@ function ProfilePageContent() {
         .form-input:focus {
           outline: none;
           border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+          box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
         }
 
         .form-input.textarea {
@@ -1313,16 +1205,6 @@ function ProfilePageContent() {
           accent-color: var(--brand);
         }
 
-        .form-actions {
-          display: flex;
-          justify-content: flex-end;
-          padding-top: 0.5rem;
-        }
-
-        .save-button {
-          min-width: 8rem;
-        }
-
         .loading-state {
           display: flex;
           align-items: center;
@@ -1342,7 +1224,9 @@ function ProfilePageContent() {
         }
 
         @keyframes spin {
-          to { transform: rotate(360deg); }
+          to {
+            transform: rotate(360deg);
+          }
         }
 
         /* Button styles */
@@ -1364,7 +1248,7 @@ function ProfilePageContent() {
 
         .btn:hover {
           transform: translateY(-1px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
 
         .btn-primary {
@@ -1377,14 +1261,14 @@ function ProfilePageContent() {
         }
 
         .btn-neutral {
-          background: rgba(255,255,255,0.9);
+          background: rgba(255, 255, 255, 0.9);
           color: #374151;
-          border: 1px solid rgba(139,92,246,0.2);
+          border: 1px solid rgba(139, 92, 246, 0.2);
         }
 
         .btn-neutral:hover {
           background: white;
-          border-color: rgba(139,92,246,0.3);
+          border-color: rgba(139, 92, 246, 0.3);
         }
 
         /* Mobile optimizations */
@@ -1392,34 +1276,34 @@ function ProfilePageContent() {
           .profile-page {
             padding: 1rem 0.5rem;
           }
-          
+
           .form-input {
             font-size: 16px;
             min-height: 44px;
           }
-          
+
           .profile-actions {
             justify-content: center;
             width: 100%;
           }
-          
+
           .btn-compact {
             flex: 1;
             min-width: 0;
           }
-          
+
           .avatar-section {
             margin-top: -3rem;
           }
-          
+
           .cover-section {
             height: 150px;
           }
-          
+
           .interests-picker {
             justify-content: center;
           }
-          
+
           .btn {
             min-height: 44px;
           }
@@ -1432,9 +1316,9 @@ function ProfilePageContent() {
 // Export the component wrapped to prevent any SSR issues
 export default function ProfilePage() {
   // Complete SSR prevention
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return null;
   }
-  
+
   return <ProfilePageContent />;
 }
