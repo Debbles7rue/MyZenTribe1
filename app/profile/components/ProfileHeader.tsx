@@ -1,18 +1,11 @@
 // app/profile/components/ProfileHeader.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AvatarUploader from '@/components/AvatarUploader';
 import type { Profile } from '../types/profile';
-
-// SVG Icons to avoid external dependencies
-const CameraIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-    <circle cx="12" cy="13" r="4"/>
-  </svg>
-);
+import { Camera } from 'lucide-react';
 
 interface ProfileHeaderProps {
   profile: Profile | null;
@@ -25,11 +18,16 @@ interface ProfileHeaderProps {
   saving: boolean;
 }
 
-function AnimatedCounter({ value, label }: { value: number; label: string }) {
-  const [displayValue, setDisplayValue] = React.useState(0);
+// Animated Counter Component
+function AnimatedCounter({ value, label, icon }: { value: number; label: string; icon?: string }) {
+  const [displayValue, setDisplayValue] = useState(0);
   
-  React.useEffect(() => {
-    if (value === 0) return;
+  useEffect(() => {
+    if (value === 0) {
+      setDisplayValue(0);
+      return;
+    }
+    
     let start = 0;
     const duration = 1000;
     const increment = value / (duration / 16);
@@ -67,7 +65,7 @@ export default function ProfileHeader({
 }: ProfileHeaderProps) {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [uploadingCover, setUploadingCover] = useState(false);
+  const [inviteExpanded, setInviteExpanded] = useState(false);
   
   if (!profile) return null;
   
@@ -87,6 +85,15 @@ export default function ProfileHeader({
     onProfileChange({ ...profile, cover_url: tempUrl });
   };
 
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setAvatarFile(file);
+    const tempUrl = URL.createObjectURL(file);
+    onProfileChange({ ...profile, avatar_url: tempUrl });
+  };
+
   return (
     <div className="card profile-main-card">
       {/* Cover Image Section */}
@@ -103,14 +110,13 @@ export default function ProfileHeader({
         
         {editMode && (
           <label className="cover-upload-btn">
-            <CameraIcon size={20} />
+            <Camera size={20} />
             <span>{isDesktop ? "Change Cover" : "Cover"}</span>
             <input
               type="file"
               accept="image/*"
               onChange={handleCoverUpload}
               style={{ display: "none" }}
-              disabled={uploadingCover}
             />
           </label>
         )}
@@ -131,18 +137,11 @@ export default function ProfileHeader({
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setAvatarFile(file);
-                      // Create temporary URL for preview
-                      const tempUrl = URL.createObjectURL(file);
-                      onProfileChange({ ...profile, avatar_url: tempUrl });
-                    }
-                  }}
+                  onChange={handleAvatarUpload}
                   className="file-input"
+                  id="avatar-input"
                 />
-                <label className="file-label">Change Photo</label>
+                <label htmlFor="avatar-input" className="file-label">Change Photo</label>
               </div>
             ) : (
               <AvatarUploader 
@@ -177,6 +176,9 @@ export default function ProfileHeader({
               {profile.posts_count && profile.posts_count > 0 && (
                 <AnimatedCounter value={profile.posts_count} label="Posts" />
               )}
+              {profile.collab_posts_count && profile.collab_posts_count > 0 && (
+                <AnimatedCounter value={profile.collab_posts_count} label="Collabs" />
+              )}
             </div>
             
             {/* Action Buttons */}
@@ -204,8 +206,6 @@ export default function ProfileHeader({
           border: 1px solid rgba(255,255,255,0.6);
           box-shadow: 0 8px 32px rgba(0,0,0,0.1);
           overflow: hidden;
-          max-width: 800px;
-          margin: 0 auto 1.5rem;
         }
 
         .cover-section {
@@ -387,7 +387,7 @@ export default function ProfileHeader({
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
           gap: 1rem;
-          max-width: 25rem;
+          max-width: 30rem;
         }
 
         .stat-card {
@@ -430,34 +430,15 @@ export default function ProfileHeader({
           padding: 0.5rem 0.75rem;
           font-size: 0.875rem;
           border-radius: 0.5rem;
-          background: rgba(255,255,255,0.9);
-          color: #374151;
-          border: 1px solid rgba(139,92,246,0.2);
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.25rem;
-          transition: all 0.2s;
-        }
-
-        .btn-compact:hover {
-          background: white;
-          border-color: rgba(139,92,246,0.3);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
         @media (max-width: 640px) {
-          .cover-section {
-            height: 150px;
-          }
-          
           .avatar-section {
             margin-top: -3rem;
           }
           
-          .profile-name {
-            font-size: 1.5rem;
+          .cover-section {
+            height: 150px;
           }
           
           .profile-actions {
@@ -468,7 +449,6 @@ export default function ProfileHeader({
           .btn-compact {
             flex: 1;
             min-width: 0;
-            justify-content: center;
           }
         }
       `}</style>
