@@ -3,11 +3,22 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
-import ProfileInviteQR from "@/components/ProfileInviteQR";
-import ProfileCandleWidget from "@/components/ProfileCandleWidget";
-import PhotosFeed from "@/components/PhotosFeed";
+
+// Dynamic imports to prevent SSR issues
+const ProfileInviteQR = dynamic(() => import("@/components/ProfileInviteQR"), {
+  ssr: false
+});
+
+const ProfileCandleWidget = dynamic(() => import("@/components/ProfileCandleWidget"), {
+  ssr: false
+});
+
+const PhotosFeed = dynamic(() => import("@/components/PhotosFeed"), {
+  ssr: false
+});
 
 type Profile = {
   id: string;
@@ -59,8 +70,14 @@ export default function ProfilePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [inviteExpanded, setInviteExpanded] = useState(false);
   const [friendsCount, setFriendsCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
   const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
+
+  // Track when component is mounted
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Get current user
   useEffect(() => {
@@ -312,22 +329,24 @@ export default function ProfilePage() {
                     <p className="empty-state">Add a bio using the Edit button above.</p>
                   )}
 
-                  {/* Invite Friends Section */}
-                  <div className="invite-section">
-                    <button
-                      onClick={() => setInviteExpanded(!inviteExpanded)}
-                      className="btn btn-special invite-button"
-                    >
-                      🎉 Invite Friends
-                      <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
-                    </button>
-                    
-                    {inviteExpanded && userId && (
-                      <div className="invite-content">
-                        <ProfileInviteQR userId={userId} embed qrSize={180} />
-                      </div>
-                    )}
-                  </div>
+                  {/* Invite Friends Section - Only render when mounted and userId exists */}
+                  {mounted && userId && (
+                    <div className="invite-section">
+                      <button
+                        onClick={() => setInviteExpanded(!inviteExpanded)}
+                        className="btn btn-special invite-button"
+                      >
+                        🎉 Invite Friends
+                        <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
+                      </button>
+                      
+                      {inviteExpanded && (
+                        <div className="invite-content">
+                          <ProfileInviteQR userId={userId} embed qrSize={180} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -335,8 +354,8 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Sacred Candles Widget */}
-      {userId && <ProfileCandleWidget userId={userId} isOwner={true} />}
+      {/* Sacred Candles Widget - Only render when mounted and userId exists */}
+      {mounted && userId && <ProfileCandleWidget userId={userId} isOwner={true} />}
 
       {/* Sacred Candles Card */}
       <div className="card candles-card">
@@ -348,8 +367,8 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      {/* Photos Feed */}
-      {userId && <PhotosFeed userId={userId} />}
+      {/* Photos Feed - Only render when mounted and userId exists */}
+      {mounted && userId && <PhotosFeed userId={userId} />}
 
       <style jsx>{`
         .profile-page {
