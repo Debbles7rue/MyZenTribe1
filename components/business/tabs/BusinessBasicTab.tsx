@@ -21,7 +21,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
 
   useEffect(() => {
     async function load() {
-      const { data: biz, error } = await supabase
+      const { data: biz } = await supabase
         .from('business_profiles')
         .select('display_name, handle, tagline, logo_url, cover_url, bio, categories')
         .eq('id', businessId)
@@ -61,10 +61,10 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
     setSaving(false);
   }
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="p-4">Loading...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <div>
         <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
         {message && (
@@ -76,9 +76,9 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         )}
       </div>
 
-      {/* Logo Upload */}
-      <div className="flex items-start gap-6">
-        <div>
+      {/* Logo Upload - Mobile Centered */}
+      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+        <div className="text-center sm:text-left">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Business Logo
           </label>
@@ -91,7 +91,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           />
         </div>
 
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 w-full space-y-4">
           {/* Business Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -99,14 +99,15 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             </label>
             <input
               type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2.5 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               value={data.display_name}
               onChange={(e) => setData({ ...data, display_name: e.target.value })}
               placeholder="Your Business Name"
+              style={{ fontSize: '16px' }} // Prevents zoom on iOS
             />
           </div>
 
-          {/* Handle */}
+          {/* Handle - Mobile Friendly */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Handle (your unique @name)
@@ -117,14 +118,15 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
               </span>
               <input
                 type="text"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-purple-500"
+                className="flex-1 px-3 py-2.5 text-base sm:text-sm border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 value={data.handle}
                 onChange={(e) => setData({ ...data, handle: e.target.value.replace('@', '') })}
                 placeholder="your-business"
+                style={{ fontSize: '16px' }}
               />
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              This will be your URL: mysite.com/business/@{data.handle || 'your-business'}
+              URL: mysite.com/business/@{data.handle || 'your-business'}
             </p>
           </div>
         </div>
@@ -137,35 +139,37 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         </label>
         <input
           type="text"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+          className="w-full px-3 py-2.5 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           value={data.tagline}
           onChange={(e) => setData({ ...data, tagline: e.target.value.slice(0, 80) })}
           placeholder="Your inspiring message"
           maxLength={80}
+          style={{ fontSize: '16px' }}
         />
         <p className="text-xs text-gray-500 mt-1">{data.tagline.length}/80</p>
       </div>
 
-      {/* Description */}
+      {/* Description - Mobile Optimized Textarea */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           About Your Business
         </label>
         <textarea
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+          className="w-full px-3 py-2.5 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           rows={5}
           value={data.bio}
           onChange={(e) => setData({ ...data, bio: e.target.value })}
           placeholder="Tell people what you offer, your specialties, your story..."
+          style={{ fontSize: '16px' }}
         />
       </div>
 
-      {/* Categories */}
+      {/* Categories - Touch Friendly */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           Categories
         </label>
-        <div className="flex flex-wrap gap-2 mb-2">
+        <div className="flex flex-wrap gap-2">
           {['Wellness', 'Healing', 'Events', 'Education', 'Arts', 'Community'].map(cat => (
             <button
               key={cat}
@@ -177,11 +181,13 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
                   setData({ ...data, categories: [...data.categories, cat] });
                 }
               }}
-              className={`px-3 py-1 rounded-full text-sm ${
-                data.categories.includes(cat)
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all
+                ${data.categories.includes(cat)
                   ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
-                  : 'bg-gray-100 text-gray-600 border-2 border-transparent'
-              }`}
+                  : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                }
+                min-h-[44px] min-w-[80px] touch-manipulation
+              `}
             >
               {cat}
             </button>
@@ -189,12 +195,12 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         </div>
       </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end pt-4 border-t">
+      {/* Save Button - Mobile Sticky */}
+      <div className="flex justify-center sm:justify-end pt-4 border-t">
         <button
           onClick={save}
           disabled={saving || !data.display_name}
-          className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+          className="w-full sm:w-auto px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium text-base touch-manipulation min-h-[48px]"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
