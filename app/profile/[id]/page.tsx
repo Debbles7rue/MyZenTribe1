@@ -1,10 +1,10 @@
-// app/profile/[id]/page.tsx - PUBLIC PROFILE VIEW
+// app/profile/[id]/page.tsx - PUBLIC PROFILE VIEW (COMBINED VERSION)
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import ProfileViewer from "../components/ProfileViewer";
 import PhotosFeed from "@/components/PhotosFeed";
 import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
 
@@ -15,8 +15,18 @@ type PublicProfile = {
   bio: string | null;
   location_text: string | null;
   location_is_public: boolean | null;
-  business_name: string | null;
-  has_creator_profile: boolean;
+  username: string | null;
+  cover_url: string | null;
+  tagline: string | null;
+  interests: string[] | null;
+  website_url: string | null;
+  social_links: any | null;
+  languages: string[] | null;
+  visibility: 'public' | 'friends_only' | 'private' | null;
+  allow_messages: 'everyone' | 'friends' | 'no_one' | null;
+  show_online_status: boolean | null;
+  show_mutuals: boolean | null;
+  verified: boolean | null;
   memories_visibility: 'public' | 'friends' | 'private' | null;
 };
 
@@ -35,15 +45,17 @@ type Memory = {
 
 export default function PublicProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const profileId = params?.id as string;
+  
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('none');
   const [friendStatus, setFriendStatus] = useState<"none" | "pending" | "friends">("none");
   const [friendsCount, setFriendsCount] = useState(0);
   const [followersCount, setFollowersCount] = useState(0);
+  const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
   const [showMemories, setShowMemories] = useState(false);
   const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
@@ -60,24 +72,29 @@ export default function PublicProfilePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Get current user and check if viewing own profile
   useEffect(() => {
-    // Get current user
     supabase.auth.getUser().then(({ data }) => {
       const userId = data.user?.id ?? null;
       setCurrentUserId(userId);
       
-      // Check if viewing own profile - redirect to /profile
+      // If viewing own profile, redirect to /profile
       if (userId && userId === profileId) {
-        window.location.href = "/profile";
+        router.push("/profile");
       }
     });
-  }, [profileId]);
+  }, [profileId, router]);
 
+  // Load all data when profileId or currentUserId changes
   useEffect(() => {
-    loadProfile();
-    loadStats();
+    if (profileId) {
+      loadProfile();
+      loadStats();
+    }
+    
     if (currentUserId && profileId) {
       checkRelationshipStatus();
+      loadMutualFriends();
       loadTodayMemories();
     }
   }, [profileId, currentUserId]);
@@ -86,7 +103,7 @@ export default function PublicProfilePage() {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url, bio, location_text, location_is_public, business_name, memories_visibility")
+        .select("*")
         .eq("id", profileId)
         .single();
 
@@ -94,7 +111,6 @@ export default function PublicProfilePage() {
 
       setProfile({
         ...data,
-        has_creator_profile: !!data.business_name,
         memories_visibility: data.memories_visibility || 'private'
       });
     } catch (err) {
@@ -134,7 +150,6 @@ export default function PublicProfilePage() {
 
     if (friendship) {
       setFriendStatus("friends");
-      // Check relationship type (friend, acquaintance, restricted)
       setRelationshipType(friendship.relationship || 'friend');
     } else {
       // Check for pending request
@@ -151,6 +166,40 @@ export default function PublicProfilePage() {
     }
   }
 
+  async function loadMutualFriends() {
+    if (!currentUserId || !profileId) return;
+
+    try {
+      // Get current user's friends
+      const { data: myFriends } = await supabase
+        .from("friendships")
+        .select("user_id, friend_id")
+        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`);
+
+      // Get profile user's friends
+      const { data: theirFriends } = await supabase
+        .from("friendships")
+        .select("user_id, friend_id")
+        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
+
+      if (myFriends && theirFriends) {
+        // Extract friend IDs
+        const myFriendIds = myFriends.map(f => 
+          f.user_id === currentUserId ? f.friend_id : f.user_id
+        );
+        const theirFriendIds = theirFriends.map(f => 
+          f.user_id === profileId ? f.friend_id : f.user_id
+        );
+
+        // Find mutual friends
+        const mutuals = myFriendIds.filter(id => theirFriendIds.includes(id));
+        setMutualFriendsCount(mutuals.length);
+      }
+    } catch (err) {
+      console.error("Error loading mutual friends:", err);
+    }
+  }
+
   async function loadTodayMemories() {
     if (!profileId) return;
     
@@ -159,7 +208,6 @@ export default function PublicProfilePage() {
       const today = new Date();
       const dayMonth = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
       
-      // Get memories for this day/month from any year
       const { data, error } = await supabase
         .from("memories")
         .select("*")
@@ -178,6 +226,9 @@ export default function PublicProfilePage() {
       }) || [];
 
       setTodayMemories(visibleMemories);
+      if (visibleMemories.length > 0) {
+        setShowMemories(true);
+      }
     } catch (err) {
       console.error("Error loading memories:", err);
     } finally {
@@ -204,6 +255,12 @@ export default function PublicProfilePage() {
     }
   }
 
+  async function sendMessage() {
+    if (!currentUserId || !profileId) return;
+    // Navigate to messages with this user
+    router.push(`/messages?user=${profileId}`);
+  }
+
   async function followUser() {
     if (!currentUserId || !profileId) return;
 
@@ -223,125 +280,100 @@ export default function PublicProfilePage() {
     }
   }
 
-  // Determine what content to show based on relationship
-  const canViewFriendContent = relationshipType === 'friend';
-  const canViewAcquaintanceContent = relationshipType === 'friend' || relationshipType === 'acquaintance';
-  const canViewMemories = 
-    profile?.memories_visibility === 'public' ||
-    (profile?.memories_visibility === 'friends' && canViewFriendContent) ||
-    currentUserId === profileId;
-
-  const showLocation = profile?.location_is_public && profile?.location_text;
-
+  // Loading state
   if (loading) {
     return (
       <div className="loading-container">
         <div className="loading-spinner"></div>
         <span>Loading profile...</span>
+        <style jsx>{`
+          .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            gap: 1rem;
+          }
+          .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #8b5cf6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
 
+  // Error state - profile not found
   if (!profile) {
     return (
       <div className="error-container">
         <h2>Profile Not Found</h2>
         <p>This profile doesn't exist or has been removed.</p>
-        <Link href="/" className="btn btn-primary">Go Home</Link>
+        <button onClick={() => router.push("/")} className="btn btn-primary">
+          Go Home
+        </button>
+        <style jsx>{`
+          .error-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            gap: 1rem;
+            text-align: center;
+            padding: 2rem;
+          }
+          .btn {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+          }
+        `}</style>
       </div>
     );
   }
 
+  // Determine what content viewer can see
+  const canViewFriendContent = relationshipType === 'friend';
+  const canViewMemories = 
+    profile?.memories_visibility === 'public' ||
+    (profile?.memories_visibility === 'friends' && canViewFriendContent) ||
+    currentUserId === profileId;
+
   return (
     <div className="profile-page">
-      {/* Simple Header */}
-      <div className="page-header">
-        <Link href="/" className="back-link">
-          ← Back
-        </Link>
-      </div>
+      {/* Use the ProfileViewer component for the main display */}
+      <ProfileViewer
+        profile={profile}
+        currentUserId={currentUserId}
+        relationshipType={relationshipType}
+        mutualFriendsCount={mutualFriendsCount}
+        onAddFriend={sendFriendRequest}
+        onMessage={sendMessage}
+        onFollow={followUser}
+        isPending={friendStatus === "pending"}
+      />
 
-      {/* Main Profile Card */}
-      <div className="card profile-main-card">
-        <div className="profile-layout">
-          {/* Avatar */}
-          <div className="avatar-section">
-            <img
-              src={profile.avatar_url || "/default-avatar.png"}
-              alt={profile.full_name || "Profile"}
-              className="avatar-image"
-            />
-            {/* Online Status Indicator */}
-            <div className="status-indicator"></div>
-          </div>
-
-          {/* Profile Info */}
-          <div className="profile-info">
-            <h1 className="profile-name">
-              {profile.full_name || "Anonymous User"}
-            </h1>
-            
-            {showLocation && (
-              <p className="profile-location">📍 {profile.location_text}</p>
-            )}
-
-            {/* Stats */}
-            <div className="stats-row">
-              <div className="stat">
-                <span className="stat-number">{friendsCount}</span>
-                <span className="stat-label">Friends</span>
-              </div>
-              <div className="stat">
-                <span className="stat-number">{followersCount}</span>
-                <span className="stat-label">Followers</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            {currentUserId && currentUserId !== profileId && (
-              <div className="action-buttons">
-                {friendStatus === "none" && (
-                  <button onClick={sendFriendRequest} className="btn btn-primary">
-                    Add Friend
-                  </button>
-                )}
-                {friendStatus === "pending" && (
-                  <button className="btn btn-secondary" disabled>
-                    Request Sent
-                  </button>
-                )}
-                {friendStatus === "friends" && (
-                  <button className="btn btn-success" disabled>
-                    ✓ Friends
-                  </button>
-                )}
-                <button onClick={followUser} className="btn btn-secondary">
-                  Follow
-                </button>
-              </div>
-            )}
-
-            {/* Business Profile Link */}
-            {profile.has_creator_profile && (
-              <Link href={`/business/${profileId}`} className="business-link">
-                View Business Profile →
-              </Link>
-            )}
-          </div>
-        </div>
-
-        {/* Bio Section */}
-        {profile.bio && (
-          <div className="bio-section">
-            <h3>About</h3>
-            <p>{profile.bio}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Memories Section */}
+      {/* Memories Section - if applicable */}
       {canViewMemories && todayMemories.length > 0 && (
-        <div className="card memories-card">
+        <div className="memories-section">
           <h3>Today in Past Years</h3>
           <div className="memories-grid">
             {todayMemories.map(memory => (
@@ -361,9 +393,11 @@ export default function PublicProfilePage() {
         </div>
       )}
 
-      {/* Photos Feed */}
-      {(canViewFriendContent || profile.id === currentUserId) && (
-        <PhotosFeed userId={profile.id} />
+      {/* Photos Feed - if friend or public */}
+      {(canViewFriendContent || profile.visibility === 'public') && (
+        <div className="photos-section">
+          <PhotosFeed userId={profile.id} />
+        </div>
       )}
 
       {/* Memory Modal */}
@@ -378,145 +412,28 @@ export default function PublicProfilePage() {
       <style jsx>{`
         .profile-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-          padding: 1rem;
+          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
+          padding: 2rem 1rem;
         }
 
-        .page-header {
-          margin-bottom: 1rem;
+        @media (max-width: 640px) {
+          .profile-page {
+            padding: 1rem 0.5rem;
+          }
         }
 
-        .back-link {
-          color: #6b7280;
-          text-decoration: none;
-        }
-
-        .card {
+        .memories-section {
+          max-width: 800px;
+          margin: 2rem auto;
           background: white;
-          border-radius: 0.75rem;
+          border-radius: 1rem;
           padding: 1.5rem;
-          margin-bottom: 1rem;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        .profile-layout {
-          display: flex;
-          gap: 1.5rem;
-          align-items: flex-start;
-        }
-
-        .avatar-section {
-          position: relative;
-        }
-
-        .avatar-image {
-          width: 120px;
-          height: 120px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-
-        .status-indicator {
-          position: absolute;
-          bottom: 8px;
-          right: 8px;
-          width: 20px;
-          height: 20px;
-          background: #10b981;
-          border: 3px solid white;
-          border-radius: 50%;
-        }
-
-        .profile-info {
-          flex: 1;
-        }
-
-        .profile-name {
-          font-size: 1.5rem;
-          font-weight: 700;
-          margin: 0 0 0.5rem 0;
-        }
-
-        .profile-location {
-          color: #6b7280;
+        .memories-section h3 {
           margin: 0 0 1rem 0;
-        }
-
-        .stats-row {
-          display: flex;
-          gap: 2rem;
-          margin-bottom: 1rem;
-        }
-
-        .stat {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .stat-number {
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-
-        .stat-label {
-          color: #6b7280;
-          font-size: 0.875rem;
-        }
-
-        .action-buttons {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 1rem;
-        }
-
-        .btn {
-          padding: 0.5rem 1rem;
-          border-radius: 0.5rem;
-          border: none;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .btn-primary {
-          background: #8b5cf6;
-          color: white;
-        }
-
-        .btn-secondary {
-          background: #e5e7eb;
-          color: #374151;
-        }
-
-        .btn-success {
-          background: #10b981;
-          color: white;
-        }
-
-        .btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .business-link {
-          color: #8b5cf6;
-          text-decoration: none;
-          font-weight: 500;
-        }
-
-        .bio-section {
-          margin-top: 1.5rem;
-          padding-top: 1.5rem;
-          border-top: 1px solid #e5e7eb;
-        }
-
-        .bio-section h3 {
-          margin: 0 0 0.5rem 0;
           color: #1f2937;
-        }
-
-        .memories-card h3 {
-          margin: 0 0 1rem 0;
         }
 
         .memories-grid {
@@ -544,6 +461,7 @@ export default function PublicProfilePage() {
         .memory-item p {
           margin: 0.5rem 0 0.25rem 0;
           font-size: 0.875rem;
+          color: #374151;
         }
 
         .memory-date {
@@ -551,43 +469,9 @@ export default function PublicProfilePage() {
           font-size: 0.75rem;
         }
 
-        .loading-container,
-        .error-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          gap: 1rem;
-        }
-
-        .loading-spinner {
-          width: 3rem;
-          height: 3rem;
-          border: 3px solid #e5e7eb;
-          border-top: 3px solid #8b5cf6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 640px) {
-          .profile-layout {
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-          }
-
-          .stats-row {
-            justify-content: center;
-          }
-
-          .action-buttons {
-            justify-content: center;
-          }
+        .photos-section {
+          max-width: 800px;
+          margin: 2rem auto;
         }
       `}</style>
     </div>
