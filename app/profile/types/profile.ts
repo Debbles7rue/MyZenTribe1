@@ -1,7 +1,9 @@
 // app/profile/types/profile.ts
+import type React from 'react';
+
 export interface Profile {
   id: string;
-  
+
   // Core fields
   full_name: string | null;
   avatar_url: string | null;
@@ -10,7 +12,7 @@ export interface Profile {
   location_text?: string | null;
   location_is_public?: boolean | null;
   show_mutuals: boolean | null;
-  
+
   // Display fields
   username?: string | null;
   cover_url?: string | null;
@@ -19,7 +21,7 @@ export interface Profile {
   website_url?: string | null;
   social_links?: SocialLinks | null;
   languages?: string[] | null;
-  
+
   // Privacy settings
   visibility?: 'public' | 'friends_only' | 'private' | null;
   discoverable?: boolean | null;
@@ -28,12 +30,12 @@ export interface Profile {
   allow_collaboration_on_posts?: 'friends' | 'invited_only' | 'off' | null;
   default_post_visibility?: 'public' | 'friends_only' | 'private' | null;
   show_online_status?: boolean | null;
-  
+
   // Private fields
   phone?: string | null;
   birthday?: string | null;
   internal_notes?: string | null;
-  
+
   // System fields
   verified?: boolean | null;
   friends_count?: number | null;
