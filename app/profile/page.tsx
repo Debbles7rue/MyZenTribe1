@@ -4,316 +4,655 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import ProfileHeader from "./components/ProfileHeader";
+import ProfileEditForm from "./components/ProfileEditForm";
+import ProfileAboutSection from "./components/ProfileAboutSection";
+import ProfilePrivacySettings from "./components/ProfilePrivacySettings";
+import ProfileSocialLinks from "./components/ProfileSocialLinks";
+import ProfileAnalytics from "./components/ProfileAnalytics";
+import ProfileInviteQR from "@/components/ProfileInviteQR";
+import ProfileCandleWidget from "@/components/ProfileCandleWidget";
+import PhotosFeed from "@/components/PhotosFeed";
+import { useProfileData } from "./hooks/useProfileData";
+import { useProfileSave } from "./hooks/useProfileSave";
+import type { Profile } from "./types/profile";
 
-type Profile = {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  location_text?: string | null;
-  location_is_public?: boolean | null;
-  show_mutuals: boolean | null;
-  username?: string | null;
-  cover_url?: string | null;
-  tagline?: string | null;
-  interests?: string[] | null;
-  website_url?: string | null;
-  social_links?: any | null;
-  languages?: string[] | null;
-  visibility?: string | null;
-  discoverable?: boolean | null;
-  allow_messages?: string | null;
-  allow_tags?: string | null;
-  phone?: string | null;
-  birthday?: string | null;
-  internal_notes?: string | null;
-};
+// Hook for desktop detection
+function useIsDesktop(minWidth = 1024) {
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(min-width:${minWidth}px)`);
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, [minWidth]);
+  return isDesktop;
+}
 
 export default function ProfilePage() {
+  // Core state
   const [userId, setUserId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [inviteExpanded, setInviteExpanded] = useState(false);
+  const [activeSection, setActiveSection] = useState<'about' | 'privacy' | 'social'>('about');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [tableMissing, setTableMissing] = useState(false);
   
-  const [profile, setProfile] = useState<Profile>({
-    id: "",
-    full_name: "",
-    avatar_url: "",
-    bio: "",
-    location_text: "",
-    location_is_public: false,
-    show_mutuals: true,
-    username: "",
-    cover_url: "",
-    tagline: "",
-    interests: [],
-    website_url: "",
-    social_links: {},
-    languages: [],
-    visibility: "public",
-    discoverable: true,
-    allow_messages: "friends",
-    phone: "",
-    birthday: "",
-    internal_notes: "",
-  });
-
+  const isDesktop = useIsDesktop(1024);
+  
+  // Get current user
   useEffect(() => { 
     supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
+      const user = data.user;
+      setUserId(user?.id ?? null);
     });
   }, []);
 
+  // Use custom hooks
+  const { profile, setProfile, loading, error, friendsCount, reload } = useProfileData(userId);
+  const { save: saveProfile, saving, uploadImage } = useProfileSave();
+
+  // Check for table errors
   useEffect(() => {
-    const load = async () => {
-      if (!userId) return;
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle();
-        
-        if (data) {
-          setProfile({
-            ...profile,
-            ...data,
-            id: data.id
-          });
-        }
-      } catch (err) {
-        console.error("Profile load error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [userId]);
+    if (error && error.includes('relation') && error.includes('does not exist')) {
+      setTableMissing(true);
+    }
+  }, [error]);
 
-  const save = async () => {
-    if (!userId) return;
-    setSaving(true);
-    setStatus("Saving...");
-    
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .upsert({
-          id: userId,
-          full_name: profile.full_name,
-          bio: profile.bio,
-          location_text: profile.location_text,
-          location_is_public: profile.location_is_public,
-          username: profile.username,
-          tagline: profile.tagline,
-          website_url: profile.website_url,
-          interests: profile.interests,
-          languages: profile.languages,
-          updated_at: new Date().toISOString()
-        });
+  // Initialize default profile if needed
+  useEffect(() => {
+    if (!loading && !profile && userId) {
+      setProfile({
+        id: userId,
+        full_name: "",
+        avatar_url: "",
+        bio: "",
+        location: "",
+        location_text: "",
+        location_is_public: false,
+        show_mutuals: true,
+        username: "",
+        cover_url: "",
+        tagline: "",
+        interests: [],
+        website_url: "",
+        social_links: {},
+        languages: [],
+        visibility: "public",
+        discoverable: true,
+        allow_messages: "friends",
+        allow_tags: "review_required",
+        allow_collaboration_on_posts: "friends",
+        default_post_visibility: "public",
+        show_online_status: true,
+        phone: "",
+        birthday: "",
+        internal_notes: "",
+        verified: false,
+        friends_count: 0,
+        posts_count: 0,
+        collab_posts_count: 0,
+        profile_views_30d: 0
+      });
+    }
+  }, [loading, profile, userId, setProfile]);
 
-      if (error) throw error;
-      
-      setStatus("Saved ✅");
-      setEditMode(false);
-      setTimeout(() => setStatus(null), 3000);
-    } catch (e: any) {
-      setStatus(`Error: ${e.message}`);
-    } finally {
-      setSaving(false);
+  const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
+
+  // Handle profile updates
+  const handleProfileChange = (updates: Partial<Profile>) => {
+    if (profile) {
+      setProfile({ ...profile, ...updates });
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-200 border-t-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!userId) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-4">Please log in</h2>
-          <Link href="/login" className="text-purple-600 hover:text-purple-700 underline">
-            Go to Login
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // Handle save with image uploads
+  const handleSave = async () => {
+    if (!userId || !profile) return;
+    
+    setStatus("Saving…");
+    
+    try {
+      let updatedProfile = { ...profile };
+      
+      // Upload avatar if changed
+      if (avatarFile) {
+        const avatarUrl = await uploadImage(avatarFile, userId, 'avatars');
+        if (avatarUrl) {
+          updatedProfile.avatar_url = avatarUrl;
+        }
+      }
+      
+      // Upload cover if changed
+      if (coverFile) {
+        const coverUrl = await uploadImage(coverFile, userId, 'covers');
+        if (coverUrl) {
+          updatedProfile.cover_url = coverUrl;
+        }
+      }
+      
+      // Save profile
+      const success = await saveProfile(userId, updatedProfile);
+      
+      if (success) {
+        setStatus("Saved ✅");
+        setEditMode(false);
+        setAvatarFile(null);
+        setCoverFile(null);
+        setProfile(updatedProfile);
+        setTimeout(() => setStatus(null), 3000);
+      } else {
+        setStatus("Save failed. Please try again.");
+        setTimeout(() => setStatus(null), 5000);
+      }
+    } catch (err: any) {
+      console.error("Save error:", err);
+      setStatus(`Error: ${err.message}`);
+      setTimeout(() => setStatus(null), 5000);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-purple-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
-            Your Profile
-          </h1>
-          <button
+    <div className="profile-page">
+      {/* Page Header */}
+      <div className="page-header">
+        <h1 className="page-title">Your Profile</h1>
+        <div className="header-controls">
+          <Link href="/business" className="btn btn-neutral">Business Profile</Link>
+          <button 
+            className="btn btn-primary"
             onClick={() => setEditMode(!editMode)}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
           >
-            {editMode ? "Cancel" : "Edit"}
+            {editMode ? "✓ Done" : "✏️ Edit"}
           </button>
         </div>
+      </div>
 
-        {/* Status Message */}
-        {status && (
-          <div className={`p-4 rounded-lg mb-6 ${
-            status.includes("Error") ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-          }`}>
-            {status}
-          </div>
-        )}
+      {/* Status Messages */}
+      {status && (
+        <div className={`status-message ${status.includes('failed') || status.includes('Error') ? 'error' : 'success'}`}>
+          {status}
+        </div>
+      )}
 
-        {/* Main Profile Card */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Cover Image Area */}
-          <div className="h-48 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400"></div>
+      {/* Error State */}
+      {tableMissing && (
+        <div className="error-banner">
+          <div className="error-title">Tables not found</div>
+          <div className="error-message">Run the SQL migration, then reload.</div>
+        </div>
+      )}
+
+      {/* Main Profile Header with Cover, Avatar, Stats */}
+      <ProfileHeader
+        profile={profile}
+        userId={userId}
+        friendsCount={friendsCount}
+        editMode={editMode}
+        isDesktop={isDesktop}
+        onProfileChange={handleProfileChange}
+        onSave={handleSave}
+        saving={saving}
+      />
+
+      {/* Invite Friends Section */}
+      {profile && (
+        <div className="card invite-card">
+          <button
+            onClick={() => setInviteExpanded(!inviteExpanded)}
+            className="btn btn-special invite-button"
+          >
+            🎉 Invite Friends
+            <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
+          </button>
           
-          {/* Profile Content */}
-          <div className="px-8 py-6">
-            {/* Avatar Placeholder */}
-            <div className="w-32 h-32 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full -mt-20 mb-4 border-4 border-white shadow-lg flex items-center justify-center">
-              <span className="text-white text-4xl font-bold">
-                {profile.full_name?.charAt(0)?.toUpperCase() || "?"}
-              </span>
+          {inviteExpanded && (
+            <div className="invite-content">
+              <ProfileInviteQR userId={userId} embed qrSize={180} />
             </div>
+          )}
+        </div>
+      )}
 
-            {editMode ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={profile.full_name || ""}
-                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                  <input
-                    type="text"
-                    value={profile.username || ""}
-                    onChange={(e) => setProfile({ ...profile, username: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="@username"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                  <textarea
-                    value={profile.bio || ""}
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Tell us about yourself..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={profile.location_text || ""}
-                    onChange={(e) => setProfile({ ...profile, location_text: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="City, State"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
-                  <input
-                    type="url"
-                    value={profile.website_url || ""}
-                    onChange={(e) => setProfile({ ...profile, website_url: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="https://yourwebsite.com"
-                  />
-                </div>
-
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">
-                  {profile.full_name || "Member"}
-                </h2>
-                {profile.username && (
-                  <p className="text-gray-600 mb-3">@{profile.username}</p>
-                )}
-                {profile.tagline && (
-                  <p className="text-purple-600 font-medium mb-3">{profile.tagline}</p>
-                )}
-                {profile.bio && (
-                  <p className="text-gray-700 mb-4">{profile.bio}</p>
-                )}
-                <div className="space-y-2 text-gray-600">
-                  {profile.location_text && (
-                    <p className="flex items-center gap-2">
-                      <span>📍</span> {profile.location_text}
-                    </p>
-                  )}
-                  {profile.website_url && (
-                    <p className="flex items-center gap-2">
-                      <span>🌐</span>
-                      <a 
-                        href={profile.website_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-purple-600 hover:text-purple-700 underline"
-                      >
-                        {profile.website_url.replace(/^https?:\/\//, "")}
-                      </a>
-                    </p>
-                  )}
-                </div>
-              </div>
+      {/* Edit Mode */}
+      {editMode && profile ? (
+        <div className="card edit-card">
+          <h3 className="card-title">
+            <span className="title-icon">✏️</span>
+            Edit Your Information
+          </h3>
+          
+          {/* Mobile Tab Navigation */}
+          {!isDesktop && (
+            <div className="edit-tabs">
+              <button
+                className={`tab ${activeSection === 'about' ? 'active' : ''}`}
+                onClick={() => setActiveSection('about')}
+              >
+                About
+              </button>
+              <button
+                className={`tab ${activeSection === 'privacy' ? 'active' : ''}`}
+                onClick={() => setActiveSection('privacy')}
+              >
+                Privacy
+              </button>
+              <button
+                className={`tab ${activeSection === 'social' ? 'active' : ''}`}
+                onClick={() => setActiveSection('social')}
+              >
+                Social
+              </button>
+            </div>
+          )}
+          
+          {/* Edit Forms */}
+          <div className="edit-sections">
+            {(isDesktop || activeSection === 'about') && (
+              <ProfileEditForm
+                profile={profile}
+                onChange={handleProfileChange}
+                onSave={handleSave}
+                saving={saving}
+                isDesktop={isDesktop}
+              />
+            )}
+            
+            {(isDesktop || activeSection === 'privacy') && (
+              <ProfilePrivacySettings
+                profile={profile}
+                onChange={handleProfileChange}
+                isEditing={true}
+              />
+            )}
+            
+            {(isDesktop || activeSection === 'social') && (
+              <ProfileSocialLinks
+                profile={profile}
+                onChange={handleProfileChange}
+                isEditing={true}
+              />
             )}
           </div>
         </div>
+      ) : (
+        /* View Mode */
+        profile && (
+          <>
+            <ProfileAboutSection profile={profile} isOwner={true} />
+            <ProfileSocialLinks profile={profile} onChange={handleProfileChange} isEditing={false} />
+            <ProfileAnalytics profile={profile} isOwner={true} />
+          </>
+        )
+      )}
 
-        {/* Quick Links */}
-        <div className="flex gap-4 mt-8 justify-center">
-          <Link 
-            href="/friends" 
-            className="px-6 py-3 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-purple-600 font-medium"
-          >
-            👥 Friends
-          </Link>
-          <Link 
-            href="/messages" 
-            className="px-6 py-3 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-purple-600 font-medium"
-          >
-            💬 Messages
-          </Link>
-          <Link 
-            href="/gratitude" 
-            className="px-6 py-3 bg-white rounded-lg shadow hover:shadow-md transition-shadow text-purple-600 font-medium"
-          >
-            🙏 Gratitude
-          </Link>
-        </div>
+      {/* Sacred Candles Widget */}
+      {userId && <ProfileCandleWidget userId={userId} isOwner={true} />}
+
+      {/* Sacred Candles Link Card */}
+      <div className="card candles-card">
+        <div className="candles-icon">🕯️</div>
+        <h3 className="candles-title">My Sacred Candles</h3>
+        <p className="candles-description">View your eternal memorials and prayer candles</p>
+        <Link href="/profile/candles" className="btn btn-candles">
+          View My Candles ✨
+        </Link>
       </div>
+
+      {/* Photos Feed */}
+      <PhotosFeed userId={userId} />
+
+      {/* Loading State */}
+      {loading && (
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <span>Loading your amazing profile...</span>
+        </div>
+      )}
+
+      <style jsx>{`
+        .profile-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
+          padding: 2rem 1rem;
+          position: relative;
+        }
+
+        .profile-page::before {
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: 
+            radial-gradient(circle at 20% 30%, rgba(139,92,246,0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 70%, rgba(245,158,11,0.08) 0%, transparent 50%),
+            radial-gradient(circle at 40% 80%, rgba(16,185,129,0.06) 0%, transparent 50%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .profile-page > * {
+          position: relative;
+          z-index: 1;
+        }
+
+        .page-header {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 2rem;
+        }
+
+        @media (min-width: 768px) {
+          .page-header {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+          }
+        }
+
+        .page-title {
+          font-size: 2rem;
+          font-weight: 700;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          margin: 0;
+        }
+
+        .header-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          align-items: center;
+        }
+
+        .status-message {
+          padding: 0.75rem 1rem;
+          border-radius: 0.75rem;
+          margin-bottom: 1rem;
+          font-weight: 500;
+          text-align: center;
+        }
+
+        .status-message.success {
+          background: #d1fae5;
+          color: #065f46;
+          border: 1px solid #a7f3d0;
+        }
+
+        .status-message.error {
+          background: #fef2f2;
+          color: #dc2626;
+          border: 1px solid #fecaca;
+        }
+
+        .error-banner {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 0.75rem;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .error-title {
+          font-weight: 600;
+          color: #dc2626;
+        }
+
+        .error-message {
+          color: #b91c1c;
+          font-size: 0.875rem;
+        }
+
+        .card {
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255,255,255,0.6);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+          border-radius: 0.75rem;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .invite-card {
+          max-width: 20rem;
+          margin: 0 auto 1.5rem;
+        }
+
+        .btn.btn-special {
+          background: linear-gradient(135deg, #c084fc, #a78bfa);
+          color: white;
+          border: none;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          font-size: 0.875rem;
+          padding: 0.75rem 1rem;
+          border-radius: 0.5rem;
+        }
+
+        .btn.btn-special:hover {
+          background: linear-gradient(135deg, #a78bfa, #9333ea);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(196,132,252,0.4);
+        }
+
+        .invite-arrow {
+          transition: transform 0.2s ease;
+          font-size: 0.75rem;
+        }
+
+        .invite-arrow.expanded {
+          transform: rotate(180deg);
+        }
+
+        .invite-content {
+          margin-top: 1rem;
+          padding: 1rem;
+          background: rgba(255,255,255,0.6);
+          border: 1px solid rgba(255,255,255,0.8);
+          border-radius: 0.75rem;
+        }
+
+        .edit-card {
+          padding: 1.5rem;
+        }
+
+        .card-title {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 1rem 0;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .title-icon {
+          width: 1.75rem;
+          height: 1.75rem;
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          border-radius: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 0.875rem;
+        }
+
+        .edit-tabs {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+          padding: 0.25rem;
+          background: rgba(139,92,246,0.05);
+          border-radius: 0.5rem;
+        }
+
+        .tab {
+          flex: 1;
+          padding: 0.5rem;
+          border: none;
+          background: transparent;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          color: #6b7280;
+        }
+
+        .tab.active {
+          background: white;
+          color: var(--brand);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .edit-sections {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+
+        .candles-card {
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(254,243,199,0.1));
+          border: 1px solid rgba(245,158,11,0.2);
+          text-align: center;
+          transition: all 0.3s ease;
+        }
+
+        .candles-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(245,158,11,0.15);
+          background: linear-gradient(135deg, rgba(255,255,255,1), rgba(254,243,199,0.15));
+        }
+
+        .candles-icon {
+          font-size: 2rem;
+          margin-bottom: 0.5rem;
+          animation: flicker 2s ease-in-out infinite;
+        }
+
+        @keyframes flicker {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        .candles-title {
+          margin: 0 0 0.5rem 0;
+          color: #78350f;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+
+        .candles-description {
+          margin: 0 0 1rem 0;
+          color: #92400e;
+          opacity: 0.8;
+          font-size: 0.875rem;
+        }
+
+        .btn-candles {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          color: white;
+          padding: 0.75rem 1.5rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          text-decoration: none;
+          font-size: 16px;
+          border: none;
+        }
+
+        .btn-candles:hover {
+          background: linear-gradient(135deg, #d97706, #b45309);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(245,158,11,0.3);
+        }
+
+        .loading-state {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          padding: 2rem 0;
+          color: #6b7280;
+        }
+
+        .loading-spinner {
+          width: 1.5rem;
+          height: 1.5rem;
+          border: 2px solid #e5e7eb;
+          border-top: 2px solid var(--brand);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .btn {
+          transition: all 0.2s ease;
+          font-weight: 500;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.25rem;
+          font-size: 16px;
+          padding: 0.75rem 1rem;
+          border-radius: 0.5rem;
+          cursor: pointer;
+        }
+
+        .btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, var(--brand), #8b5cf6);
+          color: white;
+          border: none;
+        }
+
+        .btn-primary:hover {
+          background: linear-gradient(135deg, #7c2d12, #6d28d9);
+        }
+
+        .btn-neutral {
+          background: rgba(255,255,255,0.9);
+          color: #374151;
+          border: 1px solid rgba(139,92,246,0.2);
+        }
+
+        .btn-neutral:hover {
+          background: white;
+          border-color: rgba(139,92,246,0.3);
+        }
+
+        @media (max-width: 640px) {
+          .profile-page {
+            padding: 1rem 0.5rem;
+          }
+          
+          .invite-card {
+            max-width: 100%;
+          }
+        }
+      `}</style>
     </div>
   );
 }
