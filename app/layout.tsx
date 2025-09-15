@@ -10,6 +10,8 @@ import ElevenElevenFireworks from "@/components/ElevenElevenFireworks";
 export const metadata: Metadata = {
   title: "MyZenTribe",
   description: "Meditation • Community • Presence",
+  viewport: "width=device-width, initial-scale=1",
+  themeColor: "#7c3aed",
 };
 
 export default function RootLayout({
@@ -20,6 +22,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Ensure title is always present for error pages */}
+        <title>MyZenTribe</title>
         {/* Leaflet CSS for maps */}
         <link
           rel="stylesheet"
