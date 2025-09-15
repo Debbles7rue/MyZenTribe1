@@ -1,24 +1,10 @@
 // app/profile/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
-
-// Dynamic imports to prevent SSR issues
-const ProfileInviteQR = dynamic(() => import("@/components/ProfileInviteQR"), {
-  ssr: false
-});
-
-const ProfileCandleWidget = dynamic(() => import("@/components/ProfileCandleWidget"), {
-  ssr: false
-});
-
-const PhotosFeed = dynamic(() => import("@/components/PhotosFeed"), {
-  ssr: false
-});
 
 type Profile = {
   id: string;
@@ -61,6 +47,25 @@ function AnimatedCounter({ value, label }: { value: number; label: string }) {
   );
 }
 
+// Lazy load components with error boundaries
+const LazyProfileInviteQR = React.lazy(() => 
+  import("@/components/ProfileInviteQR").catch(() => ({
+    default: () => <div>QR component could not load</div>
+  }))
+);
+
+const LazyProfileCandleWidget = React.lazy(() => 
+  import("@/components/ProfileCandleWidget").catch(() => ({
+    default: () => null
+  }))
+);
+
+const LazyPhotosFeed = React.lazy(() => 
+  import("@/components/PhotosFeed").catch(() => ({
+    default: () => null
+  }))
+);
+
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -70,13 +75,16 @@ export default function ProfilePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [inviteExpanded, setInviteExpanded] = useState(false);
   const [friendsCount, setFriendsCount] = useState(0);
-  const [mounted, setMounted] = useState(false);
+  const [componentsReady, setComponentsReady] = useState(false);
 
   const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
 
-  // Track when component is mounted
+  // Delay loading of complex components
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setComponentsReady(true);
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Get current user
@@ -127,11 +135,15 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!userId) return;
     (async () => {
-      const { count } = await supabase
-        .from("friendships")
-        .select("a", { count: "exact", head: true })
-        .or(`a.eq.${userId},b.eq.${userId}`);
-      if (typeof count === "number") setFriendsCount(count);
+      try {
+        const { count } = await supabase
+          .from("friendships")
+          .select("a", { count: "exact", head: true })
+          .or(`a.eq.${userId},b.eq.${userId}`);
+        if (typeof count === "number") setFriendsCount(count);
+      } catch (err) {
+        console.error("Error loading friends count:", err);
+      }
     })();
   }, [userId]);
 
@@ -329,24 +341,24 @@ export default function ProfilePage() {
                     <p className="empty-state">Add a bio using the Edit button above.</p>
                   )}
 
-                  {/* Invite Friends Section - Only render when mounted and userId exists */}
-                  {mounted && userId && (
-                    <div className="invite-section">
-                      <button
-                        onClick={() => setInviteExpanded(!inviteExpanded)}
-                        className="btn btn-special invite-button"
-                      >
-                        🎉 Invite Friends
-                        <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
-                      </button>
-                      
-                      {inviteExpanded && (
-                        <div className="invite-content">
-                          <ProfileInviteQR userId={userId} embed qrSize={180} />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {/* Invite Friends Section */}
+                  <div className="invite-section">
+                    <button
+                      onClick={() => setInviteExpanded(!inviteExpanded)}
+                      className="btn btn-special invite-button"
+                    >
+                      🎉 Invite Friends
+                      <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
+                    </button>
+                    
+                    {inviteExpanded && userId && componentsReady && (
+                      <div className="invite-content">
+                        <Suspense fallback={<div>Loading QR code...</div>}>
+                          <LazyProfileInviteQR userId={userId} embed qrSize={180} />
+                        </Suspense>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -354,8 +366,12 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Sacred Candles Widget - Only render when mounted and userId exists */}
-      {mounted && userId && <ProfileCandleWidget userId={userId} isOwner={true} />}
+      {/* Sacred Candles Widget - Wrapped in Suspense */}
+      {componentsReady && userId && (
+        <Suspense fallback={null}>
+          <LazyProfileCandleWidget userId={userId} isOwner={true} />
+        </Suspense>
+      )}
 
       {/* Sacred Candles Card */}
       <div className="card candles-card">
@@ -367,8 +383,12 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      {/* Photos Feed - Only render when mounted and userId exists */}
-      {mounted && userId && <PhotosFeed userId={userId} />}
+      {/* Photos Feed - Wrapped in Suspense */}
+      {componentsReady && userId && (
+        <Suspense fallback={null}>
+          <LazyPhotosFeed userId={userId} />
+        </Suspense>
+      )}
 
       <style jsx>{`
         .profile-page {
