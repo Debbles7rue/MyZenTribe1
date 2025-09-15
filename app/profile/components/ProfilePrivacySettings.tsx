@@ -3,24 +3,22 @@
 
 import React from 'react';
 import type { Profile } from '../types/profile';
+import { Shield } from 'lucide-react';
 
-interface ProfilePrivacySettingsProps {
+type ProfilePrivacySettingsProps = {
   profile: Profile | null;
   onChange: (updates: Partial<Profile>) => void;
   isEditing: boolean;
-}
+};
 
-export default function ProfilePrivacySettings({ 
-  profile, 
-  onChange, 
-  isEditing 
-}: ProfilePrivacySettingsProps) {
+export default function ProfilePrivacySettings({ profile, onChange, isEditing }: ProfilePrivacySettingsProps) {
   if (!profile || !isEditing) return null;
 
   return (
     <div className="privacy-settings">
       <h4 className="section-subtitle">
-        🛡️ Privacy & Safety Settings
+        <Shield size={16} style={{ display: "inline", marginRight: "0.25rem" }} />
+        Privacy & Safety Settings
       </h4>
 
       <div className="form-field">
@@ -50,7 +48,7 @@ export default function ProfilePrivacySettings({
         <select 
           className="form-input"
           value={profile.allow_messages ?? "friends"} 
-          onChange={(e) => onChange({ allow_messages: e.target.value })}
+          onChange={(e) => onChange({ allow_messages: e.target.value as Profile['allow_messages'] })}
         >
           <option value="everyone">Everyone</option>
           <option value="friends">Friends Only</option>
@@ -63,11 +61,37 @@ export default function ProfilePrivacySettings({
         <select 
           className="form-input"
           value={profile.allow_tags ?? "review_required"} 
-          onChange={(e) => onChange({ allow_tags: e.target.value })}
+          onChange={(e) => onChange({ allow_tags: e.target.value as Profile['allow_tags'] })}
         >
           <option value="auto">Auto-approve tags</option>
           <option value="review_required">Review required</option>
           <option value="no_one">Don't allow tags</option>
+        </select>
+      </div>
+
+      <div className="form-field">
+        <label className="form-label">Post collaboration</label>
+        <select 
+          className="form-input"
+          value={profile.allow_collaboration_on_posts ?? "friends"} 
+          onChange={(e) => onChange({ allow_collaboration_on_posts: e.target.value as Profile['allow_collaboration_on_posts'] })}
+        >
+          <option value="friends">Friends can collaborate</option>
+          <option value="invited_only">Only people I invite</option>
+          <option value="off">No collaboration</option>
+        </select>
+      </div>
+
+      <div className="form-field">
+        <label className="form-label">Default post visibility</label>
+        <select 
+          className="form-input"
+          value={profile.default_post_visibility ?? "public"} 
+          onChange={(e) => onChange({ default_post_visibility: e.target.value as Profile['default_post_visibility'] })}
+        >
+          <option value="public">Public</option>
+          <option value="friends_only">Friends Only</option>
+          <option value="private">Private</option>
         </select>
       </div>
 
@@ -86,29 +110,52 @@ export default function ProfilePrivacySettings({
           flex-direction: column;
           gap: 1rem;
         }
+        
         .section-subtitle {
           font-size: 1rem;
           font-weight: 600;
           color: #1f2937;
-          margin-bottom: 1rem;
+          margin: 1.5rem 0 1rem 0;
+          padding-top: 1rem;
+          border-top: 1px solid #e5e7eb;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
         }
+        
+        .section-subtitle:first-child {
+          border-top: none;
+          padding-top: 0;
+          margin-top: 0;
+        }
+        
         .form-field {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
         }
+        
         .form-label {
           font-size: 0.875rem;
           font-weight: 500;
           color: #374151;
         }
+        
         .form-input {
           padding: 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 0.5rem;
           background: rgba(255,255,255,0.9);
+          transition: all 0.2s ease;
           font-size: 16px;
         }
+        
+        .form-input:focus {
+          outline: none;
+          border-color: var(--brand);
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+        
         .checkbox-label {
           display: flex;
           align-items: center;
@@ -117,9 +164,11 @@ export default function ProfilePrivacySettings({
           font-size: 0.875rem;
           color: #374151;
         }
+        
         .checkbox-label input[type="checkbox"] {
           width: 1rem;
           height: 1rem;
+          accent-color: var(--brand);
         }
       `}</style>
     </div>
