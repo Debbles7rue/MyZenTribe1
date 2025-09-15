@@ -4,13 +4,17 @@
 import React from 'react';
 import type { Profile } from '../types/profile';
 
-type ProfilePrivacySettingsProps = {
+interface ProfilePrivacySettingsProps {
   profile: Profile | null;
   onChange: (updates: Partial<Profile>) => void;
   isEditing: boolean;
-};
+}
 
-export default function ProfilePrivacySettings({ profile, onChange, isEditing }: ProfilePrivacySettingsProps) {
+export default function ProfilePrivacySettings({ 
+  profile, 
+  onChange, 
+  isEditing 
+}: ProfilePrivacySettingsProps) {
   if (!profile || !isEditing) return null;
 
   return (
@@ -82,49 +86,29 @@ export default function ProfilePrivacySettings({ profile, onChange, isEditing }:
           flex-direction: column;
           gap: 1rem;
         }
-        
         .section-subtitle {
           font-size: 1rem;
           font-weight: 600;
           color: #1f2937;
-          margin: 1.5rem 0 1rem 0;
-          padding-top: 1rem;
-          border-top: 1px solid #e5e7eb;
+          margin-bottom: 1rem;
         }
-        
-        .section-subtitle:first-child {
-          border-top: none;
-          padding-top: 0;
-          margin-top: 0;
-        }
-        
         .form-field {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
         }
-        
         .form-label {
           font-size: 0.875rem;
           font-weight: 500;
           color: #374151;
         }
-        
         .form-input {
           padding: 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 0.5rem;
           background: rgba(255,255,255,0.9);
-          transition: all 0.2s ease;
           font-size: 16px;
         }
-        
-        .form-input:focus {
-          outline: none;
-          border-color: var(--brand);
-          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
-        }
-        
         .checkbox-label {
           display: flex;
           align-items: center;
@@ -133,11 +117,9 @@ export default function ProfilePrivacySettings({ profile, onChange, isEditing }:
           font-size: 0.875rem;
           color: #374151;
         }
-        
         .checkbox-label input[type="checkbox"] {
           width: 1rem;
           height: 1rem;
-          accent-color: var(--brand);
         }
       `}</style>
     </div>
