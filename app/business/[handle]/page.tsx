@@ -306,7 +306,7 @@ export default function BusinessPublicPage() {
                 </div>
               )}
 
-              {/* Social Links */}
+              {/* Social Links - FIXED */}
               {business.social_links && Object.keys(business.social_links).length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-gray-600 mb-2">Connect</h4>
