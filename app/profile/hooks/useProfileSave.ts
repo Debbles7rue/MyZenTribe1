@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { Profile } from '../types/profile';
@@ -12,29 +14,29 @@ export function useProfileSave() {
   const save = async (userId: string, profile: Profile): Promise<boolean> => {
     setSaving(true);
     setStatus(null);
-    
+
     try {
       const { error } = await supabase
         .from('profiles')
         .upsert({
           id: userId,
           ...profile,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         });
-      
+
       if (error) throw error;
-      
+
       setStatus({
         type: 'success',
-        message: 'Profile saved successfully!'
+        message: 'Profile saved successfully!',
       });
-      
+
       return true;
     } catch (err: any) {
       console.error('Error saving profile:', err);
       setStatus({
         type: 'error',
-        message: err.message || 'Failed to save profile'
+        message: err?.message || 'Failed to save profile',
       });
       return false;
     } finally {
@@ -42,7 +44,11 @@ export function useProfileSave() {
     }
   };
 
-  const uploadImage = async (file: File, userId: string, bucket: string): Promise<string | null> => {
+  const uploadImage = async (
+    file: File,
+    userId: string,
+    bucket: string
+  ): Promise<string | null> => {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${userId}-${Date.now()}.${fileExt}`;
@@ -54,11 +60,9 @@ export function useProfileSave() {
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      const publicUrl = data?.publicUrl ?? null;
+      return publicUrl;
     } catch (err: any) {
       console.error('Error uploading image:', err);
       return null;
@@ -69,6 +73,6 @@ export function useProfileSave() {
     save,
     saving,
     status,
-    uploadImage
+    uploadImage,
   };
 }
