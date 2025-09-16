@@ -94,6 +94,20 @@ export default function CreateEventModal({
       return;
     }
 
+    // Validate dates
+    const startDate = new Date(form.start);
+    const endDate = new Date(form.end);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      showToast({ type: 'error', message: 'Invalid date/time format' });
+      return;
+    }
+    
+    if (endDate <= startDate) {
+      showToast({ type: 'warning', message: 'End time must be after start time' });
+      return;
+    }
+
     setLoading(true);
     try {
       // Create event
@@ -103,8 +117,8 @@ export default function CreateEventModal({
           created_by: currentUserId,
           title: form.title,
           description: form.description,
-          start_time: new Date(form.start).toISOString(),
-          end_time: new Date(form.end).toISOString(),
+          start_time: startDate.toISOString(),
+          end_time: endDate.toISOString(),
           location: form.location,
           visibility: form.visibility,
           allows_rsvp: form.allows_rsvp,
@@ -559,7 +573,13 @@ export default function CreateEventModal({
                   <h4 className="font-semibold text-gray-700">Event Summary</h4>
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>📌 {form.title || "Untitled Event"}</p>
-                    <p>📅 {form.start ? new Date(form.start).toLocaleString() : "No date set"}</p>
+                    <p>📅 {form.start ? (() => {
+                      try {
+                        return new Date(form.start).toLocaleString();
+                      } catch {
+                        return "Invalid date";
+                      }
+                    })() : "No date set"}</p>
                     {form.location && <p>📍 {form.location}</p>}
                     <p>👥 Visibility: {form.visibility}</p>
                     {enableCarpool && <p>🚗 Carpool coordination enabled</p>}
