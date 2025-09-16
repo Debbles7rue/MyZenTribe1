@@ -1,381 +1,113 @@
-// app/business/[slug]/page.tsx
+// app/(protected)/business/dashboard/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
+import BusinessHeader from '@/components/business/BusinessHeader';
+import BusinessSidebar from '@/components/business/BusinessSidebar';
+import BusinessTabs from '@/components/business/BusinessTabs';
+import BusinessWelcome from '@/components/business/BusinessWelcome';
 
-interface BusinessProfile {
-  owner_id: string;
-  display_name: string;
-  handle: string;
-  tagline?: string;
-  bio?: string;
-  logo_url?: string;
-  cover_url?: string;
-  categories?: string[];
-  tags?: string[];
-
-  phone?: string;
-  phone_public?: boolean;
-  email?: string;
-  email_public?: boolean;
-  website_url?: string;
-  booking_url?: string;
-
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  location_text?: string;
-  location_is_public?: boolean;
-
-  hours?: any;
-  special_hours?: any;
-  services?: any[];
-  gallery?: any[];
-  social_links?: Record<string, string> | null;
-
-  rating_average?: number;
-  rating_count?: number;
-  allow_messages?: boolean;
-  allow_reviews?: boolean;
-  verified?: boolean;
-
-  visibility?: string;
-  view_count?: number | null;
-}
-
-export default function BusinessPublicPage() {
-  const params = useParams();
-  const slug = params?.slug as string;
-  const [business, setBusiness] = useState<BusinessProfile | null>(null);
+export default function BusinessDashboardPage() {
+  const router = useRouter();
+  const [businessId, setBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(false);
-  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('basic');
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      if (!slug) {
-        setError('No business handle provided');
-        setLoading(false);
+    async function checkBusinessProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        router.push('/login');
         return;
       }
 
-      const cleanSlug = slug.replace('@', '');
-      
-      console.log('Looking for business with handle:', cleanSlug);
-
-      const { data, error } = await supabase
+      // Check if user has a business profile
+      const { data: profile, error } = await supabase
         .from('business_profiles')
-        .select('*')
-        .eq('handle', cleanSlug)
-        .eq('visibility', 'public')
+        .select('id')
+        .eq('user_id', user.id)
         .single();
 
-      if (error) {
-        console.error('Error loading business:', error);
-        setError(`Business not found: ${error.message}`);
-      }
+      if (error || !profile) {
+        // Create a new business profile
+        const { data: newProfile, error: createError } = await supabase
+          .from('business_profiles')
+          .insert({
+            user_id: user.id,
+            display_name: 'My Business',
+            handle: `business-${user.id.slice(0, 8)}`,
+            visibility: 'private',
+            allow_messages: false,
+            allow_reviews: false,
+            discoverable: false,
+          })
+          .select()
+          .single();
 
-      if (data) {
-        console.log('Found business:', data);
-        setBusiness(data);
-        
-        // Check if open
-        checkIfOpen(data.hours);
-
-        // Update view count
-        try {
-          await supabase
-            .from('business_profiles')
-            .update({ view_count: (data.view_count || 0) + 1 })
-            .eq('owner_id', data.owner_id);
-        } catch (e) {
-          console.warn('View count update failed', e);
+        if (!createError && newProfile) {
+          setBusinessId(newProfile.id);
+          setShowWelcome(true);
         }
       } else {
-        setError('Business not found or not public');
+        setBusinessId(profile.id);
       }
-      
+
       setLoading(false);
     }
-    
-    load();
-  }, [slug]);
 
-  function checkIfOpen(hours: any) {
-    if (!hours || typeof hours !== 'object') return;
-    
-    const now = new Date();
-    const dayIndex = now.getDay();
-    const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const day = dayKeys[dayIndex];
-
-    const hh = now.getHours().toString().padStart(2, '0');
-    const mm = now.getMinutes().toString().padStart(2, '0');
-    const currentTime = `${hh}:${mm}`;
-
-    const today = hours[day];
-    if (today && !today.closed && today.open && today.close) {
-      setIsOpen(currentTime >= today.open && currentTime <= today.close);
-    }
-  }
+    checkBusinessProfile();
+  }, [router]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading business...</div>
+        <div className="text-lg">Loading business dashboard...</div>
       </div>
     );
   }
 
-  if (error || !business) {
+  if (!businessId) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Business Not Found</h1>
-          <p className="text-gray-600 mb-4">{error || 'This business profile doesn\'t exist or is not public.'}</p>
-          <div className="text-sm text-gray-500 bg-gray-100 p-4 rounded-lg text-left max-w-md mx-auto">
-            <p className="font-semibold mb-2">Debug Info:</p>
-            <p>URL Slug: {slug}</p>
-            <p>Clean Slug: {slug?.replace('@', '')}</p>
-            <p>Looking for: handle="{slug?.replace('@', '')}" AND visibility="public"</p>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg text-red-600">Error loading business profile</div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
-      <div className="relative">
-        {business.cover_url ? (
-          <img
-            src={business.cover_url}
-            alt="Cover"
-            className="w-full h-48 sm:h-64 lg:h-80 object-cover"
-          />
-        ) : (
-          <div className="w-full h-48 sm:h-64 lg:h-80 bg-gradient-to-br from-purple-400 to-pink-300" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-
-        {/* Logo + Name Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-          <div className="max-w-6xl mx-auto flex items-end gap-4">
-            {business.logo_url && (
-              <img
-                src={business.logo_url}
-                alt={business.display_name}
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg border-4 border-white shadow-lg object-cover"
-              />
-            )}
-            <div className="flex-1 text-white">
-              <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-                {business.display_name || 'Unnamed Business'}
-                {business.verified && <span className="text-blue-400">✓</span>}
-              </h1>
-              {business.tagline && (
-                <p className="text-sm sm:text-base opacity-90">{business.tagline}</p>
-              )}
-            </div>
+      {showWelcome && (
+        <BusinessWelcome onComplete={() => setShowWelcome(false)} />
+      )}
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <BusinessHeader businessId={businessId} />
+        
+        {/* Main Layout */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sidebar - Desktop Only */}
+          <div className="hidden lg:block">
+            <BusinessSidebar businessId={businessId} />
           </div>
-        </div>
-      </div>
-
-      {/* Action Bar */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
-          <div className="flex flex-wrap gap-2">
-            {business.phone_public && business.phone && (
-              <a
-                href={`tel:${business.phone}`}
-                className="flex-1 sm:flex-none px-4 py-2 bg-purple-600 text-white rounded-lg text-center hover:bg-purple-700"
-              >
-                📞 Call
-              </a>
-            )}
-            {business.allow_messages && (
-              <button className="flex-1 sm:flex-none px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200">
-                💬 Message
-              </button>
-            )}
-            {business.booking_url && (
-              <a
-                href={business.booking_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 sm:flex-none px-4 py-2 bg-green-600 text-white rounded-lg text-center hover:bg-green-700"
-              >
-                📅 Book
-              </a>
-            )}
-            {business.website_url && (
-              <a
-                href={business.website_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 rounded-lg text-center hover:bg-gray-50"
-              >
-                🌐 Website
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Left Column - Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* About Section */}
-            {business.bio && (
-              <div className="bg-white rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-3">About</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{business.bio}</p>
-              </div>
-            )}
-
-            {/* Services */}
-            {business.services && Array.isArray(business.services) && business.services.length > 0 && (
-              <div className="bg-white rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-4">Services</h2>
-                <div className="grid gap-4">
-                  {business.services.map((service: any, index: number) => (
-                    <div key={service.id || index} className="border rounded-lg p-4">
-                      <div className="flex gap-4">
-                        {service.image_url && (
-                          <img
-                            src={service.image_url}
-                            alt={service.title}
-                            className="w-20 h-20 rounded object-cover"
-                          />
-                        )}
-                        <div className="flex-1">
-                          <h3 className="font-semibold">{service.title}</h3>
-                          {service.description && (
-                            <p className="text-sm text-gray-600 mt-1">{service.description}</p>
-                          )}
-                          <div className="flex gap-4 mt-2">
-                            {service.price && (
-                              <span className="text-purple-600 font-medium">{service.price}</span>
-                            )}
-                            {service.duration && (
-                              <span className="text-gray-500 text-sm">{service.duration}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Gallery */}
-            {business.gallery && Array.isArray(business.gallery) && business.gallery.length > 0 && (
-              <div className="bg-white rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-4">Gallery</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {business.gallery
-                    .filter((item: any) => !item.visibility || item.visibility === 'public')
-                    .map((item: any, index: number) => (
-                      <img
-                        key={item.id || index}
-                        src={item.url}
-                        alt={item.alt || 'Gallery image'}
-                        className="w-full h-32 sm:h-40 object-cover rounded-lg"
-                      />
-                    ))}
-                </div>
-              </div>
-            )}
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <BusinessTabs 
+              businessId={businessId} 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+            />
           </div>
+        </div>
 
-          {/* Right Column - Sidebar */}
-          <div className="space-y-6">
-            
-            {/* Business Details */}
-            <div className="bg-white rounded-lg p-6">
-              <h3 className="font-semibold mb-4">Details</h3>
-
-              {/* Open/Closed Status */}
-              <div className="mb-4 text-center p-3 rounded-lg bg-gray-50">
-                <span className={`font-semibold ${isOpen ? 'text-green-600' : 'text-red-600'}`}>
-                  {isOpen ? '✅ Open Now' : '❌ Closed'}
-                </span>
-              </div>
-
-              {/* Location */}
-              {business.location_is_public && (business.city || business.location_text || business.address) && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-600 mb-1">Location</h4>
-                  <div className="text-gray-900 space-y-1">
-                    {business.location_text && <div>{business.location_text}</div>}
-                    {business.address && <div>{business.address}</div>}
-                    {(business.city || business.state) && (
-                      <div>
-                        {business.city}{business.city && business.state && ', '}{business.state}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Email */}
-              {business.email_public && business.email && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-600 mb-1">Email</h4>
-                  <a href={`mailto:${business.email}`} className="text-purple-600 hover:underline">
-                    {business.email}
-                  </a>
-                </div>
-              )}
-
-              {/* Categories */}
-              {business.categories && business.categories.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-600 mb-2">Categories</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {business.categories.map((cat) => (
-                      <span
-                        key={cat}
-                        className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-sm"
-                      >
-                        {cat}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Hours */}
-            {business.hours && Object.keys(business.hours).length > 0 && (
-              <div className="bg-white rounded-lg p-6">
-                <h3 className="font-semibold mb-4">Hours</h3>
-                <div className="space-y-2 text-sm">
-                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
-                    const hours = business.hours[day];
-                    if (!hours) return null;
-                    return (
-                      <div key={day} className="flex justify-between">
-                        <span className="capitalize">{day}</span>
-                        <span className="text-gray-600">
-                          {hours.closed ? 'Closed' : `${hours.open || '—'} - ${hours.close || '—'}`}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Mobile Sidebar - Bottom */}
+        <div className="lg:hidden mt-6">
+          <BusinessSidebar businessId={businessId} />
         </div>
       </div>
     </div>
