@@ -23,8 +23,9 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
     load();
   }, [businessId]);
 
+  // Use handle directly without @ symbol
   const profileUrl = business?.handle 
-    ? `/business/@${business.handle}`
+    ? `/business/${business.handle}`
     : null;
 
   return (
@@ -46,7 +47,7 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          {profileUrl && (
+          {profileUrl && business?.visibility === 'public' && (
             <Link 
               href={profileUrl}
               target="_blank"
@@ -62,7 +63,8 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
                 alert('Link copied!');
               }
             }}
-            className="flex-1 sm:flex-none px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+            disabled={!profileUrl || business?.visibility === 'private'}
+            className="flex-1 sm:flex-none px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium disabled:opacity-50"
           >
             📋 Share
           </button>
