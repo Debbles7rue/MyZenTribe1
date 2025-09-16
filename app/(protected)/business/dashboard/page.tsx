@@ -12,7 +12,6 @@ import BusinessWelcome from '@/components/business/BusinessWelcome';
 export default function BusinessDashboard() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
-  const [businessId, setBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('basic');
   const [showWelcome, setShowWelcome] = useState(false);
@@ -29,57 +28,40 @@ export default function BusinessDashboard() {
       setUserId(user.id);
       
       // Check if business profile exists
-      // Try both field names in case database uses either
-      let { data } = await supabase
+      const { data, error } = await supabase
         .from('business_profiles')
-        .select('id, display_name, handle')
-        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`)
+        .select('*')
+        .eq('owner_id', user.id)
         .single();
       
-      if (data) {
-        setBusinessId(data.id);
-        // Check if this is a new business (no name or handle set)
-        if (!data.display_name || !data.handle) {
-          setShowWelcome(true);
-        }
-      } else {
-        // Create business profile with defaults if doesn't exist
-        const { data: newBiz, error } = await supabase
+      if (error && error.code === 'PGRST116') {
+        // No profile exists - create one
+        const { data: newBiz, error: createError } = await supabase
           .from('business_profiles')
           .insert({ 
-            user_id: user.id,  // Try user_id first (standard naming)
+            owner_id: user.id,
             display_name: 'My Business',
             handle: `business-${user.id.slice(0, 8)}`,
             visibility: 'private',
             allow_messages: false,
             allow_reviews: false,
-            discoverable: false
+            discoverable: false,
+            services: [],
+            hours: {},
+            social_links: {},
+            gallery: [],
+            featured_items: [],
+            special_hours: {}
           })
-          .select('id')
+          .select()
           .single();
 
-        if (error && error.code === '42703') {
-          // Column doesn't exist - try with owner_id instead
-          const { data: retryBiz } = await supabase
-            .from('business_profiles')
-            .insert({ 
-              owner_id: user.id,  // Fallback to owner_id
-              display_name: 'My Business',
-              handle: `business-${user.id.slice(0, 8)}`,
-              visibility: 'private',
-              allow_messages: false,
-              allow_reviews: false,
-              discoverable: false
-            })
-            .select('id')
-            .single();
-          
-          if (retryBiz) {
-            setBusinessId(retryBiz.id);
-            setShowWelcome(true);
-          }
-        } else if (newBiz) {
-          setBusinessId(newBiz.id);
+        if (newBiz) {
+          setShowWelcome(true);
+        }
+      } else if (data) {
+        // Check if this is a new business (no name or handle set)
+        if (!data.display_name || data.display_name === 'My Business' || !data.handle) {
           setShowWelcome(true);
         }
       }
@@ -101,7 +83,7 @@ export default function BusinessDashboard() {
     );
   }
 
-  if (!businessId) {
+  if (!userId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-pink-50">
         <div className="text-center">
@@ -135,15 +117,15 @@ export default function BusinessDashboard() {
       
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
         <div className="max-w-7xl mx-auto p-4">
-          {/* Header */}
-          <BusinessHeader businessId={businessId} />
+          {/* Header - Pass userId as businessId since owner_id is the identifier */}
+          <BusinessHeader businessId={userId} />
           
           {/* Main Layout - Responsive Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
             {/* Main Content Area */}
             <div className="lg:col-span-3 order-2 lg:order-1">
               <BusinessTabs 
-                businessId={businessId} 
+                businessId={userId} 
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
               />
@@ -151,7 +133,7 @@ export default function BusinessDashboard() {
             
             {/* Sidebar - Shows on top for mobile */}
             <div className="lg:col-span-1 order-1 lg:order-2">
-              <BusinessSidebar businessId={businessId} />
+              <BusinessSidebar businessId={userId} />
             </div>
           </div>
         </div>
