@@ -22,7 +22,6 @@ import CalendarModals from "./components/CalendarModals";
 import MobileQuickActions from "./components/MobileQuickActions";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
-import PhotoMemories from "./components/PhotoMemories";
 import DarkModeToggle from "./components/DarkModeToggle";
 import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
@@ -65,10 +64,10 @@ export default function CalendarPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [showMemories, setShowMemories] = useState(false);
   const [showMoodTracker, setShowMoodTracker] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
+  const [gamificationEnabled, setGamificationEnabled] = useState(false); // Gamification is now optional
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -165,13 +164,13 @@ export default function CalendarPage() {
     setSelectedCarpoolFriends
   });
 
-  // ===== GAMIFICATION HOOKS =====
+  // ===== GAMIFICATION HOOKS (OPTIONAL) =====
   const { 
     userStats, 
     checkAchievements, 
     addPoints,
     showConfetti 
-  } = useGameification(me);
+  } = useGameification(gamificationEnabled ? me : null);
 
   // ===== NOTIFICATION HOOKS =====
   useNotifications(reminders, todos, events, showToast);
@@ -328,8 +327,10 @@ export default function CalendarPage() {
         duration: 2000
       });
       
-      // Add points for refresh
-      addPoints(5, 'refresh');
+      // Add points for refresh if gamification is enabled
+      if (gamificationEnabled) {
+        addPoints(5, 'refresh');
+      }
     } catch (error) {
       showToast({ 
         type: 'error', 
@@ -338,7 +339,7 @@ export default function CalendarPage() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, addPoints]);
+  }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, gamificationEnabled, addPoints]);
 
   // ===== CALENDAR NAVIGATION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
@@ -415,12 +416,14 @@ export default function CalendarPage() {
         await handleDeleteEvent(eventId);
       }
       
-      showConfetti();
-      addPoints(selectedBatchEvents.size * 10, 'batch-delete');
+      if (gamificationEnabled) {
+        showConfetti();
+        addPoints(selectedBatchEvents.size * 10, 'batch-delete');
+      }
       setSelectedBatchEvents(new Set());
       setBatchMode(false);
     }
-  }, [selectedBatchEvents, handleDeleteEvent, showConfetti, addPoints]);
+  }, [selectedBatchEvents, handleDeleteEvent, gamificationEnabled, showConfetti, addPoints]);
 
   const handleBatchMove = useCallback((days: number) => {
     if (selectedBatchEvents.size === 0) return;
@@ -431,10 +434,12 @@ export default function CalendarPage() {
       message: `Moved ${selectedBatchEvents.size} events ${days > 0 ? 'forward' : 'backward'} ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
     });
     
-    addPoints(selectedBatchEvents.size * 5, 'batch-move');
+    if (gamificationEnabled) {
+      addPoints(selectedBatchEvents.size * 5, 'batch-move');
+    }
     setSelectedBatchEvents(new Set());
     setBatchMode(false);
-  }, [selectedBatchEvents, showToast, addPoints]);
+  }, [selectedBatchEvents, showToast, gamificationEnabled, addPoints]);
 
   // ===== CARPOOL CHAT HELPER =====
   const openCarpoolChat = useCallback((event: any) => {
@@ -443,18 +448,18 @@ export default function CalendarPage() {
   }, [setSelectedCarpoolEvent]);
 
   // ===== FILTERED LISTS =====
-  const visibleReminders = useMemo(() => 
-    showCompletedItems ? reminders : reminders.filter(r => !r.completed),
-    [reminders, showCompletedItems]
-  );
+  const visibleReminders = useMemo(() => {
+    const safeReminders = reminders || [];
+    return showCompletedItems ? safeReminders : safeReminders.filter(r => !r.completed);
+  }, [reminders, showCompletedItems]);
 
-  const visibleTodos = useMemo(() => 
-    showCompletedItems ? todos : todos.filter(t => !t.completed),
-    [todos, showCompletedItems]
-  );
+  const visibleTodos = useMemo(() => {
+    const safeTodos = todos || [];
+    return showCompletedItems ? safeTodos : safeTodos.filter(t => !t.completed);
+  }, [todos, showCompletedItems]);
 
   const calendarEvents = useMemo(() => 
-    mode === 'my' ? events : [],
+    mode === 'my' ? (events || []) : [],
     [mode, events]
   );
 
@@ -520,12 +525,14 @@ export default function CalendarPage() {
           setFocusMode={setFocusMode}
           batchMode={batchMode}
           setBatchMode={setBatchMode}
-          userStats={userStats}
+          userStats={gamificationEnabled ? userStats : null}
           isListening={isListening}
           startListening={startListening}
+          gamificationEnabled={gamificationEnabled}
+          setGamificationEnabled={setGamificationEnabled}
         />
 
-        {/* Mobile Quick Actions Bar - Removed Photo Memories */}
+        {/* Mobile Quick Actions Bar */}
         {isMobile && (
           <MobileQuickActions
             onMoodTrack={() => setShowMoodTracker(true)}
@@ -571,13 +578,13 @@ export default function CalendarPage() {
         }`}>
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Desktop Sidebar */}
+            {/* Desktop Sidebar - Shows only in "My Calendar" mode on desktop */}
             {mode === 'my' && !isMobile && (
               <CalendarSidebar
-                carpoolMatches={carpoolMatches}
-                friends={friends}
-                visibleReminders={visibleReminders}
-                visibleTodos={visibleTodos}
+                carpoolMatches={carpoolMatches || []}
+                friends={friends || []}
+                visibleReminders={visibleReminders || []}
+                visibleTodos={visibleTodos || []}
                 showRemindersList={showRemindersList}
                 setShowRemindersList={setShowRemindersList}
                 showTodosList={showTodosList}
@@ -597,13 +604,13 @@ export default function CalendarPage() {
                 }}
                 onToggleComplete={handleToggleComplete}
                 onDeleteItem={handleDeleteItem}
-                userStats={userStats}
+                userStats={gamificationEnabled ? userStats : null}
               />
             )}
 
             {/* Calendar or Feed View */}
             <div className="flex-1" ref={calendarRef}>
-              {mode === 'whats' && feed.length > 0 ? (
+              {mode === 'whats' && feed && feed.length > 0 ? (
                 <FeedView
                   feed={feed.filter((e: any) => !e._dismissed)}
                   onDismiss={dismissFeedEvent}
@@ -660,10 +667,10 @@ export default function CalendarPage() {
           <MobileSidebar
             open={mobileMenuOpen}
             onClose={() => setMobileMenuOpen(false)}
-            carpoolMatches={carpoolMatches}
-            friends={friends}
-            visibleReminders={visibleReminders}
-            visibleTodos={visibleTodos}
+            carpoolMatches={carpoolMatches || []}
+            friends={friends || []}
+            visibleReminders={visibleReminders || []}
+            visibleTodos={visibleTodos || []}
             showCompletedItems={showCompletedItems}
             setShowCompletedItems={setShowCompletedItems}
             openCarpoolChat={(event) => {
@@ -677,7 +684,9 @@ export default function CalendarPage() {
             setShowMeetingCoordinator={setShowMeetingCoordinator}
             onToggleComplete={handleToggleComplete}
             onDeleteItem={handleDeleteItem}
-            userStats={userStats}
+            userStats={gamificationEnabled ? userStats : null}
+            gamificationEnabled={gamificationEnabled}
+            setGamificationEnabled={setGamificationEnabled}
           />
         )}
 
@@ -689,7 +698,9 @@ export default function CalendarPage() {
             onSave={(mood) => {
               // Save mood to database
               showToast({ type: 'success', message: `Mood saved: ${mood}` });
-              addPoints(10, 'mood-track');
+              if (gamificationEnabled) {
+                addPoints(10, 'mood-track');
+              }
               setShowMoodTracker(false);
             }}
           />
@@ -730,8 +741,8 @@ export default function CalendarPage() {
           selectedCarpoolEvent={selectedCarpoolEvent}
           selectedCarpoolFriends={selectedCarpoolFriends}
           setSelectedCarpoolFriends={setSelectedCarpoolFriends}
-          events={events}
-          friends={friends}
+          events={events || []}
+          friends={friends || []}
           form={form}
           setForm={setForm}
           quickModalForm={quickModalForm}
@@ -742,22 +753,30 @@ export default function CalendarPage() {
           // Actions
           handleCreateEvent={async () => {
             await handleCreateEvent();
-            showConfetti();
-            addPoints(20, 'event-create');
+            if (gamificationEnabled) {
+              showConfetti();
+              addPoints(20, 'event-create');
+            }
           }}
           handleUpdateEvent={handleUpdateEvent}
           handleEdit={handleEditFromDetails}
           handleApplyTemplate={handleApplyTemplate}
           createQuickItem={async () => {
             await createQuickItem();
-            addPoints(10, 'quick-create');
+            if (gamificationEnabled) {
+              addPoints(10, 'quick-create');
+            }
           }}
           createCarpoolGroup={async () => {
             await createCarpoolGroup();
-            addPoints(30, 'carpool-create');
-            showConfetti();
+            if (gamificationEnabled) {
+              addPoints(30, 'carpool-create');
+              showConfetti();
+            }
           }}
           resetForm={resetForm}
+          gamificationEnabled={gamificationEnabled}
+          setGamificationEnabled={setGamificationEnabled}
         />
       </div>
 
