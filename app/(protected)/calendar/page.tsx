@@ -13,7 +13,7 @@ import SmartMeetingCoordinator from "@/components/SmartMeetingCoordinator";
 import EventCarpoolModal from "./components/EventCarpoolModal";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
-import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
+// import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts"; // Commented out if not available
 import type { DBEvent, Visibility } from "@/lib/types";
 
 // Client-only calendar grid - prevent SSR
@@ -124,7 +124,7 @@ export default function CalendarPage() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showMeetingCoordinator, setShowMeetingCoordinator] = useState(false);
-  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  // const [showShortcutsHelp, setShowShortcutsHelp] = useState(false); // Commented out if not available
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickModalOpen, setQuickModalOpen] = useState(false);
   const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
@@ -728,6 +728,8 @@ export default function CalendarPage() {
     : todos.filter(t => !t.completed);
 
   // ===== KEYBOARD SHORTCUTS =====
+  // Commented out if useKeyboardShortcuts hook is not available
+  /*
   const shortcutActions = {
     createEvent: () => setOpenCreate(true),
     navigateNext: () => {
@@ -765,7 +767,7 @@ export default function CalendarPage() {
       setShowAnalytics(false);
       setShowTemplates(false);
       setShowMeetingCoordinator(false);
-      setShowShortcutsHelp(false);
+      // setShowShortcutsHelp(false); // Commented out if not available
       setQuickModalOpen(false);
       setMobileMenuOpen(false);
       setShowCarpool(false);
@@ -773,6 +775,7 @@ export default function CalendarPage() {
   };
 
   useKeyboardShortcuts(shortcutActions, !isMobile);
+  */
 
   // ===== RENDER =====
   if (!me) {
@@ -1554,9 +1557,10 @@ export default function CalendarPage() {
         />
       )}
 
-      {showShortcutsHelp && (
+      {/* Keyboard Shortcuts Help - Commented out if not available */}
+      {/* {showShortcutsHelp && (
         <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
-      )}
+      )} */}
     </div>
   );
 }
