@@ -24,6 +24,7 @@ import MobileQuickActions from "./components/MobileQuickActions";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import DarkModeToggle from "./components/DarkModeToggle";
+import EventCarpoolModal from "./components/EventCarpoolModal"; // ADD THIS IMPORT
 import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -132,10 +133,11 @@ export default function CalendarPage() {
     carpoolMatches,
     suggestedCarpools,
     loading: carpoolLoading,
+    friends: carpoolFriends, // Use friends from carpool hook
     createCarpoolGroup: createCarpoolFromMatch,
     sendCarpoolInvite,
     calculateImpact
-  } = useCarpoolMatches({ userId: me, events, friends });
+  } = useCarpoolMatches({ userId: me, events });
 
   const {
     handleCreateEvent,
@@ -556,10 +558,10 @@ export default function CalendarPage() {
                     📋 Browse Event Templates
                   </button>
                   <button
-                    onClick={() => setShowTimeBlocking(true)}
+                    onClick={() => setShowPomodoroTimer(true)}
                     className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:shadow-lg transition-all"
                   >
-                    ⏰ Time Block Schedule
+                    ⏰ Pomodoro Timer
                   </button>
                 </div>
                 {gamificationEnabled && userStats && (
@@ -747,6 +749,12 @@ export default function CalendarPage() {
             >
               {isListening ? '🎤 Listening...' : '🎙️ Voice Command'}
             </button>
+            <button
+              onClick={() => openCarpoolChat()}
+              className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-green-400 to-blue-400 text-white rounded-lg text-sm font-medium shadow-md"
+            >
+              🚗 Carpool
+            </button>
           </div>
         )}
 
@@ -797,13 +805,13 @@ export default function CalendarPage() {
                         <div
                           key={idx}
                           className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg cursor-pointer hover:shadow-md transition-all"
-                          onClick={() => openCarpoolChat(match.event)}
+                          onClick={() => openCarpoolChat(match.myEventId ? events.find(e => e.id === match.myEventId) : undefined)}
                         >
                           <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
-                            {match.event.title}
+                            {match.destination}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {match.matches.length} potential carpoolers
+                            with {match.friendName} • Save {match.savings}
                           </div>
                         </div>
                       ))}
@@ -908,6 +916,25 @@ export default function CalendarPage() {
           />
         )}
 
+        {/* EVENT CARPOOL MODAL - ADD THIS */}
+        <EventCarpoolModal
+          isOpen={showCarpoolChat}
+          onClose={() => {
+            setShowCarpoolChat(false);
+            setSelectedCarpoolEvent(null);
+          }}
+          event={selectedCarpoolEvent}
+          userId={me}
+          carpoolData={{
+            carpoolMatches,
+            friends: carpoolFriends,
+            sendCarpoolInvite,
+            createCarpoolGroup: createCarpoolFromMatch
+          }}
+          showToast={showToast}
+          isMobile={isMobile}
+        />
+
         {/* All Other Modals */}
         <CalendarModals
           // Modal visibility states
@@ -918,7 +945,7 @@ export default function CalendarPage() {
           showTemplates={showTemplates}
           showMeetingCoordinator={showMeetingCoordinator}
           showShortcutsHelp={showShortcutsHelp}
-          showCarpoolChat={showCarpoolChat}
+          showCarpoolChat={false} // We're using EventCarpoolModal instead
           quickModalOpen={quickModalOpen}
           showPomodoroTimer={showPomodoroTimer}
           showTimeBlocking={false} // Disabled as requested
@@ -931,7 +958,7 @@ export default function CalendarPage() {
           setShowTemplates={setShowTemplates}
           setShowMeetingCoordinator={setShowMeetingCoordinator}
           setShowShortcutsHelp={setShowShortcutsHelp}
-          setShowCarpoolChat={setShowCarpoolChat}
+          setShowCarpoolChat={() => {}} // Not needed anymore
           setQuickModalOpen={setQuickModalOpen}
           setShowPomodoroTimer={setShowPomodoroTimer}
           setShowTimeBlocking={() => {}} // Disabled
@@ -997,6 +1024,11 @@ export default function CalendarPage() {
             }
           }}
           resetForm={resetForm}
+          onOpenCarpool={(event) => {
+            setSelectedCarpoolEvent(event);
+            setShowCarpoolChat(true);
+            setDetailsOpen(false);
+          }}
         />
       </div>
 
@@ -1034,6 +1066,18 @@ export default function CalendarPage() {
           animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
         
+        @keyframes slide-up {
+          from {
+            transform: translateY(100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+        
         /* Mobile optimizations */
         @media (max-width: 640px) {
           .rbc-calendar {
@@ -1062,11 +1106,29 @@ export default function CalendarPage() {
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
           }
+          
+          /* Safe area for iOS */
+          .safe-area-top {
+            padding-top: env(safe-area-inset-top);
+          }
+          
+          .safe-area-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+          }
         }
         
         /* Dark mode transitions */
         .dark * {
           transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Active button states for mobile */
+        .active\:scale-95:active {
+          transform: scale(0.95);
+        }
+        
+        .active\:scale-98:active {
+          transform: scale(0.98);
         }
       `}</style>
     </div>
