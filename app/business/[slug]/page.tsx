@@ -6,14 +6,15 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 interface BusinessProfile {
-  id: string;
+  owner_id: string;
   display_name: string;
-  handle: string;            // DB still stores this as 'handle'
+  handle: string;
   tagline?: string;
   bio?: string;
   logo_url?: string;
   cover_url?: string;
   categories?: string[];
+  tags?: string[];
 
   phone?: string;
   phone_public?: boolean;
@@ -22,13 +23,15 @@ interface BusinessProfile {
   website_url?: string;
   booking_url?: string;
 
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   location_text?: string;
-  location_city?: string;
-  location_state?: string;
   location_is_public?: boolean;
 
   hours?: any;
-  special_hours?: string;
+  special_hours?: any;
   services?: any[];
   gallery?: any[];
   social_links?: Record<string, string> | null;
@@ -39,59 +42,74 @@ interface BusinessProfile {
   allow_reviews?: boolean;
   verified?: boolean;
 
-  // optional:
-  visibility?: 'public' | 'private' | 'unlisted';
+  visibility?: string;
   view_count?: number | null;
 }
 
 export default function BusinessPublicPage() {
   const params = useParams();
-  const slug = params?.slug as string; // route param (was 'handle' before)
+  const slug = params?.slug as string;
   const [business, setBusiness] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function load() {
-      const cleanSlug = slug?.replace('@', '');
+      if (!slug) {
+        setError('No business handle provided');
+        setLoading(false);
+        return;
+      }
+
+      const cleanSlug = slug.replace('@', '');
+      
+      console.log('Looking for business with handle:', cleanSlug);
 
       const { data, error } = await supabase
         .from('business_profiles')
         .select('*')
-        .eq('handle', cleanSlug)     // still look up by DB handle field
+        .eq('handle', cleanSlug)
         .eq('visibility', 'public')
         .single();
 
       if (error) {
-        console.warn('business load error:', error.message);
+        console.error('Error loading business:', error);
+        setError(`Business not found: ${error.message}`);
       }
 
       if (data) {
+        console.log('Found business:', data);
         setBusiness(data);
-
-        // compute open/closed
+        
+        // Check if open
         checkIfOpen(data.hours);
 
-        // optimistic, simple view counter (ok for MVP)
+        // Update view count
         try {
           await supabase
             .from('business_profiles')
             .update({ view_count: (data.view_count || 0) + 1 })
-            .eq('id', data.id);
+            .eq('owner_id', data.owner_id);
         } catch (e) {
-          console.warn('view_count update failed', e);
+          console.warn('View count update failed', e);
         }
+      } else {
+        setError('Business not found or not public');
       }
+      
       setLoading(false);
     }
+    
     load();
   }, [slug]);
 
   function checkIfOpen(hours: any) {
-    if (!hours) return;
+    if (!hours || typeof hours !== 'object') return;
+    
     const now = new Date();
-    const dayIndex = now.getDay(); // 0..6
-    const dayKeys = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const dayIndex = now.getDay();
+    const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const day = dayKeys[dayIndex];
 
     const hh = now.getHours().toString().padStart(2, '0');
@@ -101,25 +119,29 @@ export default function BusinessPublicPage() {
     const today = hours[day];
     if (today && !today.closed && today.open && today.close) {
       setIsOpen(currentTime >= today.open && currentTime <= today.close);
-    } else {
-      setIsOpen(false);
     }
   }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
+        <div className="text-lg">Loading business...</div>
       </div>
     );
   }
 
-  if (!business) {
+  if (error || !business) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Business Not Found</h1>
-          <p className="text-gray-600">This business profile doesn't exist or is not public.</p>
+          <p className="text-gray-600 mb-4">{error || 'This business profile doesn\'t exist or is not public.'}</p>
+          <div className="text-sm text-gray-500 bg-gray-100 p-4 rounded-lg text-left max-w-md mx-auto">
+            <p className="font-semibold mb-2">Debug Info:</p>
+            <p>URL Slug: {slug}</p>
+            <p>Clean Slug: {slug?.replace('@', '')}</p>
+            <p>Looking for: handle="{slug?.replace('@', '')}" AND visibility="public"</p>
+          </div>
         </div>
       </div>
     );
@@ -127,7 +149,7 @@ export default function BusinessPublicPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero */}
+      {/* Hero Section */}
       <div className="relative">
         {business.cover_url ? (
           <img
@@ -140,7 +162,7 @@ export default function BusinessPublicPage() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
 
-        {/* Logo + name */}
+        {/* Logo + Name Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
           <div className="max-w-6xl mx-auto flex items-end gap-4">
             {business.logo_url && (
@@ -152,7 +174,7 @@ export default function BusinessPublicPage() {
             )}
             <div className="flex-1 text-white">
               <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-                {business.display_name}
+                {business.display_name || 'Unnamed Business'}
                 {business.verified && <span className="text-blue-400">✓</span>}
               </h1>
               {business.tagline && (
@@ -163,7 +185,7 @@ export default function BusinessPublicPage() {
         </div>
       </div>
 
-      {/* Action bar */}
+      {/* Action Bar */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
           <div className="flex flex-wrap gap-2">
@@ -176,9 +198,7 @@ export default function BusinessPublicPage() {
               </a>
             )}
             {business.allow_messages && (
-              <button
-                className="flex-1 sm:flex-none px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200"
-              >
+              <button className="flex-1 sm:flex-none px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200">
                 💬 Message
               </button>
             )}
@@ -206,12 +226,14 @@ export default function BusinessPublicPage() {
         </div>
       </div>
 
-      {/* Main content */}
+      {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left column */}
+          
+          {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* About */}
+            
+            {/* About Section */}
             {business.bio && (
               <div className="bg-white rounded-lg p-6">
                 <h2 className="text-lg font-semibold mb-3">About</h2>
@@ -220,12 +242,12 @@ export default function BusinessPublicPage() {
             )}
 
             {/* Services */}
-            {business.services && business.services.length > 0 && (
+            {business.services && Array.isArray(business.services) && business.services.length > 0 && (
               <div className="bg-white rounded-lg p-6">
                 <h2 className="text-lg font-semibold mb-4">Services</h2>
                 <div className="grid gap-4">
-                  {business.services.map((service: any) => (
-                    <div key={service.id ?? `${service.title}-${service.price}`} className="border rounded-lg p-4">
+                  {business.services.map((service: any, index: number) => (
+                    <div key={service.id || index} className="border rounded-lg p-4">
                       <div className="flex gap-4">
                         {service.image_url && (
                           <img
@@ -256,15 +278,15 @@ export default function BusinessPublicPage() {
             )}
 
             {/* Gallery */}
-            {business.gallery && business.gallery.length > 0 && (
+            {business.gallery && Array.isArray(business.gallery) && business.gallery.length > 0 && (
               <div className="bg-white rounded-lg p-6">
                 <h2 className="text-lg font-semibold mb-4">Gallery</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {business.gallery
                     .filter((item: any) => !item.visibility || item.visibility === 'public')
-                    .map((item: any) => (
+                    .map((item: any, index: number) => (
                       <img
-                        key={item.id ?? item.url}
+                        key={item.id || index}
                         src={item.url}
                         alt={item.alt || 'Gallery image'}
                         className="w-full h-32 sm:h-40 object-cover rounded-lg"
@@ -275,27 +297,31 @@ export default function BusinessPublicPage() {
             )}
           </div>
 
-          {/* Right column */}
+          {/* Right Column - Sidebar */}
           <div className="space-y-6">
-            {/* Details */}
+            
+            {/* Business Details */}
             <div className="bg-white rounded-lg p-6">
               <h3 className="font-semibold mb-4">Details</h3>
 
-              {/* Status */}
-              <div className="mb-4 text-center p-3 rounded-lg bg-green-50">
+              {/* Open/Closed Status */}
+              <div className="mb-4 text-center p-3 rounded-lg bg-gray-50">
                 <span className={`font-semibold ${isOpen ? 'text-green-600' : 'text-red-600'}`}>
                   {isOpen ? '✅ Open Now' : '❌ Closed'}
                 </span>
               </div>
 
               {/* Location */}
-              {business.location_is_public && (business.location_city || business.location_text) && (
+              {business.location_is_public && (business.city || business.location_text || business.address) && (
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-gray-600 mb-1">Location</h4>
                   <div className="text-gray-900 space-y-1">
                     {business.location_text && <div>{business.location_text}</div>}
-                    {business.location_city && business.location_state && (
-                      <div>{business.location_city}, {business.location_state}</div>
+                    {business.address && <div>{business.address}</div>}
+                    {(business.city || business.state) && (
+                      <div>
+                        {business.city}{business.city && business.state && ', '}{business.state}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -327,55 +353,26 @@ export default function BusinessPublicPage() {
                   </div>
                 </div>
               )}
-
-              {/* Social Links (fixed) */}
-              {business.social_links && Object.keys(business.social_links || {}).length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-600 mb-2">Connect</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(business.social_links).map(([platform, url]) => {
-                      const safeUrl = (url || '').toString().trim();
-                      if (!safeUrl) return null;
-                      const label = platform.charAt(0).toUpperCase();
-                      return (
-                        <a
-                          key={platform}
-                          href={safeUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center hover:bg-purple-100"
-                          aria-label={platform}
-                          title={platform}
-                        >
-                          <span className="font-semibold">{label}</span>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Hours */}
-            {business.hours && (
+            {business.hours && Object.keys(business.hours).length > 0 && (
               <div className="bg-white rounded-lg p-6">
                 <h3 className="font-semibold mb-4">Hours</h3>
                 <div className="space-y-2 text-sm">
-                  {Object.entries(business.hours).map(([day, hours]: [string, any]) => (
-                    <div key={day} className="flex justify-between">
-                      <span className="capitalize">{day}</span>
-                      <span className="text-gray-600">
-                        {hours?.closed ? 'Closed' : `${hours?.open ?? '--:--'} - ${hours?.close ?? '--:--'}`}
-                      </span>
-                    </div>
-                  ))}
+                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                    const hours = business.hours[day];
+                    if (!hours) return null;
+                    return (
+                      <div key={day} className="flex justify-between">
+                        <span className="capitalize">{day}</span>
+                        <span className="text-gray-600">
+                          {hours.closed ? 'Closed' : `${hours.open || '—'} - ${hours.close || '—'}`}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-                {business.special_hours && (
-                  <div className="mt-3 pt-3 border-t text-sm text-gray-600">
-                    <p className="font-medium mb-1">Special Hours:</p>
-                    <p className="whitespace-pre-wrap">{business.special_hours}</p>
-                  </div>
-                )}
               </div>
             )}
           </div>
