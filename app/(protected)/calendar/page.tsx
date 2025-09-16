@@ -5,6 +5,10 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { supabase } from "@/lib/supabaseClient";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
+import type { View } from "react-big-calendar";
+import { supabase } from "@/lib/supabaseClient";
 import CreateEventModal from "@/components/CreateEventModal";
 import EventDetails from "@/components/EventDetails";
 import CalendarAnalytics from "@/components/CalendarAnalytics";
@@ -99,7 +103,7 @@ export default function CalendarPage() {
   // ===== ALL HOOKS DECLARED AT TOP =====
   const [me, setMe] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("my");
-  const [date, setDate] = useState<Date>(new Date());
+  const [date, setDate] = useState<Date>(() => new Date()); // Initialize with function to avoid SSR issues
   const [view, setView] = useState<View>("month");
   const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
 
@@ -158,8 +162,8 @@ export default function CalendarPage() {
     selected_friends: [] as string[],
   });
 
-  // Moon phases hook
-  const moonPhases = useMoon();
+  // Moon phases hook - with proper parameters and fallbacks
+  const moonPhases = useMoon(date || new Date(), view || 'month');
   
   // Device detection
   const [isMobile, setIsMobile] = useState(false);
@@ -253,7 +257,24 @@ export default function CalendarPage() {
         .order("start_time", { ascending: true });
 
       if (error) throw error;
-      setEvents(data || []);
+      
+      // Validate events have required date fields
+      const validEvents = (data || []).filter(event => {
+        if (!event.start_time || !event.end_time) {
+          console.warn('Event missing date fields:', event);
+          return false;
+        }
+        // Check if dates are valid
+        const start = new Date(event.start_time);
+        const end = new Date(event.end_time);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          console.warn('Event has invalid dates:', event);
+          return false;
+        }
+        return true;
+      });
+      
+      setEvents(validEvents);
     } catch (e: any) {
       setErr(e.message);
       showToast({ type: 'error', message: 'Failed to load events' });
@@ -535,7 +556,7 @@ export default function CalendarPage() {
   // ===== CALENDAR NAVIGATION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
     // Click on day in month view -> navigate to day view
-    if (view === 'month') {
+    if (view === 'month' && slotInfo.start) {
       setDate(slotInfo.start);
       setView('day');
       return;
@@ -553,7 +574,7 @@ export default function CalendarPage() {
       }));
       setOpenCreate(true);
     }
-  }, [view]);
+  }, [view, toLocalInput]);
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
@@ -645,72 +666,108 @@ export default function CalendarPage() {
   }, [friends, events, findCarpoolMatches]);
 
   // ===== UI HELPERS =====
-  const toLocalInput = (d: Date) => {
-    const iso = d.toISOString();
-    return iso.slice(0, 16);
+  const toLocalInput = (d: Date | string | undefined) => {
+    if (!d) return '';
+    try {
+      const date = typeof d === 'string' ? new Date(d) : d;
+      if (isNaN(date.getTime())) return '';
+      const iso = date.toISOString();
+      return iso.slice(0, 16);
+    } catch {
+      return '';
+    }
   };
 
-  // Calendar events for UI
+  // Calendar events for UI - with proper date validation
   const dbUiEvents = useMemo(() => {
-    const mainEvents = events.map((e) => ({
-      id: e.id,
-      title: e.title || "Event",
-      start: new Date(e.start_time),
-      end: new Date(e.end_time),
-      resource: e,
-    }));
+    const mainEvents = events.map((e) => {
+      // Ensure we have valid dates
+      const startTime = e.start_time ? new Date(e.start_time) : new Date();
+      const endTime = e.end_time ? new Date(e.end_time) : new Date(startTime.getTime() + 3600000); // 1 hour default
+      
+      // Validate dates
+      if (isNaN(startTime.getTime())) {
+        console.warn('Invalid start_time for event:', e);
+        return null;
+      }
+      
+      return {
+        id: e.id,
+        title: e.title || "Event",
+        start: startTime,
+        end: endTime,
+        resource: e,
+      };
+    }).filter(Boolean); // Remove any null events
 
-    // Add reminders and todos to calendar
-    const reminderEvents = reminders.map(r => ({
-      id: r.id,
-      title: r.title,
-      start: new Date(r.date || r.start_time || new Date()),
-      end: new Date(r.date || r.end_time || new Date()),
-      resource: { ...r, event_type: 'reminder' }
-    }));
+    // Add reminders to calendar with date validation
+    const reminderEvents = reminders.map(r => {
+      const reminderDate = r.date || r.start_time;
+      if (!reminderDate) return null;
+      
+      const startDate = new Date(reminderDate);
+      if (isNaN(startDate.getTime())) return null;
+      
+      const endDate = r.end_time ? new Date(r.end_time) : new Date(startDate.getTime() + 1800000); // 30 min default
+      
+      return {
+        id: r.id,
+        title: r.title || "Reminder",
+        start: startDate,
+        end: endDate,
+        resource: { ...r, event_type: 'reminder' }
+      };
+    }).filter(Boolean);
 
-    const todoEvents = todos.map(t => ({
-      id: t.id,
-      title: t.title,
-      start: new Date(t.date || t.start_time || new Date()),
-      end: new Date(t.date || t.end_time || new Date()),
-      resource: { ...t, event_type: 'todo' }
-    }));
+    // Add todos to calendar with date validation
+    const todoEvents = todos.map(t => {
+      const todoDate = t.date || t.start_time;
+      if (!todoDate) return null;
+      
+      const startDate = new Date(todoDate);
+      if (isNaN(startDate.getTime())) return null;
+      
+      const endDate = t.end_time ? new Date(t.end_time) : new Date(startDate.getTime() + 1800000); // 30 min default
+      
+      return {
+        id: t.id,
+        title: t.title || "Todo",
+        start: startDate,
+        end: endDate,
+        resource: { ...t, event_type: 'todo' }
+      };
+    }).filter(Boolean);
 
     return [...mainEvents, ...reminderEvents, ...todoEvents];
   }, [events, reminders, todos]);
 
-  // Moon events for calendar with proper icons
+  // Moon events for calendar - already formatted by useMoon hook
   const moonEvents = useMemo(() => {
     if (!showMoon) return [];
     
-    return Object.entries(moonPhases).map(([date, phase]) => {
-      // Map phase names to icons
+    // Ensure moonPhases is an array
+    const phases = Array.isArray(moonPhases) ? moonPhases : [];
+    
+    if (phases.length === 0) return [];
+    
+    // The useMoon hook already returns properly formatted events
+    // Just add icons to the titles
+    return phases.map(event => {
       const phaseIcons: Record<string, string> = {
-        'new': '🌑',
         'moon-new': '🌑',
-        'first-quarter': '🌓',
         'moon-first': '🌓',
-        'full': '🌕',
         'moon-full': '🌕',
-        'last-quarter': '🌗',
-        'moon-last': '🌗',
-        'waxing-crescent': '🌒',
-        'waxing-gibbous': '🌔',
-        'waning-gibbous': '🌖',
-        'waning-crescent': '🌘'
+        'moon-last': '🌗'
       };
       
-      const icon = phaseIcons[phase] || phaseIcons[phase.replace('moon-', '')] || '🌙';
+      const phase = event.resource?.moonPhase;
+      const icon = phase ? phaseIcons[phase] || '🌙' : '🌙';
       
       return {
-        id: `moon-${date}`,
-        title: icon,
-        start: new Date(date),
-        end: new Date(date),
-        allDay: true,
-        resource: { 
-          moonPhase: phase,
+        ...event,
+        title: icon, // Replace text title with emoji
+        resource: {
+          ...event.resource,
           isMoon: true,
           displayIcon: icon
         }
@@ -801,7 +858,7 @@ export default function CalendarPage() {
                 MyZenTribe Calendar
               </h1>
               <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
-                <span>{date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                <span>{date && !isNaN(date.getTime()) ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Select Date'}</span>
               </div>
             </div>
 
@@ -976,11 +1033,16 @@ export default function CalendarPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  const newDate = new Date(date);
-                  if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
-                  else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
-                  else newDate.setDate(newDate.getDate() - 1);
-                  setDate(newDate);
+                  try {
+                    const newDate = new Date(date || new Date());
+                    if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
+                    else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
+                    else newDate.setDate(newDate.getDate() - 1);
+                    setDate(newDate);
+                  } catch (e) {
+                    console.error('Navigation error:', e);
+                    setDate(new Date());
+                  }
                 }}
                 className="p-1 rounded-md text-gray-600 hover:bg-gray-100"
               >
@@ -994,11 +1056,16 @@ export default function CalendarPage() {
               </button>
               <button
                 onClick={() => {
-                  const newDate = new Date(date);
-                  if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
-                  else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
-                  else newDate.setDate(newDate.getDate() + 1);
-                  setDate(newDate);
+                  try {
+                    const newDate = new Date(date || new Date());
+                    if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
+                    else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
+                    else newDate.setDate(newDate.getDate() + 1);
+                    setDate(newDate);
+                  } catch (e) {
+                    console.error('Navigation error:', e);
+                    setDate(new Date());
+                  }
                 }}
                 className="p-1 rounded-md text-gray-600 hover:bg-gray-100"
               >
@@ -1066,6 +1133,24 @@ export default function CalendarPage() {
                               {reminder.description}
                             </div>
                           )}
+                          {reminder.date && (
+                            <div className="text-xs text-amber-600 mt-0.5">
+                              {(() => {
+                                try {
+                                  const d = new Date(reminder.date);
+                                  if (!isNaN(d.getTime())) {
+                                    return d.toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit'
+                                    });
+                                  }
+                                } catch {}
+                                return 'Date pending';
+                              })()}
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => deleteItem(reminder.id, 'reminder')}
@@ -1120,6 +1205,24 @@ export default function CalendarPage() {
                           {todo.description && (
                             <div className="text-xs text-gray-600 mt-0.5">
                               {todo.description}
+                            </div>
+                          )}
+                          {todo.date && (
+                            <div className="text-xs text-green-600 mt-0.5">
+                              {(() => {
+                                try {
+                                  const d = new Date(todo.date);
+                                  if (!isNaN(d.getTime())) {
+                                    return d.toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit'
+                                    });
+                                  }
+                                } catch {}
+                                return 'Date pending';
+                              })()}
                             </div>
                           )}
                         </div>
@@ -1177,12 +1280,16 @@ export default function CalendarPage() {
                   <div className="text-red-500 text-center py-12">{err}</div>
                 ) : (
                   <CalendarGrid
-                    dbEvents={events}
-                    moonEvents={moonEvents}
+                    dbEvents={events || []}
+                    moonEvents={moonEvents || []}
                     showMoon={showMoon}
                     theme={calendarTheme}
-                    date={date}
-                    setDate={setDate}
+                    date={date && !isNaN(date.getTime()) ? date : new Date()}
+                    setDate={(newDate) => {
+                      if (newDate && !isNaN(newDate.getTime())) {
+                        setDate(newDate);
+                      }
+                    }}
                     view={view}
                     setView={setView}
                     onSelectSlot={onSelectSlot}
@@ -1214,8 +1321,12 @@ export default function CalendarPage() {
                           <h3 className="text-lg font-semibold text-gray-800">{event.title}</h3>
                           <p className="text-gray-600 text-sm mt-1">{event.description}</p>
                           <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-                            <span>📅 {new Date(event.start_time).toLocaleDateString()}</span>
-                            <span>⏰ {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {event.start_time && (
+                              <>
+                                <span>📅 {new Date(event.start_time).toLocaleDateString()}</span>
+                                <span>⏰ {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </>
+                            )}
                             {event.location && <span>📍 {event.location}</span>}
                           </div>
                           <div className="flex gap-2 mt-4">
@@ -1306,6 +1417,24 @@ export default function CalendarPage() {
                           <div className={`text-sm ${reminder.completed ? 'line-through' : ''}`}>
                             {reminder.title}
                           </div>
+                          {reminder.date && (
+                            <div className="text-xs text-amber-600 mt-0.5">
+                              {(() => {
+                                try {
+                                  const d = new Date(reminder.date);
+                                  if (!isNaN(d.getTime())) {
+                                    return d.toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit'
+                                    });
+                                  }
+                                } catch {}
+                                return '';
+                              })()}
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => deleteItem(reminder.id, 'reminder')}
@@ -1348,6 +1477,24 @@ export default function CalendarPage() {
                           <div className={`text-sm ${todo.completed ? 'line-through' : ''}`}>
                             {todo.title}
                           </div>
+                          {todo.date && (
+                            <div className="text-xs text-green-600 mt-0.5">
+                              {(() => {
+                                try {
+                                  const d = new Date(todo.date);
+                                  if (!isNaN(d.getTime())) {
+                                    return d.toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit'
+                                    });
+                                  }
+                                } catch {}
+                                return '';
+                              })()}
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => deleteItem(todo.id, 'todo')}
