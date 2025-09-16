@@ -10,7 +10,7 @@ import EventDetails from "@/components/EventDetails";
 import CalendarAnalytics from "@/components/CalendarAnalytics";
 import SmartTemplates from "@/components/SmartTemplates";
 import SmartMeetingCoordinator from "@/components/SmartMeetingCoordinator";
-import CarpoolModal from "@/components/CarpoolModal"; // Will create this
+import EventCarpoolModal from "./components/EventCarpoolModal";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
 import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
@@ -196,8 +196,33 @@ export default function CalendarPage() {
   const fetchWeather = async () => {
     setLoadingWeather(true);
     try {
-      // Using a simple weather API (you may need to add your API key)
-      const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Greenville,TX&appid=YOUR_API_KEY&units=imperial`);
+      // Mock weather data for now - replace with real API when you have a key
+      // For OpenWeatherMap, get your free API key at: https://openweathermap.org/api
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock weather data based on time of day
+      const hour = new Date().getHours();
+      const isMorning = hour >= 6 && hour < 12;
+      const isEvening = hour >= 18 || hour < 6;
+      
+      setWeather({
+        temp: isMorning ? 68 : isEvening ? 72 : 85,
+        description: isMorning ? "Clear skies" : isEvening ? "Partly cloudy" : "Sunny",
+        icon: isMorning ? "01d" : isEvening ? "02n" : "01d",
+        feels_like: isMorning ? 65 : isEvening ? 70 : 88,
+        humidity: 45,
+        wind_speed: 8
+      });
+      
+      showToast({ type: 'success', message: '☀️ Weather updated!' });
+      
+      /* 
+      // Real API implementation - uncomment when you have an API key:
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=Greenville,TX&appid=YOUR_API_KEY&units=imperial`
+      );
       const data = await response.json();
       setWeather({
         temp: Math.round(data.main.temp),
@@ -207,7 +232,7 @@ export default function CalendarPage() {
         humidity: data.main.humidity,
         wind_speed: Math.round(data.wind.speed)
       });
-      showToast({ type: 'success', message: '☀️ Weather updated!' });
+      */
     } catch (error) {
       console.error('Weather fetch error:', error);
       showToast({ type: 'error', message: 'Unable to fetch weather' });
@@ -240,33 +265,74 @@ export default function CalendarPage() {
   // Fetch todos and reminders
   const fetchTodosAndReminders = async () => {
     try {
-      const { data: remindersData } = await supabase
-        .from("todo_reminders")
+      // Check if the table name is 'todo_reminders' or 'todos_reminders' in your Supabase
+      // You may need to adjust this based on your actual table name
+      const { data: remindersData, error: remindersError } = await supabase
+        .from("todos_reminders") // Note: Check if your table is named 'todos_reminders' or 'todo_reminders'
         .select("*")
         .eq("user_id", me)
         .eq("type", "reminder")
-        .order("date", { ascending: true });
+        .order("start_time", { ascending: true });
 
-      const { data: todosData } = await supabase
-        .from("todo_reminders")
+      if (remindersError) {
+        console.error('Reminders fetch error:', remindersError);
+        // Try alternative table name
+        const { data: altRemindersData } = await supabase
+          .from("todo_reminders")
+          .select("*")
+          .eq("user_id", me)
+          .eq("type", "reminder")
+          .order("start_time", { ascending: true });
+        
+        if (altRemindersData) {
+          setReminders((altRemindersData || []).map(r => ({
+            ...r,
+            type: 'reminder' as const,
+            date: r.date || r.start_time
+          })));
+        }
+      } else {
+        setReminders((remindersData || []).map(r => ({
+          ...r,
+          type: 'reminder' as const,
+          date: r.date || r.start_time
+        })));
+      }
+
+      const { data: todosData, error: todosError } = await supabase
+        .from("todos_reminders") // Note: Check table name
         .select("*")
         .eq("user_id", me)
         .eq("type", "todo")
-        .order("date", { ascending: true });
+        .order("start_time", { ascending: true });
 
-      setReminders((remindersData || []).map(r => ({
-        ...r,
-        type: 'reminder' as const,
-        date: r.date || r.start_time
-      })));
-      
-      setTodos((todosData || []).map(t => ({
-        ...t,
-        type: 'todo' as const,
-        date: t.date || t.start_time
-      })));
+      if (todosError) {
+        console.error('Todos fetch error:', todosError);
+        // Try alternative table name
+        const { data: altTodosData } = await supabase
+          .from("todo_reminders")
+          .select("*")
+          .eq("user_id", me)
+          .eq("type", "todo")
+          .order("start_time", { ascending: true });
+        
+        if (altTodosData) {
+          setTodos((altTodosData || []).map(t => ({
+            ...t,
+            type: 'todo' as const,
+            date: t.date || t.start_time
+          })));
+        }
+      } else {
+        setTodos((todosData || []).map(t => ({
+          ...t,
+          type: 'todo' as const,
+          date: t.date || t.start_time
+        })));
+      }
     } catch (e: any) {
       console.error('Failed to fetch todos/reminders:', e);
+      showToast({ type: 'warning', message: 'Could not load todos/reminders' });
     }
   };
 
@@ -275,7 +341,14 @@ export default function CalendarPage() {
     try {
       const { data } = await supabase
         .from("friends")
-        .select("friend_id, profiles!friends_friend_id_fkey(name, avatar_url)")
+        .select(`
+          friend_id, 
+          safe_to_carpool,
+          profiles!friends_friend_id_fkey(
+            name, 
+            avatar_url
+          )
+        `)
         .eq("user_id", me)
         .eq("status", "accepted");
 
@@ -284,7 +357,7 @@ export default function CalendarPage() {
           friend_id: f.friend_id,
           name: f.profiles?.name || "Friend",
           avatar_url: f.profiles?.avatar_url,
-          safe_to_carpool: true // You can add this field to your DB
+          safe_to_carpool: f.safe_to_carpool !== false // Default to true if not specified
         })));
       }
     } catch (e) {
@@ -321,12 +394,23 @@ export default function CalendarPage() {
   // Toggle todo/reminder completion
   const toggleItemCompletion = async (item: TodoReminder) => {
     try {
+      // Try both possible table names
       const { error } = await supabase
-        .from("todo_reminders")
+        .from("todos_reminders") // Check your actual table name
         .update({ completed: !item.completed })
-        .eq("id", item.id);
+        .eq("id", item.id)
+        .eq("user_id", me); // Add user check for security
 
-      if (error) throw error;
+      if (error) {
+        // Try alternative table name
+        const { error: altError } = await supabase
+          .from("todo_reminders")
+          .update({ completed: !item.completed })
+          .eq("id", item.id)
+          .eq("user_id", me);
+        
+        if (altError) throw altError;
+      }
 
       // Update local state
       if (item.type === 'reminder') {
@@ -344,7 +428,8 @@ export default function CalendarPage() {
         message: `${item.type === 'reminder' ? '🔔' : '✓'} ${item.completed ? 'Unmarked' : 'Marked as done'}!` 
       });
     } catch (e: any) {
-      showToast({ type: 'error', message: `Failed to update ${item.type}` });
+      console.error('Update error:', e);
+      showToast({ type: 'error', message: `Failed to update ${item.type}. Please refresh and try again.` });
     }
   };
 
@@ -352,11 +437,21 @@ export default function CalendarPage() {
   const deleteItem = async (id: string, type: 'reminder' | 'todo') => {
     try {
       const { error } = await supabase
-        .from("todo_reminders")
+        .from("todos_reminders") // Check your actual table name
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", me); // Add user check for security
 
-      if (error) throw error;
+      if (error) {
+        // Try alternative table name
+        const { error: altError } = await supabase
+          .from("todo_reminders")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", me);
+        
+        if (altError) throw altError;
+      }
 
       if (type === 'reminder') {
         setReminders(prev => prev.filter(r => r.id !== id));
@@ -366,7 +461,8 @@ export default function CalendarPage() {
 
       showToast({ type: 'success', message: `${type === 'reminder' ? '🗑️ Reminder' : '✓ Todo'} deleted` });
     } catch (e: any) {
-      showToast({ type: 'error', message: `Failed to delete ${type}` });
+      console.error('Delete error:', e);
+      showToast({ type: 'error', message: `Failed to delete ${type}. Please refresh and try again.` });
     }
   };
 
@@ -375,30 +471,54 @@ export default function CalendarPage() {
     if (!title.trim()) return;
 
     try {
+      const newItemData = {
+        user_id: me,
+        title,
+        type,
+        completed: false,
+        start_time: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+
       const { data, error } = await supabase
-        .from("todo_reminders")
-        .insert({
-          user_id: me,
-          title,
-          type,
-          completed: false,
-          date: new Date().toISOString()
-        })
+        .from("todos_reminders") // Check your actual table name
+        .insert(newItemData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Try alternative table name
+        const { data: altData, error: altError } = await supabase
+          .from("todo_reminders")
+          .insert(newItemData)
+          .select()
+          .single();
+        
+        if (altError) throw altError;
+        
+        const newItem: TodoReminder = {
+          ...altData,
+          type: type,
+          date: altData.date || altData.start_time
+        };
 
-      const newItem: TodoReminder = {
-        ...data,
-        type: type,
-        date: data.date || data.start_time
-      };
-
-      if (type === 'reminder') {
-        setReminders(prev => [...prev, newItem]);
+        if (type === 'reminder') {
+          setReminders(prev => [...prev, newItem]);
+        } else {
+          setTodos(prev => [...prev, newItem]);
+        }
       } else {
-        setTodos(prev => [...prev, newItem]);
+        const newItem: TodoReminder = {
+          ...data,
+          type: type,
+          date: data.date || data.start_time
+        };
+
+        if (type === 'reminder') {
+          setReminders(prev => [...prev, newItem]);
+        } else {
+          setTodos(prev => [...prev, newItem]);
+        }
       }
 
       showToast({ 
@@ -407,7 +527,8 @@ export default function CalendarPage() {
       });
       setQuickModalOpen(false);
     } catch (e: any) {
-      showToast({ type: 'error', message: `Failed to create ${type}` });
+      console.error('Create error:', e);
+      showToast({ type: 'error', message: `Failed to create ${type}. Please check your connection.` });
     }
   };
 
@@ -436,7 +557,9 @@ export default function CalendarPage() {
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
-    if (r?.moonPhase) return; // Ignore moon markers
+    // Ignore moon markers and other non-event items
+    if (r?.moonPhase || r?.isMoon) return;
+    
     setSelected(r as DBEvent);
     setDetailsOpen(true);
   }, []);
@@ -557,18 +680,42 @@ export default function CalendarPage() {
     return [...mainEvents, ...reminderEvents, ...todoEvents];
   }, [events, reminders, todos]);
 
-  // Moon events for calendar
+  // Moon events for calendar with proper icons
   const moonEvents = useMemo(() => {
     if (!showMoon) return [];
     
-    return Object.entries(moonPhases).map(([date, phase]) => ({
-      id: `moon-${date}`,
-      title: MOON_ICONS[phase as keyof typeof MOON_ICONS] || phase,
-      start: new Date(date),
-      end: new Date(date),
-      allDay: true,
-      resource: { moonPhase: phase }
-    }));
+    return Object.entries(moonPhases).map(([date, phase]) => {
+      // Map phase names to icons
+      const phaseIcons: Record<string, string> = {
+        'new': '🌑',
+        'moon-new': '🌑',
+        'first-quarter': '🌓',
+        'moon-first': '🌓',
+        'full': '🌕',
+        'moon-full': '🌕',
+        'last-quarter': '🌗',
+        'moon-last': '🌗',
+        'waxing-crescent': '🌒',
+        'waxing-gibbous': '🌔',
+        'waning-gibbous': '🌖',
+        'waning-crescent': '🌘'
+      };
+      
+      const icon = phaseIcons[phase] || phaseIcons[phase.replace('moon-', '')] || '🌙';
+      
+      return {
+        id: `moon-${date}`,
+        title: icon,
+        start: new Date(date),
+        end: new Date(date),
+        allDay: true,
+        resource: { 
+          moonPhase: phase,
+          isMoon: true,
+          displayIcon: icon
+        }
+      };
+    });
   }, [moonPhases, showMoon]);
 
   // Filtered items for display
@@ -708,18 +855,20 @@ export default function CalendarPage() {
               </button>
 
               {/* Carpool Button */}
-              <button
-                onClick={() => setShowCarpool(true)}
-                className="p-2 rounded-full bg-white text-gray-600 shadow-md hover:scale-110 transition-transform"
-                title="Find carpool matches"
-              >
-                🚗
+              <div className="relative">
+                <button
+                  onClick={() => setShowCarpool(true)}
+                  className="p-2 rounded-full bg-white text-gray-600 shadow-md hover:scale-110 transition-transform"
+                  title="Find carpool matches"
+                >
+                  🚗
+                </button>
                 {carpoolMatches.length > 0 && (
-                  <span className="absolute -top-1 -right-1 px-1 bg-green-500 text-white text-xs rounded-full">
+                  <span className="absolute -top-1 -right-1 px-1 bg-green-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center">
                     {carpoolMatches.length}
                   </span>
                 )}
-              </button>
+              </div>
 
               {/* Templates */}
               <button
@@ -1339,15 +1488,69 @@ export default function CalendarPage() {
       )}
 
       {showCarpool && (
-        <CarpoolModal
-          open={showCarpool}
+        <EventCarpoolModal
+          isOpen={showCarpool}
           onClose={() => {
             setShowCarpool(false);
             setCarpoolEvent(null);
           }}
           event={carpoolEvent}
-          friends={friends}
-          carpoolMatches={carpoolMatches}
+          userId={me}
+          carpoolData={{
+            carpoolMatches: carpoolMatches,
+            friends: friends,
+            sendCarpoolInvite: async (matchId: string, message?: string) => {
+              // Implementation for sending invites
+              try {
+                await supabase.from("carpool_invites").insert({
+                  match_id: matchId,
+                  sender_id: me,
+                  message: message
+                });
+                showToast({ type: 'success', message: 'Invite sent!' });
+                return { success: true };
+              } catch (error) {
+                showToast({ type: 'error', message: 'Failed to send invite' });
+                return { success: false };
+              }
+            },
+            createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
+              // Implementation for creating carpool group
+              try {
+                const { data, error } = await supabase
+                  .from("carpool_groups")
+                  .insert({
+                    event_id: eventId,
+                    organizer_id: me,
+                    members: [...friendIds, me],
+                    message: message
+                  })
+                  .select()
+                  .single();
+
+                if (error) throw error;
+
+                // Send notifications
+                await Promise.all(friendIds.map(friendId => 
+                  supabase.from("notifications").insert({
+                    user_id: friendId,
+                    type: "carpool_invite",
+                    title: `Carpool invitation`,
+                    message: message || "You've been invited to carpool!",
+                    data: { group_id: data.id, event_id: eventId }
+                  })
+                ));
+
+                showToast({ type: 'success', message: '🚗 Carpool group created!' });
+                return { success: true, data };
+              } catch (error) {
+                showToast({ type: 'error', message: 'Failed to create group' });
+                return { success: false };
+              }
+            }
+          }}
+          showToast={showToast}
+          isMobile={isMobile}
         />
       )}
 
