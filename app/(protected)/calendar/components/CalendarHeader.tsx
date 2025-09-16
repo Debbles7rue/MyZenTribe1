@@ -1,7 +1,6 @@
 // app/(protected)/calendar/components/CalendarHeader.tsx
-
 import React from 'react';
-import { Mode, CalendarTheme } from '../types';
+import type { Mode, CalendarTheme } from '../types';
 
 interface CalendarHeaderProps {
   mode: Mode;
@@ -10,22 +9,32 @@ interface CalendarHeaderProps {
   setCalendarTheme: (theme: CalendarTheme) => void;
   showMoon: boolean;
   setShowMoon: (show: boolean) => void;
+  showWeather: boolean;
+  setShowWeather: (show: boolean) => void;
   isMobile: boolean;
   setOpenCreate: (open: boolean) => void;
   setMobileMenuOpen: (open: boolean) => void;
-  setShowTemplates: (show: boolean) => void;
-  setShowAnalytics: (show: boolean) => void;
-  setShowMeetingCoordinator: (show: boolean) => void;
-  setShowShortcutsHelp: (show: boolean) => void;
   darkMode: boolean;
   setDarkMode: (dark: boolean) => void;
-  focusMode: boolean;
-  setFocusMode: (focus: boolean) => void;
   batchMode: boolean;
   setBatchMode: (batch: boolean) => void;
   userStats: any;
   isListening: boolean;
   startListening: () => void;
+  activeHeaderTab: 'calendar' | 'reminders' | 'todos' | 'templates';
+  setActiveHeaderTab: (tab: 'calendar' | 'reminders' | 'todos' | 'templates') => void;
+  gamificationEnabled: boolean;
+  setGamificationEnabled: (enabled: boolean) => void;
+  
+  // New props for carpool
+  setShowCarpoolChat: (show: boolean) => void;
+  setSelectedCarpoolEvent: (event: any) => void;
+  
+  // Existing modal props
+  setShowTemplates: (show: boolean) => void;
+  setShowAnalytics: (show: boolean) => void;
+  setShowMeetingCoordinator: (show: boolean) => void;
+  setShowShortcutsHelp: (show: boolean) => void;
 }
 
 export default function CalendarHeader({
@@ -35,231 +44,290 @@ export default function CalendarHeader({
   setCalendarTheme,
   showMoon,
   setShowMoon,
+  showWeather,
+  setShowWeather,
   isMobile,
   setOpenCreate,
   setMobileMenuOpen,
-  setShowTemplates,
-  setShowAnalytics,
-  setShowMeetingCoordinator,
-  setShowShortcutsHelp,
   darkMode,
   setDarkMode,
-  focusMode,
-  setFocusMode,
   batchMode,
   setBatchMode,
   userStats,
   isListening,
-  startListening
+  startListening,
+  activeHeaderTab,
+  setActiveHeaderTab,
+  gamificationEnabled,
+  setGamificationEnabled,
+  setShowCarpoolChat,
+  setSelectedCarpoolEvent,
+  setShowTemplates,
+  setShowAnalytics,
+  setShowMeetingCoordinator,
+  setShowShortcutsHelp
 }: CalendarHeaderProps) {
+  
+  const handleCarpoolClick = () => {
+    setSelectedCarpoolEvent(null);
+    setShowCarpoolChat(true);
+  };
+
   return (
-    <header className="mb-4 sm:mb-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        {/* Title and Mode Selector */}
-        <div className="flex items-center gap-4 w-full sm:w-auto">
-          {isMobile && (
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="p-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg"
-              aria-label="Open menu"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          )}
-          
-          <div className="flex-1 sm:flex-initial">
-            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+    <div className="mb-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-lg p-4">
+      <div className="flex flex-col gap-3">
+        {/* Top Row - Title and Mode Toggle */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               Calendar Hub
             </h1>
-            {userStats && (
-              <div className="flex items-center gap-3 mt-1 text-sm text-gray-600 dark:text-gray-300">
-                <span className="flex items-center gap-1">
-                  <span className="text-yellow-500">⭐</span>
-                  Level {userStats.level}
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="text-purple-500">💎</span>
-                  {userStats.points} pts
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="text-red-500">🔥</span>
-                  {userStats.streak} day streak
-                </span>
+            
+            {/* User Stats Badge - Desktop only */}
+            {!isMobile && gamificationEnabled && userStats && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full text-white text-sm font-medium shadow-md">
+                <span>Lvl {userStats.level}</span>
+                <span className="text-xs opacity-75">•</span>
+                <span>{userStats.points} pts</span>
               </div>
             )}
           </div>
 
-          {/* Mode Tabs */}
-          <div className="flex bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-xl p-1 shadow-lg">
-            <button
-              onClick={() => setMode('my')}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium transition-all ${
-                mode === 'my'
-                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              My Calendar
-            </button>
-            <button
-              onClick={() => setMode('whats')}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium transition-all ${
-                mode === 'whats'
-                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              What's Happening
-            </button>
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg bg-white/50 dark:bg-gray-700/50 shadow-md p-0.5">
+              <button
+                onClick={() => setMode('my')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  mode === 'my'
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                My Calendar
+              </button>
+              <button
+                onClick={() => setMode('whats')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  mode === 'whats'
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                What's Happening
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-2">
-          {/* Voice Command Button */}
+        {/* Features Row - All buttons in one row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Voice Command Button - Mobile */}
+          {isMobile && (
+            <button
+              onClick={startListening}
+              className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
+                isListening
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
+              }`}
+            >
+              {isListening ? '🎤' : '🎙️'}
+            </button>
+          )}
+
+          {/* Feature Toggle Buttons */}
           <button
-            onClick={startListening}
-            className={`p-2 rounded-lg backdrop-blur-xl shadow-lg transition-all ${
-              isListening 
-                ? 'bg-red-500 text-white animate-pulse' 
-                : 'bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700'
+            onClick={() => setShowWeather(!showWeather)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
+              showWeather
+                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
             }`}
-            title="Voice Command"
+            title="Toggle weather"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
+            {showWeather ? '☀️' : '🌤️'}
           </button>
 
-          {/* Focus Mode Toggle */}
           <button
-            onClick={() => setFocusMode(!focusMode)}
-            className={`p-2 rounded-lg backdrop-blur-xl shadow-lg transition-all ${
-              focusMode 
-                ? 'bg-purple-500 text-white' 
-                : 'bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700'
+            onClick={() => setShowMoon(!showMoon)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
+              showMoon
+                ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
             }`}
-            title="Focus Mode - Show only today"
+            title="Toggle moon phases"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </button>
-
-          {/* Batch Mode Toggle */}
-          <button
-            onClick={() => setBatchMode(!batchMode)}
-            className={`p-2 rounded-lg backdrop-blur-xl shadow-lg transition-all ${
-              batchMode 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700'
-            }`}
-            title="Batch Edit Mode"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
+            {showMoon ? '🌙' : '🌑'}
           </button>
 
           {/* Dark Mode Toggle */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="p-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg hover:bg-white dark:hover:bg-gray-700 transition-all"
-            title="Toggle Dark Mode"
-          >
-            {darkMode ? (
-              <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-              </svg>
-            )}
-          </button>
-
-          {/* Moon Phases Toggle */}
-          <button
-            onClick={() => setShowMoon(!showMoon)}
-            className={`p-2 rounded-lg backdrop-blur-xl shadow-lg transition-all ${
-              showMoon 
-                ? 'bg-indigo-500 text-white' 
-                : 'bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700'
+            className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
+              darkMode
+                ? 'bg-gray-800 text-white'
+                : 'bg-white text-gray-700 hover:shadow-lg'
             }`}
-            title="Toggle Moon Phases"
+            title="Toggle dark mode"
           >
-            🌙
+            {darkMode ? '🌜' : '☀️'}
           </button>
 
           {/* Theme Selector */}
           <select
             value={calendarTheme}
             onChange={(e) => setCalendarTheme(e.target.value as CalendarTheme)}
-            className="px-3 py-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg text-sm font-medium"
+            className="px-3 py-2 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium shadow-md hover:shadow-lg transition-all"
           >
             <option value="default">Default Theme</option>
-            <option value="spring">🌸 Spring</option>
-            <option value="summer">☀️ Summer</option>
-            <option value="autumn">🍂 Autumn</option>
-            <option value="winter">❄️ Winter</option>
-            <option value="nature">🌿 Nature</option>
-            <option value="ocean">🌊 Ocean</option>
+            <option value="minimal">Minimal</option>
+            <option value="colorful">Colorful</option>
+            <option value="pastel">Pastel</option>
           </select>
 
+          {/* Divider */}
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          {/* CARPOOL BUTTON - NEW! */}
+          <button
+            onClick={handleCarpoolClick}
+            className="px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-green-600 hover:to-blue-600 transition-all flex items-center gap-2"
+            title="Coordinate carpools"
+          >
+            <span>🚗</span>
+            <span className={isMobile ? 'hidden' : ''}>Carpool</span>
+          </button>
+
+          {/* Meeting Coordinator Button */}
+          <button
+            onClick={() => setShowMeetingCoordinator(true)}
+            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-indigo-600 hover:to-purple-600 transition-all flex items-center gap-2"
+            title="AI meeting scheduler"
+          >
+            <span>🤝</span>
+            <span className={isMobile ? 'hidden' : ''}>Coordinate</span>
+          </button>
+
+          {/* Templates Button */}
+          <button
+            onClick={() => setShowTemplates(true)}
+            className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+            title="Event templates"
+          >
+            {isMobile ? '📋' : '📋 Templates'}
+          </button>
+
+          {/* Analytics Button */}
+          <button
+            onClick={() => setShowAnalytics(true)}
+            className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+            title="View analytics"
+          >
+            {isMobile ? '📊' : '📊 Analytics'}
+          </button>
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+
+          {/* New Event Button */}
+          <button
+            onClick={() => setOpenCreate(true)}
+            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-purple-600 hover:to-pink-600 transition-all flex items-center gap-2"
+          >
+            <span>+</span>
+            <span>New Event</span>
+          </button>
+
+          {/* Mobile Menu Toggle */}
+          {isMobile && (
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+              title="Open menu"
+            >
+              ☰
+            </button>
+          )}
+
+          {/* Keyboard Shortcuts Help - Desktop */}
           {!isMobile && (
-            <>
-              {/* Templates Button */}
-              <button
-                onClick={() => setShowTemplates(true)}
-                className="px-3 py-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg hover:bg-white dark:hover:bg-gray-700 transition-all text-sm font-medium"
-              >
-                📋 Templates
-              </button>
-
-              {/* Analytics Button */}
-              <button
-                onClick={() => setShowAnalytics(true)}
-                className="px-3 py-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg hover:bg-white dark:hover:bg-gray-700 transition-all text-sm font-medium"
-              >
-                📊 Analytics
-              </button>
-
-              {/* Meeting Coordinator Button */}
-              <button
-                onClick={() => setShowMeetingCoordinator(true)}
-                className="px-3 py-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg hover:bg-white dark:hover:bg-gray-700 transition-all text-sm font-medium"
-              >
-                🤝 Coordinate
-              </button>
-
-              {/* Shortcuts Help */}
-              <button
-                onClick={() => setShowShortcutsHelp(true)}
-                className="p-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-lg hover:bg-white dark:hover:bg-gray-700 transition-all"
-                title="Keyboard Shortcuts"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-
-              {/* Create Event Button */}
-              <button
-                onClick={() => setOpenCreate(true)}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all font-medium"
-              >
-                + New Event
-              </button>
-            </>
+            <button
+              onClick={() => setShowShortcutsHelp(true)}
+              className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg text-sm font-medium hover:shadow-md transition-all"
+              title="Keyboard shortcuts"
+            >
+              ⌘
+            </button>
           )}
         </div>
+
+        {/* Tabs Row - Desktop only */}
+        {!isMobile && (
+          <div className="flex items-center gap-2 border-t dark:border-gray-700 pt-3">
+            <button
+              onClick={() => setActiveHeaderTab('calendar')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                activeHeaderTab === 'calendar'
+                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Calendar
+            </button>
+            <button
+              onClick={() => setActiveHeaderTab('reminders')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                activeHeaderTab === 'reminders'
+                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Reminders
+            </button>
+            <button
+              onClick={() => setActiveHeaderTab('todos')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                activeHeaderTab === 'todos'
+                  ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              To-Dos
+            </button>
+            <button
+              onClick={() => setActiveHeaderTab('templates')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                activeHeaderTab === 'templates'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Templates & Goals
+            </button>
+
+            {/* Batch Mode Toggle - Far right */}
+            <div className="ml-auto flex items-center gap-2">
+              {gamificationEnabled && userStats && (
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  🔥 {userStats.streak} day streak
+                </div>
+              )}
+              <button
+                onClick={() => setBatchMode(!batchMode)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  batchMode
+                    ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                title="Select multiple events"
+              >
+                {batchMode ? '✓ Batch' : 'Batch'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-    </header>
+    </div>
   );
 }
