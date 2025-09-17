@@ -146,13 +146,17 @@ export default function SmartMeetingCoordinator({
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  // Handle adding email invites
+  // Handle adding email invites - FIXED
   const handleAddEmail = () => {
-    const email = inviteInput.trim();
-    if (email && email.includes('@') && !emailInvites.includes(email)) {
-      setEmailInvites([...emailInvites, email]);
+    const email = inviteInput.trim().toLowerCase();
+    if (email && email.includes('@') && email.includes('.') && !emailInvites.includes(email)) {
+      setEmailInvites(prev => [...prev, email]);
       setInviteInput('');
       showToast('success', `Added ${email} to invites`);
+    } else if (!email.includes('@') || !email.includes('.')) {
+      showToast('error', 'Please enter a valid email address');
+    } else if (emailInvites.includes(email)) {
+      showToast('warning', 'Email already added');
     }
   };
 
@@ -404,6 +408,14 @@ export default function SmartMeetingCoordinator({
     }
   }, [step, selectedParticipants, emailInvites, fetchParticipantAvailability, findOptimalSlots]);
 
+  // Generate shareable link
+  const generateShareableLink = useCallback(() => {
+    const mockId = Math.random().toString(36).substring(7);
+    const link = `${window.location.origin}/meeting-poll/${mockId}`;
+    setShareableLink(link);
+    return link;
+  }, []);
+
   const handleScheduleMeeting = async () => {
     if (!selectedSlot) return;
 
@@ -433,7 +445,7 @@ export default function SmartMeetingCoordinator({
   // Mobile Bottom Sheet Style
   if (isMobile && mobileMode === 'bottomSheet') {
     return (
-      <div className="fixed inset-0 z-50">
+      <div className="fixed inset-0 z-[9999]">
         <div className="fixed inset-0 bg-black/60" onClick={onClose} />
         
         <div 
@@ -563,13 +575,93 @@ export default function SmartMeetingCoordinator({
                 </div>
               </div>
             ) : (
-              // Mobile Wizard Mode content continues...
+              // Mobile Wizard Mode
               <>
+                {step === 'details' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Meeting Title</label>
+                      <input
+                        type="text"
+                        value={meetingDetails.title}
+                        onChange={(e) => setMeetingDetails(prev => ({ ...prev, title: e.target.value }))}
+                        placeholder="e.g., Team Standup"
+                        className="w-full px-3 py-2 border rounded-lg text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Duration</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[15, 30, 45, 60].map(min => (
+                          <button
+                            key={min}
+                            onClick={() => setMeetingDetails(prev => ({ ...prev, duration: min }))}
+                            className={`py-2 rounded-lg text-sm ${
+                              meetingDetails.duration === min
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 dark:bg-gray-700'
+                            }`}
+                          >
+                            {min}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Type</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['virtual', 'in-person', 'hybrid'].map(type => (
+                          <button
+                            key={type}
+                            onClick={() => setMeetingDetails(prev => ({ 
+                              ...prev, 
+                              meetingType: type as 'virtual' | 'in-person' | 'hybrid' 
+                            }))}
+                            className={`py-3 rounded-lg text-xs capitalize ${
+                              meetingDetails.meetingType === type
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 dark:bg-gray-700'
+                            }`}
+                          >
+                            {type === 'virtual' ? '🎥' : type === 'in-person' ? '📍' : '☕'}<br/>
+                            {type}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Preferred Times</label>
+                      <div className="space-y-2">
+                        {['morning', 'afternoon', 'evening'].map(time => (
+                          <label key={time} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <input
+                              type="checkbox"
+                              checked={meetingDetails.preferredTimes[time as keyof typeof meetingDetails.preferredTimes]}
+                              onChange={(e) => setMeetingDetails(prev => ({
+                                ...prev,
+                                preferredTimes: {
+                                  ...prev.preferredTimes,
+                                  [time]: e.target.checked
+                                }
+                              }))}
+                              className="rounded text-purple-600"
+                            />
+                            <span className="text-sm capitalize">{time}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {step === 'participants' && (
                   <div className="space-y-3">
                     <h3 className="font-medium">Select Participants</h3>
                     
-                    {/* Add Email Input for Mobile */}
+                    {/* Add Email Input for Mobile - FIXED */}
                     <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                       <label className="block text-sm font-medium mb-2">Invite by Email</label>
                       <div className="flex gap-2">
@@ -577,11 +669,17 @@ export default function SmartMeetingCoordinator({
                           type="email"
                           value={inviteInput}
                           onChange={(e) => setInviteInput(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && handleAddEmail()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddEmail();
+                            }
+                          }}
                           placeholder="email@example.com"
-                          className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                          className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-700"
                         />
                         <button
+                          type="button"
                           onClick={handleAddEmail}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
                         >
@@ -624,7 +722,109 @@ export default function SmartMeetingCoordinator({
                     )}
                   </div>
                 )}
-                {/* Other mobile steps remain the same */}
+                
+                {step === 'ai-slots' && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Best Times Found</h3>
+                    {isAnalyzing ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600 mx-auto" />
+                        <p className="mt-3 text-sm">Finding best times...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {suggestedSlots.map((slot, idx) => {
+                          const availableCount = Array.from(slot.availability.values()).filter(a => a).length;
+                          const totalCount = slot.availability.size;
+                          
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => setSelectedSlot(slot)}
+                              className={`p-3 rounded-lg border-2 ${
+                                selectedSlot === slot ? 'border-purple-500 bg-purple-50' : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="font-medium text-sm">
+                                    {slot.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </div>
+                                  <div className="text-xs text-gray-600">
+                                    {slot.startTime} - {slot.endTime}
+                                  </div>
+                                  {slot.aiReason && (
+                                    <div className="text-xs text-purple-600 mt-1">{slot.aiReason}</div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  {slot.isOptimal && (
+                                    <span className="inline-block px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xs rounded-full mb-1">
+                                      ⭐ Best
+                                    </span>
+                                  )}
+                                  <div className="text-xs text-gray-500">
+                                    {availableCount}/{totalCount} free
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {step === 'confirm' && selectedSlot && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <h3 className="font-medium text-green-800 dark:text-green-300 mb-2">Ready to Schedule!</h3>
+                      <div className="space-y-1 text-sm">
+                        <div>📅 {selectedSlot.date.toLocaleDateString()}</div>
+                        <div>⏰ {selectedSlot.startTime}</div>
+                        <div>👥 {selectedParticipants.size + emailInvites.length + 1} people</div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Send Invites Via</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['app', 'email', 'link'].map(method => (
+                          <button
+                            key={method}
+                            onClick={() => setSendMethod(method as 'app' | 'email' | 'link')}
+                            className={`py-2 rounded-lg text-xs capitalize ${
+                              sendMethod === method
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 dark:bg-gray-700'
+                            }`}
+                          >
+                            {method}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {sendMethod === 'link' && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-xs text-blue-800 dark:text-blue-300 mb-2">
+                          Meeting link (tap to copy):
+                        </p>
+                        <div 
+                          onClick={() => {
+                            generateShareableLink();
+                            navigator.clipboard.writeText(shareableLink);
+                            showToast('success', 'Link copied!');
+                          }}
+                          className="text-xs bg-white dark:bg-gray-800 p-2 rounded break-all font-mono"
+                        >
+                          {shareableLink || 'Tap to generate link'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -652,7 +852,8 @@ export default function SmartMeetingCoordinator({
                   else if (step === 'confirm') handleScheduleMeeting();
                 }}
                 disabled={
-                  (step === 'participants' && selectedParticipants.size === 0 && emailInvites.length === 0)
+                  (step === 'participants' && selectedParticipants.size === 0 && emailInvites.length === 0) ||
+                  (step === 'ai-slots' && !selectedSlot)
                 }
                 className="flex-1 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-sm font-medium"
               >
@@ -665,20 +866,15 @@ export default function SmartMeetingCoordinator({
     );
   }
 
-  // Desktop/Tablet Modal - FIXED POSITIONING WITH ABSOLUTE CENTERING
+  // Desktop/Tablet Modal - FIXED POSITIONING
   return (
-    <div className="fixed inset-0 z-50">
-      {/* Background overlay */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-[9999] p-4 md:p-8 overflow-y-auto">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       
-      {/* Centered modal container */}
-      <div 
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-[90%] max-w-4xl flex flex-col"
-        style={{ maxHeight: '85vh' }}
-      >
-        {/* Desktop Header - Fixed at top */}
-        <div className="flex-shrink-0">
-          <div className="relative overflow-hidden rounded-t-2xl">
+      <div className="relative mx-auto mt-8 mb-8 max-w-lg sm:max-w-2xl lg:max-w-4xl">
+        <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+          {/* Desktop Header */}
+          <div className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-pink-600 to-indigo-600 opacity-90" />
             
             <div className="relative p-4 sm:p-6 text-white">
@@ -756,208 +952,667 @@ export default function SmartMeetingCoordinator({
               )}
             </div>
           </div>
-        </div>
 
-        {/* Desktop Content - Scrollable middle section */}
-        <div className="flex-grow overflow-y-auto p-4 sm:p-6">
-          {/* Content remains the same but add participants section with email input */}
-          {mode === 'wizard' && step === 'participants' && (
-            <div className="space-y-4">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
-                  Select Participants
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Invite people by email or select from your friends list.
-                </p>
-              </div>
-
-              {/* Email Invitation Section */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
-                  Invite by Email Address
-                </label>
+          {/* Desktop Content */}
+          <div className="p-4 sm:p-6 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+            {mode === 'chat' ? (
+              // Desktop Chat Mode
+              <div className="flex flex-col h-[450px]">
+                <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[70%] ${
+                        msg.role === 'user' 
+                          ? 'bg-purple-600 text-white rounded-2xl rounded-tr-sm' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white rounded-2xl rounded-tl-sm'
+                      } p-3`}>
+                        <p className="text-sm">{msg.content}</p>
+                        {msg.suggestions && msg.suggestions.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {msg.suggestions.map((suggestion, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => handleChatSubmit(suggestion)}
+                                className="block w-full text-left px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors"
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-tl-sm p-3">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+                
                 <div className="flex gap-2">
                   <input
-                    type="email"
-                    value={inviteInput}
-                    onChange={(e) => setInviteInput(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddEmail();
-                      }
-                    }}
-                    placeholder="Enter email address (e.g., john@example.com)"
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit(chatInput)}
+                    placeholder="Type your message..."
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
                              bg-white dark:bg-gray-700 text-gray-800 dark:text-white
-                             focus:outline-none focus:ring-2 focus:ring-blue-500"
+                             focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                   <button
-                    onClick={handleAddEmail}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={() => handleChatSubmit(chatInput)}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg
+                             hover:from-purple-700 hover:to-pink-700 transition-all"
                   >
-                    Add
+                    Send
                   </button>
                 </div>
                 
-                {emailInvites.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">Email invites ({emailInvites.length}):</p>
-                    <div className="flex flex-wrap gap-2">
-                      {emailInvites.map(email => (
-                        <span 
-                          key={email} 
-                          className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-800 rounded-full text-sm"
+                <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                  <p className="text-xs text-purple-700 dark:text-purple-300">
+                    💡 Try: "Schedule a team standup tomorrow morning" or "Find time for a 1-on-1 with Sarah"
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Desktop Wizard Mode - ALL STEPS COMPLETE
+              <>
+                {step === 'details' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Meeting Title *
+                        </label>
+                        <input
+                          type="text"
+                          value={meetingDetails.title}
+                          onChange={(e) => setMeetingDetails(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="e.g., Team Standup, Project Review"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                   bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                   focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Duration
+                        </label>
+                        <select
+                          value={meetingDetails.duration}
+                          onChange={(e) => setMeetingDetails(prev => ({ ...prev, duration: Number(e.target.value) }))}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                   bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                   focus:outline-none focus:ring-2 focus:ring-purple-500"
                         >
-                          <span>📧</span>
-                          {email}
-                          <button 
-                            onClick={() => handleRemoveEmail(email)} 
-                            className="text-red-500 hover:text-red-700 font-bold"
+                          <option value="15">15 minutes</option>
+                          <option value="30">30 minutes</option>
+                          <option value="45">45 minutes</option>
+                          <option value="60">1 hour</option>
+                          <option value="90">1.5 hours</option>
+                          <option value="120">2 hours</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Description
+                      </label>
+                      <textarea
+                        value={meetingDetails.description}
+                        onChange={(e) => setMeetingDetails(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="What's this meeting about?"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                 bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Meeting Type
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { value: 'virtual', icon: '🎥', label: 'Virtual' },
+                          { value: 'in-person', icon: '📍', label: 'In-Person' },
+                          { value: 'hybrid', icon: '☕', label: 'Hybrid' }
+                        ].map(type => (
+                          <button
+                            key={type.value}
+                            onClick={() => setMeetingDetails(prev => ({ 
+                              ...prev, 
+                              meetingType: type.value as 'virtual' | 'in-person' | 'hybrid' 
+                            }))}
+                            className={`p-3 rounded-lg border-2 transition-all ${
+                              meetingDetails.meetingType === type.value
+                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                : 'border-gray-300 dark:border-gray-600 hover:border-purple-300'
+                            }`}
                           >
-                            ×
+                            <div className={`text-2xl mb-1 ${
+                              meetingDetails.meetingType === type.value 
+                                ? 'text-purple-600 dark:text-purple-400' 
+                                : 'text-gray-500'
+                            }`}>{type.icon}</div>
+                            <span className={`text-sm ${
+                              meetingDetails.meetingType === type.value 
+                                ? 'text-purple-700 dark:text-purple-300 font-medium' 
+                                : 'text-gray-600 dark:text-gray-400'
+                            }`}>{type.label}</span>
                           </button>
-                        </span>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+
+                    {meetingDetails.meetingType !== 'virtual' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Location
+                        </label>
+                        <input
+                          type="text"
+                          value={meetingDetails.location}
+                          onChange={(e) => setMeetingDetails(prev => ({ ...prev, location: e.target.value }))}
+                          placeholder="Where will the meeting take place?"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                   bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                   focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Preferred Time of Day
+                      </label>
+                      <div className="flex gap-3">
+                        {[
+                          { key: 'morning', label: 'Morning (9am-12pm)' },
+                          { key: 'afternoon', label: 'Afternoon (12pm-5pm)' },
+                          { key: 'evening', label: 'Evening (5pm-8pm)' }
+                        ].map(time => (
+                          <label key={time.key} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={meetingDetails.preferredTimes[time.key as keyof typeof meetingDetails.preferredTimes]}
+                              onChange={(e) => setMeetingDetails(prev => ({
+                                ...prev,
+                                preferredTimes: {
+                                  ...prev.preferredTimes,
+                                  [time.key]: e.target.checked
+                                }
+                              }))}
+                              className="rounded text-purple-600 focus:ring-purple-500"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{time.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Search From
+                        </label>
+                        <input
+                          type="date"
+                          value={meetingDetails.dateRange.start}
+                          onChange={(e) => setMeetingDetails(prev => ({
+                            ...prev,
+                            dateRange: { ...prev.dateRange, start: e.target.value }
+                          }))}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                   bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                   focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Search Until
+                        </label>
+                        <input
+                          type="date"
+                          value={meetingDetails.dateRange.end}
+                          onChange={(e) => setMeetingDetails(prev => ({
+                            ...prev,
+                            dateRange: { ...prev.dateRange, end: e.target.value }
+                          }))}
+                          min={meetingDetails.dateRange.start}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                   bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                   focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Friends Selection */}
-              {friends.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 mt-6 mb-3">
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Or Select from Friends
-                    </h4>
-                    <span className="text-xs text-gray-500">({friends.length} available)</span>
-                  </div>
-                  
-                  <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
-                    {friends.map(friend => (
-                      <label
-                        key={friend.friend_id}
-                        className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-600 rounded-lg
-                                 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedParticipants.has(friend.friend_id)}
-                          onChange={(e) => {
-                            const newSet = new Set(selectedParticipants);
-                            if (e.target.checked) {
-                              newSet.add(friend.friend_id);
-                            } else {
-                              newSet.delete(friend.friend_id);
-                            }
-                            setSelectedParticipants(newSet);
-                          }}
-                          className="rounded text-purple-600 focus:ring-purple-500"
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-800 dark:text-white">
-                            {friend.name}
-                          </div>
-                          {friend.email && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {friend.email}
-                            </div>
-                          )}
-                        </div>
+                {step === 'participants' && (
+                  <div className="space-y-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
+                        Select Participants
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Invite people by email or select from your friends list.
+                      </p>
+                    </div>
+
+                    {/* Email Invitation Section - FIXED */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                      <label className="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
+                        Invite by Email Address
                       </label>
-                    ))}
-                  </div>
-                </>
-              )}
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={inviteInput}
+                          onChange={(e) => setInviteInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddEmail();
+                            }
+                          }}
+                          placeholder="Enter email address (e.g., john@example.com)"
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                   bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                   focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddEmail}
+                          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      
+                      {emailInvites.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs text-blue-800 dark:text-blue-200 mb-2">Email invites ({emailInvites.length}):</p>
+                          <div className="flex flex-wrap gap-2">
+                            {emailInvites.map(email => (
+                              <span 
+                                key={email} 
+                                className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-800 rounded-full text-sm"
+                              >
+                                <span>📧</span>
+                                {email}
+                                <button 
+                                  onClick={() => handleRemoveEmail(email)} 
+                                  className="text-red-500 hover:text-red-700 font-bold"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-              {/* Summary */}
-              <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">✨</span>
-                  <div>
-                    <p className="text-sm text-purple-800 dark:text-purple-300 font-medium">
-                      Total Invites: {selectedParticipants.size + emailInvites.length}
-                    </p>
-                    <p className="text-xs text-purple-700 dark:text-purple-400 mt-1">
-                      {selectedParticipants.size > 0 && `${selectedParticipants.size} friends`}
-                      {selectedParticipants.size > 0 && emailInvites.length > 0 && ', '}
-                      {emailInvites.length > 0 && `${emailInvites.length} email invites`}
-                    </p>
+                    {/* Friends Selection */}
+                    {friends.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 mt-6 mb-3">
+                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Or Select from Friends
+                          </h4>
+                          <span className="text-xs text-gray-500">({friends.length} available)</span>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+                          {friends.map(friend => (
+                            <label
+                              key={friend.friend_id}
+                              className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-600 rounded-lg
+                                       hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedParticipants.has(friend.friend_id)}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedParticipants);
+                                  if (e.target.checked) {
+                                    newSet.add(friend.friend_id);
+                                  } else {
+                                    newSet.delete(friend.friend_id);
+                                  }
+                                  setSelectedParticipants(newSet);
+                                }}
+                                className="rounded text-purple-600 focus:ring-purple-500"
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800 dark:text-white">
+                                  {friend.name}
+                                </div>
+                                {friend.email && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {friend.email}
+                                  </div>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Summary */}
+                    <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">✨</span>
+                        <div>
+                          <p className="text-sm text-purple-800 dark:text-purple-300 font-medium">
+                            Total Invites: {selectedParticipants.size + emailInvites.length}
+                          </p>
+                          <p className="text-xs text-purple-700 dark:text-purple-400 mt-1">
+                            {selectedParticipants.size > 0 && `${selectedParticipants.size} friends`}
+                            {selectedParticipants.size > 0 && emailInvites.length > 0 && ', '}
+                            {emailInvites.length > 0 && `${emailInvites.length} email invites`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
+
+                {step === 'ai-slots' && (
+                  <div className="space-y-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
+                        AI-Suggested Times
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Based on analyzing {selectedParticipants.size + emailInvites.length + 1} calendars, here are the best times:
+                      </p>
+                    </div>
+
+                    {isAnalyzing ? (
+                      <div className="text-center py-12">
+                        <div className="inline-flex items-center gap-3">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Analyzing calendars and finding optimal times...
+                          </span>
+                        </div>
+                      </div>
+                    ) : suggestedSlots.length === 0 ? (
+                      <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <span className="text-4xl">😔</span>
+                        <p className="mt-3 text-gray-600 dark:text-gray-400">
+                          No common available times found in the selected date range.
+                        </p>
+                        <button
+                          onClick={() => setStep('details')}
+                          className="mt-4 text-purple-600 hover:text-purple-700 text-sm font-medium"
+                        >
+                          Adjust date range or preferences
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {suggestedSlots.map((slot, index) => {
+                          const availableCount = Array.from(slot.availability.values()).filter(a => a).length;
+                          const totalCount = slot.availability.size;
+                          const percentage = Math.round((availableCount / totalCount) * 100);
+                          
+                          return (
+                            <div
+                              key={index}
+                              onClick={() => setSelectedSlot(slot)}
+                              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                selectedSlot === slot
+                                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                  : 'border-gray-200 dark:border-gray-600 hover:border-purple-300'
+                              } ${slot.isOptimal ? 'ring-2 ring-yellow-400 ring-offset-2' : ''}`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xl">📅</span>
+                                    <span className="font-medium text-gray-800 dark:text-white">
+                                      {slot.dayName}, {slot.date.toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric' 
+                                      })}
+                                    </span>
+                                    {slot.isOptimal && (
+                                      <span className="px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xs rounded-full font-medium">
+                                        ⭐ Optimal
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    {slot.startTime} - {slot.endTime}
+                                  </p>
+                                  {slot.aiReason && (
+                                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                      {slot.aiReason}
+                                    </p>
+                                  )}
+                                </div>
+                                
+                                <div className="text-right">
+                                  <div className={`text-sm font-medium ${
+                                    percentage === 100 ? 'text-green-600' : 
+                                    percentage >= 75 ? 'text-yellow-600' : 'text-orange-600'
+                                  }`}>
+                                    {percentage}% Available
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {availableCount}/{totalCount} people
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {slot.conflicts.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Conflicts: {slot.conflicts.map(c => c.eventTitle).join(', ')}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {step === 'confirm' && selectedSlot && (
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold text-green-800 dark:text-green-300 mb-3">
+                        Ready to Schedule! 🎉
+                      </h3>
+                      
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">📅</span>
+                          <span className="text-gray-700 dark:text-gray-300">
+                            <strong>{meetingDetails.title}</strong>
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">⏰</span>
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {selectedSlot.dayName}, {selectedSlot.date.toLocaleDateString('en-US', { 
+                              month: 'long', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            })} at {selectedSlot.startTime}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">👥</span>
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {selectedParticipants.size + emailInvites.length + 1} participants
+                          </span>
+                        </div>
+                        
+                        {meetingDetails.location && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">📍</span>
+                            <span className="text-gray-700 dark:text-gray-300">
+                              {meetingDetails.location}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        How should we notify participants?
+                      </h4>
+                      
+                      <div className="space-y-2">
+                        {[
+                          { value: 'app', label: 'In-App Notification', desc: 'Send via MyZenTribe', icon: '📱' },
+                          { value: 'email', label: 'Email', desc: 'Send calendar invites', icon: '📧' },
+                          { value: 'link', label: 'Share Link', desc: 'Copy link to share manually', icon: '🔗' }
+                        ].map(method => (
+                          <label
+                            key={method.value}
+                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                              sendMethod === method.value
+                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                : 'border-gray-200 dark:border-gray-600 hover:border-purple-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="sendMethod"
+                              value={method.value}
+                              checked={sendMethod === method.value}
+                              onChange={(e) => setSendMethod(e.target.value as 'app' | 'email' | 'link')}
+                              className="text-purple-600 focus:ring-purple-500"
+                            />
+                            <span className="text-xl">{method.icon}</span>
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-800 dark:text-white">
+                                {method.label}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {method.desc}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {sendMethod === 'link' && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                          📋 Meeting link (click to copy):
+                        </p>
+                        <div 
+                          onClick={() => {
+                            const link = generateShareableLink();
+                            navigator.clipboard.writeText(link);
+                            showToast('success', 'Link copied to clipboard!');
+                          }}
+                          className="text-xs bg-white dark:bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 break-all font-mono"
+                        >
+                          {shareableLink || 'Click to generate and copy link'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Desktop Footer */}
+          {mode === 'wizard' && (
+            <div className="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+              <button
+                onClick={() => {
+                  if (step === 'participants') setStep('details');
+                  else if (step === 'ai-slots') setStep('participants');
+                  else if (step === 'confirm') setStep('ai-slots');
+                }}
+                disabled={step === 'details'}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg
+                         hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed
+                         transition-colors"
+              >
+                <span>←</span>
+                Back
+              </button>
+
+              <button
+                onClick={() => {
+                  if (step === 'details') {
+                    if (meetingDetails.title && 
+                        (meetingDetails.preferredTimes.morning || 
+                         meetingDetails.preferredTimes.afternoon || 
+                         meetingDetails.preferredTimes.evening)) {
+                      setStep('participants');
+                    }
+                  } else if (step === 'participants') {
+                    if (selectedParticipants.size > 0 || emailInvites.length > 0) {
+                      setStep('ai-slots');
+                    }
+                  } else if (step === 'ai-slots') {
+                    if (selectedSlot) {
+                      setStep('confirm');
+                    }
+                  } else if (step === 'confirm') {
+                    handleScheduleMeeting();
+                  }
+                }}
+                disabled={
+                  (step === 'details' && (!meetingDetails.title || 
+                    (!meetingDetails.preferredTimes.morning && 
+                     !meetingDetails.preferredTimes.afternoon && 
+                     !meetingDetails.preferredTimes.evening))) ||
+                  (step === 'participants' && selectedParticipants.size === 0 && emailInvites.length === 0) ||
+                  (step === 'ai-slots' && !selectedSlot)
+                }
+                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg
+                         hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed
+                         transform hover:scale-105 active:scale-95 transition-all disabled:transform-none"
+              >
+                {step === 'confirm' ? (
+                  <>
+                    <span>✅</span>
+                    Schedule & Send Invites
+                  </>
+                ) : (
+                  <>
+                    Next
+                    <span>→</span>
+                  </>
+                )}
+              </button>
             </div>
           )}
-          {/* Other wizard steps and chat mode remain the same */}
         </div>
-
-        {/* Desktop Footer - Fixed at bottom */}
-        {mode === 'wizard' && (
-          <div className="flex-shrink-0 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-2xl flex justify-between">
-            <button
-              onClick={() => {
-                if (step === 'participants') setStep('details');
-                else if (step === 'ai-slots') setStep('participants');
-                else if (step === 'confirm') setStep('ai-slots');
-              }}
-              disabled={step === 'details'}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg
-                       hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-colors"
-            >
-              <span>←</span>
-              Back
-            </button>
-
-            <button
-              onClick={() => {
-                if (step === 'details') {
-                  if (meetingDetails.title && 
-                      (meetingDetails.preferredTimes.morning || 
-                       meetingDetails.preferredTimes.afternoon || 
-                       meetingDetails.preferredTimes.evening)) {
-                    setStep('participants');
-                  }
-                } else if (step === 'participants') {
-                  if (selectedParticipants.size > 0 || emailInvites.length > 0) {
-                    setStep('ai-slots');
-                  }
-                } else if (step === 'ai-slots') {
-                  if (selectedSlot) {
-                    setStep('confirm');
-                  }
-                } else if (step === 'confirm') {
-                  handleScheduleMeeting();
-                }
-              }}
-              disabled={
-                (step === 'details' && (!meetingDetails.title || 
-                  (!meetingDetails.preferredTimes.morning && 
-                   !meetingDetails.preferredTimes.afternoon && 
-                   !meetingDetails.preferredTimes.evening))) ||
-                (step === 'participants' && selectedParticipants.size === 0 && emailInvites.length === 0) ||
-                (step === 'ai-slots' && !selectedSlot)
-              }
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg
-                       hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed
-                       transform hover:scale-105 active:scale-95 transition-all disabled:transform-none"
-            >
-              {step === 'confirm' ? (
-                <>
-                  <span>✅</span>
-                  Schedule & Send Invites
-                </>
-              ) : (
-                <>
-                  Next
-                  <span>→</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
