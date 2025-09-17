@@ -116,7 +116,7 @@ export default function MobileSidebar({
                 <span className="text-xl">🔔</span>
                 <span className="font-medium">Add Reminder</span>
                 <span className="ml-auto text-sm bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full">
-                  {visibleReminders.filter(r => !r.completed).length}
+                  {safeVisibleReminders.filter(r => !r.completed).length || 0}
                 </span>
               </button>
               
@@ -131,28 +131,28 @@ export default function MobileSidebar({
                 <span className="text-xl">✅</span>
                 <span className="font-medium">Add To-do</span>
                 <span className="ml-auto text-sm bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-0.5 rounded-full">
-                  {visibleTodos.filter(t => !t.completed).length}
+                  {safeVisibleTodos.filter(t => !t.completed).length || 0}
                 </span>
               </button>
             </div>
 
             {/* Carpool Matches */}
-            {carpoolMatches.length > 0 && (
+            {safeCarpoolMatches && safeCarpoolMatches.length > 0 && (
               <div>
                 <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Carpool Matches</h3>
                 <div className="space-y-2">
-                  {carpoolMatches.slice(0, 3).map((match) => (
+                  {safeCarpoolMatches.slice(0, 3).map((match) => (
                     <div
-                      key={match.event.id}
+                      key={match.event?.id || Math.random()}
                       className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                       onClick={() => {
                         openCarpoolChat(match.event);
                         onClose();
                       }}
                     >
-                      <div className="font-medium text-sm">{match.event.title}</div>
+                      <div className="font-medium text-sm">{match.event?.title || 'Event'}</div>
                       <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {match.friends.length} friend{match.friends.length > 1 ? 's' : ''} attending
+                        {(match.friends?.length || 0)} friend{(match.friends?.length || 0) !== 1 ? 's' : ''} attending
                       </div>
                     </div>
                   ))}
@@ -165,10 +165,10 @@ export default function MobileSidebar({
               {/* Reminders */}
               <div>
                 <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Active Reminders ({visibleReminders.filter(r => !r.completed).length})
+                  Active Reminders ({safeVisibleReminders.filter(r => !r.completed).length || 0})
                 </h3>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {visibleReminders.filter(r => !r.completed).slice(0, 3).map((reminder) => (
+                  {safeVisibleReminders.filter(r => !r.completed).slice(0, 3).map((reminder) => (
                     <div 
                       key={reminder.id} 
                       className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg flex items-center gap-2"
@@ -188,10 +188,10 @@ export default function MobileSidebar({
               {/* To-dos */}
               <div>
                 <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Active To-dos ({visibleTodos.filter(t => !t.completed).length})
+                  Active To-dos ({safeVisibleTodos.filter(t => !t.completed).length || 0})
                 </h3>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {visibleTodos.filter(t => !t.completed).slice(0, 3).map((todo) => (
+                  {safeVisibleTodos.filter(t => !t.completed).slice(0, 3).map((todo) => (
                     <div 
                       key={todo.id} 
                       className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-2"
