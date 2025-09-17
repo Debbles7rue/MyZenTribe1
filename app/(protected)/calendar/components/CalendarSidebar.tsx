@@ -25,10 +25,10 @@ interface CalendarSidebarProps {
 }
 
 export default function CalendarSidebar({
-  carpoolMatches = [],
-  friends = [],
-  visibleReminders = [],
-  visibleTodos = [],
+  carpoolMatches,
+  friends,
+  visibleReminders,
+  visibleTodos,
   showRemindersList,
   setShowRemindersList,
   showTodosList,
@@ -44,11 +44,6 @@ export default function CalendarSidebar({
   onDeleteItem,
   userStats
 }: CalendarSidebarProps) {
-  // Safe array checks
-  const safeCarpoolMatches = carpoolMatches || [];
-  const safeVisibleReminders = visibleReminders || [];
-  const safeVisibleTodos = visibleTodos || [];
-
   return (
     <div className="w-80 shrink-0 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
       
@@ -85,28 +80,28 @@ export default function CalendarSidebar({
       )}
       
       {/* Carpool Matches Section */}
-      {safeCarpoolMatches && safeCarpoolMatches.length > 0 && (
+      {carpoolMatches.length > 0 && (
         <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-green-800 dark:text-green-300 flex items-center gap-2">
               <span>🚗</span> Carpool Matches
             </h3>
             <span className="text-xs bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded-full">
-              {safeCarpoolMatches.length} available
+              {carpoolMatches.length} available
             </span>
           </div>
           <div className="space-y-2">
-            {safeCarpoolMatches.slice(0, 3).map((match) => (
+            {carpoolMatches.slice(0, 3).map((match) => (
               <div
-                key={match.event?.id || Math.random()}
+                key={match.event.id}
                 className="bg-gradient-to-br from-white to-green-50 dark:from-gray-800 dark:to-green-900/20 rounded-lg p-3 cursor-pointer hover:shadow-md transition-all"
                 onClick={() => openCarpoolChat(match.event)}
               >
                 <div className="font-medium text-sm text-gray-800 dark:text-gray-200">
-                  {match.event?.title || 'Event'}
+                  {match.event.title}
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  {(match.friends?.length || 0)} friend{(match.friends?.length || 0) !== 1 ? 's' : ''} attending
+                  {match.friends.length} friend{match.friends.length > 1 ? 's' : ''} attending
                 </div>
               </div>
             ))}
@@ -124,7 +119,7 @@ export default function CalendarSidebar({
             <span className={`transform transition-transform ${showRemindersList ? 'rotate-90' : ''}`}>▶</span>
             Reminders
             <span className="text-xs bg-amber-100 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-2 py-1 rounded-full">
-              {safeVisibleReminders.filter(r => !r.completed).length || 0}
+              {visibleReminders.filter(r => !r.completed).length}
             </span>
           </button>
           <button
@@ -150,10 +145,10 @@ export default function CalendarSidebar({
               Show completed
             </label>
             
-            {safeVisibleReminders.length === 0 ? (
+            {visibleReminders.length === 0 ? (
               <p className="text-sm text-gray-400 italic">No reminders yet</p>
             ) : (
-              safeVisibleReminders.map((reminder) => (
+              visibleReminders.map((reminder) => (
                 <div
                   key={reminder.id}
                   draggable={!reminder.completed}
@@ -212,7 +207,7 @@ export default function CalendarSidebar({
             <span className={`transform transition-transform ${showTodosList ? 'rotate-90' : ''}`}>▶</span>
             To-dos
             <span className="text-xs bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded-full">
-              {safeVisibleTodos.filter(t => !t.completed).length || 0}
+              {visibleTodos.filter(t => !t.completed).length}
             </span>
           </button>
           <button
@@ -228,10 +223,10 @@ export default function CalendarSidebar({
         
         {showTodosList && (
           <div className="space-y-2">
-            {safeVisibleTodos.length === 0 ? (
+            {visibleTodos.length === 0 ? (
               <p className="text-sm text-gray-400 italic">No to-dos yet</p>
             ) : (
-              safeVisibleTodos.map((todo) => (
+              visibleTodos.map((todo) => (
                 <div
                   key={todo.id}
                   draggable={!todo.completed}
@@ -277,7 +272,7 @@ export default function CalendarSidebar({
               ))
             )}
             
-            {!safeVisibleTodos.every(t => t.completed) && safeVisibleTodos.length > 0 && (
+            {!visibleTodos.every(t => t.completed) && visibleTodos.length > 0 && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
                 Drag items to calendar to schedule them
               </p>
