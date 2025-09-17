@@ -7,33 +7,11 @@ import CalendarGrid, { type UiEvent } from "@/components/CalendarGrid";
 import EventDetails from "@/components/EventDetails";
 import CreateEventModal from "@/components/CreateEventModal";
 import CalendarThemeSelector from "@/components/CalendarThemeSelector";
-import WeatherBadge from "@/components/WeatherBadge";
 import { useToast } from "@/components/ToastProvider";
-import { useMoon } from "@/lib/useMoon";
 import type { DBEvent, Visibility } from "@/lib/types";
 import type { View } from "react-big-calendar";
-import {
-  startOfDay,
-  endOfDay,
-  startOfMonth,
-  endOfMonth,
-  addDays,
-  addMonths,
-} from "date-fns";
 
-// Weather data interface
-interface WeatherData {
-  date: string;
-  temp: number;
-  tempMin: number;
-  tempMax: number;
-  condition: 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'stormy' | 'foggy' | 'partly-cloudy';
-  description: string;
-  humidity?: number;
-  windSpeed?: number;
-}
-
-// Friend interface (if you have friends features)
+// Friend interface
 interface Friend {
   friend_id: string;
   name: string;
@@ -68,15 +46,10 @@ export default function CalendarPage() {
   const [calendarMode, setCalendarMode] = useState<'my-calendar' | 'whats-happening'>('my-calendar');
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedBatchEvents, setSelectedBatchEvents] = useState<string[]>([]);
   
-  // Weather states
-  const [weatherEnabled, setWeatherEnabled] = useState(false);
-  const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('fahrenheit');
-  const [weatherAnimations, setWeatherAnimations] = useState(true);
-  
-  // Sidebar states (todos, reminders)
+  // Sidebar states
   const [todos, setTodos] = useState<TodoReminder[]>([]);
   const [reminders, setReminders] = useState<TodoReminder[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -90,7 +63,7 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   
-  // Friends states (if you have friends features)
+  // Friends states
   const [friends, setFriends] = useState<Friend[]>([]);
   const [carpoolMatches, setCarpoolMatches] = useState<any[]>([]);
   
@@ -119,9 +92,73 @@ export default function CalendarPage() {
     image_path: "",
   });
   
-  // Get moon events using the moon hook
-  const currentYear = date.getFullYear();
-  const moonEvents = useMoon(currentYear, showMoon);
+  // Generate moon events with proper Date objects
+  const moonEvents = useMemo(() => {
+    if (!showMoon) return [];
+    
+    const generateMoonEvents = (rangeStart: Date, rangeEnd: Date) => {
+      const base = Date.UTC(2000, 0, 6, 18, 14, 0);
+      const synodic = 29.530588853; // days
+      const quarter = synodic / 4;
+      
+      const start = rangeStart.getTime();
+      const end = rangeEnd.getTime();
+      const events: any[] = [];
+      
+      for (let t = base; t < end + synodic * 24 * 3600 * 1000; t += synodic * 24 * 3600 * 1000) {
+        const newMoon = new Date(t);
+        const firstQuarter = new Date(t + quarter * 24 * 3600 * 1000);
+        const fullMoon = new Date(t + 2 * quarter * 24 * 3600 * 1000);
+        const lastQuarter = new Date(t + 3 * quarter * 24 * 3600 * 1000);
+        
+        const phases = [
+          { date: newMoon, label: "New Moon", key: "moon-new" },
+          { date: firstQuarter, label: "First Quarter", key: "moon-first" },
+          { date: fullMoon, label: "Full Moon", key: "moon-full" },
+          { date: lastQuarter, label: "Last Quarter", key: "moon-last" },
+        ];
+        
+        for (const p of phases) {
+          const phaseStart = new Date(p.date.getFullYear(), p.date.getMonth(), p.date.getDate());
+          const phaseEnd = new Date(phaseStart);
+          phaseEnd.setDate(phaseEnd.getDate() + 1);
+          
+          if (phaseStart.getTime() >= start && phaseStart.getTime() <= end) {
+            events.push({
+              id: `moon-${p.key}-${phaseStart.toISOString()}`,
+              title: p.label,
+              start: phaseStart,
+              end: phaseEnd,
+              allDay: true,
+              resource: { moonPhase: p.key },
+            });
+          }
+        }
+      }
+      
+      return events;
+    };
+    
+    // Calculate range based on current view
+    let rangeStart: Date, rangeEnd: Date;
+    if (view === 'month') {
+      rangeStart = new Date(date.getFullYear(), date.getMonth(), 1);
+      rangeEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    } else if (view === 'week') {
+      const startOfWeek = new Date(date);
+      const day = startOfWeek.getDay();
+      startOfWeek.setDate(startOfWeek.getDate() - day);
+      rangeStart = startOfWeek;
+      rangeEnd = new Date(startOfWeek);
+      rangeEnd.setDate(rangeEnd.getDate() + 6);
+    } else {
+      rangeStart = new Date(date);
+      rangeEnd = new Date(date);
+      rangeEnd.setDate(rangeEnd.getDate() + 1);
+    }
+    
+    return generateMoonEvents(rangeStart, rangeEnd);
+  }, [showMoon, date, view]);
   
   // Detect mobile
   useEffect(() => {
@@ -138,106 +175,10 @@ export default function CalendarPage() {
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }, []);
   
-  // Weather functions
-  const mapWeatherCode = (code: number): WeatherData['condition'] => {
-    if (code === 0) return 'sunny';
-    if (code <= 3) return 'partly-cloudy';
-    if (code <= 48) return 'foggy';
-    if (code <= 67) return 'rainy';
-    if (code <= 77) return 'snowy';
-    if (code >= 95) return 'stormy';
-    return 'cloudy';
-  };
-  
-  const getWeatherDescription = (code: number): string => {
-    const descriptions: Record<number, string> = {
-      0: 'Clear sky',
-      1: 'Mainly clear',
-      2: 'Partly cloudy',
-      3: 'Overcast',
-      45: 'Foggy',
-      51: 'Light drizzle',
-      61: 'Slight rain',
-      71: 'Slight snow',
-      80: 'Rain showers',
-      95: 'Thunderstorm',
-    };
-    return descriptions[code] || 'Variable';
-  };
-  
-  const fetchWeatherData = useCallback(async () => {
-    if (!weatherEnabled) return;
-    
-    setWeatherLoading(true);
-    try {
-      // Get user location
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { 
-          timeout: 5000,
-          enableHighAccuracy: false 
-        });
-      });
-      
-      const { latitude, longitude } = position.coords;
-      const days = view === 'month' ? 30 : view === 'week' ? 7 : 1;
-      
-      // Fetch from Open-Meteo (free, no API key needed!)
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?` +
-        `latitude=${latitude}&longitude=${longitude}` +
-        `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,windspeed_10m_max` +
-        `&temperature_unit=${temperatureUnit === 'celsius' ? 'celsius' : 'fahrenheit'}` +
-        `&forecast_days=${days}` +
-        `&timezone=auto`
-      );
-      
-      const data = await response.json();
-      
-      if (data.daily) {
-        const weatherDays: WeatherData[] = data.daily.time.map((date: string, i: number) => ({
-          date,
-          temp: Math.round((data.daily.temperature_2m_max[i] + data.daily.temperature_2m_min[i]) / 2),
-          tempMin: Math.round(data.daily.temperature_2m_min[i]),
-          tempMax: Math.round(data.daily.temperature_2m_max[i]),
-          condition: mapWeatherCode(data.daily.weather_code[i]),
-          description: getWeatherDescription(data.daily.weather_code[i]),
-          windSpeed: Math.round(data.daily.windspeed_10m_max[i] || 0),
-        }));
-        
-        setWeatherData(weatherDays);
-      }
-    } catch (error) {
-      console.error('Weather fetch error:', error);
-      // Default to Greenville, TX if geolocation fails
-      try {
-        const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?` +
-          `latitude=33.1384&longitude=-96.1108` +
-          `&daily=temperature_2m_max,temperature_2m_min,weather_code` +
-          `&temperature_unit=${temperatureUnit === 'celsius' ? 'celsius' : 'fahrenheit'}` +
-          `&forecast_days=7&timezone=auto`
-        );
-        const data = await response.json();
-        // Process data same as above...
-      } catch {
-        showToast({ type: 'info', message: '📍 Weather unavailable' });
-      }
-    } finally {
-      setWeatherLoading(false);
-    }
-  }, [weatherEnabled, view, temperatureUnit, showToast]);
-  
   // Load user on mount
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
-  
-  // Load weather when enabled
-  useEffect(() => {
-    if (weatherEnabled) {
-      fetchWeatherData();
-    }
-  }, [weatherEnabled, fetchWeatherData]);
   
   // Load calendar events
   const loadCalendar = useCallback(async () => {
@@ -257,7 +198,14 @@ export default function CalendarPage() {
       
       if (error) throw error;
       
-      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time);
+      // Ensure all events have valid date objects
+      const safe = (data || []).filter((e: any) => {
+        if (!e?.start_time || !e?.end_time) return false;
+        const start = new Date(e.start_time);
+        const end = new Date(e.end_time);
+        return !isNaN(start.getTime()) && !isNaN(end.getTime());
+      });
+      
       setCalendarEvents(safe);
     } catch (error: any) {
       console.error("Load calendar error:", error);
@@ -277,13 +225,15 @@ export default function CalendarPage() {
         .select("*")
         .eq('created_by', me)
         .eq('completed', false)
-        .order('due_date', { ascending: true });
+        .order('due_date', { ascending: true })
+        .limit(10);
       
       const { data: reminderData } = await supabase
         .from("reminders")
         .select("*")
         .eq('created_by', me)
-        .order('reminder_time', { ascending: true });
+        .order('reminder_time', { ascending: true })
+        .limit(10);
       
       setTodos((todoData || []).map(t => ({ ...t, type: 'todo' as const })));
       setReminders((reminderData || []).map(r => ({ ...r, type: 'reminder' as const })));
@@ -292,7 +242,7 @@ export default function CalendarPage() {
     }
   }, [me]);
   
-  // Load friends (if you have this feature)
+  // Load friends
   const loadFriends = useCallback(async () => {
     if (!me) return;
     
@@ -303,6 +253,13 @@ export default function CalendarPage() {
         .eq('user_id', me);
       
       setFriends(data || []);
+      
+      // Check for carpool matches if there are friends
+      if (data && data.length > 0) {
+        const carpoolFriends = data.filter((f: Friend) => f.carpool_flag);
+        // Here you'd check for matching events
+        setCarpoolMatches([]); // Placeholder
+      }
     } catch (error) {
       console.error("Load friends error:", error);
     }
@@ -333,9 +290,20 @@ export default function CalendarPage() {
   const onSelectEvent = useCallback((evt: UiEvent) => {
     const r = evt.resource as any;
     if (r?.moonPhase) return; // Ignore moon events
-    setSelected(r as DBEvent);
-    setDetailsOpen(true);
-  }, []);
+    
+    if (batchMode) {
+      // Batch selection mode
+      const id = r.id;
+      setSelectedBatchEvents(prev => 
+        prev.includes(id) 
+          ? prev.filter(eid => eid !== id)
+          : [...prev, id]
+      );
+    } else {
+      setSelected(r as DBEvent);
+      setDetailsOpen(true);
+    }
+  }, [batchMode]);
   
   const onDrop = async ({ event, start, end }: any) => {
     const r = (event.resource || {}) as DBEvent;
@@ -428,6 +396,8 @@ export default function CalendarPage() {
       resetForm();
       showToast({ type: 'success', message: '✨ Event created!' });
       loadCalendar();
+    } else {
+      showToast({ type: 'error', message: 'Failed to create event' });
     }
   };
   
@@ -453,6 +423,46 @@ export default function CalendarPage() {
       setSelected(null);
       resetForm();
       showToast({ type: 'success', message: '✨ Event updated!' });
+      loadCalendar();
+    } else {
+      showToast({ type: 'error', message: 'Failed to update event' });
+    }
+  };
+  
+  // Delete event
+  const deleteEvent = async (eventId: string) => {
+    if (!me) return;
+    
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", eventId)
+      .eq("created_by", me);
+    
+    if (!error) {
+      showToast({ type: 'success', message: 'Event deleted' });
+      loadCalendar();
+      setDetailsOpen(false);
+      setSelected(null);
+    } else {
+      showToast({ type: 'error', message: 'Failed to delete event' });
+    }
+  };
+  
+  // Batch delete
+  const batchDelete = async () => {
+    if (!me || selectedBatchEvents.length === 0) return;
+    
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .in("id", selectedBatchEvents)
+      .eq("created_by", me);
+    
+    if (!error) {
+      showToast({ type: 'success', message: `Deleted ${selectedBatchEvents.length} events` });
+      setSelectedBatchEvents([]);
+      setBatchMode(false);
       loadCalendar();
     }
   };
@@ -491,6 +501,38 @@ export default function CalendarPage() {
     });
   };
   
+  // Toggle todo completion
+  const toggleTodo = async (todoId: string, completed: boolean) => {
+    if (!me) return;
+    
+    const { error } = await supabase
+      .from("todos")
+      .update({ completed: !completed })
+      .eq("id", todoId)
+      .eq("created_by", me);
+    
+    if (!error) {
+      loadTodosAndReminders();
+    }
+  };
+  
+  // Delete todo/reminder
+  const deleteItem = async (itemId: string, type: 'todo' | 'reminder') => {
+    if (!me) return;
+    
+    const table = type === 'todo' ? 'todos' : 'reminders';
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq("id", itemId)
+      .eq("created_by", me);
+    
+    if (!error) {
+      showToast({ type: 'success', message: `${type === 'todo' ? 'Todo' : 'Reminder'} deleted` });
+      loadTodosAndReminders();
+    }
+  };
+  
   // Filtered events based on search and filters
   const filteredEvents = useMemo(() => {
     let events = calendarEvents;
@@ -498,7 +540,8 @@ export default function CalendarPage() {
     if (searchQuery) {
       events = events.filter(e => 
         e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        e.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.location?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
     
@@ -512,23 +555,8 @@ export default function CalendarPage() {
   }, [calendarEvents, searchQuery, selectedEventTypes]);
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-lavender-50 to-purple-100 relative">
-      {/* Weather animations overlay */}
-      {weatherAnimations && weatherEnabled && weatherData.length > 0 && (
-        <div className="fixed inset-0 pointer-events-none z-0">
-          {weatherData[0]?.condition === 'sunny' && (
-            <div className="absolute top-10 right-10 w-32 h-32 bg-yellow-300 rounded-full opacity-20 animate-pulse" />
-          )}
-          {weatherData[0]?.condition === 'cloudy' && (
-            <div className="absolute inset-0 bg-gray-200 opacity-10" />
-          )}
-          {weatherData[0]?.condition === 'rainy' && (
-            <div className="absolute inset-0 bg-blue-200 opacity-10" />
-          )}
-        </div>
-      )}
-      
-      <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-lavender-50 to-purple-100">
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
         <div className="mb-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg p-4">
           <div className="flex flex-col gap-4">
@@ -544,7 +572,7 @@ export default function CalendarPage() {
                   onClick={() => setCalendarMode('my-calendar')}
                   className={`px-4 py-2 rounded-lg font-medium transition-all ${
                     calendarMode === 'my-calendar'
-                      ? 'bg-purple-600 text-white'
+                      ? 'bg-purple-600 text-white shadow-lg'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -554,7 +582,7 @@ export default function CalendarPage() {
                   onClick={() => setCalendarMode('whats-happening')}
                   className={`px-4 py-2 rounded-lg font-medium transition-all ${
                     calendarMode === 'whats-happening'
-                      ? 'bg-purple-600 text-white'
+                      ? 'bg-purple-600 text-white shadow-lg'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -563,10 +591,12 @@ export default function CalendarPage() {
               </div>
               
               {/* Theme Selector */}
-              <CalendarThemeSelector
-                currentTheme={calendarTheme}
-                onThemeChange={setCalendarTheme}
-              />
+              {CalendarThemeSelector && (
+                <CalendarThemeSelector
+                  currentTheme={calendarTheme}
+                  onThemeChange={setCalendarTheme}
+                />
+              )}
             </div>
             
             {/* Controls Row */}
@@ -579,71 +609,57 @@ export default function CalendarPage() {
                   onChange={(e) => setShowMoon(e.target.checked)}
                   className="w-4 h-4 rounded accent-purple-600"
                 />
-                <span className="text-sm font-medium">🌙 Moon</span>
+                <span className="text-sm font-medium">🌙 Moon Phases</span>
               </label>
               
-              {/* Weather Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={weatherEnabled}
-                  onChange={(e) => setWeatherEnabled(e.target.checked)}
-                  className="w-4 h-4 rounded accent-purple-600"
-                />
-                <span className="text-sm font-medium">🌤️ Weather</span>
-              </label>
-              
-              {/* Weather Animations (if weather enabled) */}
-              {weatherEnabled && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={weatherAnimations}
-                    onChange={(e) => setWeatherAnimations(e.target.checked)}
-                    className="w-4 h-4 rounded accent-purple-600"
-                  />
-                  <span className="text-sm font-medium">✨ Animations</span>
-                </label>
+              {/* Carpool Button */}
+              {friends.some(f => f.carpool_flag) && (
+                <button className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium transition-all">
+                  🚗 Carpool
+                </button>
               )}
               
-              {/* Temperature Unit (if weather enabled) */}
-              {weatherEnabled && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setTemperatureUnit('fahrenheit')}
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      temperatureUnit === 'fahrenheit'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-200'
-                    }`}
-                  >
-                    °F
-                  </button>
-                  <button
-                    onClick={() => setTemperatureUnit('celsius')}
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      temperatureUnit === 'celsius'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-200'
-                    }`}
-                  >
-                    °C
-                  </button>
-                </div>
-              )}
-              
-              {/* Weather Badge */}
-              <WeatherBadge />
-              
-              {/* Analytics Button */}
-              <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-all">
-                📊 Analytics
+              {/* Coordinate Button */}
+              <button className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition-all">
+                🤝 Coordinate
               </button>
               
               {/* Templates Button */}
               <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-all">
                 📝 Templates
               </button>
+              
+              {/* Analytics Button */}
+              <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-all">
+                📊 Analytics
+              </button>
+              
+              {/* Batch Mode Toggle */}
+              {calendarMode === 'my-calendar' && (
+                <button
+                  onClick={() => {
+                    setBatchMode(!batchMode);
+                    setSelectedBatchEvents([]);
+                  }}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                    batchMode 
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                >
+                  {batchMode ? '✓ Batch' : '☐ Batch'}
+                </button>
+              )}
+              
+              {/* Batch Delete (if items selected) */}
+              {batchMode && selectedBatchEvents.length > 0 && (
+                <button
+                  onClick={batchDelete}
+                  className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+                >
+                  Delete {selectedBatchEvents.length} events
+                </button>
+              )}
               
               {/* Create Event Button */}
               <button
@@ -657,42 +673,17 @@ export default function CalendarPage() {
               </button>
             </div>
             
-            {/* Weather Forecast Strip (if enabled) */}
-            {weatherEnabled && weatherData.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {weatherData.slice(0, view === 'month' ? 5 : view === 'week' ? 7 : 1).map((day) => (
-                  <div
-                    key={day.date}
-                    className="flex-shrink-0 p-2 bg-white/80 rounded-lg border border-purple-200
-                             shadow-sm hover:shadow-md transition-all min-w-[100px]"
-                  >
-                    <div className="text-xs font-medium text-gray-600">
-                      {new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-xl">
-                        {day.condition === 'sunny' && '☀️'}
-                        {day.condition === 'partly-cloudy' && '⛅'}
-                        {day.condition === 'cloudy' && '☁️'}
-                        {day.condition === 'rainy' && '🌧️'}
-                        {day.condition === 'stormy' && '⛈️'}
-                        {day.condition === 'snowy' && '❄️'}
-                        {day.condition === 'foggy' && '🌫️'}
-                      </span>
-                      <div className="text-right">
-                        <div className="text-sm font-bold">{day.temp}°</div>
-                        <div className="text-xs text-gray-500">
-                          {day.tempMin}°/{day.tempMax}°
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-600 mt-1 capitalize">{day.description}</div>
-                  </div>
-                ))}
+            {/* Search Bar (if What's Happening mode) */}
+            {calendarMode === 'whats-happening' && (
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search events..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 pl-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
               </div>
             )}
           </div>
@@ -704,85 +695,126 @@ export default function CalendarPage() {
           {!isMobile && sidebarOpen && (
             <div className="w-64 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg p-4">
               <div className="space-y-4">
+                {/* Tab Navigation */}
+                <div className="flex gap-2 mb-4">
+                  <button className="flex-1 py-1 px-2 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium">
+                    Calendar
+                  </button>
+                  <button className="flex-1 py-1 px-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
+                    Reminders
+                  </button>
+                  <button className="flex-1 py-1 px-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
+                    To-Dos
+                  </button>
+                </div>
+                
                 {/* Reminders Section */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold text-gray-700">Reminders</h3>
-                    <button 
-                      className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200"
-                      onClick={() => {/* Add reminder logic */}}
-                    >
-                      + Add
-                    </button>
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+                      {reminders.length}
+                    </span>
                   </div>
                   <div className="space-y-2">
-                    {reminders.slice(0, 5).map((reminder) => (
-                      <div
-                        key={reminder.id}
-                        draggable
-                        onDragStart={() => {
-                          setDragType('reminder');
-                          setDraggedItem(reminder);
-                        }}
-                        className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg cursor-move
-                                 hover:shadow-md transition-all text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>⏰</span>
-                          <span className="truncate">{reminder.title}</span>
+                    {reminders.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No reminders</p>
+                    ) : (
+                      reminders.slice(0, 5).map((reminder) => (
+                        <div
+                          key={reminder.id}
+                          draggable={!isMobile}
+                          onDragStart={() => {
+                            setDragType('reminder');
+                            setDraggedItem(reminder);
+                          }}
+                          className="group p-2 bg-yellow-50 border border-yellow-200 rounded-lg cursor-move
+                                   hover:shadow-md transition-all text-sm relative"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>⏰</span>
+                            <span className="truncate flex-1">{reminder.title}</span>
+                            <button
+                              onClick={() => deleteItem(reminder.id, 'reminder')}
+                              className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
+                  {!isMobile && reminders.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-2 italic">
+                      Drag to calendar to schedule
+                    </p>
+                  )}
                 </div>
                 
                 {/* To-Dos Section */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold text-gray-700">To-Dos</h3>
-                    <button 
-                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                      onClick={() => {/* Add todo logic */}}
-                    >
-                      + Add
-                    </button>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                      {todos.filter(t => !t.completed).length}
+                    </span>
                   </div>
                   <div className="space-y-2">
-                    {todos.slice(0, 5).map((todo) => (
-                      <div
-                        key={todo.id}
-                        draggable
-                        onDragStart={() => {
-                          setDragType('todo');
-                          setDraggedItem(todo);
-                        }}
-                        className="p-2 bg-green-50 border border-green-200 rounded-lg cursor-move
-                                 hover:shadow-md transition-all text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="checkbox" 
-                            checked={todo.completed}
-                            onChange={() => {/* Toggle logic */}}
-                            className="w-3 h-3"
-                          />
-                          <span className={`truncate ${todo.completed ? 'line-through' : ''}`}>
-                            {todo.title}
-                          </span>
+                    {todos.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No todos</p>
+                    ) : (
+                      todos.slice(0, 5).map((todo) => (
+                        <div
+                          key={todo.id}
+                          draggable={!isMobile && !todo.completed}
+                          onDragStart={() => {
+                            if (!todo.completed) {
+                              setDragType('todo');
+                              setDraggedItem(todo);
+                            }
+                          }}
+                          className={`group p-2 bg-green-50 border border-green-200 rounded-lg
+                                   hover:shadow-md transition-all text-sm relative
+                                   ${!todo.completed && !isMobile ? 'cursor-move' : ''}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              checked={todo.completed || false}
+                              onChange={() => toggleTodo(todo.id, todo.completed || false)}
+                              className="w-3 h-3"
+                            />
+                            <span className={`truncate flex-1 ${todo.completed ? 'line-through text-gray-500' : ''}`}>
+                              {todo.title}
+                            </span>
+                            <button
+                              onClick={() => deleteItem(todo.id, 'todo')}
+                              className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
+                  {!isMobile && todos.filter(t => !t.completed).length > 0 && (
+                    <p className="text-xs text-gray-500 mt-2 italic">
+                      Drag to calendar to schedule
+                    </p>
+                  )}
                 </div>
                 
-                {/* Carpool Matches (if any) */}
+                {/* Carpool Matches */}
                 {carpoolMatches.length > 0 && (
                   <div>
-                    <h3 className="font-semibold text-gray-700 mb-2">🚗 Carpool Matches</h3>
+                    <h3 className="font-semibold text-gray-700 mb-2">🚗 Carpool Opportunities</h3>
                     <div className="space-y-2">
                       {carpoolMatches.map((match) => (
                         <div key={match.id} className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                          {match.name}
+                          <div className="font-medium">{match.eventTitle}</div>
+                          <div className="text-xs text-gray-600">{match.friendNames}</div>
                         </div>
                       ))}
                     </div>
@@ -793,12 +825,12 @@ export default function CalendarPage() {
           )}
           
           {/* Calendar Grid */}
-          <div className={`flex-1 ${weatherEnabled ? 'weather-enhanced' : ''}`}>
+          <div className="flex-1">
             <CalendarGrid
               dbEvents={filteredEvents}
               moonEvents={moonEvents}
               showMoon={showMoon}
-              showWeather={false} // We handle weather display externally
+              showWeather={false}
               theme={calendarTheme}
               date={date}
               setDate={setDate}
@@ -823,17 +855,17 @@ export default function CalendarPage() {
                 onClick={() => setMobileMenuOpen(true)}
                 className="p-2 text-purple-600"
               >
-                📋 Lists
+                <span className="text-xs">📋 Lists</span>
               </button>
-              <button className="p-2 text-purple-600">
-                🌙 {showMoon ? 'Hide' : 'Show'} Moon
-              </button>
-              <button className="p-2 text-purple-600">
-                🌤️ Weather
+              <button 
+                onClick={() => setShowMoon(!showMoon)}
+                className="p-2 text-purple-600"
+              >
+                <span className="text-xs">🌙 Moon</span>
               </button>
               <button 
                 onClick={() => setOpenCreate(true)}
-                className="p-2 bg-purple-600 text-white rounded-full"
+                className="p-2 bg-purple-600 text-white rounded-full px-4"
               >
                 +
               </button>
@@ -848,15 +880,59 @@ export default function CalendarPage() {
               className="fixed inset-0 bg-black/50" 
               onClick={() => setMobileMenuOpen(false)} 
             />
-            <div className="fixed left-0 top-0 h-full w-80 bg-white shadow-xl overflow-y-auto p-4">
-              {/* Mobile sidebar content */}
-              <button 
-                onClick={() => setMobileMenuOpen(false)}
-                className="mb-4 text-gray-600"
-              >
-                ← Close
-              </button>
-              {/* Copy sidebar content here for mobile */}
+            <div className="fixed left-0 top-0 h-full w-80 bg-white shadow-xl overflow-y-auto">
+              <div className="p-4">
+                <button 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="mb-4 text-gray-600 text-lg"
+                >
+                  ← Close
+                </button>
+                
+                {/* Mobile Reminders */}
+                <div className="mb-6">
+                  <h3 className="font-semibold text-gray-700 mb-3">Reminders</h3>
+                  {reminders.map((reminder) => (
+                    <div key={reminder.id} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-2">
+                      <div className="flex items-center gap-2">
+                        <span>⏰</span>
+                        <span className="flex-1">{reminder.title}</span>
+                        <button
+                          onClick={() => deleteItem(reminder.id, 'reminder')}
+                          className="text-red-500"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Mobile To-Dos */}
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3">To-Dos</h3>
+                  {todos.map((todo) => (
+                    <div key={todo.id} className="p-3 bg-green-50 border border-green-200 rounded-lg mb-2">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          checked={todo.completed || false}
+                          onChange={() => toggleTodo(todo.id, todo.completed || false)}
+                        />
+                        <span className={`flex-1 ${todo.completed ? 'line-through' : ''}`}>
+                          {todo.title}
+                        </span>
+                        <button
+                          onClick={() => deleteItem(todo.id, 'todo')}
+                          className="text-red-500"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -869,6 +945,7 @@ export default function CalendarPage() {
             setSelected(null);
           }}
           onEdit={handleEdit}
+          onDelete={() => selected && deleteEvent(selected.id)}
           isOwner={selected?.created_by === me}
         />
         
@@ -900,31 +977,6 @@ export default function CalendarPage() {
           isEdit={true}
         />
       </div>
-      
-      {/* Weather-based calendar styling */}
-      {weatherEnabled && weatherData.length > 0 && (
-        <style jsx>{`
-          .weather-enhanced .rbc-today {
-            background: ${
-              weatherData[0]?.condition === 'sunny'
-                ? 'linear-gradient(135deg, rgba(254,240,138,0.1) 0%, rgba(163,230,253,0.1) 100%)'
-                : weatherData[0]?.condition === 'rainy'
-                ? 'linear-gradient(135deg, rgba(203,213,225,0.1) 0%, rgba(100,116,139,0.1) 100%)'
-                : 'rgba(139, 92, 246, 0.08)'
-            } !important;
-          }
-          
-          .weather-enhanced .calendar-wrapper {
-            box-shadow: ${
-              weatherData[0]?.condition === 'sunny'
-                ? '0 0 40px rgba(255, 204, 0, 0.15)'
-                : weatherData[0]?.condition === 'rainy'
-                ? '0 0 40px rgba(100, 150, 200, 0.15)'
-                : '0 0 30px rgba(139, 92, 246, 0.1)'
-            };
-          }
-        `}</style>
-      )}
     </div>
   );
 }
