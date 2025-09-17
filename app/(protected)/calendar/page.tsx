@@ -1,802 +1,930 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import dynamic from "next/dynamic";
-import type { View } from "react-big-calendar";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import CalendarGrid, { type UiEvent } from "@/components/CalendarGrid";
+import EventDetails from "@/components/EventDetails";
+import CreateEventModal from "@/components/CreateEventModal";
+import CalendarThemeSelector from "@/components/CalendarThemeSelector";
+import WeatherBadge from "@/components/WeatherBadge";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
+import type { DBEvent, Visibility } from "@/lib/types";
+import type { View } from "react-big-calendar";
+import {
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  endOfMonth,
+  addDays,
+  addMonths,
+} from "date-fns";
 
-// Import our modular components
-import { useCalendarData } from "./hooks/useCalendarData";
-import { useCalendarActions } from "./hooks/useCalendarActions";
-import { useSwipeGestures } from "./hooks/useSwipeGestures";
-import { useVoiceCommands } from "./hooks/useVoiceCommands";
-import { useNotifications } from "./hooks/useNotifications";
-import { useGameification } from "./hooks/useGameification";
-import CalendarHeader from "./components/CalendarHeader";
-import CalendarSidebar from "./components/CalendarSidebar";
-import MobileSidebar from "./components/MobileSidebar";
-import FeedView from "./components/FeedView";
-import CalendarModals from "./components/CalendarModals";
-import MobileQuickActions from "./components/MobileQuickActions";
-import FloatingActionButton from "./components/FloatingActionButton";
-import MoodTracker from "./components/MoodTracker";
-import DarkModeToggle from "./components/DarkModeToggle";
-import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
+// Weather data interface
+interface WeatherData {
+  date: string;
+  temp: number;
+  tempMin: number;
+  tempMax: number;
+  condition: 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'stormy' | 'foggy' | 'partly-cloudy';
+  description: string;
+  humidity?: number;
+  windSpeed?: number;
+}
 
-// Dynamic import for CalendarGrid to prevent SSR issues
-const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
-  ssr: false,
-  loading: () => (
-    <div className="card p-3">
-      <div style={{ height: "680px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-4"></div>
-          <div className="space-y-3">
-            <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: 7 }).map((_, i) => (
-                <div key={i} className="h-8 bg-gray-200 dark:bg-gray-700 rounded"></div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: 35 }).map((_, i) => (
-                <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 rounded"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-});
+// Friend interface (if you have friends features)
+interface Friend {
+  friend_id: string;
+  name: string;
+  avatar_url?: string;
+  carpool_flag?: boolean;
+}
+
+// Todo/Reminder interfaces
+interface TodoReminder {
+  id: string;
+  title: string;
+  due_date?: string;
+  completed?: boolean;
+  type: 'todo' | 'reminder';
+  created_by: string;
+}
 
 export default function CalendarPage() {
-  // ===== CORE STATE =====
-  const [mode, setMode] = useState<Mode>("my");
+  const { showToast } = useToast();
+  
+  // Core calendar states
+  const [me, setMe] = useState<string | null>(null);
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
-  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
-  const [showMoon, setShowMoon] = useState(true);
-  const [showWeather, setShowWeather] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<DBEvent[]>([]);
+  const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
-  const [showMoodTracker, setShowMoodTracker] = useState(false);
-  const [batchMode, setBatchMode] = useState(false);
-  const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
-  const [gamificationEnabled, setGamificationEnabled] = useState(false); // Gamification is now optional
   
-  // ===== MODAL STATES =====
+  // Calendar features states
+  const [showMoon, setShowMoon] = useState(true);
+  const [calendarTheme, setCalendarTheme] = useState<string>("default");
+  const [calendarMode, setCalendarMode] = useState<'my-calendar' | 'whats-happening'>('my-calendar');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
+  
+  // Weather states
+  const [weatherEnabled, setWeatherEnabled] = useState(false);
+  const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('fahrenheit');
+  const [weatherAnimations, setWeatherAnimations] = useState(true);
+  
+  // Sidebar states (todos, reminders)
+  const [todos, setTodos] = useState<TodoReminder[]>([]);
+  const [reminders, setReminders] = useState<TodoReminder[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [dragType, setDragType] = useState<'none' | 'reminder' | 'todo'>('none');
+  const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
+  
+  // Modal states
   const [openCreate, setOpenCreate] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [selected, setSelected] = useState<DBEvent | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showMeetingCoordinator, setShowMeetingCoordinator] = useState(false);
-  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  const [showCarpoolChat, setShowCarpoolChat] = useState(false);
-  const [quickModalOpen, setQuickModalOpen] = useState(false);
-  const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
-  const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
-  const [showTimeBlocking, setShowTimeBlocking] = useState(false);
-
-  // ===== SIDEBAR STATES =====
-  const [showCompletedItems, setShowCompletedItems] = useState(false);
-  const [showRemindersList, setShowRemindersList] = useState(true);
-  const [showTodosList, setShowTodosList] = useState(true);
-  const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
-  const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
-
-  // ===== REFS FOR MOBILE INTERACTIONS =====
-  const calendarRef = useRef<HTMLDivElement>(null);
-  const pullToRefreshRef = useRef<HTMLDivElement>(null);
-  const lastVibrationTime = useRef(0);
-
-  // ===== TOAST & MOON =====
-  const { showToast } = useToast();
-  const moonEvents = useMoon(date, view);
-
-  // ===== CUSTOM HOOKS FOR DATA & ACTIONS =====
-  const {
-    me,
-    events,
-    loading,
-    feed,
-    selected,
-    setSelected,
-    selectedFeedEvent,
-    setSelectedFeedEvent,
-    reminders,
-    todos,
-    friends,
-    carpoolMatches,
-    selectedCarpoolEvent,
-    setSelectedCarpoolEvent,
-    selectedCarpoolFriends,
-    setSelectedCarpoolFriends,
-    form,
-    setForm,
-    quickModalForm,
-    setQuickModalForm,
-    loadCalendar,
-    loadFeed,
-    resetForm
-  } = useCalendarData();
-
-  const {
-    handleCreateEvent,
-    handleUpdateEvent,
-    handleDeleteEvent,
-    handleExternalDrop,
-    handleApplyTemplate,
-    handleToggleComplete,
-    handleDeleteItem,
-    handleShowInterest,
-    handleRSVP,
-    dismissFeedEvent,
-    createQuickItem,
-    createCarpoolGroup,
-    onDrop,
-    onResize
-  } = useCalendarActions({
-    me,
-    form,
-    selected,
-    quickModalForm,
-    quickModalType,
-    draggedItem,
-    selectedCarpoolFriends,
-    friends,
-    showToast,
-    loadCalendar,
-    resetForm,
-    setOpenCreate,
-    setOpenEdit,
-    setQuickModalOpen,
-    setShowCarpoolChat,
-    setQuickModalForm,
-    setSelected,
-    setDraggedItem,
-    setDragType,
-    setSelectedCarpoolFriends
+  
+  // Friends states (if you have friends features)
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [carpoolMatches, setCarpoolMatches] = useState<any[]>([]);
+  
+  // Form state
+  const [form, setForm] = useState<{
+    title: string;
+    description: string;
+    location: string;
+    start: string;
+    end: string;
+    visibility: Visibility;
+    event_type: string;
+    community_id: string;
+    source: "personal" | "business";
+    image_path: string;
+  }>({
+    title: "",
+    description: "",
+    location: "",
+    start: "",
+    end: "",
+    visibility: "private",
+    event_type: "",
+    community_id: "",
+    source: "personal",
+    image_path: "",
   });
-
-  // ===== GAMIFICATION HOOKS (OPTIONAL) =====
-  const { 
-    userStats, 
-    checkAchievements, 
-    addPoints,
-    showConfetti 
-  } = useGameification(gamificationEnabled ? me : null);
-
-  // ===== NOTIFICATION HOOKS =====
-  useNotifications(reminders, todos, events, showToast);
-
-  // ===== MOBILE DETECTION & DARK MODE =====
+  
+  // Get moon events using the moon hook
+  const currentYear = date.getFullYear();
+  const moonEvents = useMoon(currentYear, showMoon);
+  
+  // Detect mobile
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      setIsMobile(window.innerWidth < 768);
     };
-    
-    const checkDarkMode = () => {
-      const hour = new Date().getHours();
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const isEvening = hour >= 18 || hour < 6;
-      setDarkMode(prefersDark || isEvening);
-    };
-    
     checkMobile();
-    checkDarkMode();
-    
     window.addEventListener('resize', checkMobile);
-    const darkModeInterval = setInterval(checkDarkMode, 60000); // Check every minute
-    
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      clearInterval(darkModeInterval);
-    };
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // ===== APPLY DARK MODE CLASS =====
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
-
-  // ===== HAPTIC FEEDBACK =====
-  const vibrate = useCallback(() => {
-    if (!isMobile) return;
-    
-    const now = Date.now();
-    if (now - lastVibrationTime.current < 50) return; // Debounce
-    
-    if ('vibrate' in navigator) {
-      navigator.vibrate(10); // Short haptic feedback
-      lastVibrationTime.current = now;
-    }
-  }, [isMobile]);
-
-  // ===== FORMAT DATE FOR TOAST =====
-  const formatDateForToast = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
+  
+  // Helper function for date formatting
+  const toLocalInput = useCallback((d: Date) => {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }, []);
+  
+  // Weather functions
+  const mapWeatherCode = (code: number): WeatherData['condition'] => {
+    if (code === 0) return 'sunny';
+    if (code <= 3) return 'partly-cloudy';
+    if (code <= 48) return 'foggy';
+    if (code <= 67) return 'rainy';
+    if (code <= 77) return 'snowy';
+    if (code >= 95) return 'stormy';
+    return 'cloudy';
   };
-
-  // ===== MOBILE SWIPE GESTURES =====
-  const swipeHandlers = useSwipeGestures({
-    onSwipeLeft: () => {
-      if (!isMobile) return;
-      vibrate();
-      const newDate = new Date(date);
-      if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
-      else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
-      else newDate.setDate(newDate.getDate() + 1);
-      setDate(newDate);
-      showToast({ type: 'info', message: `📅 ${formatDateForToast(newDate)}` });
-    },
-    onSwipeRight: () => {
-      if (!isMobile) return;
-      vibrate();
-      const newDate = new Date(date);
-      if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
-      else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
-      else newDate.setDate(newDate.getDate() - 1);
-      setDate(newDate);
-      showToast({ type: 'info', message: `📅 ${formatDateForToast(newDate)}` });
-    },
-    onSwipeUp: () => {
-      if (!isMobile) return;
-      vibrate();
-      setOpenCreate(true);
-    },
-    onSwipeDown: async () => {
-      if (!isMobile || isRefreshing) return;
-      await handlePullToRefresh();
-    }
-  });
-
-  // ===== VOICE COMMANDS =====
-  const { isListening, startListening } = useVoiceCommands({
-    onCommand: (command: string) => {
-      const lower = command.toLowerCase();
-      
-      if (lower.includes('create') || lower.includes('add')) {
-        if (lower.includes('meeting') || lower.includes('event')) {
-          setOpenCreate(true);
-        } else if (lower.includes('reminder')) {
-          setQuickModalType('reminder');
-          setQuickModalOpen(true);
-        } else if (lower.includes('todo') || lower.includes('task')) {
-          setQuickModalType('todo');
-          setQuickModalOpen(true);
-        }
-        vibrate();
-      } else if (lower.includes('next')) {
-        const newDate = new Date(date);
-        if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
-        else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
-        else newDate.setDate(newDate.getDate() + 1);
-        setDate(newDate);
-        vibrate();
-      } else if (lower.includes('previous') || lower.includes('back')) {
-        const newDate = new Date(date);
-        if (view === 'month') newDate.setMonth(newDate.getMonth() - 1);
-        else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
-        else newDate.setDate(newDate.getDate() - 1);
-        setDate(newDate);
-        vibrate();
-      } else if (lower.includes('today')) {
-        setDate(new Date());
-        vibrate();
-      } else if (lower.includes('week')) {
-        setView('week');
-        vibrate();
-      } else if (lower.includes('month')) {
-        setView('month');
-        vibrate();
-      } else if (lower.includes('day')) {
-        setView('day');
-        vibrate();
-      }
-    }
-  });
-
-  // ===== PULL TO REFRESH =====
-  const handlePullToRefresh = useCallback(async () => {
-    if (!isMobile || isRefreshing) return;
+  
+  const getWeatherDescription = (code: number): string => {
+    const descriptions: Record<number, string> = {
+      0: 'Clear sky',
+      1: 'Mainly clear',
+      2: 'Partly cloudy',
+      3: 'Overcast',
+      45: 'Foggy',
+      51: 'Light drizzle',
+      61: 'Slight rain',
+      71: 'Slight snow',
+      80: 'Rain showers',
+      95: 'Thunderstorm',
+    };
+    return descriptions[code] || 'Variable';
+  };
+  
+  const fetchWeatherData = useCallback(async () => {
+    if (!weatherEnabled) return;
     
-    setIsRefreshing(true);
-    vibrate();
-    
+    setWeatherLoading(true);
     try {
-      await loadCalendar();
-      if (mode === 'whats') await loadFeed();
-      
-      showToast({ 
-        type: 'success', 
-        message: '✨ Calendar refreshed!',
-        duration: 2000
+      // Get user location
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { 
+          timeout: 5000,
+          enableHighAccuracy: false 
+        });
       });
       
-      // Add points for refresh if gamification is enabled
-      if (gamificationEnabled) {
-        addPoints(5, 'refresh');
+      const { latitude, longitude } = position.coords;
+      const days = view === 'month' ? 30 : view === 'week' ? 7 : 1;
+      
+      // Fetch from Open-Meteo (free, no API key needed!)
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?` +
+        `latitude=${latitude}&longitude=${longitude}` +
+        `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,windspeed_10m_max` +
+        `&temperature_unit=${temperatureUnit === 'celsius' ? 'celsius' : 'fahrenheit'}` +
+        `&forecast_days=${days}` +
+        `&timezone=auto`
+      );
+      
+      const data = await response.json();
+      
+      if (data.daily) {
+        const weatherDays: WeatherData[] = data.daily.time.map((date: string, i: number) => ({
+          date,
+          temp: Math.round((data.daily.temperature_2m_max[i] + data.daily.temperature_2m_min[i]) / 2),
+          tempMin: Math.round(data.daily.temperature_2m_min[i]),
+          tempMax: Math.round(data.daily.temperature_2m_max[i]),
+          condition: mapWeatherCode(data.daily.weather_code[i]),
+          description: getWeatherDescription(data.daily.weather_code[i]),
+          windSpeed: Math.round(data.daily.windspeed_10m_max[i] || 0),
+        }));
+        
+        setWeatherData(weatherDays);
       }
     } catch (error) {
-      showToast({ 
-        type: 'error', 
-        message: 'Failed to refresh' 
-      });
+      console.error('Weather fetch error:', error);
+      // Default to Greenville, TX if geolocation fails
+      try {
+        const response = await fetch(
+          `https://api.open-meteo.com/v1/forecast?` +
+          `latitude=33.1384&longitude=-96.1108` +
+          `&daily=temperature_2m_max,temperature_2m_min,weather_code` +
+          `&temperature_unit=${temperatureUnit === 'celsius' ? 'celsius' : 'fahrenheit'}` +
+          `&forecast_days=7&timezone=auto`
+        );
+        const data = await response.json();
+        // Process data same as above...
+      } catch {
+        showToast({ type: 'info', message: '📍 Weather unavailable' });
+      }
     } finally {
-      setIsRefreshing(false);
+      setWeatherLoading(false);
     }
-  }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, gamificationEnabled, addPoints]);
-
-  // ===== CALENDAR NAVIGATION =====
+  }, [weatherEnabled, view, temperatureUnit, showToast]);
+  
+  // Load user on mount
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
+  
+  // Load weather when enabled
+  useEffect(() => {
+    if (weatherEnabled) {
+      fetchWeatherData();
+    }
+  }, [weatherEnabled, fetchWeatherData]);
+  
+  // Load calendar events
+  const loadCalendar = useCallback(async () => {
+    if (!me) return;
+    setLoading(true);
+    
+    try {
+      let query = supabase.from("events").select("*");
+      
+      if (calendarMode === 'my-calendar') {
+        query = query.eq('created_by', me);
+      } else {
+        query = query.or(`created_by.eq.${me},visibility.in.(public,friends)`);
+      }
+      
+      const { data, error } = await query.order("start_time", { ascending: true });
+      
+      if (error) throw error;
+      
+      const safe = (data || []).filter((e: any) => e?.start_time && e?.end_time);
+      setCalendarEvents(safe);
+    } catch (error: any) {
+      console.error("Load calendar error:", error);
+      showToast({ type: 'error', message: 'Failed to load events' });
+    } finally {
+      setLoading(false);
+    }
+  }, [me, calendarMode, showToast]);
+  
+  // Load todos and reminders
+  const loadTodosAndReminders = useCallback(async () => {
+    if (!me) return;
+    
+    try {
+      const { data: todoData } = await supabase
+        .from("todos")
+        .select("*")
+        .eq('created_by', me)
+        .eq('completed', false)
+        .order('due_date', { ascending: true });
+      
+      const { data: reminderData } = await supabase
+        .from("reminders")
+        .select("*")
+        .eq('created_by', me)
+        .order('reminder_time', { ascending: true });
+      
+      setTodos((todoData || []).map(t => ({ ...t, type: 'todo' as const })));
+      setReminders((reminderData || []).map(r => ({ ...r, type: 'reminder' as const })));
+    } catch (error) {
+      console.error("Load todos/reminders error:", error);
+    }
+  }, [me]);
+  
+  // Load friends (if you have this feature)
+  const loadFriends = useCallback(async () => {
+    if (!me) return;
+    
+    try {
+      const { data } = await supabase
+        .from("friends")
+        .select("*")
+        .eq('user_id', me);
+      
+      setFriends(data || []);
+    } catch (error) {
+      console.error("Load friends error:", error);
+    }
+  }, [me]);
+  
+  // Load all data when user is ready
+  useEffect(() => {
+    if (me) {
+      loadCalendar();
+      loadTodosAndReminders();
+      loadFriends();
+    }
+  }, [me, loadCalendar, loadTodosAndReminders, loadFriends]);
+  
+  // Calendar event handlers
   const onSelectSlot = useCallback((slotInfo: any) => {
-    if (batchMode) return; // Disable slot selection in batch mode
+    const start = slotInfo.start || new Date();
+    const end = slotInfo.end || new Date(start.getTime() + 3600000);
     
-    // Add immediate feedback for mobile
-    if (isMobile) {
-      vibrate();
-    }
-    
-    // In month view, clicking/tapping a day should navigate to day view
-    if (view === 'month') {
-      setDate(slotInfo.start);
-      setView('day');
-      // Add toast notification for mobile users
-      if (isMobile) {
-        showToast({ 
-          type: 'info', 
-          message: `Viewing ${formatDateForToast(slotInfo.start)}`,
-          duration: 1500
-        });
-      }
-      return;
-    }
-    
-    // In week or day view, clicking a time slot should open the create modal
-    if (view === 'week' || view === 'day') {
-      const start = slotInfo.start || new Date();
-      const end = slotInfo.end || new Date(start.getTime() + 3600000);
-      
-      setForm(prev => ({
-        ...prev,
-        start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
-        end: new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-      }));
-      setOpenCreate(true);
-    }
-  }, [view, batchMode, isMobile, setForm, showToast, vibrate]);
-
-  const onSelectEvent = useCallback((evt: any) => {
+    setForm(prev => ({
+      ...prev,
+      start: toLocalInput(start),
+      end: toLocalInput(end)
+    }));
+    setOpenCreate(true);
+  }, [toLocalInput]);
+  
+  const onSelectEvent = useCallback((evt: UiEvent) => {
     const r = evt.resource as any;
-    if (r?.moonPhase) return;
-    
-    vibrate();
-    
-    // Handle batch mode selection
-    if (batchMode) {
-      const eventId = r?.id || evt.id;
-      setSelectedBatchEvents(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(eventId)) {
-          newSet.delete(eventId);
-        } else {
-          newSet.add(eventId);
-        }
-        return newSet;
-      });
+    if (r?.moonPhase) return; // Ignore moon events
+    setSelected(r as DBEvent);
+    setDetailsOpen(true);
+  }, []);
+  
+  const onDrop = async ({ event, start, end }: any) => {
+    const r = (event.resource || {}) as DBEvent;
+    if (!me || r.created_by !== me) {
+      showToast({ type: 'error', message: 'You can only move your own events' });
       return;
     }
     
-    // Normal event selection
-    if (r?.id) {
-      setSelected(r);
-      setDetailsOpen(true);
-    }
-  }, [batchMode, setSelected, vibrate]);
-
-  // ===== BATCH ACTIONS =====
-  const handleBatchDelete = useCallback(async () => {
-    if (selectedBatchEvents.size === 0) return;
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+      .eq("id", r.id);
     
-    if (confirm(`Delete ${selectedBatchEvents.size} events?`)) {
-      for (const eventId of selectedBatchEvents) {
-        await handleDeleteEvent(eventId);
-      }
-      
-      if (gamificationEnabled) {
-        showConfetti();
-        addPoints(selectedBatchEvents.size * 10, 'batch-delete');
-      }
-      setSelectedBatchEvents(new Set());
-      setBatchMode(false);
+    if (!error) {
+      showToast({ type: 'success', message: 'Event moved!' });
+      loadCalendar();
     }
-  }, [selectedBatchEvents, handleDeleteEvent, gamificationEnabled, showConfetti, addPoints]);
-
-  const handleBatchMove = useCallback((days: number) => {
-    if (selectedBatchEvents.size === 0) return;
-    
-    // Implementation for batch move
-    showToast({ 
-      type: 'success', 
-      message: `Moved ${selectedBatchEvents.size} events ${days > 0 ? 'forward' : 'backward'} ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
-    });
-    
-    if (gamificationEnabled) {
-      addPoints(selectedBatchEvents.size * 5, 'batch-move');
+  };
+  
+  const onResize = async ({ event, start, end }: any) => {
+    const r = (event.resource || {}) as DBEvent;
+    if (!me || r.created_by !== me) {
+      showToast({ type: 'error', message: 'You can only resize your own events' });
+      return;
     }
-    setSelectedBatchEvents(new Set());
-    setBatchMode(false);
-  }, [selectedBatchEvents, showToast, gamificationEnabled, addPoints]);
-
-  // ===== CARPOOL CHAT HELPER =====
-  const openCarpoolChat = useCallback((event: any) => {
-    setSelectedCarpoolEvent(event);
-    setShowCarpoolChat(true);
-  }, [setSelectedCarpoolEvent]);
-
-  // ===== FILTERED LISTS =====
-  const visibleReminders = useMemo(() => {
-    const safeReminders = reminders || [];
-    return showCompletedItems ? safeReminders : safeReminders.filter(r => !r.completed);
-  }, [reminders, showCompletedItems]);
-
-  const visibleTodos = useMemo(() => {
-    const safeTodos = todos || [];
-    return showCompletedItems ? safeTodos : safeTodos.filter(t => !t.completed);
-  }, [todos, showCompletedItems]);
-
-  const calendarEvents = useMemo(() => 
-    mode === 'my' ? (events || []) : [],
-    [mode, events]
-  );
-
-  // ===== HANDLE EDIT FROM DETAILS =====
-  const handleEditFromDetails = useCallback((event: any) => {
+    
+    const { error } = await supabase
+      .from("events")
+      .update({ start_time: start.toISOString(), end_time: end.toISOString() })
+      .eq("id", r.id);
+    
+    if (!error) {
+      showToast({ type: 'success', message: 'Event resized!' });
+      loadCalendar();
+    }
+  };
+  
+  // Handle external drop from sidebar
+  const onExternalDrop = useCallback(async (
+    info: { start: Date; end: Date; allDay?: boolean },
+    type: 'reminder' | 'todo'
+  ) => {
+    if (!draggedItem || !me) return;
+    
+    const payload = {
+      title: draggedItem.title,
+      description: `Created from ${type}`,
+      start_time: info.start.toISOString(),
+      end_time: info.end.toISOString(),
+      all_day: info.allDay || false,
+      event_type: type,
+      visibility: 'private' as Visibility,
+      created_by: me,
+      source: 'personal' as const,
+    };
+    
+    const { error } = await supabase.from("events").insert(payload);
+    
+    if (!error) {
+      showToast({ type: 'success', message: `${type === 'todo' ? 'Todo' : 'Reminder'} added to calendar!` });
+      loadCalendar();
+    }
+    
+    setDragType('none');
+    setDraggedItem(null);
+  }, [draggedItem, me, showToast, loadCalendar]);
+  
+  // Create event
+  const createEvent = async () => {
+    if (!me || !form.title || !form.start || !form.end) {
+      showToast({ type: 'error', message: 'Please fill required fields' });
+      return;
+    }
+    
+    const payload: any = {
+      title: form.title,
+      description: form.description || null,
+      location: form.location || null,
+      start_time: new Date(form.start).toISOString(),
+      end_time: new Date(form.end).toISOString(),
+      visibility: form.visibility,
+      created_by: me,
+      event_type: form.event_type || null,
+      source: form.source,
+    };
+    
+    const { error } = await supabase.from("events").insert(payload);
+    if (!error) {
+      setOpenCreate(false);
+      resetForm();
+      showToast({ type: 'success', message: '✨ Event created!' });
+      loadCalendar();
+    }
+  };
+  
+  // Update event
+  const updateEvent = async () => {
+    if (!selected || !me) return;
+    
+    const { error } = await supabase
+      .from("events")
+      .update({
+        title: form.title,
+        description: form.description || null,
+        location: form.location || null,
+        start_time: new Date(form.start).toISOString(),
+        end_time: new Date(form.end).toISOString(),
+        visibility: form.visibility,
+      })
+      .eq("id", selected.id)
+      .eq("created_by", me);
+    
+    if (!error) {
+      setOpenEdit(false);
+      setSelected(null);
+      resetForm();
+      showToast({ type: 'success', message: '✨ Event updated!' });
+      loadCalendar();
+    }
+  };
+  
+  // Handle edit
+  const handleEdit = (event: DBEvent) => {
     setSelected(event);
     setForm({
-      title: event.title || "",
-      description: event.description || "",
-      location: event.location || "",
-      start: new Date(event.start_time).toISOString().slice(0, 16),
-      end: new Date(event.end_time).toISOString().slice(0, 16),
+      title: event.title,
+      description: event.description || '',
+      location: event.location || '',
+      start: toLocalInput(new Date(event.start_time)),
+      end: toLocalInput(new Date(event.end_time)),
       visibility: event.visibility,
-      event_type: event.event_type || "",
-      community_id: event.community_id || "",
-      source: event.source || "personal",
-      image_path: event.image_path || "",
+      event_type: event.event_type || '',
+      community_id: event.community_id || '',
+      source: event.source || 'personal',
+      image_path: event.image_path || '',
     });
-    setOpenEdit(true);
     setDetailsOpen(false);
-    vibrate();
-  }, [setSelected, setForm, vibrate]);
-
+    setOpenEdit(true);
+  };
+  
+  const resetForm = () => {
+    setForm({
+      title: "",
+      description: "",
+      location: "",
+      start: "",
+      end: "",
+      visibility: "private",
+      event_type: "",
+      community_id: "",
+      source: "personal",
+      image_path: "",
+    });
+  };
+  
+  // Filtered events based on search and filters
+  const filteredEvents = useMemo(() => {
+    let events = calendarEvents;
+    
+    if (searchQuery) {
+      events = events.filter(e => 
+        e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    if (selectedEventTypes.length > 0) {
+      events = events.filter(e => 
+        selectedEventTypes.includes(e.event_type || 'default')
+      );
+    }
+    
+    return events;
+  }, [calendarEvents, searchQuery, selectedEventTypes]);
+  
   return (
-    <div 
-      className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 p-2 sm:p-4 relative transition-all duration-500"
-      {...(isMobile ? swipeHandlers : {})}
-    >
-      {/* Animated Background Blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob dark:opacity-30"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000 dark:opacity-30"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000 dark:opacity-30"></div>
-      </div>
-
-      <div className="relative z-10 max-w-[1600px] mx-auto">
-        
-        {/* Pull to Refresh Indicator */}
-        {isMobile && isRefreshing && (
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 mt-2 z-50">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-          </div>
-        )}
-        
-        {/* Header Component */}
-        <CalendarHeader
-          mode={mode}
-          setMode={setMode}
-          calendarTheme={calendarTheme}
-          setCalendarTheme={setCalendarTheme}
-          showMoon={showMoon}
-          setShowMoon={setShowMoon}
-          isMobile={isMobile}
-          setOpenCreate={setOpenCreate}
-          setMobileMenuOpen={setMobileMenuOpen}
-          setShowTemplates={setShowTemplates}
-          setShowAnalytics={setShowAnalytics}
-          setShowMeetingCoordinator={setShowMeetingCoordinator}
-          setShowShortcutsHelp={setShowShortcutsHelp}
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-          focusMode={focusMode}
-          setFocusMode={setFocusMode}
-          batchMode={batchMode}
-          setBatchMode={setBatchMode}
-          userStats={gamificationEnabled ? userStats : null}
-          isListening={isListening}
-          startListening={startListening}
-          gamificationEnabled={gamificationEnabled}
-          setGamificationEnabled={setGamificationEnabled}
-        />
-
-        {/* Mobile Quick Actions Bar */}
-        {isMobile && (
-          <MobileQuickActions
-            onMoodTrack={() => setShowMoodTracker(true)}
-            onPomodoro={() => setShowPomodoroTimer(true)}
-            onTimeBlock={() => setShowTimeBlocking(true)}
-            onVoiceCommand={startListening}
-            isListening={isListening}
-          />
-        )}
-
-        {/* Batch Mode Actions Bar */}
-        {batchMode && selectedBatchEvents.size > 0 && (
-          <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              {selectedBatchEvents.size} events selected
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleBatchMove(1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-all"
-              >
-                Move +1 day
-              </button>
-              <button
-                onClick={() => handleBatchMove(-1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-all"
-              >
-                Move -1 day
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-all"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Main Content Area */}
-        <div className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden ${
-          focusMode ? 'ring-4 ring-purple-500 ring-opacity-50' : ''
-        }`}>
-          <div className="flex gap-4 p-2 sm:p-4">
-            
-            {/* Desktop Sidebar - Shows only in "My Calendar" mode on desktop */}
-            {mode === 'my' && !isMobile && (
-              <CalendarSidebar
-                carpoolMatches={carpoolMatches || []}
-                friends={friends || []}
-                visibleReminders={visibleReminders || []}
-                visibleTodos={visibleTodos || []}
-                showRemindersList={showRemindersList}
-                setShowRemindersList={setShowRemindersList}
-                showTodosList={showTodosList}
-                setShowTodosList={setShowTodosList}
-                showCompletedItems={showCompletedItems}
-                setShowCompletedItems={setShowCompletedItems}
-                openCarpoolChat={openCarpoolChat}
-                setQuickModalType={setQuickModalType}
-                setQuickModalOpen={setQuickModalOpen}
-                onDragStart={(item: TodoReminder, type: 'reminder' | 'todo') => {
-                  setDraggedItem(item);
-                  setDragType(type);
-                }}
-                onDragEnd={() => {
-                  setDraggedItem(null);
-                  setDragType('none');
-                }}
-                onToggleComplete={handleToggleComplete}
-                onDeleteItem={handleDeleteItem}
-                userStats={gamificationEnabled ? userStats : null}
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-lavender-50 to-purple-100 relative">
+      {/* Weather animations overlay */}
+      {weatherAnimations && weatherEnabled && weatherData.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          {weatherData[0]?.condition === 'sunny' && (
+            <div className="absolute top-10 right-10 w-32 h-32 bg-yellow-300 rounded-full opacity-20 animate-pulse" />
+          )}
+          {weatherData[0]?.condition === 'cloudy' && (
+            <div className="absolute inset-0 bg-gray-200 opacity-10" />
+          )}
+          {weatherData[0]?.condition === 'rainy' && (
+            <div className="absolute inset-0 bg-blue-200 opacity-10" />
+          )}
+        </div>
+      )}
+      
+      <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
+        {/* Header */}
+        <div className="mb-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg p-4">
+          <div className="flex flex-col gap-4">
+            {/* Title and Mode Toggle */}
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Calendar Hub
+              </h1>
+              
+              {/* Mode Toggle */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCalendarMode('my-calendar')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    calendarMode === 'my-calendar'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  My Calendar
+                </button>
+                <button
+                  onClick={() => setCalendarMode('whats-happening')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    calendarMode === 'whats-happening'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  What's Happening
+                </button>
+              </div>
+              
+              {/* Theme Selector */}
+              <CalendarThemeSelector
+                currentTheme={calendarTheme}
+                onThemeChange={setCalendarTheme}
               />
-            )}
-
-            {/* Calendar or Feed View */}
-            <div className="flex-1" ref={calendarRef}>
-              {mode === 'whats' && feed && feed.length > 0 ? (
-                <FeedView
-                  feed={feed.filter((e: any) => !e._dismissed)}
-                  onDismiss={dismissFeedEvent}
-                  onInterested={handleShowInterest}
-                  onRSVP={handleRSVP}
-                  onShowDetails={(event) => {
-                    setSelectedFeedEvent(event);
-                    setDetailsOpen(true);
-                    vibrate();
-                  }}
-                  isMobile={isMobile}
-                />
-              ) : (
-                <CalendarGrid
-                  dbEvents={calendarEvents}
-                  moonEvents={moonEvents}
-                  showMoon={showMoon}
-                  showWeather={showWeather}
-                  theme={calendarTheme}
-                  date={date}
-                  setDate={setDate}
-                  view={view}
-                  setView={setView}
-                  onSelectSlot={onSelectSlot}
-                  onSelectEvent={onSelectEvent}
-                  onDrop={isMobile ? undefined : onDrop}
-                  onResize={isMobile ? undefined : onResize}
-                  externalDragType={dragType}
-                  externalDragTitle={draggedItem?.title}
-                  onExternalDrop={handleExternalDrop}
-                  darkMode={darkMode}
-                  focusMode={focusMode}
-                  selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
-                />
-              )}
             </div>
+            
+            {/* Controls Row */}
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Moon Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showMoon}
+                  onChange={(e) => setShowMoon(e.target.checked)}
+                  className="w-4 h-4 rounded accent-purple-600"
+                />
+                <span className="text-sm font-medium">🌙 Moon</span>
+              </label>
+              
+              {/* Weather Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={weatherEnabled}
+                  onChange={(e) => setWeatherEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded accent-purple-600"
+                />
+                <span className="text-sm font-medium">🌤️ Weather</span>
+              </label>
+              
+              {/* Weather Animations (if weather enabled) */}
+              {weatherEnabled && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={weatherAnimations}
+                    onChange={(e) => setWeatherAnimations(e.target.checked)}
+                    className="w-4 h-4 rounded accent-purple-600"
+                  />
+                  <span className="text-sm font-medium">✨ Animations</span>
+                </label>
+              )}
+              
+              {/* Temperature Unit (if weather enabled) */}
+              {weatherEnabled && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setTemperatureUnit('fahrenheit')}
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      temperatureUnit === 'fahrenheit'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200'
+                    }`}
+                  >
+                    °F
+                  </button>
+                  <button
+                    onClick={() => setTemperatureUnit('celsius')}
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      temperatureUnit === 'celsius'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200'
+                    }`}
+                  >
+                    °C
+                  </button>
+                </div>
+              )}
+              
+              {/* Weather Badge */}
+              <WeatherBadge />
+              
+              {/* Analytics Button */}
+              <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-all">
+                📊 Analytics
+              </button>
+              
+              {/* Templates Button */}
+              <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-all">
+                📝 Templates
+              </button>
+              
+              {/* Create Event Button */}
+              <button
+                onClick={() => setOpenCreate(true)}
+                className="ml-auto px-4 py-2 rounded-full font-medium text-white
+                         bg-gradient-to-r from-purple-600 to-pink-600
+                         shadow-lg hover:shadow-xl transform hover:scale-105 
+                         active:scale-95 transition-all duration-200"
+              >
+                + New Event
+              </button>
+            </div>
+            
+            {/* Weather Forecast Strip (if enabled) */}
+            {weatherEnabled && weatherData.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {weatherData.slice(0, view === 'month' ? 5 : view === 'week' ? 7 : 1).map((day) => (
+                  <div
+                    key={day.date}
+                    className="flex-shrink-0 p-2 bg-white/80 rounded-lg border border-purple-200
+                             shadow-sm hover:shadow-md transition-all min-w-[100px]"
+                  >
+                    <div className="text-xs font-medium text-gray-600">
+                      {new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xl">
+                        {day.condition === 'sunny' && '☀️'}
+                        {day.condition === 'partly-cloudy' && '⛅'}
+                        {day.condition === 'cloudy' && '☁️'}
+                        {day.condition === 'rainy' && '🌧️'}
+                        {day.condition === 'stormy' && '⛈️'}
+                        {day.condition === 'snowy' && '❄️'}
+                        {day.condition === 'foggy' && '🌫️'}
+                      </span>
+                      <div className="text-right">
+                        <div className="text-sm font-bold">{day.temp}°</div>
+                        <div className="text-xs text-gray-500">
+                          {day.tempMin}°/{day.tempMax}°
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1 capitalize">{day.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Mobile Floating Action Button */}
+        
+        {/* Main Content Area */}
+        <div className="flex gap-4">
+          {/* Sidebar (Desktop) */}
+          {!isMobile && sidebarOpen && (
+            <div className="w-64 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg p-4">
+              <div className="space-y-4">
+                {/* Reminders Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-700">Reminders</h3>
+                    <button 
+                      className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200"
+                      onClick={() => {/* Add reminder logic */}}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {reminders.slice(0, 5).map((reminder) => (
+                      <div
+                        key={reminder.id}
+                        draggable
+                        onDragStart={() => {
+                          setDragType('reminder');
+                          setDraggedItem(reminder);
+                        }}
+                        className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg cursor-move
+                                 hover:shadow-md transition-all text-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>⏰</span>
+                          <span className="truncate">{reminder.title}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* To-Dos Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-700">To-Dos</h3>
+                    <button 
+                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                      onClick={() => {/* Add todo logic */}}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {todos.slice(0, 5).map((todo) => (
+                      <div
+                        key={todo.id}
+                        draggable
+                        onDragStart={() => {
+                          setDragType('todo');
+                          setDraggedItem(todo);
+                        }}
+                        className="p-2 bg-green-50 border border-green-200 rounded-lg cursor-move
+                                 hover:shadow-md transition-all text-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            checked={todo.completed}
+                            onChange={() => {/* Toggle logic */}}
+                            className="w-3 h-3"
+                          />
+                          <span className={`truncate ${todo.completed ? 'line-through' : ''}`}>
+                            {todo.title}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Carpool Matches (if any) */}
+                {carpoolMatches.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-gray-700 mb-2">🚗 Carpool Matches</h3>
+                    <div className="space-y-2">
+                      {carpoolMatches.map((match) => (
+                        <div key={match.id} className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                          {match.name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Calendar Grid */}
+          <div className={`flex-1 ${weatherEnabled ? 'weather-enhanced' : ''}`}>
+            <CalendarGrid
+              dbEvents={filteredEvents}
+              moonEvents={moonEvents}
+              showMoon={showMoon}
+              showWeather={false} // We handle weather display externally
+              theme={calendarTheme}
+              date={date}
+              setDate={setDate}
+              view={view}
+              setView={setView}
+              onSelectSlot={onSelectSlot}
+              onSelectEvent={onSelectEvent}
+              onDrop={isMobile ? undefined : onDrop}
+              onResize={isMobile ? undefined : onResize}
+              externalDragType={isMobile ? 'none' : dragType}
+              externalDragTitle={draggedItem?.title}
+              onExternalDrop={isMobile ? undefined : onExternalDrop}
+            />
+          </div>
+        </div>
+        
+        {/* Mobile Bottom Menu */}
         {isMobile && (
-          <FloatingActionButton
-            onClick={() => setOpenCreate(true)}
-            onLongPress={() => {
-              vibrate();
-              setQuickModalType('reminder');
-              setQuickModalOpen(true);
-            }}
-          />
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-2 z-20">
+            <div className="flex justify-around">
+              <button 
+                onClick={() => setMobileMenuOpen(true)}
+                className="p-2 text-purple-600"
+              >
+                📋 Lists
+              </button>
+              <button className="p-2 text-purple-600">
+                🌙 {showMoon ? 'Hide' : 'Show'} Moon
+              </button>
+              <button className="p-2 text-purple-600">
+                🌤️ Weather
+              </button>
+              <button 
+                onClick={() => setOpenCreate(true)}
+                className="p-2 bg-purple-600 text-white rounded-full"
+              >
+                +
+              </button>
+            </div>
+          </div>
         )}
-
-        {/* Mobile Sidebar */}
-        {isMobile && (
-          <MobileSidebar
-            open={mobileMenuOpen}
-            onClose={() => setMobileMenuOpen(false)}
-            carpoolMatches={carpoolMatches || []}
-            friends={friends || []}
-            visibleReminders={visibleReminders || []}
-            visibleTodos={visibleTodos || []}
-            showCompletedItems={showCompletedItems}
-            setShowCompletedItems={setShowCompletedItems}
-            openCarpoolChat={(event) => {
-              openCarpoolChat(event);
-              setMobileMenuOpen(false);
-            }}
-            setQuickModalType={setQuickModalType}
-            setQuickModalOpen={setQuickModalOpen}
-            setShowTemplates={setShowTemplates}
-            setShowAnalytics={setShowAnalytics}
-            setShowMeetingCoordinator={setShowMeetingCoordinator}
-            onToggleComplete={handleToggleComplete}
-            onDeleteItem={handleDeleteItem}
-            userStats={gamificationEnabled ? userStats : null}
-            gamificationEnabled={gamificationEnabled}
-            setGamificationEnabled={setGamificationEnabled}
-          />
+        
+        {/* Mobile Lists Drawer */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div 
+              className="fixed inset-0 bg-black/50" 
+              onClick={() => setMobileMenuOpen(false)} 
+            />
+            <div className="fixed left-0 top-0 h-full w-80 bg-white shadow-xl overflow-y-auto p-4">
+              {/* Mobile sidebar content */}
+              <button 
+                onClick={() => setMobileMenuOpen(false)}
+                className="mb-4 text-gray-600"
+              >
+                ← Close
+              </button>
+              {/* Copy sidebar content here for mobile */}
+            </div>
+          </div>
         )}
-
-        {/* Mood Tracker Modal */}
-        {showMoodTracker && (
-          <MoodTracker
-            date={date}
-            onClose={() => setShowMoodTracker(false)}
-            onSave={(mood) => {
-              // Save mood to database
-              showToast({ type: 'success', message: `Mood saved: ${mood}` });
-              if (gamificationEnabled) {
-                addPoints(10, 'mood-track');
-              }
-              setShowMoodTracker(false);
-            }}
-          />
-        )}
-
-        {/* All Other Modals */}
-        <CalendarModals
-          // Modal visibility states
-          openCreate={openCreate}
-          openEdit={openEdit}
-          detailsOpen={detailsOpen}
-          showAnalytics={showAnalytics}
-          showTemplates={showTemplates}
-          showMeetingCoordinator={showMeetingCoordinator}
-          showShortcutsHelp={showShortcutsHelp}
-          showCarpoolChat={showCarpoolChat}
-          quickModalOpen={quickModalOpen}
-          showPomodoroTimer={showPomodoroTimer}
-          showTimeBlocking={showTimeBlocking}
-          
-          // Modal setters
-          setOpenCreate={setOpenCreate}
-          setOpenEdit={setOpenEdit}
-          setDetailsOpen={setDetailsOpen}
-          setShowAnalytics={setShowAnalytics}
-          setShowTemplates={setShowTemplates}
-          setShowMeetingCoordinator={setShowMeetingCoordinator}
-          setShowShortcutsHelp={setShowShortcutsHelp}
-          setShowCarpoolChat={setShowCarpoolChat}
-          setQuickModalOpen={setQuickModalOpen}
-          setShowPomodoroTimer={setShowPomodoroTimer}
-          setShowTimeBlocking={setShowTimeBlocking}
-          
-          // Data
-          me={me}
-          selected={selected}
-          selectedFeedEvent={selectedFeedEvent}
-          selectedCarpoolEvent={selectedCarpoolEvent}
-          selectedCarpoolFriends={selectedCarpoolFriends}
-          setSelectedCarpoolFriends={setSelectedCarpoolFriends}
-          events={events || []}
-          friends={friends || []}
-          form={form}
-          setForm={setForm}
-          quickModalForm={quickModalForm}
-          setQuickModalForm={setQuickModalForm}
-          quickModalType={quickModalType}
-          isMobile={isMobile}
-          
-          // Actions
-          handleCreateEvent={async () => {
-            await handleCreateEvent();
-            if (gamificationEnabled) {
-              showConfetti();
-              addPoints(20, 'event-create');
-            }
+        
+        {/* Modals */}
+        <EventDetails 
+          event={selected} 
+          onClose={() => {
+            setDetailsOpen(false);
+            setSelected(null);
           }}
-          handleUpdateEvent={handleUpdateEvent}
-          handleEdit={handleEditFromDetails}
-          handleApplyTemplate={handleApplyTemplate}
-          createQuickItem={async () => {
-            await createQuickItem();
-            if (gamificationEnabled) {
-              addPoints(10, 'quick-create');
-            }
+          onEdit={handleEdit}
+          isOwner={selected?.created_by === me}
+        />
+        
+        <CreateEventModal
+          open={openCreate}
+          onClose={() => {
+            setOpenCreate(false);
+            resetForm();
           }}
-          createCarpoolGroup={async () => {
-            await createCarpoolGroup();
-            if (gamificationEnabled) {
-              addPoints(30, 'carpool-create');
-              showConfetti();
-            }
+          sessionUser={me}
+          value={form}
+          onChange={(updates) => setForm(prev => ({ ...prev, ...updates }))}
+          onSave={createEvent}
+          friends={friends}
+        />
+        
+        <CreateEventModal
+          open={openEdit}
+          onClose={() => {
+            setOpenEdit(false);
+            setSelected(null);
+            resetForm();
           }}
-          resetForm={resetForm}
-          gamificationEnabled={gamificationEnabled}
-          setGamificationEnabled={setGamificationEnabled}
+          sessionUser={me}
+          value={form}
+          onChange={(updates) => setForm(prev => ({ ...prev, ...updates }))}
+          onSave={updateEvent}
+          friends={friends}
+          isEdit={true}
         />
       </div>
-
-      <style jsx>{`
-        @keyframes blob {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          25% { transform: translate(20px, -30px) scale(1.1); }
-          50% { transform: translate(-20px, 20px) scale(1); }
-          75% { transform: translate(30px, 10px) scale(0.9); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
+      
+      {/* Weather-based calendar styling */}
+      {weatherEnabled && weatherData.length > 0 && (
+        <style jsx>{`
+          .weather-enhanced .rbc-today {
+            background: ${
+              weatherData[0]?.condition === 'sunny'
+                ? 'linear-gradient(135deg, rgba(254,240,138,0.1) 0%, rgba(163,230,253,0.1) 100%)'
+                : weatherData[0]?.condition === 'rainy'
+                ? 'linear-gradient(135deg, rgba(203,213,225,0.1) 0%, rgba(100,116,139,0.1) 100%)'
+                : 'rgba(139, 92, 246, 0.08)'
+            } !important;
+          }
+          
+          .weather-enhanced .calendar-wrapper {
+            box-shadow: ${
+              weatherData[0]?.condition === 'sunny'
+                ? '0 0 40px rgba(255, 204, 0, 0.15)'
+                : weatherData[0]?.condition === 'rainy'
+                ? '0 0 40px rgba(100, 150, 200, 0.15)'
+                : '0 0 30px rgba(139, 92, 246, 0.1)'
+            };
+          }
+        `}</style>
+      )}
     </div>
   );
 }
