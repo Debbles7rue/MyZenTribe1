@@ -12,9 +12,6 @@ import type { DBEvent, Visibility } from "@/lib/types";
 import type { View } from "react-big-calendar";
 import MediaFilesDiagnostic from '@/components/MediaFilesDiagnostic';
 
-// In your component's return:
-<MediaFilesDiagnostic />
-
 // IMPORT TODO AND REMINDER COMPONENTS FROM THEIR PAGES
 import { TodoSidebar, type Todo } from "@/app/(protected)/todos/page";
 import { ReminderSidebar, type Reminder } from "@/app/(protected)/reminders/page";
