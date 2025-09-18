@@ -11,22 +11,16 @@ import { useToast } from "@/components/ToastProvider";
 import type { DBEvent, Visibility } from "@/lib/types";
 import type { View } from "react-big-calendar";
 
+// IMPORT TODO AND REMINDER COMPONENTS FROM THEIR PAGES
+import { TodoSidebar, type Todo } from "@/app/(protected)/todos/page";
+import { ReminderSidebar, type Reminder } from "@/app/(protected)/reminders/page";
+
 // Friend interface
 interface Friend {
   friend_id: string;
   name: string;
   avatar_url?: string;
   carpool_flag?: boolean;
-}
-
-// Todo/Reminder interfaces
-interface TodoReminder {
-  id: string;
-  title: string;
-  due_date?: string;
-  completed?: boolean;
-  type: 'todo' | 'reminder';
-  created_by: string;
 }
 
 export default function CalendarPage() {
@@ -50,12 +44,10 @@ export default function CalendarPage() {
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<string[]>([]);
   
   // Sidebar states
-  const [todos, setTodos] = useState<TodoReminder[]>([]);
-  const [reminders, setReminders] = useState<TodoReminder[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dragType, setDragType] = useState<'none' | 'reminder' | 'todo'>('none');
-  const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
+  const [draggedItem, setDraggedItem] = useState<Todo | Reminder | null>(null);
   
   // Modal states
   const [openCreate, setOpenCreate] = useState(false);
@@ -215,33 +207,6 @@ export default function CalendarPage() {
     }
   }, [me, calendarMode, showToast]);
   
-  // Load todos and reminders
-  const loadTodosAndReminders = useCallback(async () => {
-    if (!me) return;
-    
-    try {
-      const { data: todoData } = await supabase
-        .from("todos")
-        .select("*")
-        .eq('created_by', me)
-        .eq('completed', false)
-        .order('due_date', { ascending: true })
-        .limit(10);
-      
-      const { data: reminderData } = await supabase
-        .from("reminders")
-        .select("*")
-        .eq('created_by', me)
-        .order('reminder_time', { ascending: true })
-        .limit(10);
-      
-      setTodos((todoData || []).map(t => ({ ...t, type: 'todo' as const })));
-      setReminders((reminderData || []).map(r => ({ ...r, type: 'reminder' as const })));
-    } catch (error) {
-      console.error("Load todos/reminders error:", error);
-    }
-  }, [me]);
-  
   // Load friends
   const loadFriends = useCallback(async () => {
     if (!me) return;
@@ -269,10 +234,9 @@ export default function CalendarPage() {
   useEffect(() => {
     if (me) {
       loadCalendar();
-      loadTodosAndReminders();
       loadFriends();
     }
-  }, [me, loadCalendar, loadTodosAndReminders, loadFriends]);
+  }, [me, loadCalendar, loadFriends]);
   
   // Calendar event handlers
   const onSelectSlot = useCallback((slotInfo: any) => {
@@ -348,9 +312,21 @@ export default function CalendarPage() {
   ) => {
     if (!draggedItem || !me) return;
     
+    // Handle the description based on the item type
+    let description = `Created from ${type}`;
+    if (type === 'reminder' && 'reminder_time' in draggedItem) {
+      // For reminders, include the original reminder time in description
+      const reminderTime = new Date(draggedItem.reminder_time);
+      description = `Reminder: ${draggedItem.description || draggedItem.title} (Originally set for ${reminderTime.toLocaleString()})`;
+    } else if (type === 'todo' && 'due_date' in draggedItem && draggedItem.due_date) {
+      // For todos with due dates
+      const dueDate = new Date(draggedItem.due_date);
+      description = `Todo: ${draggedItem.description || draggedItem.title} (Due: ${dueDate.toLocaleDateString()})`;
+    }
+    
     const payload = {
       title: draggedItem.title,
-      description: `Created from ${type}`,
+      description: description,
       start_time: info.start.toISOString(),
       end_time: info.end.toISOString(),
       all_day: info.allDay || false,
@@ -501,36 +477,16 @@ export default function CalendarPage() {
     });
   };
   
-  // Toggle todo completion
-  const toggleTodo = async (todoId: string, completed: boolean) => {
-    if (!me) return;
-    
-    const { error } = await supabase
-      .from("todos")
-      .update({ completed: !completed })
-      .eq("id", todoId)
-      .eq("created_by", me);
-    
-    if (!error) {
-      loadTodosAndReminders();
-    }
+  // Handle drag start for todos
+  const handleTodoDragStart = (todo: Todo) => {
+    setDragType('todo');
+    setDraggedItem(todo);
   };
   
-  // Delete todo/reminder
-  const deleteItem = async (itemId: string, type: 'todo' | 'reminder') => {
-    if (!me) return;
-    
-    const table = type === 'todo' ? 'todos' : 'reminders';
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq("id", itemId)
-      .eq("created_by", me);
-    
-    if (!error) {
-      showToast({ type: 'success', message: `${type === 'todo' ? 'Todo' : 'Reminder'} deleted` });
-      loadTodosAndReminders();
-    }
+  // Handle drag start for reminders
+  const handleReminderDragStart = (reminder: Reminder) => {
+    setDragType('reminder');
+    setDraggedItem(reminder);
   };
   
   // Filtered events based on search and filters
@@ -708,103 +664,21 @@ export default function CalendarPage() {
                   </button>
                 </div>
                 
-                {/* Reminders Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-700">Reminders</h3>
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
-                      {reminders.length}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {reminders.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">No reminders</p>
-                    ) : (
-                      reminders.slice(0, 5).map((reminder) => (
-                        <div
-                          key={reminder.id}
-                          draggable={!isMobile}
-                          onDragStart={() => {
-                            setDragType('reminder');
-                            setDraggedItem(reminder);
-                          }}
-                          className="group p-2 bg-yellow-50 border border-yellow-200 rounded-lg cursor-move
-                                   hover:shadow-md transition-all text-sm relative"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span>⏰</span>
-                            <span className="truncate flex-1">{reminder.title}</span>
-                            <button
-                              onClick={() => deleteItem(reminder.id, 'reminder')}
-                              className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {!isMobile && reminders.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-2 italic">
-                      Drag to calendar to schedule
-                    </p>
-                  )}
-                </div>
+                {/* REMINDERS SECTION - NOW USING IMPORTED COMPONENT */}
+                {me && (
+                  <ReminderSidebar 
+                    userId={me} 
+                    onDragStart={handleReminderDragStart}
+                  />
+                )}
                 
-                {/* To-Dos Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-700">To-Dos</h3>
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                      {todos.filter(t => !t.completed).length}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {todos.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">No todos</p>
-                    ) : (
-                      todos.slice(0, 5).map((todo) => (
-                        <div
-                          key={todo.id}
-                          draggable={!isMobile && !todo.completed}
-                          onDragStart={() => {
-                            if (!todo.completed) {
-                              setDragType('todo');
-                              setDraggedItem(todo);
-                            }
-                          }}
-                          className={`group p-2 bg-green-50 border border-green-200 rounded-lg
-                                   hover:shadow-md transition-all text-sm relative
-                                   ${!todo.completed && !isMobile ? 'cursor-move' : ''}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input 
-                              type="checkbox" 
-                              checked={todo.completed || false}
-                              onChange={() => toggleTodo(todo.id, todo.completed || false)}
-                              className="w-3 h-3"
-                            />
-                            <span className={`truncate flex-1 ${todo.completed ? 'line-through text-gray-500' : ''}`}>
-                              {todo.title}
-                            </span>
-                            <button
-                              onClick={() => deleteItem(todo.id, 'todo')}
-                              className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {!isMobile && todos.filter(t => !t.completed).length > 0 && (
-                    <p className="text-xs text-gray-500 mt-2 italic">
-                      Drag to calendar to schedule
-                    </p>
-                  )}
-                </div>
+                {/* TODOS SECTION - NOW USING IMPORTED COMPONENT */}
+                {me && (
+                  <TodoSidebar 
+                    userId={me} 
+                    onDragStart={handleTodoDragStart}
+                  />
+                )}
                 
                 {/* Carpool Matches */}
                 {carpoolMatches.length > 0 && (
@@ -873,7 +747,7 @@ export default function CalendarPage() {
           </div>
         )}
         
-        {/* Mobile Lists Drawer */}
+        {/* Mobile Lists Drawer - SIMPLIFIED, NO DUPLICATE LOGIC */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
             <div 
@@ -889,48 +763,16 @@ export default function CalendarPage() {
                   ← Close
                 </button>
                 
-                {/* Mobile Reminders */}
+                {/* Mobile Reminders - Using imported component */}
                 <div className="mb-6">
                   <h3 className="font-semibold text-gray-700 mb-3">Reminders</h3>
-                  {reminders.map((reminder) => (
-                    <div key={reminder.id} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-2">
-                      <div className="flex items-center gap-2">
-                        <span>⏰</span>
-                        <span className="flex-1">{reminder.title}</span>
-                        <button
-                          onClick={() => deleteItem(reminder.id, 'reminder')}
-                          className="text-red-500"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {me && <ReminderSidebar userId={me} />}
                 </div>
                 
-                {/* Mobile To-Dos */}
+                {/* Mobile To-Dos - Using imported component */}
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-3">To-Dos</h3>
-                  {todos.map((todo) => (
-                    <div key={todo.id} className="p-3 bg-green-50 border border-green-200 rounded-lg mb-2">
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" 
-                          checked={todo.completed || false}
-                          onChange={() => toggleTodo(todo.id, todo.completed || false)}
-                        />
-                        <span className={`flex-1 ${todo.completed ? 'line-through' : ''}`}>
-                          {todo.title}
-                        </span>
-                        <button
-                          onClick={() => deleteItem(todo.id, 'todo')}
-                          className="text-red-500"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {me && <TodoSidebar userId={me} />}
                 </div>
               </div>
             </div>
