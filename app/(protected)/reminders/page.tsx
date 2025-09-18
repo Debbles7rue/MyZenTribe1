@@ -41,8 +41,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-interface Reminder {
+// ============================================
+// EXPORTED TYPE - for other pages to use
+// ============================================
+
+export interface Reminder {
   id: string
+  user_id?: string
+  created_by?: string
   title: string
   description?: string
   reminder_time: string
@@ -57,7 +63,214 @@ interface Reminder {
   notification_settings?: any
   created_at: string
   updated_at: string
+  type?: 'reminder'
 }
+
+// ============================================
+// EXPORTED FUNCTIONS - for other pages to use
+// ============================================
+
+// Load reminders for a user
+export async function loadRemindersForUser(userId: string): Promise<Reminder[]> {
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+    .order('reminder_time', { ascending: true })
+
+  if (!error && data) {
+    return data.map(r => ({ ...r, type: 'reminder' as const }))
+  }
+  return []
+}
+
+// Delete a reminder
+export async function deleteReminderById(reminderId: string, userId: string) {
+  const { error } = await supabase
+    .from('reminders')
+    .delete()
+    .eq('id', reminderId)
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+
+  return !error
+}
+
+// Get upcoming reminders count
+export async function getUpcomingRemindersCount(userId: string): Promise<number> {
+  const { data } = await supabase
+    .from('reminders')
+    .select('id')
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+    .eq('completed', false)
+    .gte('reminder_time', new Date().toISOString())
+    .lte('reminder_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
+
+  return data?.length || 0
+}
+
+// Get today's reminders for dashboard
+export async function getTodaysReminders(userId: string): Promise<Reminder[]> {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  const { data } = await supabase
+    .from('reminders')
+    .select('*')
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+    .gte('reminder_time', today.toISOString())
+    .lt('reminder_time', tomorrow.toISOString())
+    .order('reminder_time')
+
+  return (data || []).map(r => ({ ...r, type: 'reminder' as const }))
+}
+
+// ============================================
+// EXPORTED COMPONENTS - for other pages to use
+// ============================================
+
+// ReminderSidebar - For calendar page
+export function ReminderSidebar({ 
+  userId,
+  onDragStart,
+  className = ""
+}: { 
+  userId: string
+  onDragStart?: (reminder: Reminder) => void
+  className?: string
+}) {
+  const [reminders, setReminders] = useState<Reminder[]>([])
+  
+  useEffect(() => {
+    loadRemindersForUser(userId).then(data => {
+      // Filter for upcoming reminders only, limit to 5
+      const now = new Date()
+      const upcoming = data.filter(r => {
+        const reminderDate = new Date(r.reminder_time)
+        return !r.completed && reminderDate > now
+      }).slice(0, 5)
+      setReminders(upcoming)
+    })
+    
+    const subscription = supabase
+      .channel('sidebar-reminders')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'reminders' },
+        () => loadRemindersForUser(userId).then(data => {
+          const now = new Date()
+          const upcoming = data.filter(r => {
+            const reminderDate = new Date(r.reminder_time)
+            return !r.completed && reminderDate > now
+          }).slice(0, 5)
+          setReminders(upcoming)
+        })
+      )
+      .subscribe()
+
+    return () => { subscription.unsubscribe() }
+  }, [userId])
+  
+  const handleDragStart = (reminder: Reminder) => {
+    // Ensure the reminder has proper date formatting
+    const reminderWithDate = {
+      ...reminder,
+      reminder_time: reminder.reminder_time // Keep as string since that's what the interface expects
+    }
+    onDragStart?.(reminderWithDate)
+  }
+  
+  return (
+    <div className={className}>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold text-gray-700">Reminders</h3>
+        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+          {reminders.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {reminders.length === 0 ? (
+          <p className="text-sm text-gray-500 italic">No reminders</p>
+        ) : (
+          reminders.map((reminder) => (
+            <div
+              key={reminder.id}
+              draggable
+              onDragStart={() => handleDragStart(reminder)}
+              className="group p-2 bg-yellow-50 border border-yellow-200 rounded-lg cursor-move
+                       hover:shadow-md transition-all text-sm relative"
+            >
+              <div className="flex items-center gap-2">
+                <span>⏰</span>
+                <div className="flex-1">
+                  <span className="truncate block">{reminder.title}</span>
+                  <span className="text-xs text-gray-500">
+                    {new Date(reminder.reminder_time).toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                </div>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    await deleteReminderById(reminder.id, userId)
+                    // Refresh
+                    const data = await loadRemindersForUser(userId)
+                    const now = new Date()
+                    setReminders(data.filter(r => {
+                      const reminderDate = new Date(r.reminder_time)
+                      return !r.completed && reminderDate > now
+                    }).slice(0, 5))
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      {reminders.length > 0 && (
+        <p className="text-xs text-gray-500 mt-2 italic">
+          Drag to calendar to schedule
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ReminderQuickStats - For dashboard
+export function ReminderQuickStats({ userId }: { userId: string }) {
+  const [count, setCount] = useState(0)
+  
+  useEffect(() => {
+    getUpcomingRemindersCount(userId).then(setCount)
+    
+    const subscription = supabase
+      .channel('reminder-stats')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'reminders' },
+        () => getUpcomingRemindersCount(userId).then(setCount)
+      )
+      .subscribe()
+      
+    return () => { subscription.unsubscribe() }
+  }, [userId])
+  
+  return (
+    <div className="bg-white rounded-xl p-4 shadow-sm">
+      <div className="text-3xl mb-2">🔔</div>
+      <div className="text-2xl font-bold text-orange-600">{count}</div>
+      <div className="text-xs text-gray-600">Reminders</div>
+    </div>
+  )
+}
+
+// ============================================
+// MAIN PAGE COMPONENT - Your existing 1000+ lines
+// ============================================
 
 // Quick templates for common reminders
 const REMINDER_TEMPLATES = [
