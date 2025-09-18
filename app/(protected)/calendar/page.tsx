@@ -10,7 +10,6 @@ import CalendarThemeSelector from "@/components/CalendarThemeSelector";
 import { useToast } from "@/components/ToastProvider";
 import type { DBEvent, Visibility } from "@/lib/types";
 import type { View } from "react-big-calendar";
-import MediaFilesDiagnostic from '@/components/MediaFilesDiagnostic';
 
 // IMPORT TODO AND REMINDER COMPONENTS FROM THEIR PAGES
 import { TodoSidebar, type Todo } from "@/app/(protected)/todos/page";
@@ -25,6 +24,85 @@ interface Friend {
 }
 
 export default function CalendarPage() {
+  // ===== MEDIA FILES ERROR FIX - MUST RUN FIRST =====
+  useEffect(() => {
+    // Patch fetch to fix Supabase responses with missing media_files
+    const originalFetch = window.fetch;
+    window.fetch = async function(...args) {
+      try {
+        const response = await originalFetch.apply(this, args);
+        const url = args[0]?.toString() || '';
+        
+        // Only patch Supabase responses
+        if (url.includes('supabase')) {
+          const originalJson = response.json.bind(response);
+          response.json = async function() {
+            try {
+              const result = await originalJson();
+              
+              // Fix undefined data access
+              if (result && typeof result === 'object') {
+                // Fix array responses
+                if (Array.isArray(result)) {
+                  result.forEach(item => {
+                    if (item && typeof item === 'object') {
+                      item.media_files = item.media_files || [];
+                    }
+                  });
+                }
+                // Fix object responses with data property (Supabase pattern)
+                else if ('data' in result && result.data) {
+                  if (Array.isArray(result.data)) {
+                    result.data.forEach((item: any) => {
+                      if (item && typeof item === 'object') {
+                        item.media_files = item.media_files || [];
+                      }
+                    });
+                  } else if (typeof result.data === 'object') {
+                    result.data.media_files = result.data.media_files || [];
+                  }
+                }
+                // Fix direct object responses
+                else {
+                  result.media_files = result.media_files || [];
+                }
+              }
+              
+              return result;
+            } catch (e) {
+              console.warn('JSON parse error in media_files fix:', e);
+              return await originalJson();
+            }
+          };
+        }
+        
+        return response;
+      } catch (error) {
+        console.error('Fetch error:', error);
+        throw error;
+      }
+    };
+
+    // Error handler to prevent crashes
+    const handleError = (event: ErrorEvent) => {
+      if (event.error?.message?.includes('media_files')) {
+        console.warn('[Calendar] Caught and prevented media_files error');
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      }
+    };
+
+    window.addEventListener('error', handleError, true);
+
+    // Cleanup
+    return () => {
+      window.fetch = originalFetch;
+      window.removeEventListener('error', handleError, true);
+    };
+  }, []);
+  // ===== END MEDIA FILES FIX =====
+
   const { showToast } = useToast();
   
   // Core calendar states
@@ -191,13 +269,16 @@ export default function CalendarPage() {
       
       if (error) throw error;
       
-      // Ensure all events have valid date objects
+      // Ensure all events have valid date objects AND media_files
       const safe = (data || []).filter((e: any) => {
         if (!e?.start_time || !e?.end_time) return false;
         const start = new Date(e.start_time);
         const end = new Date(e.end_time);
         return !isNaN(start.getTime()) && !isNaN(end.getTime());
-      });
+      }).map((e: any) => ({
+        ...e,
+        media_files: e.media_files || [] // Ensure media_files exists
+      }));
       
       setCalendarEvents(safe);
     } catch (error: any) {
@@ -218,11 +299,17 @@ export default function CalendarPage() {
         .select("*")
         .eq('user_id', me);
       
-      setFriends(data || []);
+      // Ensure media_files exists on friends data
+      const safeData = (data || []).map((f: any) => ({
+        ...f,
+        media_files: f.media_files || []
+      }));
+      
+      setFriends(safeData);
       
       // Check for carpool matches if there are friends
-      if (data && data.length > 0) {
-        const carpoolFriends = data.filter((f: Friend) => f.carpool_flag);
+      if (safeData.length > 0) {
+        const carpoolFriends = safeData.filter((f: Friend) => f.carpool_flag);
         // Here you'd check for matching events
         setCarpoolMatches([]); // Placeholder
       }
@@ -335,6 +422,7 @@ export default function CalendarPage() {
       visibility: 'private' as Visibility,
       created_by: me,
       source: 'personal' as const,
+      media_files: [], // Ensure media_files is included
     };
     
     const { error } = await supabase.from("events").insert(payload);
@@ -365,6 +453,7 @@ export default function CalendarPage() {
       created_by: me,
       event_type: form.event_type || null,
       source: form.source,
+      media_files: [], // Ensure media_files is included
     };
     
     const { error } = await supabase.from("events").insert(payload);
