@@ -15,6 +15,9 @@ type Post = {
   updated_at: string;
   url: string;
   tags: { id: string; name: string }[];
+  // Add support for potential multi-media structure
+  media_files?: any[];
+  post_media?: any[];
 };
 
 type Comment = {
@@ -145,6 +148,9 @@ export default function PhotosFeed({
           ...r,
           url: pub.publicUrl,
           tags: taggedUsers,
+          // Ensure these properties exist even if undefined
+          media_files: r.media_files || [],
+          post_media: r.post_media || []
         };
       }));
 
@@ -398,6 +404,49 @@ export default function PhotosFeed({
     }
   }
 
+  // Helper function to safely render media
+  const renderPostMedia = (post: Post) => {
+    // Check if post has multi-media files (future support)
+    if (post.media_files && Array.isArray(post.media_files) && post.media_files.length > 0) {
+      // Handle multi-media posts
+      const firstMedia = post.media_files[0];
+      const mediaUrl = firstMedia?.url || firstMedia?.file_path || post.url;
+      
+      return (
+        <>
+          <img 
+            src={mediaUrl} 
+            alt={post.caption || ""} 
+            className="post-image"
+            onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
+            onError={(e) => {
+              // Fallback to post.url if media_files URL fails
+              const img = e.target as HTMLImageElement;
+              if (img.src !== post.url) {
+                img.src = post.url;
+              }
+            }}
+          />
+          {post.media_files.length > 1 && (
+            <div className="media-count-badge">
+              +{post.media_files.length - 1} more
+            </div>
+          )}
+        </>
+      );
+    }
+    
+    // Default single image rendering
+    return (
+      <img 
+        src={post.url} 
+        alt={post.caption || ""} 
+        className="post-image"
+        onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
+      />
+    );
+  };
+
   useEffect(() => { 
     listPosts(); 
   }, [userId, viewerUserId, relationshipType]);
@@ -475,7 +524,7 @@ export default function PhotosFeed({
                 <label className="upload-button">
                   <input 
                     type="file" 
-                    accept="image/*" 
+                    accept="image/*,video/*" 
                     className="file-input" 
                     onChange={onUpload} 
                     disabled={uploading}
@@ -493,17 +542,13 @@ export default function PhotosFeed({
         {posts.map(post => (
           <div key={post.id} className="post-card">
             <div className="post-image-container">
-              <img 
-                src={post.url} 
-                alt={post.caption || ""} 
-                className="post-image"
-                onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
-              />
+              {renderPostMedia(post)}
               
               {/* Like button overlay */}
               <button
                 className={`like-button ${likedPosts.has(post.id) ? 'liked' : ''}`}
                 onClick={() => toggleLike(post.id)}
+                aria-label={likedPosts.has(post.id) ? 'Unlike' : 'Like'}
               >
                 {likedPosts.has(post.id) ? '❤️' : '🤍'}
               </button>
@@ -664,6 +709,7 @@ export default function PhotosFeed({
                         <button
                           onClick={() => handleCommentSubmit(post.id)}
                           className="comment-submit"
+                          disabled={!commentText[post.id]?.trim()}
                         >
                           Post
                         </button>
@@ -728,6 +774,7 @@ export default function PhotosFeed({
           animation: slideIn 0.3s ease;
           color: white;
           font-weight: 500;
+          max-width: 90vw;
         }
 
         .message-toast.success {
@@ -791,6 +838,7 @@ export default function PhotosFeed({
           border-radius: 0.5rem;
           font-size: 16px; /* Prevents iOS zoom */
           transition: all 0.2s;
+          -webkit-appearance: none; /* Better mobile rendering */
         }
 
         .form-input:focus, .form-textarea:focus, .form-select:focus {
@@ -823,11 +871,16 @@ export default function PhotosFeed({
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          touch-action: manipulation; /* Better mobile tap handling */
         }
 
         .upload-button:hover {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .upload-button:active {
+          transform: translateY(0);
         }
 
         .file-input {
@@ -861,6 +914,13 @@ export default function PhotosFeed({
           transform: translateY(-2px);
         }
 
+        @media (hover: none) {
+          .post-card:hover {
+            transform: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          }
+        }
+
         .post-image-container {
           position: relative;
           aspect-ratio: 1;
@@ -880,6 +940,24 @@ export default function PhotosFeed({
           transform: scale(1.05);
         }
 
+        @media (hover: none) {
+          .post-image:hover {
+            transform: none;
+          }
+        }
+
+        .media-count-badge {
+          position: absolute;
+          top: 0.5rem;
+          right: 0.5rem;
+          background: rgba(0,0,0,0.7);
+          color: white;
+          padding: 0.25rem 0.5rem;
+          border-radius: 0.25rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
         .like-button {
           position: absolute;
           bottom: 0.75rem;
@@ -896,14 +974,28 @@ export default function PhotosFeed({
           font-size: 1.25rem;
           transition: all 0.2s;
           backdrop-filter: blur(10px);
+          -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
         }
 
         .like-button:hover {
           transform: scale(1.1);
         }
 
+        .like-button:active {
+          transform: scale(0.95);
+        }
+
         .like-button.liked {
           background: rgba(239,68,68,0.1);
+        }
+
+        /* Mobile touch target optimization */
+        @media (max-width: 640px) {
+          .like-button {
+            width: 3rem;
+            height: 3rem;
+            font-size: 1.5rem;
+          }
         }
 
         .post-content {
@@ -915,6 +1007,7 @@ export default function PhotosFeed({
           font-weight: 600;
           color: #1f2937;
           margin: 0 0 0.5rem 0;
+          word-wrap: break-word;
         }
 
         .post-description {
@@ -922,6 +1015,7 @@ export default function PhotosFeed({
           font-size: 0.875rem;
           line-height: 1.5;
           margin-bottom: 0.75rem;
+          word-wrap: break-word;
         }
 
         .post-tags {
@@ -987,6 +1081,15 @@ export default function PhotosFeed({
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Mobile touch targets */
+        @media (max-width: 640px) {
+          .btn-edit, .btn-delete {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+          }
         }
 
         .btn-edit {
@@ -998,6 +1101,10 @@ export default function PhotosFeed({
           background: #2563eb;
         }
 
+        .btn-edit:active {
+          transform: scale(0.95);
+        }
+
         .btn-delete {
           background: #ef4444;
           color: white;
@@ -1005,6 +1112,10 @@ export default function PhotosFeed({
 
         .btn-delete:hover {
           background: #dc2626;
+        }
+
+        .btn-delete:active {
+          transform: scale(0.95);
         }
 
         /* Edit Mode */
@@ -1020,6 +1131,14 @@ export default function PhotosFeed({
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
           font-size: 0.875rem;
+          -webkit-appearance: none;
+        }
+
+        @media (max-width: 640px) {
+          .edit-input, .edit-textarea, .edit-select {
+            font-size: 16px; /* Prevent iOS zoom */
+            padding: 0.625rem;
+          }
         }
 
         .edit-textarea {
@@ -1040,6 +1159,14 @@ export default function PhotosFeed({
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (max-width: 640px) {
+          .btn-save, .btn-cancel {
+            padding: 0.625rem;
+            font-size: 1rem;
+          }
         }
 
         .btn-save {
@@ -1051,6 +1178,10 @@ export default function PhotosFeed({
           background: #059669;
         }
 
+        .btn-save:active {
+          transform: scale(0.95);
+        }
+
         .btn-cancel {
           background: #6b7280;
           color: white;
@@ -1058,6 +1189,10 @@ export default function PhotosFeed({
 
         .btn-cancel:hover {
           background: #4b5563;
+        }
+
+        .btn-cancel:active {
+          transform: scale(0.95);
         }
 
         /* Comments Section */
@@ -1079,11 +1214,14 @@ export default function PhotosFeed({
           flex-direction: column;
           gap: 0.5rem;
           margin-bottom: 0.75rem;
+          max-height: 200px;
+          overflow-y: auto;
         }
 
         .comment {
           font-size: 0.875rem;
           line-height: 1.5;
+          word-wrap: break-word;
         }
 
         .comment-author {
@@ -1122,6 +1260,14 @@ export default function PhotosFeed({
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
           font-size: 0.875rem;
+          -webkit-appearance: none;
+        }
+
+        @media (max-width: 640px) {
+          .comment-input {
+            font-size: 16px; /* Prevent iOS zoom */
+            padding: 0.5rem;
+          }
         }
 
         .comment-input:focus {
@@ -1139,10 +1285,27 @@ export default function PhotosFeed({
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          -webkit-tap-highlight-color: transparent;
         }
 
-        .comment-submit:hover {
+        @media (max-width: 640px) {
+          .comment-submit {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+          }
+        }
+
+        .comment-submit:hover:not(:disabled) {
           background: #7c3aed;
+        }
+
+        .comment-submit:active {
+          transform: scale(0.95);
+        }
+
+        .comment-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         /* Empty State */
@@ -1179,12 +1342,6 @@ export default function PhotosFeed({
             border-radius: 0.75rem;
           }
 
-          .like-button {
-            width: 2rem;
-            height: 2rem;
-            font-size: 1rem;
-          }
-
           .post-content {
             padding: 0.75rem;
           }
@@ -1196,6 +1353,13 @@ export default function PhotosFeed({
             padding: 0.5rem;
             border-top: 1px solid #e5e7eb;
             margin: 0 -0.75rem -0.75rem;
+            z-index: 10;
+          }
+
+          /* Improve tap targets on mobile */
+          button, .upload-button, .tag-link {
+            min-height: 44px;
+            min-width: 44px;
           }
         }
 
@@ -1208,6 +1372,35 @@ export default function PhotosFeed({
           .like-button:hover {
             transform: none;
           }
+        }
+
+        /* Accessibility improvements */
+        button:focus-visible,
+        .upload-button:focus-visible,
+        .tag-link:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        select:focus-visible {
+          outline: 2px solid #8b5cf6;
+          outline-offset: 2px;
+        }
+
+        /* Smooth scrolling for comments */
+        .comments-list::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .comments-list::-webkit-scrollbar-track {
+          background: #f3f4f6;
+        }
+
+        .comments-list::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 2px;
+        }
+
+        .comments-list::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
         }
       `}</style>
     </section>
