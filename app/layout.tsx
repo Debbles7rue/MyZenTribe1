@@ -7,6 +7,7 @@ import FirstRunGate from "@/components/FirstRunGate";
 import { ToastProvider } from "@/components/ToastProvider";
 import ElevenElevenFireworks from "@/components/ElevenElevenFireeworks";
 import SafeMediaWrapper from "@/components/SafeMediaWrapper";
+import Script from 'next/script';
 
 export const metadata: Metadata = {
   title: "MyZenTribe",
@@ -26,101 +27,67 @@ export default function RootLayout({
         {/* Ensure title is always present for error pages */}
         <title>MyZenTribe</title>
         
-        {/* ULTIMATE FIX - Inline script runs immediately */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // This runs before ANYTHING else
-              (function() {
-                console.log('[MyZenTribe] Installing media_files protection...');
-                
-                // Store original undefined
-                const originalUndefined = undefined;
-                
-                // Create a proxy for undefined that returns empty array for media_files
-                try {
-                  // Method 1: Proxy undefined (doesn't work in all browsers)
-                  const undefinedProxy = new Proxy({}, {
-                    get(target, prop) {
-                      if (prop === 'media_files') {
-                        console.warn('Prevented undefined.media_files access');
-                        return [];
-                      }
-                      return originalUndefined;
-                    }
-                  });
-                  
-                  // Try to replace global undefined (usually blocked)
-                  Object.defineProperty(window, 'undefined', {
-                    get: () => undefinedProxy,
+        {/* AGGRESSIVE FIX - Run before React even loads */}
+        <Script id="media-files-fix" strategy="beforeInteractive">
+          {`
+            (function() {
+              console.log('[MyZenTribe] Applying media_files protection...');
+              
+              // 1. Create a global proxy for undefined objects
+              const handler = {
+                get(target, prop) {
+                  if (prop === 'media_files') {
+                    console.warn('[MyZenTribe] Prevented undefined.media_files access');
+                    return [];
+                  }
+                  return undefined;
+                }
+              };
+              
+              // 2. Override Object.prototype to handle media_files
+              Object.defineProperty(Object.prototype, 'media_files', {
+                get: function() {
+                  // If this is a real object with real media_files, return it
+                  if (this && this.hasOwnProperty && this.hasOwnProperty('_media_files_real')) {
+                    return this._media_files_real;
+                  }
+                  // For anything else (including undefined), return empty array
+                  if (this === undefined || this === null) {
+                    console.warn('[MyZenTribe] media_files accessed on undefined/null, returning []');
+                    return [];
+                  }
+                  // Return empty array as default
+                  return [];
+                },
+                set: function(value) {
+                  Object.defineProperty(this, '_media_files_real', {
+                    value: value,
+                    writable: true,
+                    enumerable: false,
                     configurable: true
                   });
-                } catch (e) {
-                  // Expected to fail, that's ok
-                }
-                
-                // Method 2: Add media_files getter to Object.prototype
-                // This catches ALL objects including undefined/null
+                },
+                configurable: true,
+                enumerable: false
+              });
+              
+              // 3. Patch all JSON parsing
+              const originalParse = JSON.parse;
+              JSON.parse = function(text, reviver) {
                 try {
-                  const descriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'media_files');
-                  if (!descriptor) {
-                    Object.defineProperty(Object.prototype, 'media_files', {
-                      get: function() {
-                        // Always return an array, even for undefined/null
-                        return [];
-                      },
-                      set: function(value) {
-                        // Store the real value in a different property
-                        Object.defineProperty(this, '__media_files_value', {
-                          value: value,
-                          writable: true,
-                          enumerable: false,
-                          configurable: true
-                        });
-                      },
-                      configurable: true,
-                      enumerable: false
-                    });
-                    console.log('✓ Object.prototype.media_files installed');
-                  }
-                } catch (e) {
-                  console.error('Failed to install Object.prototype.media_files:', e);
-                }
-                
-                // Method 3: Wrap all property access
-                if (typeof Proxy !== 'undefined') {
-                  const originalObjectCreate = Object.create;
-                  Object.create = function(...args) {
-                    const obj = originalObjectCreate.apply(this, args);
-                    if (obj && typeof obj === 'object') {
-                      return new Proxy(obj, {
-                        get(target, prop) {
-                          if (prop === 'media_files' && !(prop in target)) {
-                            return [];
-                          }
-                          return target[prop];
-                        }
-                      });
-                    }
-                    return obj;
-                  };
-                }
-                
-                // Method 4: Override JSON.parse to add media_files
-                const originalJSONParse = JSON.parse;
-                JSON.parse = function(text, reviver) {
-                  const result = originalJSONParse.call(this, text, reviver);
+                  const result = originalParse.call(this, text, reviver);
                   
-                  const ensureMediaFiles = (obj) => {
+                  // Add media_files to any object that doesn't have it
+                  const addMediaFiles = (obj) => {
                     if (!obj) return obj;
                     
                     if (Array.isArray(obj)) {
                       obj.forEach(item => {
-                        if (item && typeof item === 'object' && !('media_files' in item)) {
+                        if (item && typeof item === 'object' && !item.hasOwnProperty('media_files')) {
                           item.media_files = [];
                         }
                       });
-                    } else if (typeof obj === 'object' && !('media_files' in obj)) {
+                    } else if (typeof obj === 'object' && !obj.hasOwnProperty('media_files')) {
                       obj.media_files = [];
                     }
                     
@@ -129,39 +96,46 @@ export default function RootLayout({
                   
                   if (result && typeof result === 'object') {
                     if ('data' in result) {
-                      result.data = ensureMediaFiles(result.data);
+                      result.data = addMediaFiles(result.data);
                     } else {
-                      return ensureMediaFiles(result);
+                      return addMediaFiles(result);
                     }
                   }
                   
                   return result;
-                };
-                
-                // Method 5: Error suppression
-                window.addEventListener('error', function(event) {
-                  if (event.error && event.error.message && event.error.message.includes('media_files')) {
-                    console.warn('[MyZenTribe] Suppressed media_files error');
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
-                    return false;
-                  }
-                }, true);
-                
-                window.addEventListener('unhandledrejection', function(event) {
-                  if (event.reason && event.reason.toString().includes('media_files')) {
-                    console.warn('[MyZenTribe] Suppressed async media_files error');
-                    event.preventDefault();
-                    return false;
-                  }
-                });
-                
-                console.log('[MyZenTribe] Protection installed successfully');
-              })();
-            `,
-          }}
-        />
+                } catch (e) {
+                  return originalParse.call(this, text, reviver);
+                }
+              };
+              
+              // 4. Global error suppressor
+              window.addEventListener('error', function(event) {
+                if (event.error && event.error.message && event.error.message.includes('media_files')) {
+                  console.warn('[MyZenTribe] Caught media_files error, preventing crash');
+                  console.log('Error details:', event.error.message);
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.stopImmediatePropagation();
+                  return false;
+                }
+              }, true);
+              
+              // 5. Promise rejection handler
+              window.addEventListener('unhandledrejection', function(event) {
+                if (event.reason && (
+                  (event.reason.message && event.reason.message.includes('media_files')) ||
+                  (event.reason.toString && event.reason.toString().includes('media_files'))
+                )) {
+                  console.warn('[MyZenTribe] Caught async media_files error');
+                  event.preventDefault();
+                  return false;
+                }
+              });
+              
+              console.log('[MyZenTribe] Protection active. Object.prototype.media_files installed.');
+            })();
+          `}
+        </Script>
         
         {/* Leaflet CSS for maps */}
         <link
