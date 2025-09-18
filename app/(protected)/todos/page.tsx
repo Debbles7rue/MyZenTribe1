@@ -1,7 +1,7 @@
 // app/(protected)/todos/page.tsx
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -9,18 +9,240 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-interface Todo {
+// ============================================
+// TYPES - Exported for other pages to use
+// ============================================
+
+export interface Todo {
   id: string
+  user_id?: string
+  created_by?: string
   title: string
   description?: string
   priority: 'low' | 'medium' | 'high' | 'urgent'
   due_date?: string
   completed: boolean
+  completed_at?: string
   category?: string
   tags?: string[]
   created_at: string
   updated_at: string
 }
+
+// ============================================
+// SHARED FUNCTIONS - Export these for other pages
+// ============================================
+
+// Load todos - can be called from anywhere
+export async function loadTodosForUser(userId: string): Promise<Todo[]> {
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+    .order('completed', { ascending: true })
+    .order('due_date', { ascending: true })
+
+  if (!error && data) {
+    return data
+  }
+  return []
+}
+
+// Toggle todo - can be called from anywhere
+export async function toggleTodoCompletion(todoId: string, currentStatus: boolean, userId: string) {
+  const { error } = await supabase
+    .from('todos')
+    .update({ 
+      completed: !currentStatus,
+      completed_at: !currentStatus ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', todoId)
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+
+  return !error
+}
+
+// Delete todo - can be called from anywhere
+export async function deleteTodoById(todoId: string, userId: string) {
+  const { error } = await supabase
+    .from('todos')
+    .delete()
+    .eq('id', todoId)
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+
+  return !error
+}
+
+// Get today's todos - for dashboard
+export async function getTodaysTodos(userId: string): Promise<Todo[]> {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  const { data } = await supabase
+    .from('todos')
+    .select('*')
+    .or(`user_id.eq.${userId},created_by.eq.${userId}`)
+    .gte('due_date', today.toISOString())
+    .lt('due_date', tomorrow.toISOString())
+    .order('due_date')
+
+  return data || []
+}
+
+// Calculate stats - for dashboard
+export function calculateTodoStats(todos: Todo[]) {
+  const now = new Date()
+  return {
+    total: todos.length,
+    completed: todos.filter(t => t.completed).length,
+    pending: todos.filter(t => !t.completed).length,
+    overdue: todos.filter(t => 
+      !t.completed && t.due_date && new Date(t.due_date) < now
+    ).length
+  }
+}
+
+// Priority color helper - shared
+export const getPriorityColor = (priority: string) => {
+  switch (priority) {
+    case 'urgent': return 'text-red-600 bg-red-50 border-red-200'
+    case 'high': return 'text-orange-600 bg-orange-50 border-orange-200'
+    case 'medium': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
+    case 'low': return 'text-green-600 bg-green-50 border-green-200'
+    default: return 'text-gray-600 bg-gray-50 border-gray-200'
+  }
+}
+
+// ============================================
+// REUSABLE COMPONENTS - Export for other pages
+// ============================================
+
+// TodoSidebar - For calendar page
+export function TodoSidebar({ 
+  userId,
+  onDragStart,
+  className = ""
+}: { 
+  userId: string
+  onDragStart?: (todo: Todo) => void
+  className?: string
+}) {
+  const [todos, setTodos] = useState<Todo[]>([])
+  
+  useEffect(() => {
+    loadTodosForUser(userId).then(setTodos)
+    
+    const subscription = supabase
+      .channel('sidebar-todos')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'todos' },
+        () => loadTodosForUser(userId).then(setTodos)
+      )
+      .subscribe()
+
+    return () => { subscription.unsubscribe() }
+  }, [userId])
+
+  const pendingTodos = todos.filter(t => !t.completed).slice(0, 5)
+  
+  return (
+    <div className={className}>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold text-gray-700">To-Dos</h3>
+        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+          {pendingTodos.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {pendingTodos.length === 0 ? (
+          <p className="text-sm text-gray-500 italic">No todos</p>
+        ) : (
+          pendingTodos.map((todo) => (
+            <div
+              key={todo.id}
+              draggable={!todo.completed}
+              onDragStart={() => onDragStart?.(todo)}
+              className="group p-2 bg-green-50 border border-green-200 rounded-lg
+                       hover:shadow-md transition-all text-sm relative cursor-move"
+            >
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={todo.completed}
+                  onChange={() => {
+                    toggleTodoCompletion(todo.id, todo.completed, userId)
+                      .then(() => loadTodosForUser(userId).then(setTodos))
+                  }}
+                  className="w-3 h-3"
+                />
+                <span className={`truncate flex-1 ${todo.completed ? 'line-through text-gray-500' : ''}`}>
+                  {todo.title}
+                </span>
+                <button
+                  onClick={() => {
+                    deleteTodoById(todo.id, userId)
+                      .then(() => loadTodosForUser(userId).then(setTodos))
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <p className="text-xs text-gray-500 mt-2 italic">
+        Drag to calendar to schedule
+      </p>
+    </div>
+  )
+}
+
+// TodoQuickStats - For dashboard
+export function TodoQuickStats({ userId }: { userId: string }) {
+  const [stats, setStats] = useState({ pending: 0, todayCount: 0 })
+  
+  useEffect(() => {
+    loadTodosForUser(userId).then(todos => {
+      const calculated = calculateTodoStats(todos)
+      const todayTodos = todos.filter(t => {
+        if (!t.due_date) return false
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        const due = new Date(t.due_date)
+        return due >= today && due < tomorrow
+      })
+      
+      setStats({
+        pending: calculated.pending,
+        todayCount: todayTodos.length
+      })
+    })
+  }, [userId])
+  
+  return (
+    <div className="bg-white rounded-xl p-4 shadow-sm">
+      <div className="text-3xl mb-2">✅</div>
+      <div className="text-2xl font-bold text-green-600">{stats.pending}</div>
+      <div className="text-xs text-gray-600">Pending Todos</div>
+      {stats.todayCount > 0 && (
+        <div className="text-xs text-orange-600 mt-1">
+          {stats.todayCount} due today
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// MAIN PAGE COMPONENT
+// ============================================
 
 export default function TodosPage() {
   const [todos, setTodos] = useState<Todo[]>([])
@@ -29,6 +251,7 @@ export default function TodosPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null)
   const [swipeDelete, setSwipeDelete] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [newTodo, setNewTodo] = useState({
     title: '',
     description: '',
@@ -46,7 +269,19 @@ export default function TodosPage() {
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
+  // Get user and load todos
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUserId(data.user.id)
+      }
+    })
+  }, [])
+
+  // Load todos when userId is available
+  useEffect(() => {
+    if (!userId) return
+    
     loadTodos()
     
     const subscription = supabase
@@ -60,61 +295,33 @@ export default function TodosPage() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [])
+  }, [userId])
 
   const loadTodos = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data, error } = await supabase
-      .from('todos')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('completed', { ascending: true })
-      .order('due_date', { ascending: true })
-
-    if (!error && data) {
-      setTodos(data)
-      calculateStats(data)
-    }
+    if (!userId) return
+    
+    const todos = await loadTodosForUser(userId)
+    setTodos(todos)
+    setStats(calculateTodoStats(todos))
     setLoading(false)
   }
 
-  const calculateStats = (todosList: Todo[]) => {
-    const now = new Date()
-    setStats({
-      total: todosList.length,
-      completed: todosList.filter(t => t.completed).length,
-      pending: todosList.filter(t => !t.completed).length,
-      overdue: todosList.filter(t => 
-        !t.completed && t.due_date && new Date(t.due_date) < now
-      ).length
-    })
-  }
-
   const toggleTodo = async (todo: Todo) => {
-    const { error } = await supabase
-      .from('todos')
-      .update({ 
-        completed: !todo.completed,
-        completed_at: !todo.completed ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', todo.id)
-
-    if (!error) {
+    if (!userId) return
+    
+    const success = await toggleTodoCompletion(todo.id, todo.completed, userId)
+    if (success) {
       await loadTodos()
     }
   }
 
   const addTodo = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!userId) return
 
     const { error } = await supabase
       .from('todos')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         ...newTodo,
         due_date: newTodo.due_date || null
       })
@@ -133,12 +340,10 @@ export default function TodosPage() {
   }
 
   const deleteTodo = async (id: string) => {
-    const { error } = await supabase
-      .from('todos')
-      .delete()
-      .eq('id', id)
-
-    if (!error) {
+    if (!userId) return
+    
+    const success = await deleteTodoById(id, userId)
+    if (success) {
       await loadTodos()
       setSwipeDelete(null)
     }
@@ -156,16 +361,6 @@ export default function TodosPage() {
       setSwipeDelete(todoId)
     } else if (swipeDistance < -100) {
       setSwipeDelete(null)
-    }
-  }
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'text-red-600 bg-red-50 border-red-200'
-      case 'high': return 'text-orange-600 bg-orange-50 border-orange-200'
-      case 'medium': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      case 'low': return 'text-green-600 bg-green-50 border-green-200'
-      default: return 'text-gray-600 bg-gray-50 border-gray-200'
     }
   }
 
