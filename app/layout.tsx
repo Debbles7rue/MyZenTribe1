@@ -1,32 +1,52 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { ToastProvider } from '@/components/ToastProvider'
-import SafeMediaWrapper from '@/components/SafeMediaWrapper'
-import SiteHeader from '@/components/SiteHeader'
-
-const inter = Inter({ subsets: ['latin'] })
+// app/layout.tsx
+import "react-big-calendar/lib/css/react-big-calendar.css";
+import "./globals.css";
+import type { Metadata } from "next";
+import SiteHeader from "@/components/SiteHeader";
+import FirstRunGate from "@/components/FirstRunGate";
+import { ToastProvider } from "@/components/ToastProvider";
+import ElevenElevenFireworks from "@/components/ElevenElevenFireworks";
+import SafeMediaWrapper from "@/components/SafeMediaWrapper";
 
 export const metadata: Metadata = {
-  title: 'MyZenTribe - Meditation • Community • Presence',
-  description: 'Connect with your spiritual community',
-}
+  title: "MyZenTribe",
+  description: "Meditation • Community • Presence",
+  viewport: "width=device-width, initial-scale=1",
+  themeColor: "#7c3aed",
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <head>
+        {/* Ensure title is always present for error pages */}
+        <title>MyZenTribe</title>
+        {/* Leaflet CSS for maps */}
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossOrigin=""
+        />
+      </head>
+      <body>
         <SafeMediaWrapper>
           <ToastProvider>
+            {/* Global header */}
             <SiteHeader />
-            <main>{children}</main>
+            {/* First-run redirect guard (client) */}
+            <FirstRunGate />
+            {/* Page content */}
+            <main className="page-wrap">{children}</main>
+            {/* 11:11 Fireworks */}
+            <ElevenElevenFireworks />
           </ToastProvider>
         </SafeMediaWrapper>
       </body>
     </html>
-  )
+  );
 }
