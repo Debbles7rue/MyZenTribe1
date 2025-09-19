@@ -35,6 +35,11 @@ interface CalendarHeaderProps {
   setShowAnalytics: (show: boolean) => void;
   setShowMeetingCoordinator: (show: boolean) => void;
   setShowShortcutsHelp: (show: boolean) => void;
+  
+  // ADD: Lists button props
+  showListsSidebar?: boolean;
+  setShowListsSidebar?: (show: boolean) => void;
+  onListsClick?: () => void;
 }
 
 export default function CalendarHeader({
@@ -65,7 +70,10 @@ export default function CalendarHeader({
   setShowTemplates,
   setShowAnalytics,
   setShowMeetingCoordinator,
-  setShowShortcutsHelp
+  setShowShortcutsHelp,
+  showListsSidebar,
+  setShowListsSidebar,
+  onListsClick
 }: CalendarHeaderProps) {
   
   const handleCarpoolClick = () => {
@@ -136,6 +144,22 @@ export default function CalendarHeader({
             </button>
           )}
 
+          {/* ADD: Lists Button for Desktop */}
+          {!isMobile && mode === 'my' && onListsClick && (
+            <button
+              onClick={onListsClick}
+              className={`px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-all flex items-center gap-2 ${
+                showListsSidebar
+                  ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
+              }`}
+              title="Toggle lists sidebar"
+            >
+              <span>📋</span>
+              <span>Lists</span>
+            </button>
+          )}
+
           {/* Feature Toggle Buttons */}
           <button
             onClick={() => setShowWeather(!showWeather)}
@@ -189,7 +213,7 @@ export default function CalendarHeader({
           {/* Divider */}
           <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
 
-          {/* CARPOOL BUTTON - NEW! */}
+          {/* CARPOOL BUTTON */}
           <button
             onClick={handleCarpoolClick}
             className="px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-green-600 hover:to-blue-600 transition-all flex items-center gap-2"
