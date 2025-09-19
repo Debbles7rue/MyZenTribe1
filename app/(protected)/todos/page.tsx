@@ -22,6 +22,8 @@ interface Todo {
   updated_at: string
   time?: string
   notes?: string
+  recurring?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
+  recurring_parent_id?: string
 }
 
 // Export for calendar integration
@@ -34,6 +36,9 @@ export interface QuickTodoForm {
   notes: string
 }
 
+// Confetti function - will be initialized after component mounts
+let confetti: any = null
+
 export default function TodosPage() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,6 +48,8 @@ export default function TodosPage() {
   const [swipeDelete, setSwipeDelete] = useState<string | null>(null)
   const [showCompletedItems, setShowCompletedItems] = useState(false)
   const [showQuickModal, setShowQuickModal] = useState(false)
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const [showEditForm, setShowEditForm] = useState(false)
   
   const [newTodo, setNewTodo] = useState({
     title: '',
@@ -51,7 +58,20 @@ export default function TodosPage() {
     due_date: '',
     category: '',
     time: '',
-    notes: ''
+    notes: '',
+    recurring: 'none' as Todo['recurring']
+  })
+  
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as Todo['priority'],
+    due_date: '',
+    category: '',
+    time: '',
+    notes: '',
+    recurring: 'none' as Todo['recurring']
   })
   
   // Quick modal form state (for calendar integration)
@@ -73,6 +93,13 @@ export default function TodosPage() {
 
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
+
+  // Load confetti library
+  useEffect(() => {
+    import('canvas-confetti').then((module) => {
+      confetti = module.default
+    })
+  }, [])
 
   // Listen for external quick modal triggers (from calendar)
   useEffect(() => {
@@ -138,21 +165,144 @@ export default function TodosPage() {
     })
   }
 
-  const toggleTodo = async (todo: Todo) => {
+  // Celebration when all todos are complete
+  const triggerCelebration = () => {
+    if (!confetti) return
+    
+    // Multiple confetti bursts for epic celebration
+    const count = 200
+    const defaults = {
+      origin: { y: 0.7 },
+      zIndex: 9999
+    }
+    
+    function fire(particleRatio: number, opts: any) {
+      confetti({
+        ...defaults,
+        ...opts,
+        particleCount: Math.floor(count * particleRatio)
+      })
+    }
+    
+    fire(0.25, {
+      spread: 26,
+      startVelocity: 55,
+    })
+    fire(0.2, {
+      spread: 60,
+    })
+    fire(0.35, {
+      spread: 100,
+      decay: 0.91,
+      scalar: 0.8
+    })
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 25,
+      decay: 0.92,
+      scalar: 1.2
+    })
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 45,
+    })
+    
+    // Show celebration message
+    const celebrationDiv = document.createElement('div')
+    celebrationDiv.innerHTML = `
+      <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                  z-index: 9999; background: white; padding: 2rem 3rem; border-radius: 1rem; 
+                  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                  animation: celebration-bounce 0.5s ease-out;">
+        <h2 style="font-size: 2rem; font-weight: bold; color: #10b981; margin: 0;">🎉 All Done! 🎉</h2>
+        <p style="color: #6b7280; margin-top: 0.5rem;">You've completed all your todos!</p>
+      </div>
+    `
+    document.body.appendChild(celebrationDiv)
+    
+    setTimeout(() => {
+      celebrationDiv.remove()
+    }, 3000)
+  }
+
+  const createRecurringTodo = async (originalTodo: Todo) => {
+    if (!originalTodo.recurring || originalTodo.recurring === 'none') return
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    
+    let nextDate = new Date(originalTodo.due_date || new Date())
+    
+    switch (originalTodo.recurring) {
+      case 'daily':
+        nextDate.setDate(nextDate.getDate() + 1)
+        break
+      case 'weekly':
+        nextDate.setDate(nextDate.getDate() + 7)
+        break
+      case 'monthly':
+        nextDate.setMonth(nextDate.getMonth() + 1)
+        break
+      case 'yearly':
+        nextDate.setFullYear(nextDate.getFullYear() + 1)
+        break
+    }
+    
+    const newRecurringTodo = {
+      user_id: user.id,
+      title: originalTodo.title,
+      description: originalTodo.description,
+      priority: originalTodo.priority,
+      due_date: nextDate.toISOString().split('T')[0],
+      time: originalTodo.time,
+      category: originalTodo.category,
+      notes: originalTodo.notes,
+      recurring: originalTodo.recurring,
+      recurring_parent_id: originalTodo.recurring_parent_id || originalTodo.id,
+      completed: false
+    }
+    
+    await supabase.from('todos').insert(newRecurringTodo)
+  }
+
+  const toggleTodo = async (todo: Todo, e?: React.MouseEvent) => {
+    // Prevent event bubbling to parent div
+    if (e) {
+      e.stopPropagation()
+    }
+    
+    const wasCompleted = todo.completed
     const { error } = await supabase
       .from('todos')
       .update({ 
-        completed: !todo.completed,
-        completed_at: !todo.completed ? new Date().toISOString() : null,
+        completed: !wasCompleted,
+        completed_at: !wasCompleted ? new Date().toISOString() : null,
         updated_at: new Date().toISOString()
       })
       .eq('id', todo.id)
 
     if (!error) {
+      // If completing a recurring todo, create the next occurrence
+      if (!wasCompleted && todo.recurring && todo.recurring !== 'none') {
+        await createRecurringTodo(todo)
+      }
+      
       await loadTodos()
       
+      // Check if all todos are now completed
+      const { data: remainingTodos } = await supabase
+        .from('todos')
+        .select('completed')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .eq('completed', false)
+      
+      if (!remainingTodos || remainingTodos.length === 0) {
+        // All todos are complete!
+        triggerCelebration()
+      }
+      
       // Trigger success animation if completed
-      if (!todo.completed) {
+      if (!wasCompleted) {
         window.dispatchEvent(new CustomEvent('todoCompleted', { 
           detail: { id: todo.id, title: todo.title }
         }))
@@ -182,8 +332,45 @@ export default function TodosPage() {
         due_date: '',
         category: '',
         time: '',
-        notes: ''
+        notes: '',
+        recurring: 'none'
       })
+    }
+  }
+
+  const startEdit = (todo: Todo, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation()
+    }
+    setEditingTodo(todo)
+    setEditForm({
+      title: todo.title || '',
+      description: todo.description || '',
+      priority: todo.priority || 'medium',
+      due_date: todo.due_date || '',
+      category: todo.category || '',
+      time: todo.time || '',
+      notes: todo.notes || '',
+      recurring: todo.recurring || 'none'
+    })
+    setShowEditForm(true)
+  }
+
+  const saveEdit = async () => {
+    if (!editingTodo) return
+    
+    const { error } = await supabase
+      .from('todos')
+      .update({
+        ...editForm,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', editingTodo.id)
+    
+    if (!error) {
+      await loadTodos()
+      setShowEditForm(false)
+      setEditingTodo(null)
     }
   }
 
@@ -202,7 +389,8 @@ export default function TodosPage() {
         priority: quickModalForm.priority as Todo['priority'] || 'medium',
         category: quickModalForm.category,
         notes: quickModalForm.notes,
-        completed: false
+        completed: false,
+        recurring: 'none'
       })
 
     if (!error) {
@@ -257,6 +445,11 @@ export default function TodosPage() {
       case 'low': return 'text-green-600 bg-green-50 border-green-200'
       default: return 'text-gray-600 bg-gray-50 border-gray-200'
     }
+  }
+
+  const getRecurringIcon = (recurring?: string) => {
+    if (!recurring || recurring === 'none') return null
+    return '🔄'
   }
 
   const filteredTodos = todos.filter(todo => {
@@ -367,6 +560,114 @@ export default function TodosPage() {
         </div>
       )}
 
+      {/* Edit Modal */}
+      {showEditForm && editingTodo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md animate-slide-up">
+            <h2 className="text-xl font-bold mb-4">Edit Todo</h2>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="What needs to be done?"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                autoFocus
+              />
+              
+              <textarea
+                placeholder="Description (optional)"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 h-20"
+              />
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Priority</label>
+                  <select
+                    value={editForm.priority}
+                    onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Todo['priority'] })}
+                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Recurring</label>
+                  <select
+                    value={editForm.recurring}
+                    onChange={(e) => setEditForm({ ...editForm, recurring: e.target.value as Todo['recurring'] })}
+                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                  >
+                    <option value="none">No Repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={editForm.due_date}
+                  onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                  className="p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                />
+                
+                <input
+                  type="time"
+                  value={editForm.time}
+                  onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                  className="p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                />
+              </div>
+              
+              <input
+                type="text"
+                placeholder="Category (optional)"
+                value={editForm.category}
+                onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+              />
+              
+              <textarea
+                placeholder="Notes (optional)"
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 h-20"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditForm(false)
+                  setEditingTodo(null)
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={!editForm.title}
+                className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile-First Header */}
       <div className="sticky top-0 z-40 bg-white shadow-lg">
         <div className="p-4">
@@ -390,7 +691,7 @@ export default function TodosPage() {
               {/* Desktop Add Button */}
               <button
                 onClick={() => setShowAddForm(true)}
-                className="hidden md:flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+                className="hidden md:flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all"
               >
                 <span className="text-xl">+</span>
                 Add Todo
@@ -448,7 +749,6 @@ export default function TodosPage() {
         </div>
       </div>
 
-      {/* Rest of your existing todo list UI remains the same... */}
       {/* Todos List - Mobile Optimized */}
       <div className="p-4 pb-24">
         {filteredTodos.length === 0 ? (
@@ -479,37 +779,52 @@ export default function TodosPage() {
                 )}
 
                 <div
-                  className={`bg-white rounded-xl shadow-sm p-4 transition-all ${
+                  className={`bg-white rounded-xl shadow-sm p-4 transition-all hover:shadow-md ${
                     todo.completed ? 'opacity-60' : ''
                   } ${swipeDelete === todo.id ? 'transform -translate-x-24' : ''}`}
                   onClick={() => setSelectedTodo(selectedTodo?.id === todo.id ? null : todo)}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Larger Checkbox for Mobile */}
+                    {/* Fixed Checkbox - Prevent propagation properly */}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleTodo(todo)
-                      }}
-                      className={`mt-0.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-colors ${
+                      onClick={(e) => toggleTodo(todo, e)}
+                      className={`mt-0.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all transform hover:scale-110 ${
                         todo.completed
                           ? 'bg-green-500 border-green-500 text-white'
-                          : 'border-gray-300 active:border-green-500'
+                          : 'border-gray-300 hover:border-green-400 active:scale-95'
                       }`}
                     >
                       {todo.completed && <span className="text-sm">✓</span>}
                     </button>
                     
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-medium text-base ${todo.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                        {todo.title}
-                      </h3>
+                      <div className="flex items-start justify-between">
+                        <h3 className={`font-medium text-base ${todo.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                          {todo.title} {getRecurringIcon(todo.recurring)}
+                        </h3>
+                        
+                        {/* Edit Button */}
+                        <button
+                          onClick={(e) => startEdit(todo, e)}
+                          className="ml-2 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                          aria-label="Edit todo"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </div>
                       
                       {/* Priority and Date - Always Visible on Mobile */}
                       <div className="flex flex-wrap gap-2 mt-2">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(todo.priority)}`}>
                           {todo.priority}
                         </span>
+                        {todo.recurring && todo.recurring !== 'none' && (
+                          <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded-full text-xs border border-purple-200">
+                            🔄 {todo.recurring}
+                          </span>
+                        )}
                         {todo.due_date && (
                           <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded-full text-xs border border-purple-200">
                             📅 {new Date(todo.due_date).toLocaleDateString()}
@@ -545,12 +860,12 @@ export default function TodosPage() {
       {/* Mobile Floating Action Button */}
       <button
         onClick={() => setShowAddForm(true)}
-        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center text-2xl z-50 active:scale-95 transition-transform"
+        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center text-2xl z-50 active:scale-95 transition-transform hover:bg-green-600"
       >
         +
       </button>
 
-      {/* Mobile-Optimized Add Form (Bottom Sheet) - Keep your existing form */}
+      {/* Mobile-Optimized Add Form (Bottom Sheet) */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center">
           <div 
@@ -597,11 +912,38 @@ export default function TodosPage() {
                 </div>
                 
                 <div>
+                  <label className="text-xs text-gray-600 mb-1 block">Repeat</label>
+                  <select
+                    value={newTodo.recurring}
+                    onChange={(e) => setNewTodo({...newTodo, recurring: e.target.value as Todo['recurring']})}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 text-sm"
+                  >
+                    <option value="none">No Repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="text-xs text-gray-600 mb-1 block">Due Date</label>
                   <input
-                    type="datetime-local"
+                    type="date"
                     value={newTodo.due_date}
                     onChange={(e) => setNewTodo({...newTodo, due_date: e.target.value})}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-xs text-gray-600 mb-1 block">Time</label>
+                  <input
+                    type="time"
+                    value={newTodo.time}
+                    onChange={(e) => setNewTodo({...newTodo, time: e.target.value})}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 text-sm"
                   />
                 </div>
@@ -618,14 +960,14 @@ export default function TodosPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowAddForm(false)}
-                  className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium active:scale-95 transition-transform"
+                  className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium active:scale-95 transition-transform hover:bg-gray-200"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={addTodo}
                   disabled={!newTodo.title}
-                  className="flex-1 px-4 py-3 bg-green-500 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
+                  className="flex-1 px-4 py-3 bg-green-500 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform hover:bg-green-600"
                 >
                   Add Todo
                 </button>
@@ -646,6 +988,15 @@ export default function TodosPage() {
         }
         .animate-slide-up {
           animation: slide-up 0.3s ease-out;
+        }
+        
+        @keyframes celebration-bounce {
+          0%, 100% {
+            transform: translate(-50%, -50%) scale(1);
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.05);
+          }
         }
       `}</style>
     </div>
