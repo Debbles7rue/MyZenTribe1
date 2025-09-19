@@ -5,6 +5,9 @@ import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import AvatarUploader from "@/components/AvatarUploader";
+import PostComposer from "@/components/PostComposer";
+import PostCard from "@/components/PostCard";
+import { Post } from "@/lib/posts";
 
 type Profile = {
   id: string;
@@ -76,6 +79,8 @@ export default function ProfilePage() {
   const [inviteExpanded, setInviteExpanded] = useState(false);
   const [friendsCount, setFriendsCount] = useState(0);
   const [componentsReady, setComponentsReady] = useState(false);
+  const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   const displayName = useMemo(() => profile?.full_name || "Member", [profile?.full_name]);
 
@@ -145,6 +150,35 @@ export default function ProfilePage() {
         console.error("Error loading friends count:", err);
       }
     })();
+  }, [userId]);
+
+  // Load user posts
+  async function loadUserPosts() {
+    if (!userId) return;
+    
+    setPostsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('author_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setUserPosts(data);
+      }
+    } catch (err) {
+      console.error('Error loading posts:', err);
+    } finally {
+      setPostsLoading(false);
+    }
+  }
+
+  // Load posts when userId is available
+  useEffect(() => {
+    if (userId) {
+      loadUserPosts();
+    }
   }, [userId]);
 
   // Save profile
@@ -382,6 +416,46 @@ export default function ProfilePage() {
           View My Candles ✨
         </Link>
       </div>
+
+      {/* Post Composer and Posts Feed Section */}
+      {userId && (
+        <div className="posts-section">
+          <div className="card">
+            <h3 className="section-title">Share a Moment</h3>
+            <PostComposer 
+              onPostCreated={loadUserPosts}
+              className="composer-wrapper"
+            />
+          </div>
+
+          <div className="card">
+            <h3 className="section-title">Your Posts</h3>
+            {postsLoading ? (
+              <div className="loading-state">
+                <div className="loading-spinner"></div>
+                <span>Loading your posts...</span>
+              </div>
+            ) : userPosts.length > 0 ? (
+              <div className="posts-feed">
+                {userPosts.map((post) => (
+                  <PostCard 
+                    key={post.id} 
+                    post={post} 
+                    onChanged={loadUserPosts}
+                    currentUserId={userId}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="empty-posts">
+                <div className="empty-icon">📝</div>
+                <p className="empty-text">No posts yet</p>
+                <p className="empty-subtext">Share your first moment above!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Photos Feed - Wrapped in Suspense */}
       {componentsReady && userId && (
@@ -767,6 +841,49 @@ export default function ProfilePage() {
           background: linear-gradient(135deg, #d97706, #b45309);
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(245,158,11,0.3);
+        }
+
+        .posts-section {
+          margin-top: 2rem;
+        }
+
+        .section-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 1rem 0;
+        }
+
+        .composer-wrapper {
+          margin-bottom: 0;
+        }
+
+        .posts-feed {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .empty-posts {
+          text-align: center;
+          padding: 2rem 1rem;
+        }
+
+        .empty-icon {
+          font-size: 3rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .empty-text {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #4b5563;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .empty-subtext {
+          color: #9ca3af;
+          margin: 0;
         }
 
         .loading-state {
