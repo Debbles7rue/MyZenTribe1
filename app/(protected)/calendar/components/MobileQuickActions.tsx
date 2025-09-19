@@ -2,22 +2,18 @@
 import React from 'react';
 
 interface MobileQuickActionsProps {
-  onMoodTrack: () => void;
-  onPomodoro: () => void;
   onTimeBlock: () => void;
   onVoiceCommand: () => void;
   isListening: boolean;
 }
 
 export default function MobileQuickActions({
-  onMoodTrack,
-  onPomodoro,
   onTimeBlock,
   onVoiceCommand,
   isListening
 }: MobileQuickActionsProps) {
   return (
-    <div className="mb-4 overflow-x-auto">
+    <div className="overflow-x-auto">
       <div className="flex gap-2 px-2 min-w-max">
         <button
           onClick={onTimeBlock}
