@@ -19,7 +19,6 @@ import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
 import FeedView from "./components/FeedView";
 import CalendarModals from "./components/CalendarModals";
-import MobileQuickActions from "./components/MobileQuickActions";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
@@ -655,7 +654,7 @@ export default function CalendarPage() {
           </div>
         )}
         
-        {/* Header Component - ADD Lists Button */}
+        {/* Header Component - Now includes all mobile buttons */}
         <CalendarHeader
           mode={mode}
           setMode={setMode}
@@ -663,6 +662,8 @@ export default function CalendarPage() {
           setCalendarTheme={setCalendarTheme}
           showMoon={showMoon}
           setShowMoon={setShowMoon}
+          showWeather={showWeather}
+          setShowWeather={setShowWeather}
           isMobile={isMobile}
           setOpenCreate={setOpenCreate}
           setMobileMenuOpen={setMobileMenuOpen}
@@ -677,9 +678,13 @@ export default function CalendarPage() {
           userStats={gamificationEnabled ? userStats : null}
           isListening={isListening}
           startListening={startListening}
+          activeHeaderTab={'calendar'}
+          setActiveHeaderTab={() => {}}
           gamificationEnabled={gamificationEnabled}
           setGamificationEnabled={setGamificationEnabled}
-          // ADD: Lists button handlers
+          setShowCarpoolChat={setShowCarpoolChat}
+          setSelectedCarpoolEvent={setSelectedCarpoolEvent}
+          // Lists button handlers
           showListsSidebar={showListsSidebar}
           setShowListsSidebar={setShowListsSidebar}
           onListsClick={() => {
@@ -689,26 +694,9 @@ export default function CalendarPage() {
               setShowListsSidebar(!showListsSidebar);
             }
           }}
+          // Time blocking for mobile
+          setShowTimeBlocking={setShowTimeBlocking}
         />
-
-        {/* Mobile Quick Actions Bar */}
-        {isMobile && (
-          <div className="flex items-center justify-between mb-3 px-2">
-            <MobileQuickActions
-              onTimeBlock={() => setShowTimeBlocking(true)}
-              onVoiceCommand={startListening}
-              isListening={isListening}
-            />
-            
-            {/* ADD: Mobile Lists Button */}
-            <button
-              onClick={() => setShowMobileListsSheet(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 rounded-lg shadow-sm whitespace-nowrap text-sm ml-2"
-            >
-              📋 Lists
-            </button>
-          </div>
-        )}
 
         {/* Batch Mode Actions Bar */}
         {batchMode && selectedBatchEvents.size > 0 && (
@@ -832,7 +820,7 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Mobile Lists Bottom Sheet - ADD */}
+        {/* Mobile Lists Bottom Sheet */}
         {isMobile && (
           <MobileListsBottomSheet
             open={showMobileListsSheet}
