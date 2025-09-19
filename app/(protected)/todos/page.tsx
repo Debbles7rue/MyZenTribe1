@@ -1,7 +1,7 @@
 // app/(protected)/todos/page.tsx
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -20,6 +20,18 @@ interface Todo {
   tags?: string[]
   created_at: string
   updated_at: string
+  time?: string
+  notes?: string
+}
+
+// Export for calendar integration
+export interface QuickTodoForm {
+  title: string
+  date: string
+  time: string
+  priority: string
+  category: string
+  notes: string
 }
 
 export default function TodosPage() {
@@ -29,13 +41,29 @@ export default function TodosPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null)
   const [swipeDelete, setSwipeDelete] = useState<string | null>(null)
+  const [showCompletedItems, setShowCompletedItems] = useState(false)
+  const [showQuickModal, setShowQuickModal] = useState(false)
+  
   const [newTodo, setNewTodo] = useState({
     title: '',
     description: '',
     priority: 'medium' as Todo['priority'],
     due_date: '',
-    category: ''
+    category: '',
+    time: '',
+    notes: ''
   })
+  
+  // Quick modal form state (for calendar integration)
+  const [quickModalForm, setQuickModalForm] = useState<QuickTodoForm>({
+    title: '',
+    date: '',
+    time: '',
+    priority: 'medium',
+    category: '',
+    notes: ''
+  })
+  
   const [stats, setStats] = useState({
     total: 0,
     completed: 0,
@@ -45,6 +73,21 @@ export default function TodosPage() {
 
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
+
+  // Listen for external quick modal triggers (from calendar)
+  useEffect(() => {
+    const handleQuickTodo = (event: CustomEvent) => {
+      setShowQuickModal(true)
+      if (event.detail) {
+        setQuickModalForm(event.detail)
+      }
+    }
+    
+    window.addEventListener('openQuickTodo' as any, handleQuickTodo)
+    return () => {
+      window.removeEventListener('openQuickTodo' as any, handleQuickTodo)
+    }
+  }, [])
 
   useEffect(() => {
     loadTodos()
@@ -76,6 +119,9 @@ export default function TodosPage() {
     if (!error && data) {
       setTodos(data)
       calculateStats(data)
+      
+      // Notify calendar to reload
+      window.dispatchEvent(new CustomEvent('todosUpdated', { detail: data }))
     }
     setLoading(false)
   }
@@ -104,6 +150,13 @@ export default function TodosPage() {
 
     if (!error) {
       await loadTodos()
+      
+      // Trigger success animation if completed
+      if (!todo.completed) {
+        window.dispatchEvent(new CustomEvent('todoCompleted', { 
+          detail: { id: todo.id, title: todo.title }
+        }))
+      }
     }
   }
 
@@ -127,8 +180,45 @@ export default function TodosPage() {
         description: '',
         priority: 'medium',
         due_date: '',
-        category: ''
+        category: '',
+        time: '',
+        notes: ''
       })
+    }
+  }
+
+  // Quick add for calendar integration
+  const createQuickTodo = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || !quickModalForm.title) return
+
+    const { error } = await supabase
+      .from('todos')
+      .insert({
+        user_id: user.id,
+        title: quickModalForm.title,
+        due_date: quickModalForm.date || new Date().toISOString().split('T')[0],
+        time: quickModalForm.time,
+        priority: quickModalForm.priority as Todo['priority'] || 'medium',
+        category: quickModalForm.category,
+        notes: quickModalForm.notes,
+        completed: false
+      })
+
+    if (!error) {
+      await loadTodos()
+      setShowQuickModal(false)
+      setQuickModalForm({
+        title: '',
+        date: '',
+        time: '',
+        priority: 'medium',
+        category: '',
+        notes: ''
+      })
+      
+      // Notify calendar of success
+      window.dispatchEvent(new CustomEvent('quickTodoCreated'))
     }
   }
 
@@ -170,6 +260,10 @@ export default function TodosPage() {
   }
 
   const filteredTodos = todos.filter(todo => {
+    // First apply completed filter if showCompletedItems is false
+    if (!showCompletedItems && todo.completed) return false
+    
+    // Then apply view filter
     if (filter === 'pending') return !todo.completed
     if (filter === 'completed') return todo.completed
     return true
@@ -185,6 +279,94 @@ export default function TodosPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+      {/* Quick Add Modal (for calendar integration) */}
+      {showQuickModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md animate-slide-up">
+            <h2 className="text-xl font-bold mb-4">Quick Add Todo</h2>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="What needs to be done?"
+                value={quickModalForm.title}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, title: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                autoFocus
+              />
+              
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={quickModalForm.date}
+                  onChange={(e) => setQuickModalForm({ ...quickModalForm, date: e.target.value })}
+                  className="p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                />
+                
+                <input
+                  type="time"
+                  value={quickModalForm.time}
+                  onChange={(e) => setQuickModalForm({ ...quickModalForm, time: e.target.value })}
+                  className="p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                />
+              </div>
+              
+              <select
+                value={quickModalForm.priority}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, priority: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+              >
+                <option value="low">Low Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="high">High Priority</option>
+                <option value="urgent">Urgent</option>
+              </select>
+              
+              <input
+                type="text"
+                placeholder="Category (optional)"
+                value={quickModalForm.category}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, category: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+              />
+              
+              <textarea
+                placeholder="Notes (optional)"
+                value={quickModalForm.notes}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, notes: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 h-20"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowQuickModal(false)
+                  setQuickModalForm({
+                    title: '',
+                    date: '',
+                    time: '',
+                    priority: 'medium',
+                    category: '',
+                    notes: ''
+                  })
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createQuickTodo}
+                disabled={!quickModalForm.title}
+                className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                Add Todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile-First Header */}
       <div className="sticky top-0 z-40 bg-white shadow-lg">
         <div className="p-4">
@@ -192,14 +374,28 @@ export default function TodosPage() {
             <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
               My To-Dos
             </h1>
-            {/* Desktop Add Button */}
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="hidden md:flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
-            >
-              <span className="text-xl">+</span>
-              Add Todo
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Show Completed Toggle */}
+              <button
+                onClick={() => setShowCompletedItems(!showCompletedItems)}
+                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                  showCompletedItems 
+                    ? 'bg-gray-200 text-gray-700' 
+                    : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                {showCompletedItems ? 'Hide' : 'Show'} Done
+              </button>
+              
+              {/* Desktop Add Button */}
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="hidden md:flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+              >
+                <span className="text-xl">+</span>
+                Add Todo
+              </button>
+            </div>
           </div>
 
           {/* Stats - Horizontal Scroll on Mobile */}
@@ -252,6 +448,7 @@ export default function TodosPage() {
         </div>
       </div>
 
+      {/* Rest of your existing todo list UI remains the same... */}
       {/* Todos List - Mobile Optimized */}
       <div className="p-4 pb-24">
         {filteredTodos.length === 0 ? (
@@ -318,6 +515,11 @@ export default function TodosPage() {
                             📅 {new Date(todo.due_date).toLocaleDateString()}
                           </span>
                         )}
+                        {todo.time && (
+                          <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs border border-blue-200">
+                            🕒 {todo.time}
+                          </span>
+                        )}
                         {todo.category && (
                           <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs border border-blue-200">
                             {todo.category}
@@ -326,9 +528,9 @@ export default function TodosPage() {
                       </div>
 
                       {/* Expanded Details */}
-                      {selectedTodo?.id === todo.id && todo.description && (
+                      {selectedTodo?.id === todo.id && (todo.description || todo.notes) && (
                         <p className="text-gray-600 text-sm mt-3 p-3 bg-gray-50 rounded-lg">
-                          {todo.description}
+                          {todo.description || todo.notes}
                         </p>
                       )}
                     </div>
@@ -348,7 +550,7 @@ export default function TodosPage() {
         +
       </button>
 
-      {/* Mobile-Optimized Add Form (Bottom Sheet) */}
+      {/* Mobile-Optimized Add Form (Bottom Sheet) - Keep your existing form */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center">
           <div 
