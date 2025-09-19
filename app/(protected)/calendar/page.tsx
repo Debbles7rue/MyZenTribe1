@@ -695,7 +695,6 @@ export default function CalendarPage() {
         {isMobile && (
           <div className="flex items-center justify-between mb-3 px-2">
             <MobileQuickActions
-              onPomodoro={() => setShowPomodoroTimer(true)}
               onTimeBlock={() => setShowTimeBlocking(true)}
               onVoiceCommand={startListening}
               isListening={isListening}
