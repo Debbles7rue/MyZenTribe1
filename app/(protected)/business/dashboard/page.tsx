@@ -8,28 +8,22 @@ import BusinessHeader from '@/components/business/BusinessHeader';
 import BusinessSidebar from '@/components/business/BusinessSidebar';
 import BusinessTabs from '@/components/business/BusinessTabs';
 import BusinessWelcome from '@/components/business/BusinessWelcome';
+import PostComposer from '@/components/PostComposer';
+import PostCard from '@/components/PostCard';
+import { Post } from '@/lib/posts';
 
-export default function BusinessDashboard() {
+export default function BusinessDashboardPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('basic');
   const [showWelcome, setShowWelcome] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const [businessPosts, setBusinessPosts] = useState<Post[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function init() {
+    async function checkBusinessProfile() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
@@ -38,153 +32,167 @@ export default function BusinessDashboard() {
       }
 
       setUserId(user.id);
-      setBusinessId(user.id); // Since owner_id is the primary key
-      
-      // Check if business profile exists
-      const { data, error } = await supabase
+
+      // Check if user has a business profile
+      const { data: profile, error } = await supabase
         .from('business_profiles')
-        .select('*')
-        .eq('owner_id', user.id)
+        .select('id')
+        .eq('user_id', user.id)
         .single();
-      
-      if (error && error.code === 'PGRST116') {
-        // No rows returned - create new profile
-        const { data: newBiz, error: createError } = await supabase
+
+      if (error || !profile) {
+        // Create a new business profile
+        const { data: newProfile, error: createError } = await supabase
           .from('business_profiles')
           .insert({
-            owner_id: user.id,
+            user_id: user.id,
             display_name: 'My Business',
             handle: `business-${user.id.slice(0, 8)}`,
             visibility: 'private',
             allow_messages: false,
             allow_reviews: false,
-            allow_collaboration: false,
             discoverable: false,
-            services: [],
-            hours: {},
-            special_hours: {},
-            social_links: {},
-            gallery: [],
-            featured_items: [],
-            view_count: 0,
-            follower_count: 0,
-            rating_count: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
           })
           .select()
           .single();
 
-        if (!createError && newBiz) {
-          setShowWelcome(true);
-        } else if (createError) {
-          console.error('Error creating business profile:', createError);
-        }
-      } else if (data) {
-        // Check if this is a new/incomplete profile
-        if (!data.display_name || data.display_name === 'My Business' || !data.handle) {
+        if (!createError && newProfile) {
+          setBusinessId(newProfile.id);
           setShowWelcome(true);
         }
+      } else {
+        setBusinessId(profile.id);
       }
-      
+
       setLoading(false);
     }
-    
-    init();
+
+    checkBusinessProfile();
   }, [router]);
+
+  // Load business posts
+  async function loadBusinessPosts() {
+    if (!userId) return;
+    
+    setPostsLoading(true);
+    try {
+      // Load posts created by this business account
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('author_id', userId)
+        .eq('is_business_post', true) // Assuming you have a flag for business posts
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setBusinessPosts(data);
+      }
+    } catch (err) {
+      console.error('Error loading business posts:', err);
+    } finally {
+      setPostsLoading(false);
+    }
+  }
+
+  // Load posts when userId is available
+  useEffect(() => {
+    if (userId && businessId) {
+      loadBusinessPosts();
+    }
+  }, [userId, businessId]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-pink-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your business dashboard...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading business dashboard...</div>
       </div>
     );
   }
 
   if (!businessId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-pink-50">
-        <div className="text-center px-4">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to load business profile</h2>
-          <p className="text-gray-600 mb-4">There was an issue accessing your business dashboard.</p>
-          <div className="space-y-2 max-w-xs mx-auto">
-            <button 
-              onClick={() => window.location.reload()} 
-              className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Try Again
-            </button>
-            <button 
-              onClick={() => router.push('/dashboard')} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg text-red-600">Error loading business profile</div>
       </div>
     );
   }
 
   return (
-    <>
-      {/* Welcome Modal for First-Time Users */}
+    <div className="min-h-screen bg-gray-50">
       {showWelcome && (
         <BusinessWelcome onComplete={() => setShowWelcome(false)} />
       )}
       
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          {/* Header - Mobile Optimized */}
-          <div className="mb-6">
-            <BusinessHeader businessId={businessId} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <BusinessHeader businessId={businessId} />
+        
+        {/* Main Layout */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sidebar - Desktop Only */}
+          <div className="hidden lg:block">
+            <BusinessSidebar businessId={businessId} />
           </div>
           
-          {/* Mobile Tab Navigation */}
-          {isMobile && (
-            <div className="mb-4 -mx-4 px-4 overflow-x-auto">
-              <div className="flex space-x-2 pb-2">
-                {['basic', 'contact', 'hours', 'services', 'gallery', 'social', 'settings'].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`
-                      px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap
-                      ${activeTab === tab 
-                        ? 'bg-purple-600 text-white' 
-                        : 'bg-gray-100 text-gray-600'}
-                    `}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Main Layout - Responsive Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Sidebar - Desktop Left, Mobile Top */}
-            <div className={`${isMobile ? 'order-2' : 'lg:col-span-1'}`}>
-              <div className={`${isMobile ? 'mt-6' : 'sticky top-4'}`}>
-                <BusinessSidebar businessId={businessId} />
-              </div>
-            </div>
-            
-            {/* Main Content - Full Width on Mobile */}
-            <div className={`${isMobile ? 'order-1' : 'lg:col-span-3'}`}>
-              <BusinessTabs 
-                businessId={businessId} 
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-              />
-            </div>
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <BusinessTabs 
+              businessId={businessId} 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+            />
           </div>
         </div>
+
+        {/* Mobile Sidebar - Bottom */}
+        <div className="lg:hidden mt-6">
+          <BusinessSidebar businessId={businessId} />
+        </div>
+
+        {/* Business Posts Section */}
+        {userId && (
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-1"></div>
+            <div className="lg:col-span-3">
+              {/* Post Composer */}
+              <div className="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 className="text-lg font-semibold mb-4">Share Business Update</h3>
+                <PostComposer 
+                  onPostCreated={loadBusinessPosts}
+                  className="business-composer"
+                />
+              </div>
+
+              {/* Business Posts Feed */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4">Your Business Posts</h3>
+                {postsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-gray-500">Loading posts...</div>
+                  </div>
+                ) : businessPosts.length > 0 ? (
+                  <div className="space-y-4">
+                    {businessPosts.map((post) => (
+                      <PostCard 
+                        key={post.id} 
+                        post={post} 
+                        onChanged={loadBusinessPosts}
+                        currentUserId={userId}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-4xl mb-3">📢</div>
+                    <div className="text-lg font-medium text-gray-700">No business posts yet</div>
+                    <div className="text-gray-500 mt-2">Share updates about your business, promotions, or news!</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
