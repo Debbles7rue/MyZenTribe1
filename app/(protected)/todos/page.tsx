@@ -24,6 +24,9 @@ interface Todo {
   notes?: string
   recurring?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
   recurring_parent_id?: string
+  list_type?: 'todo' | 'reminder'
+  quantity?: number
+  unit?: string
 }
 
 // Export for calendar integration
@@ -50,7 +53,10 @@ export default function TodosPage() {
   const [showQuickModal, setShowQuickModal] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [showEditForm, setShowEditForm] = useState(false)
+  const [showListDropdown, setShowListDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   
+  // Remove unused states
   const [newTodo, setNewTodo] = useState({
     title: '',
     description: '',
@@ -93,6 +99,18 @@ export default function TodosPage() {
 
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowListDropdown(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Load confetti library
   useEffect(() => {
@@ -140,6 +158,7 @@ export default function TodosPage() {
       .from('todos')
       .select('*')
       .eq('user_id', user.id)
+      .eq('list_type', 'todo')
       .order('completed', { ascending: true })
       .order('due_date', { ascending: true })
 
@@ -215,7 +234,7 @@ export default function TodosPage() {
                   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
                   animation: celebration-bounce 0.5s ease-out;">
         <h2 style="font-size: 2rem; font-weight: bold; color: #10b981; margin: 0;">🎉 All Done! 🎉</h2>
-        <p style="color: #6b7280; margin-top: 0.5rem;">You've completed all your todos!</p>
+        <p style="color: #6b7280; margin-top: 0.5rem;">You've completed all your ${currentConfig.title.toLowerCase()}!</p>
       </div>
     `
     document.body.appendChild(celebrationDiv)
@@ -259,7 +278,8 @@ export default function TodosPage() {
       notes: originalTodo.notes,
       recurring: originalTodo.recurring,
       recurring_parent_id: originalTodo.recurring_parent_id || originalTodo.id,
-      completed: false
+      completed: false,
+      list_type: originalTodo.list_type
     }
     
     await supabase.from('todos').insert(newRecurringTodo)
@@ -294,6 +314,7 @@ export default function TodosPage() {
         .from('todos')
         .select('completed')
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .eq('list_type', 'todo')
         .eq('completed', false)
       
       if (!remainingTodos || remainingTodos.length === 0) {
@@ -314,13 +335,17 @@ export default function TodosPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    const todoData = {
+      user_id: user.id,
+      ...newTodo,
+      list_type: 'todo',
+      due_date: newTodo.due_date || null,
+      priority: newTodo.priority
+    }
+
     const { error } = await supabase
       .from('todos')
-      .insert({
-        user_id: user.id,
-        ...newTodo,
-        due_date: newTodo.due_date || null
-      })
+      .insert(todoData)
 
     if (!error) {
       await loadTodos()
@@ -351,7 +376,9 @@ export default function TodosPage() {
       category: todo.category || '',
       time: todo.time || '',
       notes: todo.notes || '',
-      recurring: todo.recurring || 'none'
+      recurring: todo.recurring || 'none',
+      quantity: todo.quantity || 1,
+      unit: todo.unit || ''
     })
     setShowEditForm(true)
   }
@@ -390,7 +417,8 @@ export default function TodosPage() {
         category: quickModalForm.category,
         notes: quickModalForm.notes,
         completed: false,
-        recurring: 'none'
+        recurring: 'none',
+        list_type: 'todo'
       })
 
     if (!error) {
@@ -450,6 +478,27 @@ export default function TodosPage() {
   const getRecurringIcon = (recurring?: string) => {
     if (!recurring || recurring === 'none') return null
     return '🔄'
+  }
+
+  const getListColor = () => {
+    switch (currentListType) {
+      case 'reminder': return 'from-blue-600 to-cyan-600'
+      default: return 'from-green-600 to-emerald-600'
+    }
+  }
+
+  const getAccentColor = () => {
+    switch (currentListType) {
+      case 'reminder': return 'bg-blue-500 hover:bg-blue-600'
+      default: return 'bg-green-500 hover:bg-green-600'
+    }
+  }
+
+  const getCheckboxColor = () => {
+    switch (currentListType) {
+      case 'reminder': return 'bg-blue-500 border-blue-500'
+      default: return 'bg-green-500 border-green-500'
+    }
   }
 
   const filteredTodos = todos.filter(todo => {
@@ -659,7 +708,7 @@ export default function TodosPage() {
               <button
                 onClick={saveEdit}
                 disabled={!editForm.title}
-                className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+                className={`px-4 py-2 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 ${getAccentColor()}`}
               >
                 Save Changes
               </button>
@@ -668,13 +717,73 @@ export default function TodosPage() {
         </div>
       )}
 
-      {/* Mobile-First Header */}
+      {/* Mobile-First Header with List Type Dropdown */}
       <div className="sticky top-0 z-40 bg-white shadow-lg">
         <div className="p-4">
           <div className="flex justify-between items-center mb-3">
-            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-              My To-Dos
-            </h1>
+            {/* Page Title with Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowListDropdown(!showListDropdown)}
+                className="flex items-center gap-2 text-2xl md:text-3xl font-bold hover:opacity-80 transition-opacity"
+              >
+                <span>✅</span>
+                <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                  To-dos
+                </span>
+                <svg className={`w-5 h-5 transition-transform ${showListDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {/* Dropdown Menu - Navigate to different pages */}
+              {showListDropdown && (
+                <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-dropdown">
+                  <a
+                    href="/todos"
+                    className="w-full px-4 py-3 flex items-center gap-3 bg-gray-50 dark:bg-gray-700"
+                  >
+                    <span className="text-2xl">✅</span>
+                    <div className="text-left">
+                      <div className="font-medium">To-dos</div>
+                      <div className="text-xs text-gray-500">Tasks & projects</div>
+                    </div>
+                    <svg className="w-5 h-5 text-green-500 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </a>
+                  
+                  <a
+                    href="/reminders"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <span className="text-2xl">🔔</span>
+                    <div className="text-left">
+                      <div className="font-medium">Reminders</div>
+                      <div className="text-xs text-gray-500">Time-based alerts</div>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                  
+                  <a
+                    href="/shopping"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-t border-gray-200 dark:border-gray-700"
+                  >
+                    <span className="text-2xl">🛒</span>
+                    <div className="text-left">
+                      <div className="font-medium">Shopping List</div>
+                      <div className="text-xs text-gray-500">Things to buy</div>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </div>
+              )}
+            </div>
+            
             <div className="flex items-center gap-2">
               {/* Show Completed Toggle */}
               <button
@@ -876,12 +985,12 @@ export default function TodosPage() {
             {/* Mobile Handle */}
             <div className="md:hidden w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             
-            <h2 className="text-xl font-semibold mb-4">Add New Todo</h2>
+            <h2 className="text-xl font-semibold mb-4">Add New {currentListType === 'reminder' ? 'Reminder' : 'Todo'}</h2>
             
             <div className="space-y-4">
               <input
                 type="text"
-                placeholder="What needs to be done?"
+                placeholder={currentConfig.placeholder}
                 value={newTodo.title}
                 onChange={(e) => setNewTodo({...newTodo, title: e.target.value})}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-base"
@@ -892,7 +1001,7 @@ export default function TodosPage() {
                 placeholder="Add details (optional)"
                 value={newTodo.description}
                 onChange={(e) => setNewTodo({...newTodo, description: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-base"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 text-base"
                 rows={2}
               />
               
@@ -957,6 +1066,14 @@ export default function TodosPage() {
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 text-base"
               />
               
+              <textarea
+                placeholder="Notes (optional)"
+                value={newTodo.notes}
+                onChange={(e) => setNewTodo({...newTodo, notes: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 text-base"
+                rows={2}
+              />
+              
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowAddForm(false)}
@@ -967,9 +1084,9 @@ export default function TodosPage() {
                 <button
                   onClick={addTodo}
                   disabled={!newTodo.title}
-                  className="flex-1 px-4 py-3 bg-green-500 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform hover:bg-green-600"
+                  className={`flex-1 px-4 py-3 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform ${getAccentColor()}`}
                 >
-                  Add Todo
+                  Add {currentListType === 'reminder' ? 'Reminder' : 'Todo'}
                 </button>
               </div>
             </div>
@@ -988,6 +1105,20 @@ export default function TodosPage() {
         }
         .animate-slide-up {
           animation: slide-up 0.3s ease-out;
+        }
+        
+        @keyframes dropdown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-dropdown {
+          animation: dropdown 0.2s ease-out;
         }
         
         @keyframes celebration-bounce {
