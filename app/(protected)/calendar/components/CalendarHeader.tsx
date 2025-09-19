@@ -263,17 +263,6 @@ export default function CalendarHeader({
             <span>New Event</span>
           </button>
 
-          {/* Mobile Menu Toggle */}
-          {isMobile && (
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
-              title="Open menu"
-            >
-              ☰
-            </button>
-          )}
-
           {/* Keyboard Shortcuts Help - Desktop */}
           {!isMobile && (
             <button
