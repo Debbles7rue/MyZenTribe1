@@ -36,10 +36,13 @@ interface CalendarHeaderProps {
   setShowMeetingCoordinator: (show: boolean) => void;
   setShowShortcutsHelp: (show: boolean) => void;
   
-  // ADD: Lists button props
+  // Lists button props
   showListsSidebar?: boolean;
   setShowListsSidebar?: (show: boolean) => void;
   onListsClick?: () => void;
+  
+  // Time blocking prop for mobile
+  setShowTimeBlocking?: (show: boolean) => void;
 }
 
 export default function CalendarHeader({
@@ -73,7 +76,8 @@ export default function CalendarHeader({
   setShowShortcutsHelp,
   showListsSidebar,
   setShowListsSidebar,
-  onListsClick
+  onListsClick,
+  setShowTimeBlocking
 }: CalendarHeaderProps) {
   
   const handleCarpoolClick = () => {
@@ -130,21 +134,46 @@ export default function CalendarHeader({
 
         {/* Features Row - All buttons in one row */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Voice Command Button - Mobile */}
+          {/* Mobile-specific buttons */}
           {isMobile && (
-            <button
-              onClick={startListening}
-              className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
-                isListening
-                  ? 'bg-red-500 text-white animate-pulse'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
-              }`}
-            >
-              {isListening ? '🎤' : '🎙️'}
-            </button>
+            <>
+              {/* Time Block Button - Mobile */}
+              {setShowTimeBlocking && (
+                <button
+                  onClick={() => setShowTimeBlocking(true)}
+                  className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+                  title="Time blocking"
+                >
+                  ⏰ Time Block
+                </button>
+              )}
+              
+              {/* Voice Command Button - Mobile */}
+              <button
+                onClick={startListening}
+                className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
+                }`}
+              >
+                {isListening ? '🎤 Listening...' : '🎙️ Voice'}
+              </button>
+              
+              {/* Lists Button - Mobile */}
+              {onListsClick && (
+                <button
+                  onClick={onListsClick}
+                  className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+                  title="My lists"
+                >
+                  📋 Lists
+                </button>
+              )}
+            </>
           )}
 
-          {/* ADD: Lists Button for Desktop */}
+          {/* Lists Button for Desktop */}
           {!isMobile && mode === 'my' && onListsClick && (
             <button
               onClick={onListsClick}
