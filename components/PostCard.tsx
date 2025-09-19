@@ -1,8 +1,8 @@
 // components/PostCard.tsx
 "use client";
 
-import { useState, useRef } from "react";
-import { Post, toggleLike, addComment, timeAgo, updatePost, addMediaToPost, uploadMedia, deletePost } from "@/lib/posts";
+import { useState, useEffect } from "react";
+import { Post } from "@/lib/posts";
 import Link from "next/link";
 
 interface PostCardProps {
@@ -11,359 +11,651 @@ interface PostCardProps {
   currentUserId?: string;
 }
 
-export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
-  const [busy, setBusy] = useState(false);
-  const [comment, setComment] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [editBody, setEditBody] = useState(post.body);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [showAllMedia, setShowAllMedia] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Check if current user can edit (is creator or co-creator)
-  const canEdit = currentUserId && (
-    post.user_id === currentUserId || 
-    (post.co_creators && post.co_creators.includes(currentUserId))
-  );
-
-  // Check if current user is the original creator (can delete)
-  const canDelete = currentUserId && post.user_id === currentUserId;
-
-  async function like() {
-    if (busy) return;
-    setBusy(true);
-    await toggleLike(post.id);
-    setBusy(false);
-    onChanged?.();
+// Photo Grid Component
+function PhotoGrid({ 
+  media, 
+  onPhotoClick 
+}: { 
+  media: Array<{url: string; type: 'image' | 'video'}>;
+  onPhotoClick: (index: number) => void;
+}) {
+  const images = media.filter(m => m.type === 'image');
+  const videos = media.filter(m => m.type === 'video');
+  
+  if (media.length === 0) return null;
+  
+  // Different layouts based on photo count
+  if (images.length === 1 && videos.length === 0) {
+    // Single image - full width
+    return (
+      <div className="photo-grid single">
+        <div 
+          className="photo-item"
+          onClick={() => onPhotoClick(0)}
+        >
+          <img src={images[0].url} alt="" />
+        </div>
+      </div>
+    );
   }
-
-  async function sendComment() {
-    if (!comment.trim() || busy) return;
-    setBusy(true);
-    await addComment(post.id, comment.trim());
-    setComment("");
-    setBusy(false);
-    onChanged?.();
+  
+  if (images.length === 2) {
+    // Two images - side by side
+    return (
+      <div className="photo-grid two">
+        {images.map((img, idx) => (
+          <div 
+            key={idx}
+            className="photo-item"
+            onClick={() => onPhotoClick(idx)}
+          >
+            <img src={img.url} alt="" />
+          </div>
+        ))}
+      </div>
+    );
   }
-
-  async function saveEdit() {
-    if (busy || !editBody.trim()) return;
-    setBusy(true);
-    const result = await updatePost(post.id, { body: editBody });
-    if (result.ok) {
-      setIsEditing(false);
-      onChanged?.();
-    } else {
-      alert("Failed to update post. Please try again.");
-    }
-    setBusy(false);
+  
+  if (images.length === 3) {
+    // Three images - one big, two small
+    return (
+      <div className="photo-grid three">
+        <div 
+          className="photo-item main"
+          onClick={() => onPhotoClick(0)}
+        >
+          <img src={images[0].url} alt="" />
+        </div>
+        <div className="side-photos">
+          {images.slice(1, 3).map((img, idx) => (
+            <div 
+              key={idx}
+              className="photo-item"
+              onClick={() => onPhotoClick(idx + 1)}
+            >
+              <img src={img.url} alt="" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
-
-  async function handleDelete() {
-    if (busy) return;
-    setBusy(true);
-    const result = await deletePost(post.id);
-    if (result.ok) {
-      onChanged?.();
-    } else {
-      alert("Failed to delete post. Please try again.");
-    }
-    setBusy(false);
-    setShowDeleteConfirm(false);
+  
+  if (images.length === 4) {
+    // Four images - 2x2 grid
+    return (
+      <div className="photo-grid four">
+        {images.map((img, idx) => (
+          <div 
+            key={idx}
+            className="photo-item"
+            onClick={() => onPhotoClick(idx)}
+          >
+            <img src={img.url} alt="" />
+          </div>
+        ))}
+      </div>
+    );
   }
-
-  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploadingMedia(true);
-    
-    for (const file of files) {
-      const isVideo = file.type.startsWith('video');
-      const { url, error } = await uploadMedia(file, isVideo ? 'video' : 'image');
-      
-      if (error) {
-        alert(`Failed to upload ${file.name}. Please try again.`);
-        continue;
-      }
-
-      if (url) {
-        await addMediaToPost(post.id, url, isVideo ? 'video' : 'image');
-      }
-    }
-    
-    setUploadingMedia(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    onChanged?.();
-  }
-
-  // Combine all media (original + additional)
-  const allMedia = [
-    ...(post.image_url ? [{ url: post.image_url, type: 'image' as const }] : []),
-    ...(post.video_url ? [{ url: post.video_url, type: 'video' as const }] : []),
-    ...(post.additional_media || [])
-  ];
-
-  const displayedMedia = showAllMedia ? allMedia : allMedia.slice(0, 4);
-  const remainingCount = allMedia.length - displayedMedia.length;
-
+  
+  // 5 or more images
   return (
-    <article className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-      {/* Header */}
-      <div className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={(post.author?.avatar_url || "/default-avatar.png") + "?t=1"}
+    <div className="photo-grid many">
+      <div className="main-row">
+        <div 
+          className="photo-item large"
+          onClick={() => onPhotoClick(0)}
+        >
+          <img src={images[0].url} alt="" />
+        </div>
+        <div 
+          className="photo-item large"
+          onClick={() => onPhotoClick(1)}
+        >
+          <img src={images[1].url} alt="" />
+        </div>
+      </div>
+      <div className="bottom-row">
+        {images.slice(2, 5).map((img, idx) => (
+          <div 
+            key={idx}
+            className="photo-item"
+            onClick={() => onPhotoClick(idx + 2)}
+          >
+            <img src={img.url} alt="" />
+            {idx === 2 && images.length > 5 && (
+              <div className="more-overlay">
+                <span>+{images.length - 5}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      
+      {/* Videos section if any */}
+      {videos.length > 0 && (
+        <div className="videos-row">
+          {videos.map((vid, idx) => (
+            <div key={idx} className="video-item">
+              <video src={vid.url} controls />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Lightbox Component
+function PhotoLightbox({ 
+  media, 
+  startIndex, 
+  onClose 
+}: { 
+  media: Array<{url: string; type: 'image' | 'video'}>;
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  const images = media.filter(m => m.type === 'image');
+  
+  const goNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % images.length);
+  };
+  
+  const goPrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'ArrowLeft') goPrev();
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, []);
+  
+  return (
+    <div className="lightbox-overlay" onClick={onClose}>
+      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+        <button className="lightbox-close" onClick={onClose}>×</button>
+        
+        {images.length > 1 && (
+          <>
+            <button className="lightbox-prev" onClick={goPrev}>‹</button>
+            <button className="lightbox-next" onClick={goNext}>›</button>
+          </>
+        )}
+        
+        <img src={images[currentIndex].url} alt="" />
+        
+        {images.length > 1 && (
+          <div className="lightbox-counter">
+            {currentIndex + 1} / {images.length}
+          </div>
+        )}
+        
+        {/* Thumbnail strip */}
+        {images.length > 1 && (
+          <div className="lightbox-thumbnails">
+            {images.map((img, idx) => (
+              <div
+                key={idx}
+                className={`thumbnail ${idx === currentIndex ? 'active' : ''}`}
+                onClick={() => setCurrentIndex(idx)}
+              >
+                <img src={img.url} alt="" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
+  const [showEditMenu, setShowEditMenu] = useState(false);
+  const [isCoCreator, setIsCoCreator] = useState(false);
+  
+  // Check if current user is a co-creator
+  useEffect(() => {
+    if (currentUserId && post.co_creators) {
+      setIsCoCreator(post.co_creators.includes(currentUserId));
+    }
+  }, [currentUserId, post.co_creators]);
+  
+  const handlePhotoClick = (index: number) => {
+    setLightboxStartIndex(index);
+    setShowLightbox(true);
+  };
+  
+  const canEdit = currentUserId === post.author_id || isCoCreator;
+  const canDelete = currentUserId === post.author_id; // Only original author can delete
+  
+  // Format the display name with co-creators
+  const getDisplayName = () => {
+    let name = post.author_name || 'User';
+    if (post.co_creators && post.co_creators.length > 0) {
+      const coCreatorNames = post.co_creator_names || [];
+      if (coCreatorNames.length > 0) {
+        name += ` with ${coCreatorNames.join(', ')}`;
+      }
+    }
+    return name;
+  };
+  
+  return (
+    <>
+      <div className="post-card">
+        {/* Header */}
+        <div className="post-header">
+          <div className="author-info">
+            <img 
+              src={post.author_avatar || '/default-avatar.png'} 
               alt=""
-              className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-100"
+              className="author-avatar"
             />
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Link href={`/profile/${post.user_id}`} className="font-semibold text-gray-900 hover:text-purple-600 transition-colors">
-                  {post.author?.full_name || "Member"}
-                </Link>
-                
-                {/* Co-creators */}
-                {post.co_creators && post.co_creators.length > 0 && (
-                  <>
-                    <span className="text-gray-500 text-sm">with</span>
-                    {post.co_creators_info?.map((coCreator, index) => (
-                      <span key={coCreator.id} className="text-sm">
-                        <Link 
-                          href={`/profile/${coCreator.id}`}
-                          className="font-medium text-purple-600 hover:text-purple-700 transition-colors"
-                        >
-                          {coCreator.full_name || "Member"}
-                        </Link>
-                        {index < post.co_creators.length - 1 && <span className="text-gray-500">, </span>}
-                      </span>
-                    ))}
-                  </>
+              <div className="author-name">{getDisplayName()}</div>
+              <div className="post-meta">
+                <span className="post-time">
+                  {new Date(post.created_at).toLocaleDateString()}
+                </span>
+                {post.privacy && (
+                  <span className="post-privacy">
+                    {post.privacy === 'public' ? '🌍' : '🔒'}
+                  </span>
                 )}
-              </div>
-              
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span>{timeAgo(post.created_at)}</span>
-                <span>•</span>
-                <span className="capitalize">{post.privacy}</span>
               </div>
             </div>
           </div>
-
-          {/* Action Menu */}
+          
           {canEdit && (
-            <div className="flex items-center gap-2">
-              {!isEditing && (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
-                  title="Edit post"
-                >
-                  ✏️
-                </button>
-              )}
-              {canDelete && !isEditing && (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title="Delete post"
-                >
-                  🗑️
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="mt-3">
-          {isEditing ? (
-            <div className="space-y-3">
-              <textarea
-                className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                rows={3}
-                value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={saveEdit}
-                  disabled={busy || !editBody.trim()}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                >
-                  {busy ? "Saving..." : "Save"}
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditBody(post.body);
-                  }}
-                  disabled={busy}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="whitespace-pre-wrap text-gray-800">{post.body}</p>
-          )}
-        </div>
-
-        {/* Media Gallery */}
-        {allMedia.length > 0 && (
-          <div className="mt-3">
-            <div className={`grid gap-2 ${allMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-              {displayedMedia.map((media, index) => (
-                <div key={index} className="relative rounded-lg overflow-hidden bg-gray-100">
-                  {media.type === 'image' ? (
-                    <img 
-                      src={media.url} 
-                      alt="" 
-                      className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
-                      onClick={() => window.open(media.url, '_blank')}
-                    />
-                  ) : (
-                    <video 
-                      src={media.url} 
-                      controls 
-                      className="w-full h-full"
-                      onClick={(e) => e.stopPropagation()}
-                    />
+            <div className="post-actions">
+              <button 
+                className="menu-btn"
+                onClick={() => setShowEditMenu(!showEditMenu)}
+              >
+                ⋯
+              </button>
+              {showEditMenu && (
+                <div className="menu-dropdown">
+                  {isCoCreator && !canDelete && (
+                    <>
+                      <button className="menu-item">Add Photos</button>
+                      <button className="menu-item">Edit My Content</button>
+                      <button className="menu-item">Remove Tag</button>
+                    </>
                   )}
-                  
-                  {/* Show remaining count on last visible item */}
-                  {!showAllMedia && remainingCount > 0 && index === displayedMedia.length - 1 && (
-                    <button
-                      onClick={() => setShowAllMedia(true)}
-                      className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center text-white hover:bg-opacity-70 transition-all"
-                    >
-                      <span className="text-3xl font-bold">+{remainingCount}</span>
-                    </button>
+                  {canDelete && (
+                    <>
+                      <button className="menu-item">Edit Post</button>
+                      <button className="menu-item">Change Privacy</button>
+                      <button className="menu-item danger">Delete Post</button>
+                    </>
                   )}
                 </div>
-              ))}
+              )}
             </div>
-            
-            {showAllMedia && allMedia.length > 4 && (
-              <button
-                onClick={() => setShowAllMedia(false)}
-                className="mt-2 text-sm text-purple-600 hover:text-purple-700"
-              >
-                Show less
+          )}
+        </div>
+        
+        {/* Content */}
+        <div className="post-content">
+          {post.body && <p className="post-text">{post.body}</p>}
+          
+          {/* Photo Grid */}
+          {post.media && post.media.length > 0 && (
+            <PhotoGrid 
+              media={post.media} 
+              onPhotoClick={handlePhotoClick}
+            />
+          )}
+        </div>
+        
+        {/* Footer */}
+        <div className="post-footer">
+          <div className="engagement-stats">
+            {post.likes_count > 0 && (
+              <span>{post.likes_count} likes</span>
+            )}
+            {post.comments_count > 0 && (
+              <span>{post.comments_count} comments</span>
+            )}
+          </div>
+          
+          <div className="action-buttons">
+            <button className="action-btn">
+              👍 Like
+            </button>
+            <button className="action-btn">
+              💬 Comment
+            </button>
+            {post.allow_share && (
+              <button className="action-btn">
+                🔄 Share
               </button>
             )}
           </div>
-        )}
-
-        {/* Add Media Button (for co-creators when editing) */}
-        {canEdit && !isEditing && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingMedia}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
-            >
-              {uploadingMedia ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <span>📸</span>
-                  Add photos/videos
-                </>
-              )}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              style={{ display: 'none' }}
-              onChange={handleMediaSelect}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Engagement Bar */}
-      <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-4">
-        <button
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-            post.liked_by_me 
-              ? 'bg-purple-100 text-purple-600 hover:bg-purple-200' 
-              : 'hover:bg-gray-100 text-gray-600'
-          }`}
-          onClick={like}
-          disabled={busy}
-        >
-          <span>{post.liked_by_me ? '💜' : '🤍'}</span>
-          <span className="text-sm font-medium">{post.like_count || 0}</span>
-        </button>
-        
-        <div className="flex items-center gap-2 text-gray-500">
-          <span>💬</span>
-          <span className="text-sm">{post.comment_count || 0} comments</span>
-        </div>
-
-        {post.allow_share && (
-          <button className="ml-auto text-gray-500 hover:text-purple-600 transition-colors">
-            <span>🔄</span>
-          </button>
-        )}
-      </div>
-
-      {/* Comment Section */}
-      <div className="px-4 pb-4">
-        <div className="flex gap-2">
-          <input
-            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            placeholder="Write a comment..."
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendComment()}
-          />
-          <button
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            onClick={sendComment}
-            disabled={busy || !comment.trim()}
-          >
-            Post
-          </button>
         </div>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
-            <h3 className="text-lg font-semibold mb-3">Delete Post?</h3>
-            <p className="text-gray-600 mb-4">This action cannot be undone. The post and all associated media will be permanently deleted.</p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleDelete}
-                disabled={busy}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {busy ? "Deleting..." : "Delete"}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={busy}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+      
+      {/* Lightbox */}
+      {showLightbox && post.media && (
+        <PhotoLightbox
+          media={post.media}
+          startIndex={lightboxStartIndex}
+          onClose={() => setShowLightbox(false)}
+        />
       )}
-    </article>
+      
+      <style jsx>{`
+        .post-card {
+          background: white;
+          border-radius: 0.75rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          margin-bottom: 1rem;
+        }
+        
+        .post-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 1rem;
+        }
+        
+        .author-info {
+          display: flex;
+          gap: 0.75rem;
+        }
+        
+        .author-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        
+        .author-name {
+          font-weight: 600;
+          color: #1a202c;
+        }
+        
+        .post-meta {
+          display: flex;
+          gap: 0.5rem;
+          font-size: 0.875rem;
+          color: #718096;
+        }
+        
+        .post-content {
+          padding: 0 1rem;
+        }
+        
+        .post-text {
+          margin-bottom: 0.75rem;
+          line-height: 1.5;
+        }
+        
+        /* Photo Grid Styles */
+        .photo-grid {
+          margin: 0.5rem 0;
+          border-radius: 0.5rem;
+          overflow: hidden;
+        }
+        
+        .photo-grid.single .photo-item {
+          width: 100%;
+          max-height: 500px;
+        }
+        
+        .photo-grid.two {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2px;
+        }
+        
+        .photo-grid.three {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 2px;
+        }
+        
+        .photo-grid.three .side-photos {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        
+        .photo-grid.four {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr 1fr;
+          gap: 2px;
+        }
+        
+        .photo-grid.many .main-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2px;
+          margin-bottom: 2px;
+        }
+        
+        .photo-grid.many .bottom-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 2px;
+        }
+        
+        .photo-item {
+          position: relative;
+          cursor: pointer;
+          overflow: hidden;
+          background: #f7fafc;
+        }
+        
+        .photo-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.2s;
+        }
+        
+        .photo-item:hover img {
+          transform: scale(1.05);
+        }
+        
+        .more-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 1.5rem;
+          font-weight: 600;
+        }
+        
+        /* Lightbox Styles */
+        .lightbox-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.95);
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .lightbox-content {
+          position: relative;
+          max-width: 90vw;
+          max-height: 90vh;
+        }
+        
+        .lightbox-content img {
+          max-width: 100%;
+          max-height: 80vh;
+          object-fit: contain;
+        }
+        
+        .lightbox-close {
+          position: absolute;
+          top: -40px;
+          right: 0;
+          background: none;
+          border: none;
+          color: white;
+          font-size: 3rem;
+          cursor: pointer;
+        }
+        
+        .lightbox-prev,
+        .lightbox-next {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          background: rgba(255,255,255,0.1);
+          border: none;
+          color: white;
+          font-size: 3rem;
+          padding: 1rem;
+          cursor: pointer;
+        }
+        
+        .lightbox-prev {
+          left: -60px;
+        }
+        
+        .lightbox-next {
+          right: -60px;
+        }
+        
+        .lightbox-counter {
+          position: absolute;
+          bottom: -30px;
+          left: 50%;
+          transform: translateX(-50%);
+          color: white;
+        }
+        
+        .lightbox-thumbnails {
+          display: flex;
+          gap: 0.5rem;
+          justify-content: center;
+          margin-top: 1rem;
+          padding: 0.5rem;
+        }
+        
+        .thumbnail {
+          width: 60px;
+          height: 60px;
+          cursor: pointer;
+          opacity: 0.6;
+          transition: opacity 0.2s;
+          border: 2px solid transparent;
+        }
+        
+        .thumbnail.active {
+          opacity: 1;
+          border-color: white;
+        }
+        
+        .thumbnail img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        /* Post Footer */
+        .post-footer {
+          padding: 0.75rem 1rem;
+          border-top: 1px solid #e2e8f0;
+        }
+        
+        .engagement-stats {
+          display: flex;
+          gap: 1rem;
+          font-size: 0.875rem;
+          color: #718096;
+          margin-bottom: 0.5rem;
+        }
+        
+        .action-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+        
+        .action-btn {
+          flex: 1;
+          padding: 0.5rem;
+          background: none;
+          border: none;
+          color: #4a5568;
+          cursor: pointer;
+          border-radius: 0.375rem;
+          transition: background 0.2s;
+        }
+        
+        .action-btn:hover {
+          background: #f7fafc;
+        }
+        
+        /* Menu */
+        .post-actions {
+          position: relative;
+        }
+        
+        .menu-btn {
+          background: none;
+          border: none;
+          font-size: 1.25rem;
+          cursor: pointer;
+          padding: 0.25rem 0.5rem;
+        }
+        
+        .menu-dropdown {
+          position: absolute;
+          right: 0;
+          top: 100%;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          min-width: 150px;
+          z-index: 10;
+        }
+        
+        .menu-item {
+          display: block;
+          width: 100%;
+          padding: 0.5rem 1rem;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+        }
+        
+        .menu-item:hover {
+          background: #f7fafc;
+        }
+        
+        .menu-item.danger {
+          color: #e53e3e;
+        }
+      `}</style>
+    </>
   );
 }
