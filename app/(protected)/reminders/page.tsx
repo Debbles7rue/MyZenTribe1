@@ -57,6 +57,19 @@ interface Reminder {
   notification_settings?: any
   created_at: string
   updated_at: string
+  // ADD: For calendar integration
+  date?: string
+  time?: string
+  notes?: string
+}
+
+// ADD: Export for calendar integration
+export interface QuickReminderForm {
+  title: string
+  date: string
+  time: string
+  category: string
+  notes: string
 }
 
 // Quick templates for common reminders
@@ -123,6 +136,17 @@ export default function RemindersPage() {
   const [swipingReminder, setSwipingReminder] = useState<string | null>(null)
   const [isPulling, setIsPulling] = useState(false)
   
+  // ADD: States for calendar integration
+  const [showCompletedItems, setShowCompletedItems] = useState(false)
+  const [showQuickModal, setShowQuickModal] = useState(false)
+  const [quickModalForm, setQuickModalForm] = useState<QuickReminderForm>({
+    title: '',
+    date: '',
+    time: '',
+    category: '',
+    notes: ''
+  })
+  
   // Mobile detection
   const isMobile = useIsMobile()
   
@@ -156,6 +180,21 @@ export default function RemindersPage() {
   // Animation states
   const [animatingReminder, setAnimatingReminder] = useState<string | null>(null)
   const [showConfetti, setShowConfetti] = useState(false)
+
+  // ADD: Listen for external quick modal triggers (from calendar)
+  useEffect(() => {
+    const handleQuickReminder = (event: CustomEvent) => {
+      setShowQuickModal(true)
+      if (event.detail) {
+        setQuickModalForm(event.detail)
+      }
+    }
+    
+    window.addEventListener('openQuickReminder' as any, handleQuickReminder)
+    return () => {
+      window.removeEventListener('openQuickReminder' as any, handleQuickReminder)
+    }
+  }, [])
 
   // Pull to refresh handler
   const handleTouchStart = useCallback((e: TouchEvent) => {
@@ -255,6 +294,9 @@ export default function RemindersPage() {
     if (!error && data) {
       setReminders(data)
       calculateStats(data)
+      
+      // ADD: Notify calendar to reload
+      window.dispatchEvent(new CustomEvent('remindersUpdated', { detail: data }))
     }
     setLoading(false)
   }
@@ -327,6 +369,11 @@ export default function RemindersPage() {
       if (!reminder.completed) {
         setShowConfetti(true)
         setTimeout(() => setShowConfetti(false), 2000)
+        
+        // ADD: Notify calendar of completion
+        window.dispatchEvent(new CustomEvent('reminderCompleted', { 
+          detail: { id: reminder.id, title: reminder.title }
+        }))
       }
       await loadReminders()
     }
@@ -381,6 +428,45 @@ export default function RemindersPage() {
       setShowAddForm(false)
       resetForm()
       setSelectedTemplate(null)
+    }
+  }
+
+  // ADD: Quick add for calendar integration
+  const createQuickReminder = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || !quickModalForm.title) return
+
+    const reminderTime = quickModalForm.date && quickModalForm.time 
+      ? `${quickModalForm.date}T${quickModalForm.time}` 
+      : new Date().toISOString()
+
+    const { error } = await supabase
+      .from('reminders')
+      .insert({
+        user_id: user.id,
+        title: quickModalForm.title,
+        reminder_time: reminderTime,
+        date: quickModalForm.date,
+        time: quickModalForm.time,
+        category: quickModalForm.category,
+        notes: quickModalForm.notes,
+        completed: false,
+        priority: 'medium'
+      })
+
+    if (!error) {
+      await loadReminders()
+      setShowQuickModal(false)
+      setQuickModalForm({
+        title: '',
+        date: '',
+        time: '',
+        category: '',
+        notes: ''
+      })
+      
+      // ADD: Notify calendar of success
+      window.dispatchEvent(new CustomEvent('quickReminderCreated'))
     }
   }
 
@@ -451,21 +537,27 @@ export default function RemindersPage() {
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
+    // ADD: Apply showCompletedItems filter first
+    let filtered = reminders
+    if (!showCompletedItems) {
+      filtered = filtered.filter(r => !r.completed)
+    }
+
     switch (filter) {
       case 'today':
-        return reminders.filter(r => {
+        return filtered.filter(r => {
           const time = new Date(r.reminder_time)
           return time >= today && time < tomorrow
         })
       case 'upcoming':
-        return reminders.filter(r => {
+        return filtered.filter(r => {
           const time = new Date(r.reminder_time)
           return time >= tomorrow && !r.completed
         })
       case 'completed':
-        return reminders.filter(r => r.completed)
+        return reminders.filter(r => r.completed) // Always show completed when filter is 'completed'
       default:
-        return reminders
+        return filtered
     }
   }
 
@@ -516,6 +608,82 @@ export default function RemindersPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-lavender-100 to-pink-50" ref={containerRef}>
+      {/* ADD: Quick Add Modal (for calendar integration) */}
+      {showQuickModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md animate-slide-up">
+            <h2 className="text-xl font-bold mb-4">Quick Add Reminder</h2>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="What should I remind you?"
+                value={quickModalForm.title}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, title: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                autoFocus
+              />
+              
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={quickModalForm.date}
+                  onChange={(e) => setQuickModalForm({ ...quickModalForm, date: e.target.value })}
+                  className="p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                />
+                
+                <input
+                  type="time"
+                  value={quickModalForm.time}
+                  onChange={(e) => setQuickModalForm({ ...quickModalForm, time: e.target.value })}
+                  className="p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                />
+              </div>
+              
+              <input
+                type="text"
+                placeholder="Category (optional)"
+                value={quickModalForm.category}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, category: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+              />
+              
+              <textarea
+                placeholder="Notes (optional)"
+                value={quickModalForm.notes}
+                onChange={(e) => setQuickModalForm({ ...quickModalForm, notes: e.target.value })}
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 h-20"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowQuickModal(false)
+                  setQuickModalForm({
+                    title: '',
+                    date: '',
+                    time: '',
+                    category: '',
+                    notes: ''
+                  })
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createQuickReminder}
+                disabled={!quickModalForm.title}
+                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                Add Reminder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pull to Refresh Indicator */}
       {isPulling && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center py-2 bg-white/90 backdrop-blur-sm">
@@ -538,13 +706,27 @@ export default function RemindersPage() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Reminders
           </h1>
-          <button
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-            className="p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
-            style={{ minHeight: '44px', minWidth: '44px' }}
-          >
-            {showMobileMenu ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* ADD: Show Completed Toggle */}
+            <button
+              onClick={() => setShowCompletedItems(!showCompletedItems)}
+              className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                showCompletedItems 
+                  ? 'bg-purple-200 text-purple-700' 
+                  : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {showCompletedItems ? 'Hide' : 'Show'} Done
+            </button>
+            
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="p-2 rounded-lg hover:bg-gray-100 touch-manipulation"
+              style={{ minHeight: '44px', minWidth: '44px' }}
+            >
+              {showMobileMenu ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -584,13 +766,27 @@ export default function RemindersPage() {
                 </h1>
                 <p className="text-gray-600 mt-1">Never forget what matters most</p>
               </div>
-              <button
-                onClick={() => setShowAddForm(!showAddForm)}
-                className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg"
-              >
-                <Plus className="w-5 h-5" />
-                Add Reminder
-              </button>
+              <div className="flex items-center gap-2">
+                {/* ADD: Show Completed Toggle for Desktop */}
+                <button
+                  onClick={() => setShowCompletedItems(!showCompletedItems)}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    showCompletedItems 
+                      ? 'bg-purple-100 text-purple-700' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {showCompletedItems ? 'Hide' : 'Show'} Completed
+                </button>
+                
+                <button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add Reminder
+                </button>
+              </div>
             </div>
 
             {/* Stats */}
