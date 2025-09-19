@@ -1,4 +1,3 @@
-// app/(protected)/calendar/page.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
@@ -22,7 +21,6 @@ import CalendarModals from "./components/CalendarModals";
 import MobileQuickActions from "./components/MobileQuickActions";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
-import DarkModeToggle from "./components/DarkModeToggle";
 import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -67,7 +65,7 @@ export default function CalendarPage() {
   const [showMoodTracker, setShowMoodTracker] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
-  const [gamificationEnabled, setGamificationEnabled] = useState(false); // Gamification is now optional
+  const [gamificationEnabled, setGamificationEnabled] = useState(false);
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -83,16 +81,12 @@ export default function CalendarPage() {
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
   const [showTimeBlocking, setShowTimeBlocking] = useState(false);
 
-  // ===== SIDEBAR STATES =====
-  const [showCompletedItems, setShowCompletedItems] = useState(false);
-  const [showRemindersList, setShowRemindersList] = useState(true);
-  const [showTodosList, setShowTodosList] = useState(true);
+  // ===== DRAG STATES FOR SIDEBAR (minimal for calendar integration) =====
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
 
   // ===== REFS FOR MOBILE INTERACTIONS =====
   const calendarRef = useRef<HTMLDivElement>(null);
-  const pullToRefreshRef = useRef<HTMLDivElement>(null);
   const lastVibrationTime = useRef(0);
 
   // ===== TOAST & MOON =====
@@ -132,12 +126,9 @@ export default function CalendarPage() {
     handleDeleteEvent,
     handleExternalDrop,
     handleApplyTemplate,
-    handleToggleComplete,
-    handleDeleteItem,
     handleShowInterest,
     handleRSVP,
     dismissFeedEvent,
-    createQuickItem,
     createCarpoolGroup,
     onDrop,
     onResize
@@ -164,7 +155,7 @@ export default function CalendarPage() {
     setSelectedCarpoolFriends
   });
 
-  // ===== GAMIFICATION HOOKS (OPTIONAL) =====
+  // ===== GAMIFICATION HOOKS =====
   const { 
     userStats, 
     checkAchievements, 
@@ -192,7 +183,7 @@ export default function CalendarPage() {
     checkDarkMode();
     
     window.addEventListener('resize', checkMobile);
-    const darkModeInterval = setInterval(checkDarkMode, 60000); // Check every minute
+    const darkModeInterval = setInterval(checkDarkMode, 60000);
     
     return () => {
       window.removeEventListener('resize', checkMobile);
@@ -214,10 +205,10 @@ export default function CalendarPage() {
     if (!isMobile) return;
     
     const now = Date.now();
-    if (now - lastVibrationTime.current < 50) return; // Debounce
+    if (now - lastVibrationTime.current < 50) return;
     
     if ('vibrate' in navigator) {
-      navigator.vibrate(10); // Short haptic feedback
+      navigator.vibrate(10);
       lastVibrationTime.current = now;
     }
   }, [isMobile]);
@@ -327,7 +318,6 @@ export default function CalendarPage() {
         duration: 2000
       });
       
-      // Add points for refresh if gamification is enabled
       if (gamificationEnabled) {
         addPoints(5, 'refresh');
       }
@@ -343,18 +333,15 @@ export default function CalendarPage() {
 
   // ===== CALENDAR NAVIGATION =====
   const onSelectSlot = useCallback((slotInfo: any) => {
-    if (batchMode) return; // Disable slot selection in batch mode
+    if (batchMode) return;
     
-    // Add immediate feedback for mobile
     if (isMobile) {
       vibrate();
     }
     
-    // In month view, clicking/tapping a day should navigate to day view
     if (view === 'month') {
       setDate(slotInfo.start);
       setView('day');
-      // Add toast notification for mobile users
       if (isMobile) {
         showToast({ 
           type: 'info', 
@@ -365,7 +352,6 @@ export default function CalendarPage() {
       return;
     }
     
-    // In week or day view, clicking a time slot should open the create modal
     if (view === 'week' || view === 'day') {
       const start = slotInfo.start || new Date();
       const end = slotInfo.end || new Date(start.getTime() + 3600000);
@@ -385,7 +371,6 @@ export default function CalendarPage() {
     
     vibrate();
     
-    // Handle batch mode selection
     if (batchMode) {
       const eventId = r?.id || evt.id;
       setSelectedBatchEvents(prev => {
@@ -400,7 +385,6 @@ export default function CalendarPage() {
       return;
     }
     
-    // Normal event selection
     if (r?.id) {
       setSelected(r);
       setDetailsOpen(true);
@@ -428,7 +412,6 @@ export default function CalendarPage() {
   const handleBatchMove = useCallback((days: number) => {
     if (selectedBatchEvents.size === 0) return;
     
-    // Implementation for batch move
     showToast({ 
       type: 'success', 
       message: `Moved ${selectedBatchEvents.size} events ${days > 0 ? 'forward' : 'backward'} ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
@@ -446,17 +429,6 @@ export default function CalendarPage() {
     setSelectedCarpoolEvent(event);
     setShowCarpoolChat(true);
   }, [setSelectedCarpoolEvent]);
-
-  // ===== FILTERED LISTS =====
-  const visibleReminders = useMemo(() => {
-    const safeReminders = reminders || [];
-    return showCompletedItems ? safeReminders : safeReminders.filter(r => !r.completed);
-  }, [reminders, showCompletedItems]);
-
-  const visibleTodos = useMemo(() => {
-    const safeTodos = todos || [];
-    return showCompletedItems ? safeTodos : safeTodos.filter(t => !t.completed);
-  }, [todos, showCompletedItems]);
 
   const calendarEvents = useMemo(() => 
     mode === 'my' ? (events || []) : [],
@@ -578,19 +550,13 @@ export default function CalendarPage() {
         }`}>
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Desktop Sidebar - Shows only in "My Calendar" mode on desktop */}
+            {/* Desktop Sidebar */}
             {mode === 'my' && !isMobile && (
               <CalendarSidebar
                 carpoolMatches={carpoolMatches || []}
                 friends={friends || []}
-                visibleReminders={visibleReminders || []}
-                visibleTodos={visibleTodos || []}
-                showRemindersList={showRemindersList}
-                setShowRemindersList={setShowRemindersList}
-                showTodosList={showTodosList}
-                setShowTodosList={setShowTodosList}
-                showCompletedItems={showCompletedItems}
-                setShowCompletedItems={setShowCompletedItems}
+                visibleReminders={reminders || []}
+                visibleTodos={todos || []}
                 openCarpoolChat={openCarpoolChat}
                 setQuickModalType={setQuickModalType}
                 setQuickModalOpen={setQuickModalOpen}
@@ -602,8 +568,6 @@ export default function CalendarPage() {
                   setDraggedItem(null);
                   setDragType('none');
                 }}
-                onToggleComplete={handleToggleComplete}
-                onDeleteItem={handleDeleteItem}
                 userStats={gamificationEnabled ? userStats : null}
               />
             )}
@@ -669,10 +633,8 @@ export default function CalendarPage() {
             onClose={() => setMobileMenuOpen(false)}
             carpoolMatches={carpoolMatches || []}
             friends={friends || []}
-            visibleReminders={visibleReminders || []}
-            visibleTodos={visibleTodos || []}
-            showCompletedItems={showCompletedItems}
-            setShowCompletedItems={setShowCompletedItems}
+            visibleReminders={reminders || []}
+            visibleTodos={todos || []}
             openCarpoolChat={(event) => {
               openCarpoolChat(event);
               setMobileMenuOpen(false);
@@ -682,8 +644,6 @@ export default function CalendarPage() {
             setShowTemplates={setShowTemplates}
             setShowAnalytics={setShowAnalytics}
             setShowMeetingCoordinator={setShowMeetingCoordinator}
-            onToggleComplete={handleToggleComplete}
-            onDeleteItem={handleDeleteItem}
             userStats={gamificationEnabled ? userStats : null}
             gamificationEnabled={gamificationEnabled}
             setGamificationEnabled={setGamificationEnabled}
@@ -696,7 +656,6 @@ export default function CalendarPage() {
             date={date}
             onClose={() => setShowMoodTracker(false)}
             onSave={(mood) => {
-              // Save mood to database
               showToast({ type: 'success', message: `Mood saved: ${mood}` });
               if (gamificationEnabled) {
                 addPoints(10, 'mood-track');
@@ -708,7 +667,6 @@ export default function CalendarPage() {
 
         {/* All Other Modals */}
         <CalendarModals
-          // Modal visibility states
           openCreate={openCreate}
           openEdit={openEdit}
           detailsOpen={detailsOpen}
@@ -721,7 +679,6 @@ export default function CalendarPage() {
           showPomodoroTimer={showPomodoroTimer}
           showTimeBlocking={showTimeBlocking}
           
-          // Modal setters
           setOpenCreate={setOpenCreate}
           setOpenEdit={setOpenEdit}
           setDetailsOpen={setDetailsOpen}
@@ -734,7 +691,6 @@ export default function CalendarPage() {
           setShowPomodoroTimer={setShowPomodoroTimer}
           setShowTimeBlocking={setShowTimeBlocking}
           
-          // Data
           me={me}
           selected={selected}
           selectedFeedEvent={selectedFeedEvent}
@@ -750,7 +706,6 @@ export default function CalendarPage() {
           quickModalType={quickModalType}
           isMobile={isMobile}
           
-          // Actions
           handleCreateEvent={async () => {
             await handleCreateEvent();
             if (gamificationEnabled) {
@@ -761,12 +716,6 @@ export default function CalendarPage() {
           handleUpdateEvent={handleUpdateEvent}
           handleEdit={handleEditFromDetails}
           handleApplyTemplate={handleApplyTemplate}
-          createQuickItem={async () => {
-            await createQuickItem();
-            if (gamificationEnabled) {
-              addPoints(10, 'quick-create');
-            }
-          }}
           createCarpoolGroup={async () => {
             await createCarpoolGroup();
             if (gamificationEnabled) {
