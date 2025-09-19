@@ -162,13 +162,16 @@ export default function CalendarModals({
         communities={[]}
       />
 
-      {/* Edit Event Modal */}
-      <CreateEventModal
-        isOpen={openEdit}
-        onClose={() => {
-          setOpenEdit(false);
-          resetForm();
-        }}
+      {/* Event Details Modal */}
+<EventDetails 
+  event={detailsOpen ? {
+    ...(selected || selectedFeedEvent || {}),
+    media_files: (selected || selectedFeedEvent)?.media_files || []
+  } : null}
+  onClose={() => setDetailsOpen(false)} 
+  me={me || ''}
+  onEdit={() => handleEdit(selected!)}
+
         event={form}
         setEvent={setForm}
         onSave={handleUpdateEvent}
