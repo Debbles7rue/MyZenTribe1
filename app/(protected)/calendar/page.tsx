@@ -1,3 +1,4 @@
+// app/(protected)/calendar/page.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
@@ -49,6 +50,162 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
   )
 });
 
+// ADD: Lists Bottom Sheet Component for Mobile
+function MobileListsBottomSheet({ 
+  open, 
+  onClose, 
+  onNavigate 
+}: { 
+  open: boolean; 
+  onClose: () => void; 
+  onNavigate: (path: string) => void;
+}) {
+  const [dragPosition, setDragPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startY = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startY.current = e.touches[0].clientY;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+    if (diff > 0) {
+      setDragPosition(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    if (dragPosition > 100) {
+      onClose();
+    }
+    setDragPosition(0);
+  };
+
+  if (!open) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/30 z-40 md:hidden"
+        onClick={onClose}
+      />
+      
+      {/* Bottom Sheet */}
+      <div 
+        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl z-50 md:hidden transition-transform`}
+        style={{ 
+          transform: `translateY(${dragPosition}px)`,
+          maxHeight: '70vh'
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+        </div>
+        
+        {/* Title */}
+        <div className="px-6 pb-3">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">My Lists</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Tap to view or drag items to calendar</p>
+        </div>
+        
+        {/* List Options */}
+        <div className="px-6 pb-6 space-y-3">
+          <button
+            onClick={() => {
+              onNavigate('/todos');
+              onClose();
+            }}
+            className="w-full p-4 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-between group hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+                <span className="text-2xl">✅</span>
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-gray-900 dark:text-white">To-dos</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Tasks & projects</p>
+              </div>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate('/reminders');
+              onClose();
+            }}
+            className="w-full p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-between group hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
+                <span className="text-2xl">🔔</span>
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Reminders</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Time-based alerts</p>
+              </div>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate('/shopping');
+              onClose();
+            }}
+            className="w-full p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-between group hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
+                <span className="text-2xl">🛒</span>
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Shopping List</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Things to buy</p>
+              </div>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="px-6 pb-8 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">12</div>
+              <div className="text-xs text-gray-500">Todos</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">5</div>
+              <div className="text-xs text-gray-500">Reminders</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">8</div>
+              <div className="text-xs text-gray-500">Shopping</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function CalendarPage() {
   // ===== CORE STATE =====
   const [mode, setMode] = useState<Mode>("my");
@@ -61,11 +218,14 @@ export default function CalendarPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
-  const [showMoodTracker, setShowMoodTracker] = useState(false);
+
   const [batchMode, setBatchMode] = useState(false);
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
   const [gamificationEnabled, setGamificationEnabled] = useState(false);
+  
+  // ADD: Lists sidebar state
+  const [showListsSidebar, setShowListsSidebar] = useState(false);
+  const [showMobileListsSheet, setShowMobileListsSheet] = useState(false);
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -182,6 +342,12 @@ export default function CalendarPage() {
     checkMobile();
     checkDarkMode();
     
+    // Load sidebar preference from localStorage
+    const savedSidebarState = localStorage.getItem('calendarListsSidebarOpen');
+    if (savedSidebarState !== null && !isMobile) {
+      setShowListsSidebar(savedSidebarState === 'true');
+    }
+    
     window.addEventListener('resize', checkMobile);
     const darkModeInterval = setInterval(checkDarkMode, 60000);
     
@@ -199,6 +365,13 @@ export default function CalendarPage() {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  // ===== Save sidebar state to localStorage =====
+  useEffect(() => {
+    if (!isMobile) {
+      localStorage.setItem('calendarListsSidebarOpen', showListsSidebar.toString());
+    }
+  }, [showListsSidebar, isMobile]);
 
   // ===== HAPTIC FEEDBACK =====
   const vibrate = useCallback(() => {
@@ -221,6 +394,12 @@ export default function CalendarPage() {
       day: 'numeric'
     });
   };
+
+  // ADD: Navigation handler for lists
+  const handleListNavigation = useCallback((path: string) => {
+    // Use your router to navigate
+    window.location.href = path;
+  }, []);
 
   // ===== MOBILE SWIPE GESTURES =====
   const swipeHandlers = useSwipeGestures({
@@ -476,7 +655,7 @@ export default function CalendarPage() {
           </div>
         )}
         
-        {/* Header Component */}
+        {/* Header Component - ADD Lists Button */}
         <CalendarHeader
           mode={mode}
           setMode={setMode}
@@ -493,8 +672,6 @@ export default function CalendarPage() {
           setShowShortcutsHelp={setShowShortcutsHelp}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
-          focusMode={focusMode}
-          setFocusMode={setFocusMode}
           batchMode={batchMode}
           setBatchMode={setBatchMode}
           userStats={gamificationEnabled ? userStats : null}
@@ -502,17 +679,36 @@ export default function CalendarPage() {
           startListening={startListening}
           gamificationEnabled={gamificationEnabled}
           setGamificationEnabled={setGamificationEnabled}
+          // ADD: Lists button handlers
+          showListsSidebar={showListsSidebar}
+          setShowListsSidebar={setShowListsSidebar}
+          onListsClick={() => {
+            if (isMobile) {
+              setShowMobileListsSheet(true);
+            } else {
+              setShowListsSidebar(!showListsSidebar);
+            }
+          }}
         />
 
         {/* Mobile Quick Actions Bar */}
         {isMobile && (
-          <MobileQuickActions
-            onMoodTrack={() => setShowMoodTracker(true)}
-            onPomodoro={() => setShowPomodoroTimer(true)}
-            onTimeBlock={() => setShowTimeBlocking(true)}
-            onVoiceCommand={startListening}
-            isListening={isListening}
-          />
+          <div className="flex items-center justify-between mb-3 px-2">
+            <MobileQuickActions
+              onPomodoro={() => setShowPomodoroTimer(true)}
+              onTimeBlock={() => setShowTimeBlocking(true)}
+              onVoiceCommand={startListening}
+              isListening={isListening}
+            />
+            
+            {/* ADD: Mobile Lists Button */}
+            <button
+              onClick={() => setShowMobileListsSheet(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 rounded-lg shadow-sm whitespace-nowrap text-sm ml-2"
+            >
+              📋 Lists
+            </button>
+          </div>
         )}
 
         {/* Batch Mode Actions Bar */}
@@ -545,31 +741,43 @@ export default function CalendarPage() {
         )}
 
         {/* Main Content Area */}
-        <div className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden ${
-          focusMode ? 'ring-4 ring-purple-500 ring-opacity-50' : ''
-        }`}>
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Desktop Sidebar */}
+            {/* Enhanced Desktop Sidebar - Now Collapsible */}
             {mode === 'my' && !isMobile && (
-              <CalendarSidebar
-                carpoolMatches={carpoolMatches || []}
-                friends={friends || []}
-                visibleReminders={reminders || []}
-                visibleTodos={todos || []}
-                openCarpoolChat={openCarpoolChat}
-                setQuickModalType={setQuickModalType}
-                setQuickModalOpen={setQuickModalOpen}
-                onDragStart={(item: TodoReminder, type: 'reminder' | 'todo') => {
-                  setDraggedItem(item);
-                  setDragType(type);
-                }}
-                onDragEnd={() => {
-                  setDraggedItem(null);
-                  setDragType('none');
-                }}
-                userStats={gamificationEnabled ? userStats : null}
-              />
+              <div className={`transition-all duration-300 ${showListsSidebar ? 'w-80' : 'w-0'}`}>
+                {showListsSidebar && (
+                  <CalendarSidebar
+                    carpoolMatches={carpoolMatches || []}
+                    friends={friends || []}
+                    visibleReminders={reminders || []}
+                    visibleTodos={todos || []}
+                    openCarpoolChat={openCarpoolChat}
+                    setQuickModalType={setQuickModalType}
+                    setQuickModalOpen={setQuickModalOpen}
+                    onDragStart={(item: TodoReminder, type: 'reminder' | 'todo') => {
+                      setDraggedItem(item);
+                      setDragType(type);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedItem(null);
+                      setDragType('none');
+                    }}
+                    userStats={gamificationEnabled ? userStats : null}
+                    // ADD: Shopping navigation
+                    onNavigateToLists={(listType: string) => {
+                      if (listType === 'shopping') {
+                        handleListNavigation('/shopping');
+                      } else if (listType === 'reminders') {
+                        handleListNavigation('/reminders');
+                      } else if (listType === 'todos') {
+                        handleListNavigation('/todos');
+                      }
+                    }}
+                  />
+                )}
+              </div>
             )}
 
             {/* Calendar or Feed View */}
@@ -606,7 +814,6 @@ export default function CalendarPage() {
                   externalDragTitle={draggedItem?.title}
                   onExternalDrop={handleExternalDrop}
                   darkMode={darkMode}
-                  focusMode={focusMode}
                   selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
                 />
               )}
@@ -626,7 +833,16 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Mobile Sidebar */}
+        {/* Mobile Lists Bottom Sheet - ADD */}
+        {isMobile && (
+          <MobileListsBottomSheet
+            open={showMobileListsSheet}
+            onClose={() => setShowMobileListsSheet(false)}
+            onNavigate={handleListNavigation}
+          />
+        )}
+
+        {/* Mobile Sidebar (for other features, not lists) */}
         {isMobile && (
           <MobileSidebar
             open={mobileMenuOpen}
@@ -647,21 +863,6 @@ export default function CalendarPage() {
             userStats={gamificationEnabled ? userStats : null}
             gamificationEnabled={gamificationEnabled}
             setGamificationEnabled={setGamificationEnabled}
-          />
-        )}
-
-        {/* Mood Tracker Modal */}
-        {showMoodTracker && (
-          <MoodTracker
-            date={date}
-            onClose={() => setShowMoodTracker(false)}
-            onSave={(mood) => {
-              showToast({ type: 'success', message: `Mood saved: ${mood}` });
-              if (gamificationEnabled) {
-                addPoints(10, 'mood-track');
-              }
-              setShowMoodTracker(false);
-            }}
           />
         )}
 
