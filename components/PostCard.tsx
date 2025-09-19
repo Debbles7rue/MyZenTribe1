@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { Post } from "@/lib/posts";
 import Link from "next/link";
+import CoCreatorEditModal from "@/components/CoCreatorEditModal";
 
 interface PostCardProps {
   post: Post;
@@ -226,6 +227,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
   const [showEditMenu, setShowEditMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
   
   // Check if current user is a co-creator
@@ -240,8 +242,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     setShowLightbox(true);
   };
   
-  const canEdit = currentUserId === post.author_id || isCoCreator;
-  const canDelete = currentUserId === post.author_id; // Only original author can delete
+  const canEdit = currentUserId === post.user_id || isCoCreator;
+  const canDelete = currentUserId === post.user_id; // Only original author can delete
   
   // Format the display name with co-creators
   const getDisplayName = () => {
@@ -293,14 +295,14 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
                 <div className="menu-dropdown">
                   {isCoCreator && !canDelete && (
                     <>
-                      <button className="menu-item">Add Photos</button>
-                      <button className="menu-item">Edit My Content</button>
+                      <button className="menu-item" onClick={() => setShowEditModal(true)}>Add Photos</button>
+                      <button className="menu-item" onClick={() => setShowEditModal(true)}>Edit My Content</button>
                       <button className="menu-item">Remove Tag</button>
                     </>
                   )}
                   {canDelete && (
                     <>
-                      <button className="menu-item">Edit Post</button>
+                      <button className="menu-item" onClick={() => setShowEditModal(true)}>Edit Post</button>
                       <button className="menu-item">Change Privacy</button>
                       <button className="menu-item danger">Delete Post</button>
                     </>
@@ -357,6 +359,20 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           media={post.media}
           startIndex={lightboxStartIndex}
           onClose={() => setShowLightbox(false)}
+        />
+      )}
+      
+      {/* Co-Creator Edit Modal */}
+      {showEditModal && (
+        <CoCreatorEditModal
+          postId={post.id}
+          currentUserId={currentUserId || ''}
+          isCreator={currentUserId === post.user_id}
+          onClose={() => setShowEditModal(false)}
+          onUpdate={() => {
+            setShowEditModal(false);
+            if (onChanged) onChanged();
+          }}
         />
       )}
       
