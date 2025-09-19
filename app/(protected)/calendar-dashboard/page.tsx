@@ -11,19 +11,23 @@ const supabase = createClient(
 )
 
 interface AgendaItem {
-  type: 'event' | 'todo' | 'reminder'
+  type: 'event' | 'todo' | 'reminder' | 'shopping'
   id: string
   title: string
-  datetime: string
+  datetime?: string
+  due_date?: string
+  time?: string
   location?: string
   completed?: boolean
   priority?: string
+  list_type?: 'todo' | 'reminder' | 'shopping'
 }
 
 interface Stats {
   events_today: number
   todos_pending: number
   reminders_upcoming: number
+  shopping_items: number
   unread_notifications: number
 }
 
@@ -34,6 +38,7 @@ export default function CalendarDashboardPage() {
     events_today: 0,
     todos_pending: 0,
     reminders_upcoming: 0,
+    shopping_items: 0,
     unread_notifications: 0
   })
   const [userName, setUserName] = useState('')
@@ -47,19 +52,11 @@ export default function CalendarDashboardPage() {
       setCurrentTime(new Date())
     }, 60000)
 
-    // Subscribe to real-time updates
+    // Subscribe to real-time updates for todos (which now includes reminders and shopping)
     const todosChannel = supabase
       .channel('dashboard-todos')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'todos' },
-        () => loadDashboard()
-      )
-      .subscribe()
-
-    const remindersChannel = supabase
-      .channel('dashboard-reminders')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'reminders' },
         () => loadDashboard()
       )
       .subscribe()
@@ -75,7 +72,6 @@ export default function CalendarDashboardPage() {
     return () => {
       clearInterval(timer)
       todosChannel.unsubscribe()
-      remindersChannel.unsubscribe()
       eventsChannel.unsubscribe()
     }
   }, [])
@@ -84,118 +80,114 @@ export default function CalendarDashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Get user profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('id', user.id)
-      .single()
-    
-    if (profile) {
-      setUserName(profile.display_name || 'there')
-    }
+    setUserName(user.email?.split('@')[0] || 'there')
 
-    // Load today's agenda
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    // Load todos, reminders, and shopping items from unified todos table
+    const { data: todosData } = await supabase
+      .from('todos')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('due_date', { ascending: true })
+      .order('time', { ascending: true })
 
-    // Get events
-    const { data: events } = await supabase
+    // Load events (if you have an events table)
+    const { data: eventsData } = await supabase
       .from('events')
       .select('*')
-      .eq('created_by', user.id)
       .gte('start_time', today.toISOString())
       .lt('start_time', tomorrow.toISOString())
-      .neq('status', 'cancelled')
-      .order('start_time')
+      .eq('created_by', user.id)
+      .order('start_time', { ascending: true })
 
-    // Get todos
-    const { data: todos } = await supabase
-      .from('todos')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('due_date', today.toISOString())
-      .lt('due_date', tomorrow.toISOString())
-      .order('due_date')
+    // Calculate stats based on list_type
+    const todosOnly = todosData?.filter(item => item.list_type === 'todo' || !item.list_type) || []
+    const remindersOnly = todosData?.filter(item => item.list_type === 'reminder') || []
+    const shoppingOnly = todosData?.filter(item => item.list_type === 'shopping') || []
 
-    // Get reminders
-    const { data: reminders } = await supabase
-      .from('reminders')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('reminder_time', today.toISOString())
-      .lt('reminder_time', tomorrow.toISOString())
-      .order('reminder_time')
-
-    // Combine into agenda
+    // Build today's agenda
     const agenda: AgendaItem[] = []
     
-    events?.forEach(event => {
-      agenda.push({
-        type: 'event',
-        id: event.id,
-        title: event.title,
-        datetime: event.start_time,
-        location: event.location
+    // Add today's events
+    if (eventsData) {
+      eventsData.forEach(event => {
+        agenda.push({
+          type: 'event',
+          id: event.id,
+          title: event.title,
+          datetime: event.start_time,
+          location: event.location,
+          completed: false
+        })
       })
+    }
+
+    // Add today's todos/reminders/shopping with due dates
+    if (todosData) {
+      todosData
+        .filter(item => {
+          if (!item.due_date) return false
+          const itemDate = new Date(item.due_date)
+          itemDate.setHours(0, 0, 0, 0)
+          return itemDate.getTime() === today.getTime()
+        })
+        .forEach(item => {
+          agenda.push({
+            type: item.list_type || 'todo',
+            id: item.id,
+            title: item.title,
+            due_date: item.due_date,
+            time: item.time,
+            completed: item.completed,
+            priority: item.priority,
+            list_type: item.list_type
+          })
+        })
+    }
+
+    // Sort agenda by time
+    agenda.sort((a, b) => {
+      const timeA = a.datetime || (a.due_date && a.time ? `${a.due_date}T${a.time}` : a.due_date) || ''
+      const timeB = b.datetime || (b.due_date && b.time ? `${b.due_date}T${b.time}` : b.due_date) || ''
+      return timeA.localeCompare(timeB)
     })
 
-    todos?.forEach(todo => {
-      agenda.push({
-        type: 'todo',
-        id: todo.id,
-        title: todo.title,
-        datetime: todo.due_date,
-        completed: todo.completed,
-        priority: todo.priority
-      })
-    })
-
-    reminders?.forEach(reminder => {
-      agenda.push({
-        type: 'reminder',
-        id: reminder.id,
-        title: reminder.title,
-        datetime: reminder.reminder_time,
-        completed: reminder.completed
-      })
-    })
-
-    // Sort by time
-    agenda.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime())
     setTodayAgenda(agenda)
-
-    // Calculate stats
-    const { data: allTodos } = await supabase
-      .from('todos')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('completed', false)
-
-    const { data: upcomingReminders } = await supabase
-      .from('reminders')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('completed', false)
-      .gte('reminder_time', new Date().toISOString())
-      .lte('reminder_time', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())
-
-    const { data: notifications } = await supabase
-      .from('notifications')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('is_read', false)
-
+    
+    // Update stats
     setStats({
-      events_today: events?.length || 0,
-      todos_pending: allTodos?.length || 0,
-      reminders_upcoming: upcomingReminders?.length || 0,
-      unread_notifications: notifications?.length || 0
+      events_today: eventsData?.length || 0,
+      todos_pending: todosOnly.filter(t => !t.completed).length,
+      reminders_upcoming: remindersOnly.filter(r => !r.completed).length,
+      shopping_items: shoppingOnly.filter(s => !s.completed).length,
+      unread_notifications: 0 // You can implement notifications separately
     })
 
     setLoading(false)
+  }
+
+  const getItemIcon = (item: AgendaItem) => {
+    switch (item.type) {
+      case 'event': return '📅'
+      case 'reminder': return '🔔'
+      case 'shopping': return '🛒'
+      case 'todo': 
+      default: return '✅'
+    }
+  }
+
+  const getItemColor = (item: AgendaItem) => {
+    switch (item.type) {
+      case 'event': return 'text-purple-600'
+      case 'reminder': return 'text-blue-600'
+      case 'shopping': return 'text-purple-600'
+      case 'todo': 
+      default: return 'text-green-600'
+    }
   }
 
   const getGreeting = () => {
@@ -203,34 +195,6 @@ export default function CalendarDashboardPage() {
     if (hour < 12) return 'Good morning'
     if (hour < 17) return 'Good afternoon'
     return 'Good evening'
-  }
-
-  const getItemIcon = (type: string) => {
-    switch (type) {
-      case 'event': return '📅'
-      case 'todo': return '✅'
-      case 'reminder': return '🔔'
-      default: return '📌'
-    }
-  }
-
-  const getPriorityColor = (priority?: string) => {
-    switch (priority) {
-      case 'urgent': return 'text-red-600'
-      case 'high': return 'text-orange-600'
-      case 'medium': return 'text-yellow-600'
-      case 'low': return 'text-green-600'
-      default: return 'text-gray-600'
-    }
-  }
-
-  const formatTime = (datetime: string) => {
-    const date = new Date(datetime)
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    })
   }
 
   if (loading) {
@@ -246,10 +210,10 @@ export default function CalendarDashboardPage() {
       {/* Header */}
       <div className="bg-white shadow-sm sticky top-0 z-40">
         <div className="p-4">
-          <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                {getGreeting()}, {userName}
+                {getGreeting()}, {userName}!
               </h1>
               <p className="text-gray-600 text-sm">
                 {currentTime.toLocaleDateString('en-US', { 
@@ -273,7 +237,7 @@ export default function CalendarDashboardPage() {
 
       {/* Quick Stats */}
       <div className="p-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Link href="/events" className="bg-white rounded-xl p-4 shadow-sm active:scale-95 transition-transform">
             <div className="text-3xl mb-2">📅</div>
             <div className="text-2xl font-bold text-purple-600">{stats.events_today}</div>
@@ -286,10 +250,16 @@ export default function CalendarDashboardPage() {
             <div className="text-xs text-gray-600">Pending Todos</div>
           </Link>
           
-          <Link href="/reminders" className="bg-white rounded-xl p-4 shadow-sm active:scale-95 transition-transform">
+          <Link href="/todos" className="bg-white rounded-xl p-4 shadow-sm active:scale-95 transition-transform">
             <div className="text-3xl mb-2">🔔</div>
-            <div className="text-2xl font-bold text-orange-600">{stats.reminders_upcoming}</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.reminders_upcoming}</div>
             <div className="text-xs text-gray-600">Reminders</div>
+          </Link>
+
+          <Link href="/todos" className="bg-white rounded-xl p-4 shadow-sm active:scale-95 transition-transform">
+            <div className="text-3xl mb-2">🛒</div>
+            <div className="text-2xl font-bold text-purple-600">{stats.shopping_items}</div>
+            <div className="text-xs text-gray-600">Shopping Items</div>
           </Link>
         </div>
       </div>
@@ -304,43 +274,45 @@ export default function CalendarDashboardPage() {
           <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
             {todayAgenda.length === 0 ? (
               <div className="p-8 text-center">
-                <div className="text-4xl mb-2">🌟</div>
-                <p className="text-gray-600">Your day is clear!</p>
-                <p className="text-gray-500 text-sm mt-1">No scheduled items for today</p>
+                <div className="text-4xl mb-3">🌟</div>
+                <p className="text-gray-600">Nothing scheduled for today</p>
+                <p className="text-sm text-gray-400 mt-1">Enjoy your free day!</p>
               </div>
             ) : (
               todayAgenda.map((item) => (
-                <Link
-                  key={`${item.type}-${item.id}`}
-                  href={`/${item.type}s`}
+                <Link 
+                  key={item.id} 
+                  href={item.type === 'event' ? `/events/${item.id}` : `/todos`}
                   className="flex items-center p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                 >
-                  <div className="text-2xl mr-3">{getItemIcon(item.type)}</div>
-                  
-                  <div className="flex-1 min-w-0">
+                  <div className={`text-2xl mr-4 ${item.completed ? 'opacity-50' : ''}`}>
+                    {getItemIcon(item)}
+                  </div>
+                  <div className="flex-1">
                     <div className={`font-medium ${item.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                       {item.title}
                     </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-sm text-gray-500">
-                        {formatTime(item.datetime)}
-                      </span>
-                      {item.location && (
-                        <span className="text-sm text-gray-500">
-                          📍 {item.location}
-                        </span>
-                      )}
-                      {item.priority && (
-                        <span className={`text-xs font-medium ${getPriorityColor(item.priority)}`}>
-                          {item.priority}
-                        </span>
-                      )}
-                    </div>
+                    {(item.time || item.datetime) && (
+                      <div className="text-sm text-gray-500 mt-0.5">
+                        {item.datetime ? 
+                          new Date(item.datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) :
+                          item.time
+                        }
+                      </div>
+                    )}
+                    {item.location && (
+                      <div className="text-sm text-gray-500 mt-0.5">📍 {item.location}</div>
+                    )}
                   </div>
-                  
-                  <div className="text-gray-400">
-                    →
-                  </div>
+                  {item.priority && item.priority !== 'medium' && (
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      item.priority === 'urgent' ? 'bg-red-100 text-red-600' :
+                      item.priority === 'high' ? 'bg-orange-100 text-orange-600' :
+                      'bg-green-100 text-green-600'
+                    }`}>
+                      {item.priority}
+                    </span>
+                  )}
                 </Link>
               ))
             )}
@@ -348,10 +320,41 @@ export default function CalendarDashboardPage() {
         </div>
       </div>
 
+      {/* Upcoming Week - Optional Enhancement */}
+      <div className="px-4 mt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">This Week</h3>
+        <div className="grid grid-cols-7 gap-2">
+          {Array.from({ length: 7 }).map((_, i) => {
+            const date = new Date()
+            date.setDate(date.getDate() + i)
+            const isToday = i === 0
+            
+            return (
+              <Link
+                key={i}
+                href="/calendar"
+                className={`p-3 rounded-lg text-center transition-all ${
+                  isToday 
+                    ? 'bg-purple-500 text-white shadow-lg' 
+                    : 'bg-white hover:bg-gray-50'
+                }`}
+              >
+                <div className="text-xs font-medium">
+                  {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                </div>
+                <div className="text-lg font-bold mt-1">
+                  {date.getDate()}
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Quick Actions */}
-      <div className="p-4 mt-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 gap-3">
+      <div className="px-4 mt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Link href="/todos?action=new" className="bg-green-500 text-white rounded-xl p-4 text-center active:scale-95 transition-transform">
             <div className="text-2xl mb-1">➕</div>
             <div className="text-sm font-medium">Add Todo</div>
@@ -362,14 +365,14 @@ export default function CalendarDashboardPage() {
             <div className="text-sm font-medium">Create Event</div>
           </Link>
           
-          <Link href="/reminders?action=new" className="bg-orange-500 text-white rounded-xl p-4 text-center active:scale-95 transition-transform">
+          <Link href="/todos?list=reminder&action=new" className="bg-blue-500 text-white rounded-xl p-4 text-center active:scale-95 transition-transform">
             <div className="text-2xl mb-1">⏰</div>
             <div className="text-sm font-medium">Set Reminder</div>
           </Link>
           
-          <Link href="/feed" className="bg-pink-500 text-white rounded-xl p-4 text-center active:scale-95 transition-transform">
-            <div className="text-2xl mb-1">🌟</div>
-            <div className="text-sm font-medium">What's Happening</div>
+          <Link href="/todos?list=shopping&action=new" className="bg-purple-500 text-white rounded-xl p-4 text-center active:scale-95 transition-transform">
+            <div className="text-2xl mb-1">🛒</div>
+            <div className="text-sm font-medium">Shopping List</div>
           </Link>
         </div>
       </div>
@@ -387,7 +390,7 @@ export default function CalendarDashboardPage() {
           </Link>
           <Link href="/todos" className="flex flex-col items-center py-2 text-gray-600">
             <span className="text-xl">✅</span>
-            <span className="text-xs mt-1">Todos</span>
+            <span className="text-xs mt-1">Lists</span>
           </Link>
           <Link href="/feed" className="flex flex-col items-center py-2 text-gray-600">
             <span className="text-xl">🌟</span>
