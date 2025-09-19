@@ -3,6 +3,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import type { DBEvent } from '@/lib/types';
 import type { Friend, CalendarForm, QuickModalForm, FeedEvent } from '../types';
+// Import the EventCarpoolModal component
+import EventCarpoolModal from './EventCarpoolModal';
 
 interface CalendarModalsProps {
   // Modal visibility states
@@ -53,6 +55,9 @@ interface CalendarModalsProps {
   createQuickItem: () => void;
   createCarpoolGroup: () => void;
   resetForm: () => void;
+  
+  // Add showToast if not already present
+  showToast?: (toast: { type: string; message: string }) => void;
 }
 
 export default function CalendarModals({
@@ -96,7 +101,8 @@ export default function CalendarModals({
   handleApplyTemplate,
   createQuickItem,
   createCarpoolGroup,
-  resetForm
+  resetForm,
+  showToast
 }: CalendarModalsProps) {
   
   // State for pre/post events
@@ -112,10 +118,52 @@ export default function CalendarModals({
   ]);
   const [selectedBlock, setSelectedBlock] = useState<any>(null);
   
+  // State for cover photo
+  const [coverPhotoFile, setCoverPhotoFile] = useState<File | null>(null);
+  const [coverPhotoPreview, setCoverPhotoPreview] = useState<string>('');
+  
   // Refs to prevent focus loss
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Modal wrapper component with better focus management
+  // Handle file upload for cover photo
+  const handleCoverPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type and size
+      if (!file.type.startsWith('image/')) {
+        showToast?.({ type: 'error', message: 'Please select an image file' });
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        showToast?.({ type: 'error', message: 'Image must be less than 5MB' });
+        return;
+      }
+      
+      setCoverPhotoFile(file);
+      
+      // Create preview URL using FileReader for better stability
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setCoverPhotoPreview(result);
+        setForm(prev => ({ ...prev, cover_photo: result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Clear cover photo
+  const clearCoverPhoto = () => {
+    setCoverPhotoFile(null);
+    setCoverPhotoPreview('');
+    setForm(prev => ({ ...prev, cover_photo: '' }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  // Modal wrapper component with better focus management and mobile optimization
   const Modal = ({ isOpen, onClose, title, children, size = 'lg' }: { 
     isOpen: boolean; 
     onClose: () => void; 
@@ -141,6 +189,27 @@ export default function CalendarModals({
       '2xl': 'max-w-2xl'
     };
     
+    // Mobile-optimized modal
+    if (isMobile) {
+      return (
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col">
+          <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-4 py-3 flex items-center justify-between safe-area-top">
+            <button
+              onClick={onClose}
+              className="text-gray-600 dark:text-gray-400 p-1"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex-1 text-center mr-8">{title}</h2>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 safe-area-bottom">{children}</div>
+        </div>
+      );
+    }
+    
+    // Desktop modal
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto">
         <div className="flex items-center justify-center min-h-screen px-4">
@@ -176,7 +245,7 @@ export default function CalendarModals({
         {...props}
         value={value || ''}
         onChange={handleChange}
-        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors"
+        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
       />
     );
   };
@@ -193,9 +262,26 @@ export default function CalendarModals({
         {...props}
         value={value || ''}
         onChange={handleChange}
-        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors"
+        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
       />
     );
+  };
+
+  // Prepare carpool data for EventCarpoolModal
+  const carpoolData = {
+    carpoolMatches: [],
+    friends: friends || [],
+    sendCarpoolInvite: async (matchId: string, message?: string) => {
+      // Implement your carpool invite logic here
+      console.log('Sending carpool invite:', matchId, message);
+      showToast?.({ type: 'success', message: 'Carpool invite sent!' });
+      return { success: true };
+    },
+    createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
+      // Call your existing createCarpoolGroup function
+      createCarpoolGroup();
+      return { success: true };
+    }
   };
 
   return (
@@ -206,6 +292,7 @@ export default function CalendarModals({
         resetForm();
         setShowPreEvent(false);
         setShowPostEvent(false);
+        clearCoverPhoto();
       }} title="Create Event" size="xl">
         <div className="space-y-4">
           {/* Cover Photo Upload */}
@@ -213,12 +300,27 @@ export default function CalendarModals({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Cover Photo
             </label>
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:border-purple-500 transition-colors cursor-pointer">
-              {form.cover_photo ? (
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:border-purple-500 transition-colors cursor-pointer"
+            >
+              {coverPhotoPreview || form.cover_photo ? (
                 <div className="space-y-2">
-                  <img src={form.cover_photo} alt="Cover" className="w-full h-32 object-cover rounded-lg" />
+                  <img 
+                    src={coverPhotoPreview || form.cover_photo} 
+                    alt="Cover" 
+                    className="w-full h-32 object-cover rounded-lg"
+                    onError={(e) => {
+                      // Hide image if it fails to load
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      showToast?.({ type: 'error', message: 'Failed to load image' });
+                    }}
+                  />
                   <button
-                    onClick={() => setForm(prev => ({ ...prev, cover_photo: '' }))}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearCoverPhoto();
+                    }}
                     className="text-sm text-red-500 hover:text-red-700"
                   >
                     Remove
@@ -232,21 +334,15 @@ export default function CalendarModals({
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     Click to upload cover photo
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      // Handle file upload here
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        // For now, using a placeholder. In production, upload to storage
-                        setForm(prev => ({ ...prev, cover_photo: URL.createObjectURL(file) }));
-                      }
-                    }}
-                  />
                 </div>
               )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCoverPhotoUpload}
+              />
             </div>
           </div>
           
@@ -288,7 +384,7 @@ export default function CalendarModals({
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-4'}`}>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Start Time *
@@ -322,7 +418,7 @@ export default function CalendarModals({
                   onChange={(e) => setShowPreEvent(e.target.checked)}
                   className="rounded text-purple-500"
                 />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span className={`${isMobile ? 'text-base' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300`}>
                   Add Pre-Event (e.g., dinner before)
                 </span>
               </label>
@@ -358,7 +454,7 @@ export default function CalendarModals({
                   onChange={(e) => setShowPostEvent(e.target.checked)}
                   className="rounded text-purple-500"
                 />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span className={`${isMobile ? 'text-base' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300`}>
                   Add Post-Event (e.g., drinks after)
                 </span>
               </label>
@@ -394,7 +490,7 @@ export default function CalendarModals({
             <select
               value={form.visibility}
               onChange={(e) => setForm(prev => ({ ...prev, visibility: e.target.value as any }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+              className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white ${isMobile ? 'text-base' : 'text-sm'}`}
             >
               <option value="private">Private</option>
               <option value="friends">Friends Only</option>
@@ -402,10 +498,10 @@ export default function CalendarModals({
             </select>
           </div>
           
-          <div className="flex gap-3 pt-4">
+          <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4`}>
             <button
               onClick={handleCreateEvent}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all"
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all`}
             >
               Create Event
             </button>
@@ -415,8 +511,9 @@ export default function CalendarModals({
                 resetForm();
                 setShowPreEvent(false);
                 setShowPostEvent(false);
+                clearCoverPhoto();
               }}
-              className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
             >
               Cancel
             </button>
@@ -424,10 +521,11 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Edit Event Modal (similar updates) */}
+      {/* Edit Event Modal */}
       <Modal isOpen={openEdit} onClose={() => {
         setOpenEdit(false);
         resetForm();
+        clearCoverPhoto();
       }} title="Edit Event" size="xl">
         <div className="space-y-4">
           <div>
@@ -453,7 +551,7 @@ export default function CalendarModals({
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-4'}`}>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Start Time *
@@ -477,10 +575,10 @@ export default function CalendarModals({
             </div>
           </div>
           
-          <div className="flex gap-3 pt-4">
+          <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4`}>
             <button
               onClick={handleUpdateEvent}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all"
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all`}
             >
               Update Event
             </button>
@@ -488,8 +586,9 @@ export default function CalendarModals({
               onClick={() => {
                 setOpenEdit(false);
                 resetForm();
+                clearCoverPhoto();
               }}
-              className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
             >
               Cancel
             </button>
@@ -509,7 +608,7 @@ export default function CalendarModals({
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Quick Time Blocks
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-2`}>
               {timeBlocks.map((block) => (
                 <button
                   key={block.id}
@@ -529,7 +628,7 @@ export default function CalendarModals({
               <h4 className="font-medium text-gray-800 dark:text-gray-200">
                 Schedule: {selectedBlock.title}
               </h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`${isMobile ? 'space-y-3' : 'grid grid-cols-2 gap-3'}`}>
                 <div>
                   <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
                     Date
@@ -550,13 +649,13 @@ export default function CalendarModals({
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button className="flex-1 px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm hover:bg-indigo-600">
+              <div className={`${isMobile ? 'space-y-2' : 'flex gap-2'}`}>
+                <button className={`${isMobile ? 'w-full' : 'flex-1'} px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm hover:bg-indigo-600`}>
                   Add to Calendar
                 </button>
                 <button 
                   onClick={() => setSelectedBlock(null)}
-                  className="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm"
+                  className={`${isMobile ? 'w-full' : ''} px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm`}
                 >
                   Cancel
                 </button>
@@ -576,7 +675,7 @@ export default function CalendarModals({
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className={`${isMobile ? 'space-y-3' : 'grid grid-cols-3 gap-3'}`}>
                 <input
                   type="number"
                   placeholder="Duration (min)"
@@ -587,7 +686,7 @@ export default function CalendarModals({
                   className="w-full h-10 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer"
                   defaultValue="#8B5CF6"
                 />
-                <button className="px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+                <button className={`${isMobile ? 'w-full' : ''} px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600`}>
                   Add Block
                 </button>
               </div>
@@ -596,7 +695,7 @@ export default function CalendarModals({
           
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
             <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               <div className="text-sm text-blue-800 dark:text-blue-200">
@@ -621,6 +720,10 @@ export default function CalendarModals({
                 src={selected?.cover_photo || selectedFeedEvent?.cover_photo} 
                 alt="Event cover" 
                 className="w-full h-48 object-cover rounded-lg"
+                onError={(e) => {
+                  // Hide image if it fails to load
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
               />
             )}
             
@@ -666,6 +769,23 @@ export default function CalendarModals({
                   <span>{selected?.location || selectedFeedEvent?.location}</span>
                 </div>
               )}
+              
+              {/* Add Carpool Option Button */}
+              {selected && (
+                <button
+                  onClick={() => {
+                    setDetailsOpen(false);
+                    setShowCarpoolChat(true);
+                  }}
+                  className="w-full mt-3 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m0-1V8m0 0a1 1 0 011-1h2a1 1 0 011 1v9" />
+                  </svg>
+                  Coordinate Carpool
+                </button>
+              )}
             </div>
             
             {/* Post-event info */}
@@ -681,16 +801,16 @@ export default function CalendarModals({
             )}
             
             {selected && selected.created_by === me && (
-              <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+              <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4 border-t dark:border-gray-700`}>
                 <button
                   onClick={() => handleEdit(selected)}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
+                  className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all`}
                 >
                   Edit Event
                 </button>
                 <button
                   onClick={() => setDetailsOpen(false)}
-                  className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+                  className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
                 >
                   Close
                 </button>
@@ -732,7 +852,7 @@ export default function CalendarModals({
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-4'}`}>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Date
@@ -771,16 +891,16 @@ export default function CalendarModals({
             </div>
           )}
           
-          <div className="flex gap-3 pt-4">
+          <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4`}>
             <button
               onClick={createQuickItem}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all"
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all`}
             >
               Create {quickModalType === 'reminder' ? 'Reminder' : 'To-do'}
             </button>
             <button
               onClick={() => setQuickModalOpen(false)}
-              className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
             >
               Cancel
             </button>
@@ -788,64 +908,18 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Carpool Chat Modal */}
-      <Modal 
-        isOpen={showCarpoolChat} 
-        onClose={() => setShowCarpoolChat(false)} 
-        title="Carpool Coordination"
-      >
-        <div className="space-y-4">
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
-            <h4 className="font-medium text-green-800 dark:text-green-300 mb-2">
-              Select Friends for Carpool
-            </h4>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {friends.map((friend) => (
-                <label
-                  key={friend.friend_id}
-                  className="flex items-center gap-3 p-2 hover:bg-green-100 dark:hover:bg-green-800/30 rounded cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedCarpoolFriends.has(friend.friend_id)}
-                    onChange={(e) => {
-                      const newSet = new Set(selectedCarpoolFriends);
-                      if (e.target.checked) {
-                        newSet.add(friend.friend_id);
-                      } else {
-                        newSet.delete(friend.friend_id);
-                      }
-                      setSelectedCarpoolFriends(newSet);
-                    }}
-                    className="cursor-pointer"
-                  />
-                  <span className="text-sm font-medium">{friend.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          
-          <div className="flex gap-3">
-            <button
-              onClick={createCarpoolGroup}
-              disabled={selectedCarpoolFriends.size === 0}
-              className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              Create Carpool Group
-            </button>
-            <button
-              onClick={() => setShowCarpoolChat(false)}
-              className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Use the EventCarpoolModal component */}
+      <EventCarpoolModal
+        isOpen={showCarpoolChat}
+        onClose={() => setShowCarpoolChat(false)}
+        event={selectedCarpoolEvent || selected}
+        userId={me}
+        carpoolData={carpoolData}
+        showToast={showToast}
+        isMobile={isMobile}
+      />
 
-      {/* Templates, Analytics, Meeting Coordinator, and other modals would be implemented similarly */}
-      
-      {/* Templates Modal */}
+      {/* Templates Modal - COMPLETE WITH ALL TEMPLATES */}
       <Modal 
         isOpen={showTemplates} 
         onClose={() => setShowTemplates(false)} 
@@ -853,7 +927,7 @@ export default function CalendarModals({
         size="2xl"
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-4`}>
             {/* Wellness Templates */}
             <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
               <div className="flex items-start justify-between mb-2">
@@ -1040,7 +1114,7 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Analytics Modal */}
+      {/* Analytics Modal - COMPLETE */}
       <Modal 
         isOpen={showAnalytics} 
         onClose={() => setShowAnalytics(false)} 
@@ -1049,7 +1123,7 @@ export default function CalendarModals({
       >
         <div className="space-y-6">
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-4`}>
             <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4">
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{events.length}</div>
               <div className="text-xs text-blue-700 dark:text-blue-300">Total Events</div>
@@ -1080,7 +1154,7 @@ export default function CalendarModals({
                 const percentage = Math.random() * 100;
                 return (
                   <div key={day} className="flex items-center gap-3">
-                    <div className="w-20 text-sm text-gray-600 dark:text-gray-400">{day}</div>
+                    <div className={`${isMobile ? 'w-16' : 'w-20'} text-sm text-gray-600 dark:text-gray-400`}>{day}</div>
                     <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-1000"
@@ -1161,7 +1235,7 @@ export default function CalendarModals({
           </div>
 
           {/* Date Range */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`${isMobile ? 'space-y-3' : 'grid grid-cols-2 gap-3'}`}>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 From Date
