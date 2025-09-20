@@ -230,6 +230,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [showEditModal, setShowEditModal] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
   
+  // Build media array from all sources
+  const allMedia = [];
+  if (post.image_url) allMedia.push({ url: post.image_url, type: 'image' });
+  if (post.video_url) allMedia.push({ url: post.video_url, type: 'video' });
+  if (post.additional_media) allMedia.push(...post.additional_media);
+  const mediaToDisplay = allMedia.length > 0 ? allMedia : post.media;
+  
   // Check if current user is a co-creator
   useEffect(() => {
     if (currentUserId && post.co_creators) {
@@ -319,9 +326,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           {post.body && <p className="post-text">{post.body}</p>}
           
           {/* Photo Grid */}
-          {post.media && post.media.length > 0 && (
+          {mediaToDisplay && mediaToDisplay.length > 0 && (
             <PhotoGrid 
-              media={post.media} 
+              media={mediaToDisplay} 
               onPhotoClick={handlePhotoClick}
             />
           )}
@@ -355,9 +362,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       </div>
       
       {/* Lightbox */}
-      {showLightbox && post.media && (
+      {showLightbox && mediaToDisplay && mediaToDisplay.length > 0 && (
         <PhotoLightbox
-          media={post.media}
+          media={mediaToDisplay}
           startIndex={lightboxStartIndex}
           onClose={() => setShowLightbox(false)}
         />
