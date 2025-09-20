@@ -57,225 +57,224 @@ function StarryBackground() {
   );
 }
 
-// Beautiful Candle Display Component
+// Beautiful Candle Display Component (updated visual only)
 function CandleDisplay({ candle }: { candle: Candle }) {
-  const isEternal = candle.candle_type === 'eternal';
-  const color = candle.color || 'white';
-  
-  const colorMap: Record<string, { main: string; gradient: string[]; rim: string; label: string; labelText: string }> = {
-    white: { 
-      main: '#ffffff', 
-      gradient: ['#ffffff', '#F3F0F7', '#EDE9F7'],
-      rim: '#e9e4f4',
-      label: '#ffffffcc',
-      labelText: '#5b4a7a'
+  const isEternal = candle.candle_type === "eternal";
+  const color = candle.color || "white";
+
+  // Kept your map; we still default to a white candle, but only
+  // use the palette for subtle accents (e.g., plaque rim if desired)
+  const colorMap: Record<
+    string,
+    { main: string; gradient: string[]; rim?: string }
+  > = {
+    white: {
+      main: "#ffffff",
+      gradient: ["#ffffff", "#F6F4FB", "#EEEAF7"],
+      rim: "#e9e4f4",
     },
-    gold: { 
-      main: '#f8e3b1', 
-      gradient: ['#fff5d6', '#f8e3b1', '#e6c56e'],
-      rim: '#e7cf98',
-      label: '#fff3dacc',
-      labelText: '#7a5a19'
+    gold: {
+      main: "#f8e3b1",
+      gradient: ["#fff5d6", "#f8e3b1", "#e6c56e"],
+      rim: "#e7cf98",
     },
-    rose: { 
-      main: '#f7c4c9', 
-      gradient: ['#ffd6d9', '#f7c4c9', '#e8a5ab'],
-      rim: '#eab0b7',
-      label: '#ffe6eaCC',
-      labelText: '#7a3040'
+    rose: {
+      main: "#f7c4c9",
+      gradient: ["#ffd6d9", "#f7c4c9", "#e8a5ab"],
+      rim: "#eab0b7",
     },
-    azure: { 
-      main: '#c5e3ff', 
-      gradient: ['#dceeff', '#c5e3ff', '#9bc8f7'],
-      rim: '#b4d3f0',
-      label: '#eaf5ffcc',
-      labelText: '#1e3a5f'
+    azure: {
+      main: "#c5e3ff",
+      gradient: ["#dceeff", "#c5e3ff", "#9bc8f7"],
+      rim: "#b4d3f0",
     },
-    violet: { 
-      main: '#d8c7ff', 
-      gradient: ['#e8dcff', '#d8c7ff', '#c0a8f7'],
-      rim: '#cdbbfa',
-      label: '#efe9ffcc',
-      labelText: '#3f2d6e'
+    violet: {
+      main: "#d8c7ff",
+      gradient: ["#e8dcff", "#d8c7ff", "#c0a8f7"],
+      rim: "#cdbbfa",
     },
-    emerald: { 
-      main: '#cdebd3', 
-      gradient: ['#dff5e3', '#cdebd3', '#a8d6b3'],
-      rim: '#bfe1c6',
-      label: '#e9f9edcc',
-      labelText: '#1f4c33'
+    emerald: {
+      main: "#cdebd3",
+      gradient: ["#dff5e3", "#cdebd3", "#a8d6b3"],
+      rim: "#bfe1c6",
     },
   };
 
-  const candleColor = colorMap[color] || colorMap.white;
+  const palette = colorMap[color] || colorMap.white;
+
   const createdDate = new Date(candle.created_at);
-  const formattedDate = createdDate.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
+  const formattedDate = createdDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 
-  // Small randomization per render to de-sync multiple flames
+  // random offsets so multiple flames don't sync
   const swayDelay = `${(Math.random() * 1.2).toFixed(2)}s`;
   const flickerDelay = `${(Math.random() * 0.9).toFixed(2)}s`;
 
   return (
     <div className="candle-display">
       <div className="candle-visual">
-        <svg viewBox="0 0 120 160" className="candle-svg">
+        <svg viewBox="0 0 120 160" className="candle-svg" aria-hidden>
           <defs>
-            {/* FLAME gradients */}
+            {/* Candle body gradients (white glossy cylinder) */}
+            <linearGradient id={`body-grad-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stopColor="#faf9ff" />
+              <stop offset="25%" stopColor="#ffffff" />
+              <stop offset="55%" stopColor="#f3f0fa" />
+              <stop offset="100%" stopColor="#ece8f6" />
+            </linearGradient>
+            {/* vertical gloss */}
+            <linearGradient id={`body-vert-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
+              <stop offset="50%" stopColor="#ffffff" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#d9d3eb" stopOpacity="0.45" />
+            </linearGradient>
+
+            {/* Top ellipse (wax rim) */}
+            <radialGradient id={`top-ell-${candle.id}`} cx="50%" cy="45%" r="60%">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="70%" stopColor="#f2effa" />
+              <stop offset="100%" stopColor="#e8e3f4" />
+            </radialGradient>
+
+            {/* Subtle inner emboss squiggle */}
+            <linearGradient id={`squiggle-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#d7d2ea" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.2" />
+            </linearGradient>
+
+            {/* Flame */}
             <linearGradient id={`flame-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#fff9df" />
+              <stop offset="0%" stopColor="#fff7d5" />
               <stop offset="35%" stopColor="#ffd27a" />
               <stop offset="80%" stopColor="#ff9b3f" />
               <stop offset="100%" stopColor="#ff7a1a" />
             </linearGradient>
-            
             <radialGradient id={`flame-inner-${candle.id}`} cx="50%" cy="40%" r="60%">
               <stop offset="0%" stopColor="#ffffff" />
               <stop offset="65%" stopColor="#ffe9a8" />
               <stop offset="100%" stopColor="rgba(255,255,255,0)" />
             </radialGradient>
-
-            {/* Gentle flame blur for warmth */}
             <filter id={`flame-blur-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="0.6" />
             </filter>
 
-            {/* Heat shimmer above flame */}
-            <filter id={`heat-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.008 0.02" numOctaves="2" seed="3">
-                <animate attributeName="baseFrequency" dur="4s" values="0.008 0.02;0.012 0.025;0.008 0.02" repeatCount="indefinite" />
-              </feTurbulence>
-              <feDisplacementMap in="SourceGraphic" scale="2" />
-            </filter>
-
-            {/* WAX gradients & gloss */}
-            <linearGradient id={`wax-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor={candleColor.gradient[0]} />
-              <stop offset="50%" stopColor={candleColor.gradient[1]} />
-              <stop offset="100%" stopColor={candleColor.gradient[2]} />
-            </linearGradient>
-
-            <linearGradient id={`rim-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
-              <stop offset="60%" stopColor={candleColor.rim} stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#000000" stopOpacity="0.05" />
-            </linearGradient>
-            
-            {/* Soft ambient glow */}
+            {/* Glow */}
             <radialGradient id={`glow-${candle.id}`} cx="50%" cy="30%" r="60%">
               <stop offset="0%" stopColor="rgba(255, 230, 160, 0.95)" />
               <stop offset="60%" stopColor="rgba(255, 190, 90, 0.35)" />
               <stop offset="100%" stopColor="rgba(255, 150, 40, 0)" />
             </radialGradient>
 
-            {/* Card shadow */}
+            {/* Soft drop shadow */}
             <filter id={`shadow-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15"/>
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
             </filter>
 
-            {/* Label band clip so text stays on the candle */}
-            <clipPath id={`label-clip-${candle.id}`}>
-              <rect x="38" y="95" width="44" height="16" rx="6" />
-            </clipPath>
+            {/* Name plaque gradients */}
+            <linearGradient id={`plaque-base-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#caa85a" />
+              <stop offset="100%" stopColor="#a27d2c" />
+            </linearGradient>
+            <linearGradient id={`plaque-face-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#fff2c9" />
+              <stop offset="60%" stopColor="#f6d784" />
+              <stop offset="100%" stopColor="#e9c15a" />
+            </linearGradient>
           </defs>
-          
-          {/* Table shadow */}
+
+          {/* Ground shadow */}
           <ellipse cx="60" cy="150" rx="30" ry="6" fill="#000" opacity="0.12" />
 
-          {/* Candle glass base (subtle) */}
-          <g opacity="0.75">
-            <rect x="34" y="60" width="52" height="88" rx="10" fill={`url(#wax-${candle.id})`} filter={`url(#shadow-${candle.id})`} />
-            {/* top ellipse wax surface */}
-            <ellipse cx="60" cy="60" rx="26" ry="9" fill={`url(#wax-${candle.id})`} />
-            {/* rim gloss */}
-            <ellipse cx="60" cy="60" rx="26" ry="9" fill={`url(#rim-${candle.id})`} opacity="0.55" />
+          {/* CANDLE BODY (simple, elegant white cylinder) */}
+          {/* Main body */}
+          <g filter={`url(#shadow-${candle.id})`}>
+            <rect x="37" y="58" width="46" height="86" rx="10" fill={`url(#body-grad-${candle.id})`} />
+            {/* top wax ellipse */}
+            <ellipse cx="60" cy="58" rx="23" ry="8" fill={`url(#top-ell-${candle.id})`} />
+            {/* subtle vertical gloss strip */}
+            <rect x="44" y="60" width="6" height="80" rx="3" fill="white" opacity="0.5" />
+            <rect x="70" y="60" width="3" height="78" rx="1.5" fill="#efeaff" opacity="0.35" />
+            {/* a gentle embossed squiggle like in your screenshot */}
+            <path
+              d="M56 88c6 8-5 10 1 16c4 4 8-4 10-8"
+              fill="none"
+              stroke={`url(#squiggle-${candle.id})`}
+              strokeWidth="2"
+              strokeLinecap="round"
+              opacity="0.6"
+            />
           </g>
-
-          {/* Melted wax drips (light touch) */}
-          <path 
-            d="M49 78c3 10-2 12-2 15s5 5 8 0 2-12 5-15" 
-            fill="none" 
-            stroke={candleColor.gradient[1]} 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            opacity="0.55"
-          />
-          <path 
-            d="M70 74c-2 6 1 9 1 12s-4 4-6 0-1-9-4-12" 
-            fill="none" 
-            stroke={candleColor.gradient[1]} 
-            strokeWidth="1.8" 
-            strokeLinecap="round" 
-            opacity="0.45"
-          />
 
           {/* Wick */}
-          <rect x="58.6" y="48" width="2.8" height="13.5" rx="1.4" fill="#2a2a2a" />
+          <rect x="59" y="45" width="2" height="12.5" rx="1" fill="#1e1e1e" />
 
-          {/* Flame group */}
+          {/* Flame (flicker + glow) */}
           <g className="flame-group" style={{ animationDelay: swayDelay }}>
-            {/* outer flame */}
-            <path d="M60 29 C55.5 38 55 44 60 53 C65 44 64.5 38 60 29 Z" fill={`url(#flame-${candle.id})`} filter={`url(#flame-blur-${candle.id})`} />
-            {/* inner hot core */}
-            <path d="M60 32 C57.2 39 56.7 43 60 49 C63.3 43 62.8 39 60 32 Z" fill={`url(#flame-inner-${candle.id})`} />
-            {/* tiny spark at the tip */}
-            <circle cx="60" cy="30" r="0.9" fill="#fff6d5" opacity="0.9" />
+            <path d="M60 27 C55.4 36 55 42 60 51 C65 42 64.6 36 60 27 Z" fill={`url(#flame-${candle.id})`} filter={`url(#flame-blur-${candle.id})`} />
+            <path d="M60 30 C57.2 37 56.7 41 60 47 C63.3 41 62.8 37 60 30 Z" fill={`url(#flame-inner-${candle.id})`} />
+            <circle cx="60" cy="28.6" r="0.9" fill="#fff6d5" opacity="0.9" />
           </g>
 
-          {/* Heat shimmer area above flame */}
-          <g filter={`url(#heat-${candle.id})`} opacity="0.3" style={{ animation: 'haze 3.5s ease-in-out infinite', transformOrigin: '60px 20px' }}>
-            <ellipse cx="60" cy="22" rx="8" ry="4" fill="#ffd27a" />
-          </g>
+          {/* Warm glow */}
+          <ellipse
+            cx="60"
+            cy="40"
+            rx="32"
+            ry="22"
+            fill={`url(#glow-${candle.id})`}
+            className="glow-effect"
+            style={{ animationDelay: flickerDelay }}
+          />
 
-          {/* Glow effect */}
-          <ellipse cx="60" cy="41" rx="36" ry="26" fill={`url(#glow-${candle.id})`} className="glow-effect" style={{ animationDelay: flickerDelay }} />
-
-          {/* Label band with candle name */}
-          <g>
-            <rect x="38" y="95" width="44" height="16" rx="6" fill={candleColor.label} stroke="rgba(0,0,0,0.1)" />
-            <g clipPath={`url(#label-clip-${candle.id})`}>
-              <text
-                x="60"
-                y="106"
-                textAnchor="middle"
-                fontSize="6.2"
-                fontWeight={600}
-                fill={candleColor.labelText}
-                letterSpacing="0.3"
-                style={{ userSelect: 'none' }}
-                // Stretch/compress slightly to fit the band nicely
-                textLength={40}
-                lengthAdjust="spacingAndGlyphs"
-              >
-                {candle.name}
-              </text>
-            </g>
-          </g>
-
-          {/* Eternal visuals */}
+          {/* Eternal mark */}
           {isEternal && (
-            <>
-              <ellipse cx="60" cy="40" rx="35" ry="25" fill={`url(#glow-${candle.id})`} className="glow-effect" />
-              <text x="60" y="20" textAnchor="middle" fontSize="14" fill="#f3e4b0">✨</text>
-            </>
+            <text x="60" y="18" textAnchor="middle" fontSize="14" fill="#f3e4b0">
+              ✨
+            </text>
           )}
+
+          {/* NAME PLAQUE (gold, separate from candle body) */}
+          <g transform="translate(0, 0)">
+            {/* shadowy under-base */}
+            <path
+              d="M36 126 h48 a8 8 0 0 1 8 8 v2 a8 8 0 0 1 -8 8 h-48 a8 8 0 0 1 -8 -8 v-2 a8 8 0 0 1 8 -8 z"
+              fill={`url(#plaque-base-${candle.id})`}
+              opacity="0.85"
+              filter={`url(#shadow-${candle.id})`}
+            />
+            {/* face */}
+            <rect x="38" y="128" width="44" height="16" rx="8" fill={`url(#plaque-face-${candle.id})`} stroke="rgba(0,0,0,0.1)" />
+            {/* inner inset highlight */}
+            <rect x="40" y="130" width="40" height="12" rx="6" fill="rgba(255,255,255,0.35)" opacity="0.5" />
+            {/* name text */}
+            <text
+              x="60"
+              y="139"
+              textAnchor="middle"
+              fontSize="6.2"
+              fontWeight={700}
+              fill="#3e2e16"
+              letterSpacing="0.3"
+              style={{ userSelect: "none" }}
+              textLength={40}
+              lengthAdjust="spacingAndGlyphs"
+            >
+              {candle.name}
+            </text>
+          </g>
         </svg>
 
-        {isEternal && (
-          <div className="eternal-badge">Eternal Flame</div>
-        )}
+        {isEternal && <div className="eternal-badge">Eternal Flame</div>}
       </div>
-      
+
       <div className="candle-info">
         <h3 className="candle-name">{candle.name}</h3>
-        
-        {candle.message && (
-          <p className="candle-message">"{candle.message}"</p>
-        )}
-        
+
+        {candle.message && <p className="candle-message">"{candle.message}"</p>}
+
         <div className="candle-meta">
           <span className="candle-date">Lit on {formattedDate}</span>
           {candle.amount_paid && (
@@ -293,7 +292,7 @@ export default function MyCandlesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [myCandles, setMyCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'eternal' | 'renewable'>('all');
+  const [filter, setFilter] = useState<"all" | "eternal" | "renewable">("all");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -304,15 +303,15 @@ export default function MyCandlesPage() {
 
   const loadMyCandles = async () => {
     if (!userId) return;
-    
+
     setLoading(true);
     try {
       // Query using created_by field (where purchased candles are stored)
       const { data, error } = await supabase
         .from("candle_offerings")
         .select("*")
-        .eq('created_by', userId)
-        .order('created_at', { ascending: false });
+        .eq("created_by", userId)
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error loading candles:", error);
@@ -320,7 +319,7 @@ export default function MyCandlesPage() {
         setMyCandles(data || []);
       }
     } catch (error) {
-      console.error('Error loading candles:', error);
+      console.error("Error loading candles:", error);
     } finally {
       setLoading(false);
     }
@@ -334,17 +333,17 @@ export default function MyCandlesPage() {
 
   // Filter and categorize candles
   const { eternalCandles, renewableCandles, displayCandles } = useMemo(() => {
-    const eternal = myCandles.filter(c => c.candle_type === 'eternal');
-    const renewable = myCandles.filter(c => c.candle_type !== 'eternal');
-    
+    const eternal = myCandles.filter((c) => c.candle_type === "eternal");
+    const renewable = myCandles.filter((c) => c.candle_type !== "eternal");
+
     let display = myCandles;
-    if (filter === 'eternal') display = eternal;
-    if (filter === 'renewable') display = renewable;
-    
-    return { 
-      eternalCandles: eternal, 
-      renewableCandles: renewable, 
-      displayCandles: display 
+    if (filter === "eternal") display = eternal;
+    if (filter === "renewable") display = renewable;
+
+    return {
+      eternalCandles: eternal,
+      renewableCandles: renewable,
+      displayCandles: display,
     };
   }, [myCandles, filter]);
 
@@ -358,22 +357,22 @@ export default function MyCandlesPage() {
       {/* Animated Starry Background */}
       <StarryBackground />
       <div className="page-background"></div>
-      
+
       {/* Inspirational Quote */}
       <div className="inspirational-quote">
         "Each flame carries a prayer, each light holds a memory, each candle bridges heaven and earth."
       </div>
-      
+
       <header className="page-header">
         <Link href="/profile" className="back-button">
           ← Back to Profile
         </Link>
-        
+
         <h1 className="page-title">
           <span className="title-icon">🕯️</span>
           My Sacred Candles
         </h1>
-        
+
         <Link href="/meditation/candles" className="visit-sanctuary">
           Visit Sanctuary →
         </Link>
@@ -385,17 +384,17 @@ export default function MyCandlesPage() {
           <div className="stat-value">{myCandles.length}</div>
           <div className="stat-label">Total Candles</div>
         </div>
-        
+
         <div className="stat-card eternal">
           <div className="stat-value">{eternalCandles.length}</div>
           <div className="stat-label">Eternal Flames</div>
         </div>
-        
+
         <div className="stat-card renewable">
           <div className="stat-value">{renewableCandles.length}</div>
           <div className="stat-label">Prayer Candles</div>
         </div>
-        
+
         <div className="stat-card contribution">
           <div className="stat-value">${totalSpent.toFixed(2)}</div>
           <div className="stat-label">Total Contribution</div>
@@ -404,21 +403,21 @@ export default function MyCandlesPage() {
 
       {/* Filter Tabs */}
       <div className="filter-tabs">
-        <button 
-          onClick={() => setFilter('all')}
-          className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
+        <button
+          onClick={() => setFilter("all")}
+          className={`filter-tab ${filter === "all" ? "active" : ""}`}
         >
           All Candles ({myCandles.length})
         </button>
-        <button 
-          onClick={() => setFilter('eternal')}
-          className={`filter-tab ${filter === 'eternal' ? 'active' : ''}`}
+        <button
+          onClick={() => setFilter("eternal")}
+          className={`filter-tab ${filter === "eternal" ? "active" : ""}`}
         >
           ✨ Eternal ({eternalCandles.length})
         </button>
-        <button 
-          onClick={() => setFilter('renewable')}
-          className={`filter-tab ${filter === 'renewable' ? 'active' : ''}`}
+        <button
+          onClick={() => setFilter("renewable")}
+          className={`filter-tab ${filter === "renewable" ? "active" : ""}`}
         >
           🕯️ Renewable ({renewableCandles.length})
         </button>
@@ -747,9 +746,7 @@ export default function MyCandlesPage() {
         }
 
         @keyframes flicker {
-          0%, 100% {
-            filter: brightness(1);
-          }
+          0%, 100% { filter: brightness(1); }
           20% { filter: brightness(1.05); }
           40% { filter: brightness(0.95); }
           60% { filter: brightness(1.08); }
@@ -762,12 +759,6 @@ export default function MyCandlesPage() {
           50%  { transform: rotate(0deg) translateX(0px)    scale(0.98); opacity: 0.92; }
           75%  { transform: rotate(-0.6deg) translateX(-0.2px) scale(1.02); opacity: 0.96; }
           100% { transform: rotate(-1deg) translateX(-0.3px) scale(1); opacity: 0.96; }
-        }
-
-        /* subtle heat shimmer keyframes (used by inline style) */
-        @keyframes haze {
-          0%,100% { opacity: 0.28; transform: translateY(0); }
-          50%     { opacity: 0.42; transform: translateY(-0.6px); }
         }
 
         .glow-effect {
