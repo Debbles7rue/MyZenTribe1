@@ -23,6 +23,40 @@ type Candle = {
   created_by?: string;
 };
 
+// Starry Background Component
+function StarryBackground() {
+  return (
+    <div className="starry-container">
+      {/* Generate random stars */}
+      {Array.from({ length: 50 }).map((_, i) => (
+        <div
+          key={i}
+          className="star"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 3}s`,
+            animationDuration: `${2 + Math.random() * 3}s`
+          }}
+        />
+      ))}
+      
+      {/* Floating sparkles */}
+      {Array.from({ length: 15 }).map((_, i) => (
+        <div
+          key={`sparkle-${i}`}
+          className="sparkle"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 5}s`,
+            animationDuration: `${10 + Math.random() * 20}s`
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // Beautiful Candle Display Component
 function CandleDisplay({ candle }: { candle: Candle }) {
   const isEternal = candle.candle_type === 'eternal';
@@ -165,8 +199,6 @@ export default function MyCandlesPage() {
   const [myCandles, setMyCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'eternal' | 'renewable'>('all');
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -180,90 +212,18 @@ export default function MyCandlesPage() {
     
     setLoading(true);
     try {
-      // Debug: First, let's see ALL candles related to this user in any way
-      const debugQueries = await Promise.all([
-        // Query 1: Candles where user_id matches
-        supabase
-          .from("candle_offerings")
-          .select("*")
-          .eq('user_id', userId),
-        
-        // Query 2: Candles where recipient_id matches (if field exists)
-        supabase
-          .from("candle_offerings")
-          .select("*")
-          .eq('recipient_id', userId),
-        
-        // Query 3: Candles where created_for matches (if field exists)
-        supabase
-          .from("candle_offerings")
-          .select("*")
-          .eq('created_for', userId),
-        
-        // Query 4: Candles where created_by matches (if field exists)
-        supabase
-          .from("candle_offerings")
-          .select("*")
-          .eq('created_by', userId),
-          
-        // Query 5: ALL candles for this user without payment_status filter
-        supabase
-          .from("candle_offerings")
-          .select("*")
-          .or(`user_id.eq.${userId},recipient_id.eq.${userId},created_for.eq.${userId},created_by.eq.${userId}`)
-      ]);
-
-      // Store debug info
-      setDebugInfo({
-        userId,
-        byUserId: debugQueries[0].data,
-        byRecipientId: debugQueries[1].data,
-        byCreatedFor: debugQueries[2].data,
-        byCreatedBy: debugQueries[3].data,
-        allRelated: debugQueries[4].data,
-        errors: debugQueries.map((q, i) => ({ query: i, error: q.error }))
-      });
-
-      // Main query - try multiple approaches
-      // First try the original query
-      let { data: originalData } = await supabase
+      // Query using created_by field (where purchased candles are stored)
+      const { data, error } = await supabase
         .from("candle_offerings")
         .select("*")
-        .eq('user_id', userId)
-        .eq('payment_status', 'paid')
+        .eq('created_by', userId)
         .order('created_at', { ascending: false });
 
-      // If no results, try without payment_status filter
-      if (!originalData || originalData.length === 0) {
-        const { data: withoutPaymentFilter } = await supabase
-          .from("candle_offerings")
-          .select("*")
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
-        
-        if (withoutPaymentFilter && withoutPaymentFilter.length > 0) {
-          console.log("Found candles without payment_status filter:", withoutPaymentFilter);
-          setMyCandles(withoutPaymentFilter);
-          return;
-        }
+      if (error) {
+        console.error("Error loading candles:", error);
+      } else {
+        setMyCandles(data || []);
       }
-
-      // If still no results, try looking for candles created FOR this user
-      if (!originalData || originalData.length === 0) {
-        const { data: forUserData } = await supabase
-          .from("candle_offerings")
-          .select("*")
-          .or(`user_id.eq.${userId},recipient_id.eq.${userId},created_for.eq.${userId}`)
-          .order('created_at', { ascending: false });
-        
-        if (forUserData && forUserData.length > 0) {
-          console.log("Found candles using broader search:", forUserData);
-          setMyCandles(forUserData);
-          return;
-        }
-      }
-      
-      setMyCandles(originalData || []);
     } catch (error) {
       console.error('Error loading candles:', error);
     } finally {
@@ -300,7 +260,14 @@ export default function MyCandlesPage() {
 
   return (
     <div className="my-candles-page">
+      {/* Animated Starry Background */}
+      <StarryBackground />
       <div className="page-background"></div>
+      
+      {/* Inspirational Quote */}
+      <div className="inspirational-quote">
+        "Each flame carries a prayer, each light holds a memory, each candle bridges heaven and earth."
+      </div>
       
       <header className="page-header">
         <Link href="/profile" className="back-button">
@@ -316,67 +283,6 @@ export default function MyCandlesPage() {
           Visit Sanctuary →
         </Link>
       </header>
-
-      {/* Debug Toggle - Only show if no candles found */}
-      {myCandles.length === 0 && !loading && (
-        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          <button 
-            onClick={() => setShowDebug(!showDebug)}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'rgba(255,255,255,0.1)',
-              color: '#fbbf24',
-              border: '1px solid rgba(251,191,36,0.3)',
-              borderRadius: '0.5rem',
-              cursor: 'pointer'
-            }}
-          >
-            {showDebug ? 'Hide' : 'Show'} Debug Info
-          </button>
-        </div>
-      )}
-
-      {/* Debug Info */}
-      {showDebug && debugInfo && (
-        <div style={{
-          background: 'rgba(0,0,0,0.5)',
-          color: '#fde68a',
-          padding: '1rem',
-          borderRadius: '0.5rem',
-          marginBottom: '2rem',
-          fontSize: '0.75rem',
-          fontFamily: 'monospace',
-          maxHeight: '400px',
-          overflow: 'auto'
-        }}>
-          <h3>Debug Information</h3>
-          <p>User ID: {debugInfo.userId}</p>
-          <details>
-            <summary>Candles by user_id ({debugInfo.byUserId?.length || 0})</summary>
-            <pre>{JSON.stringify(debugInfo.byUserId, null, 2)}</pre>
-          </details>
-          <details>
-            <summary>Candles by recipient_id ({debugInfo.byRecipientId?.length || 0})</summary>
-            <pre>{JSON.stringify(debugInfo.byRecipientId, null, 2)}</pre>
-          </details>
-          <details>
-            <summary>Candles by created_for ({debugInfo.byCreatedFor?.length || 0})</summary>
-            <pre>{JSON.stringify(debugInfo.byCreatedFor, null, 2)}</pre>
-          </details>
-          <details>
-            <summary>Candles by created_by ({debugInfo.byCreatedBy?.length || 0})</summary>
-            <pre>{JSON.stringify(debugInfo.byCreatedBy, null, 2)}</pre>
-          </details>
-          <details>
-            <summary>All related candles ({debugInfo.allRelated?.length || 0})</summary>
-            <pre>{JSON.stringify(debugInfo.allRelated, null, 2)}</pre>
-          </details>
-          <details>
-            <summary>Errors</summary>
-            <pre>{JSON.stringify(debugInfo.errors, null, 2)}</pre>
-          </details>
-        </div>
-      )}
 
       {/* Stats Overview */}
       <div className="stats-overview">
@@ -452,16 +358,83 @@ export default function MyCandlesPage() {
           background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
           position: relative;
           padding: 2rem 1rem;
+          overflow-x: hidden;
+        }
+
+        .starry-container {
+          position: fixed;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .star {
+          position: absolute;
+          width: 2px;
+          height: 2px;
+          background: white;
+          border-radius: 50%;
+          animation: twinkle 3s infinite;
+          box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.5); }
+        }
+
+        .sparkle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: #fbbf24;
+          border-radius: 50%;
+          animation: floatSparkle 20s infinite linear;
+          box-shadow: 
+            0 0 10px rgba(251, 191, 36, 0.5),
+            0 0 20px rgba(251, 191, 36, 0.3);
+        }
+
+        @keyframes floatSparkle {
+          0% { 
+            transform: translateY(100vh) translateX(0) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
+          }
+          100% { 
+            transform: translateY(-100vh) translateX(100px) rotate(720deg);
+            opacity: 0;
+          }
         }
 
         .page-background {
           position: fixed;
           inset: 0;
           background: 
-            radial-gradient(circle at 20% 30%, rgba(251,191,36,0.1) 0%, transparent 40%),
-            radial-gradient(circle at 80% 70%, rgba(139,92,246,0.08) 0%, transparent 40%),
-            radial-gradient(circle at 50% 50%, rgba(245,158,11,0.05) 0%, transparent 50%);
+            radial-gradient(circle at 20% 30%, rgba(251,191,36,0.15) 0%, transparent 40%),
+            radial-gradient(circle at 80% 70%, rgba(139,92,246,0.1) 0%, transparent 40%),
+            radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08) 0%, transparent 50%);
           pointer-events: none;
+          z-index: 1;
+        }
+
+        .inspirational-quote {
+          text-align: center;
+          color: #fde68a;
+          font-style: italic;
+          font-size: 1.125rem;
+          margin-bottom: 2rem;
+          padding: 0 1rem;
+          position: relative;
+          z-index: 2;
+          opacity: 0.9;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
         .page-header {
@@ -472,22 +445,25 @@ export default function MyCandlesPage() {
           flex-wrap: wrap;
           gap: 1rem;
           position: relative;
-          z-index: 1;
+          z-index: 2;
         }
 
         .back-button, .visit-sanctuary {
           padding: 0.5rem 1rem;
           background: rgba(255,255,255,0.1);
+          backdrop-filter: blur(10px);
           color: #fbbf24;
           border-radius: 0.5rem;
           text-decoration: none;
           transition: all 0.2s;
           font-size: 0.875rem;
+          border: 1px solid rgba(251,191,36,0.2);
         }
 
         .back-button:hover, .visit-sanctuary:hover {
           background: rgba(255,255,255,0.15);
           transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(251,191,36,0.2);
         }
 
         .page-title {
@@ -498,6 +474,7 @@ export default function MyCandlesPage() {
           font-weight: 700;
           color: #fbbf24;
           margin: 0;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
         .title-icon {
@@ -510,7 +487,7 @@ export default function MyCandlesPage() {
           gap: 1rem;
           margin-bottom: 2rem;
           position: relative;
-          z-index: 1;
+          z-index: 2;
         }
 
         .stat-card {
@@ -534,6 +511,7 @@ export default function MyCandlesPage() {
           font-weight: 700;
           color: #fbbf24;
           margin-bottom: 0.25rem;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
         .stat-label {
@@ -545,14 +523,17 @@ export default function MyCandlesPage() {
 
         .stat-card.eternal {
           border-color: rgba(168,85,247,0.3);
+          background: linear-gradient(135deg, rgba(168,85,247,0.05), rgba(139,92,246,0.05));
         }
 
         .stat-card.renewable {
           border-color: rgba(59,130,246,0.3);
+          background: linear-gradient(135deg, rgba(59,130,246,0.05), rgba(37,99,235,0.05));
         }
 
         .stat-card.contribution {
           border-color: rgba(34,197,94,0.3);
+          background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(22,163,74,0.05));
         }
 
         .filter-tabs {
@@ -561,12 +542,14 @@ export default function MyCandlesPage() {
           gap: 0.5rem;
           margin-bottom: 2rem;
           position: relative;
-          z-index: 1;
+          z-index: 2;
+          flex-wrap: wrap;
         }
 
         .filter-tab {
           padding: 0.625rem 1.25rem;
           background: rgba(255,255,255,0.05);
+          backdrop-filter: blur(10px);
           color: #fde68a;
           border: 1px solid rgba(251,191,36,0.2);
           border-radius: 2rem;
@@ -577,12 +560,14 @@ export default function MyCandlesPage() {
 
         .filter-tab:hover {
           background: rgba(255,255,255,0.08);
+          transform: translateY(-1px);
         }
 
         .filter-tab.active {
-          background: linear-gradient(135deg, rgba(251,191,36,0.2), rgba(245,158,11,0.2));
+          background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.3));
           border-color: #fbbf24;
           color: #fbbf24;
+          box-shadow: 0 4px 12px rgba(251,191,36,0.2);
         }
 
         .candles-grid {
@@ -590,7 +575,7 @@ export default function MyCandlesPage() {
           grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 1.5rem;
           position: relative;
-          z-index: 1;
+          z-index: 2;
         }
 
         @media (min-width: 768px) {
@@ -610,6 +595,36 @@ export default function MyCandlesPage() {
           flex-direction: column;
           align-items: center;
           gap: 1rem;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .candle-display::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: linear-gradient(
+            45deg,
+            transparent,
+            rgba(251,191,36,0.1),
+            transparent
+          );
+          transform: rotate(45deg);
+          transition: all 0.5s;
+          opacity: 0;
+        }
+
+        .candle-display:hover::before {
+          opacity: 1;
+          animation: shimmer 0.5s;
+        }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+          100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
         }
 
         .candle-display:hover {
@@ -676,6 +691,7 @@ export default function MyCandlesPage() {
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.05em;
+          box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
 
         .candle-info {
@@ -688,6 +704,7 @@ export default function MyCandlesPage() {
           font-weight: 600;
           color: #fbbf24;
           margin: 0 0 0.5rem 0;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
         .candle-message {
@@ -715,6 +732,8 @@ export default function MyCandlesPage() {
           justify-content: center;
           min-height: 300px;
           color: #fde68a;
+          position: relative;
+          z-index: 2;
         }
 
         .loading-spinner {
@@ -724,6 +743,7 @@ export default function MyCandlesPage() {
           border-top: 3px solid #fbbf24;
           border-radius: 50%;
           animation: spin 1s linear infinite;
+          box-shadow: 0 0 20px rgba(251,191,36,0.3);
         }
 
         @keyframes spin {
@@ -734,6 +754,8 @@ export default function MyCandlesPage() {
           text-align: center;
           padding: 4rem 2rem;
           color: #fde68a;
+          position: relative;
+          z-index: 2;
         }
 
         .empty-icon {
@@ -751,10 +773,12 @@ export default function MyCandlesPage() {
           font-size: 1.5rem;
           color: #fbbf24;
           margin: 0 0 0.5rem 0;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
         .empty-state p {
           margin: 0 0 1.5rem 0;
+          opacity: 0.9;
         }
 
         .cta-button {
@@ -766,28 +790,102 @@ export default function MyCandlesPage() {
           text-decoration: none;
           font-weight: 600;
           transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
 
         .cta-button:hover {
           transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(251,191,36,0.3);
+          box-shadow: 0 8px 24px rgba(251,191,36,0.4);
         }
 
+        /* Mobile Optimizations */
         @media (max-width: 640px) {
           .my-candles-page {
             padding: 1rem 0.5rem;
           }
           
+          .inspirational-quote {
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .page-header {
+            flex-direction: column;
+            text-align: center;
+            gap: 0.75rem;
+          }
+          
           .page-title {
             font-size: 1.5rem;
+          }
+
+          .back-button, .visit-sanctuary {
+            width: 100%;
+            text-align: center;
           }
           
           .stats-overview {
             grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+          }
+
+          .stat-card {
+            padding: 1rem;
+          }
+
+          .stat-value {
+            font-size: 1.5rem;
+          }
+
+          .filter-tabs {
+            justify-content: center;
+            width: 100%;
+          }
+
+          .filter-tab {
+            padding: 0.5rem 1rem;
+            font-size: 0.8125rem;
           }
           
           .candles-grid {
             grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+
+          .candle-display {
+            padding: 1.25rem;
+          }
+
+          .candle-visual {
+            width: 100px;
+            height: 140px;
+          }
+
+          .candle-name {
+            font-size: 1rem;
+          }
+
+          .candle-message {
+            font-size: 0.8125rem;
+          }
+
+          .empty-state {
+            padding: 3rem 1.5rem;
+          }
+
+          .empty-icon {
+            font-size: 3rem;
+          }
+
+          .empty-state h2 {
+            font-size: 1.25rem;
+          }
+        }
+
+        @media (max-width: 375px) {
+          .filter-tab {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
           }
         }
       `}</style>
