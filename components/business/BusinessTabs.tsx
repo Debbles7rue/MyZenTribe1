@@ -1,7 +1,8 @@
 // components/business/BusinessTabs.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import BusinessBasicTab from './tabs/BusinessBasicTab';
 import BusinessContactTab from './tabs/BusinessContactTab';
 import BusinessHoursTab from './tabs/BusinessHoursTab';
@@ -12,14 +13,14 @@ import BusinessStoreTab from './tabs/BusinessStoreTab';
 import BusinessSettingsTab from './tabs/BusinessSettingsTab';
 
 const tabs = [
-  { id: 'basic', label: 'Basic Info', icon: '📝', color: 'purple' },
-  { id: 'contact', label: 'Contact', icon: '📞', color: 'blue' },
-  { id: 'hours', label: 'Hours', icon: '🕐', color: 'green' },
-  { id: 'services', label: 'Services', icon: '💼', color: 'amber' },
-  { id: 'store', label: 'Store', icon: '🛍️', color: 'rose' },
-  { id: 'gallery', label: 'Gallery', icon: '📸', color: 'pink' },
-  { id: 'social', label: 'Social', icon: '🔗', color: 'indigo' },
-  { id: 'settings', label: 'Settings', icon: '⚙️', color: 'gray' },
+  { id: 'basic', label: 'Basic Info', icon: '📝', color: 'purple', required: true },
+  { id: 'contact', label: 'Contact', icon: '📞', color: 'blue', required: false },
+  { id: 'hours', label: 'Hours', icon: '🕐', color: 'green', required: false },
+  { id: 'services', label: 'Services', icon: '💼', color: 'amber', required: false },
+  { id: 'store', label: 'Store', icon: '🛍️', color: 'rose', required: false },
+  { id: 'gallery', label: 'Gallery', icon: '📸', color: 'pink', required: false },
+  { id: 'social', label: 'Social', icon: '🔗', color: 'indigo', required: false },
+  { id: 'settings', label: 'Settings', icon: '⚙️', color: 'gray', required: true },
 ];
 
 interface Props {
@@ -30,7 +31,45 @@ interface Props {
 
 export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Props) {
   const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [enabledTabs, setEnabledTabs] = useState<Record<string, boolean>>({
+    basic: true,
+    contact: true,
+    hours: false,
+    services: false,
+    store: false,
+    gallery: true,
+    social: true,
+    settings: true,
+  });
   
+  useEffect(() => {
+    // Load enabled tabs from database
+    loadEnabledTabs();
+  }, [businessId]);
+
+  async function loadEnabledTabs() {
+    const { data } = await supabase
+      .from('business_profiles')
+      .select('enabled_tabs')
+      .eq('id', businessId)
+      .single();
+    
+    if (data?.enabled_tabs) {
+      setEnabledTabs(data.enabled_tabs);
+    }
+  }
+
+  // Pass this to Settings tab to update
+  const updateEnabledTabs = async (newEnabledTabs: Record<string, boolean>) => {
+    setEnabledTabs(newEnabledTabs);
+    
+    await supabase
+      .from('business_profiles')
+      .update({ enabled_tabs: newEnabledTabs })
+      .eq('id', businessId);
+  };
+  
+  const visibleTabs = tabs.filter(tab => tab.required || enabledTabs[tab.id]);
   const activeTabData = tabs.find(t => t.id === activeTab);
   
   // Get color classes based on active tab
@@ -63,13 +102,13 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
     const diff = touchStart - touchEnd;
     
     if (Math.abs(diff) > 50) {
-      const currentIndex = tabs.findIndex(t => t.id === activeTab);
-      if (diff > 0 && currentIndex < tabs.length - 1) {
+      const currentIndex = visibleTabs.findIndex(t => t.id === activeTab);
+      if (diff > 0 && currentIndex < visibleTabs.length - 1) {
         // Swipe left - next tab
-        setActiveTab(tabs[currentIndex + 1].id);
+        setActiveTab(visibleTabs[currentIndex + 1].id);
       } else if (diff < 0 && currentIndex > 0) {
         // Swipe right - previous tab
-        setActiveTab(tabs[currentIndex - 1].id);
+        setActiveTab(visibleTabs[currentIndex - 1].id);
       }
     }
     setTouchStart(null);
@@ -77,25 +116,27 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
 
   return (
     <div className="bg-gray-50 rounded-xl shadow-sm overflow-hidden">
-      {/* Tab Navigation - Mobile Scrollable */}
+      {/* Tab Navigation - Mobile Scrollable with Better Layout */}
       <div className="bg-white border-b border-gray-200">
         <div className="relative">
           {/* Desktop Tab Navigation */}
-          <nav className="hidden sm:flex p-1 bg-gray-50">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm
-                  transition-all duration-200 flex-1 border
-                  ${getColorClasses(activeTab === tab.id, tab.color)}
-                `}
-              >
-                <span className="text-lg">{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
+          <nav className="hidden sm:flex p-1 bg-gray-50 overflow-x-auto">
+            <div className="flex gap-1 min-w-max">
+              {visibleTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`
+                    flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm
+                    transition-all duration-200 border whitespace-nowrap
+                    ${getColorClasses(activeTab === tab.id, tab.color)}
+                  `}
+                >
+                  <span className="text-lg">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
           </nav>
 
           {/* Mobile Tab Navigation - Horizontal Scroll */}
@@ -104,20 +145,20 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
-            <nav className="flex p-2 gap-2 min-w-max">
-              {tabs.map(tab => (
+            <nav className="flex p-2 gap-2 min-w-max bg-gray-50">
+              {visibleTabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
                     flex flex-col items-center gap-1 px-4 py-3 rounded-lg
-                    font-medium text-xs min-w-[80px] transition-all border
+                    font-medium text-xs min-w-[75px] transition-all border
                     ${getColorClasses(activeTab === tab.id, tab.color)}
                     ${activeTab === tab.id ? 'shadow-md scale-105' : ''}
                   `}
                 >
                   <span className="text-xl">{tab.icon}</span>
-                  <span>{tab.label}</span>
+                  <span className="whitespace-nowrap">{tab.label}</span>
                 </button>
               ))}
             </nav>
@@ -128,8 +169,8 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
             <div 
               className="h-full bg-purple-600 transition-all duration-300"
               style={{
-                width: `${100 / tabs.length}%`,
-                marginLeft: `${(tabs.findIndex(t => t.id === activeTab) * 100) / tabs.length}%`
+                width: `${100 / visibleTabs.length}%`,
+                marginLeft: `${(visibleTabs.findIndex(t => t.id === activeTab) * 100) / visibleTabs.length}%`
               }}
             />
           </div>
@@ -155,7 +196,7 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
                   {activeTab === 'store' && 'Showcase products with external purchase links'}
                   {activeTab === 'gallery' && 'Showcase your work and space'}
                   {activeTab === 'social' && 'Connect your social media accounts'}
-                  {activeTab === 'settings' && 'Privacy and visibility settings'}
+                  {activeTab === 'settings' && 'Privacy, visibility, and tab settings'}
                 </p>
               </div>
             </div>
@@ -165,13 +206,13 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === 'basic' && <BusinessBasicTab businessId={businessId} />}
-          {activeTab === 'contact' && <BusinessContactTab businessId={businessId} />}
-          {activeTab === 'hours' && <BusinessHoursTab businessId={businessId} />}
-          {activeTab === 'services' && <BusinessServicesTab businessId={businessId} />}
-          {activeTab === 'store' && <BusinessStoreTab businessId={businessId} />}
-          {activeTab === 'gallery' && <BusinessGalleryTab businessId={businessId} />}
-          {activeTab === 'social' && <BusinessSocialTab businessId={businessId} />}
-          {activeTab === 'settings' && <BusinessSettingsTab businessId={businessId} />}
+          {activeTab === 'contact' && enabledTabs.contact && <BusinessContactTab businessId={businessId} />}
+          {activeTab === 'hours' && enabledTabs.hours && <BusinessHoursTab businessId={businessId} />}
+          {activeTab === 'services' && enabledTabs.services && <BusinessServicesTab businessId={businessId} />}
+          {activeTab === 'store' && enabledTabs.store && <BusinessStoreTab businessId={businessId} />}
+          {activeTab === 'gallery' && enabledTabs.gallery && <BusinessGalleryTab businessId={businessId} />}
+          {activeTab === 'social' && enabledTabs.social && <BusinessSocialTab businessId={businessId} />}
+          {activeTab === 'settings' && <BusinessSettingsTab businessId={businessId} enabledTabs={enabledTabs} onUpdateEnabledTabs={updateEnabledTabs} />}
         </div>
       </div>
     </div>
