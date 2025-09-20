@@ -355,7 +355,7 @@ export default function MyCandlesPage() {
       <style jsx>{`
         .my-candles-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+          background: linear-gradient(135deg, #4c3a8b 0%, #6b5ca5 50%, #8b7bb8 100%);
           position: relative;
           padding: 2rem 1rem;
           overflow-x: hidden;
