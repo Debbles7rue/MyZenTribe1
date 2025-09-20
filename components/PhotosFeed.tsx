@@ -4,9 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
+type MediaFile = {
+  id: string;
+  url: string;
+  path: string;
+  type: 'image' | 'video';
+};
+
 type Post = {
   id: string;
   user_id: string;
+  user_name?: string;
+  user_avatar?: string;
   image_path: string;
   caption: string | null;
   description: string | null;
@@ -14,10 +23,10 @@ type Post = {
   created_at: string;
   updated_at: string;
   url: string;
-  tags: { id: string; name: string }[];
-  // Add support for potential multi-media structure
-  media_files?: any[];
+  tags: { id: string; name: string; can_edit?: boolean }[];
+  media_files?: MediaFile[];
   post_media?: any[];
+  collaborators?: { user_id: string; name: string; status: 'invited' | 'accepted' | 'declined'; can_edit: boolean }[];
 };
 
 type Comment = {
@@ -55,6 +64,7 @@ export default function PhotosFeed({
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({});
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
@@ -64,16 +74,43 @@ export default function PhotosFeed({
   const [editDescription, setEditDescription] = useState("");
   const [editTags, setEditTags] = useState("");
   const [editVisibility, setEditVisibility] = useState<Post["visibility"]>("friends");
+  const [editFiles, setEditFiles] = useState<FileList | null>(null);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState<{ [postId: string]: string }>({});
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [expandedMedia, setExpandedMedia] = useState<Set<string>>(new Set());
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [likeCounts, setLikeCounts] = useState<{ [postId: string]: number }>({});
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
 
   // Determine if current user can post (only on their own profile)
   const canPost = useMemo(() => {
     return !isPublicView && userId && userId === viewerUserId;
   }, [userId, viewerUserId, isPublicView]);
+
+  // Check if user can edit a post (creator OR accepted collaborator)
+  const canEditPost = (post: Post) => {
+    if (!viewerUserId) return false;
+    
+    // Creator can always edit
+    if (post.user_id === viewerUserId) return true;
+    
+    // Check if user is a tagged collaborator with edit permissions
+    const taggedUser = post.tags?.find(t => t.id === viewerUserId);
+    if (taggedUser?.can_edit) return true;
+    
+    // Check collaborators list
+    const collaborator = post.collaborators?.find(
+      c => c.user_id === viewerUserId && c.status === 'accepted' && c.can_edit
+    );
+    return !!collaborator;
+  };
+
+  // Check if user can delete (only creator)
+  const canDeletePost = (post: Post) => {
+    return viewerUserId && post.user_id === viewerUserId;
+  };
 
   // Determine if current user is viewing their own profile
   const isOwnProfile = userId === viewerUserId;
@@ -87,7 +124,6 @@ export default function PhotosFeed({
   // Filter posts based on relationship
   const filterPostsByRelationship = (posts: Post[]): Post[] => {
     if (isOwnProfile) {
-      // Show all posts on own profile
       return posts;
     }
 
@@ -111,7 +147,8 @@ export default function PhotosFeed({
     if (!userId) return setPosts([]);
 
     try {
-      const { data: rows, error } = await supabase
+      // Get posts where user is creator
+      const { data: createdPosts, error: createdError } = await supabase
         .from("photo_posts")
         .select(`
           id, user_id, image_path, caption, description, 
@@ -120,37 +157,108 @@ export default function PhotosFeed({
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (createdError) throw createdError;
 
-      const items = await Promise.all((rows ?? []).map(async (r) => {
+      // Get posts where user is a collaborator
+      const { data: collabPosts, error: collabError } = await supabase
+        .from("photo_posts")
+        .select(`
+          id, user_id, image_path, caption, description, 
+          visibility, created_at, updated_at
+        `)
+        .in("id", 
+          await supabase
+            .from("photo_tags")
+            .select("post_id")
+            .eq("tagged_user_id", userId)
+            .then(res => res.data?.map(r => r.post_id) || [])
+        );
+
+      // Combine and deduplicate posts
+      const allPosts = [...(createdPosts || []), ...(collabPosts || [])];
+      const uniquePosts = Array.from(new Map(allPosts.map(p => [p.id, p])).values());
+
+      const items = await Promise.all(uniquePosts.map(async (r) => {
+        // Get creator info
+        const { data: creator } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .eq("id", r.user_id)
+          .single();
+
+        // Get main image URL
         const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_path);
         
-        // Get tags with user info
+        // Get additional media files if they exist
+        const { data: mediaFiles } = await supabase
+          .from("post_media")
+          .select("id, storage_path, media_type")
+          .eq("post_id", r.id)
+          .order("sort_order", { ascending: true });
+
+        const processedMedia: MediaFile[] = [];
+        if (mediaFiles && mediaFiles.length > 0) {
+          for (const media of mediaFiles) {
+            const { data: mediaUrl } = supabase.storage
+              .from("event-photos")
+              .getPublicUrl(media.storage_path);
+            processedMedia.push({
+              id: media.id,
+              url: mediaUrl.publicUrl,
+              path: media.storage_path,
+              type: media.media_type as 'image' | 'video'
+            });
+          }
+        }
+        
+        // Get tags with user info and edit permissions
         const { data: tagsRows } = await supabase
           .from("photo_tags")
-          .select("tagged_user_id")
+          .select("tagged_user_id, can_edit")
           .eq("post_id", r.id);
 
-        let taggedUsers: { id: string; name: string }[] = [];
+        let taggedUsers: { id: string; name: string; can_edit?: boolean }[] = [];
         if (tagsRows?.length) {
           const ids = tagsRows.map(t => t.tagged_user_id);
           const { data: profs } = await supabase
             .from("profiles")
             .select("id, full_name")
             .in("id", ids);
-          taggedUsers = (profs ?? []).map(p => ({ 
-            id: p.id, 
-            name: p.full_name ?? "User" 
-          }));
+          
+          taggedUsers = (profs ?? []).map(p => {
+            const tagRow = tagsRows.find(t => t.tagged_user_id === p.id);
+            return { 
+              id: p.id, 
+              name: p.full_name ?? "User",
+              can_edit: tagRow?.can_edit || false
+            };
+          });
         }
+
+        // Get collaborators
+        const { data: collabs } = await supabase
+          .from("post_collaborators")
+          .select(`
+            user_id, status, can_edit,
+            profiles!inner(full_name)
+          `)
+          .eq("post_id", r.id);
+
+        const collaborators = collabs?.map(c => ({
+          user_id: c.user_id,
+          name: (c as any).profiles?.full_name || "User",
+          status: c.status as 'invited' | 'accepted' | 'declined',
+          can_edit: c.can_edit
+        })) || [];
 
         return {
           ...r,
+          user_name: creator?.full_name || "User",
+          user_avatar: creator?.avatar_url,
           url: pub.publicUrl,
           tags: taggedUsers,
-          // Ensure these properties exist even if undefined
-          media_files: r.media_files || [],
-          post_media: r.post_media || []
+          media_files: processedMedia.length > 0 ? processedMedia : undefined,
+          collaborators
         };
       }));
 
@@ -213,33 +321,77 @@ export default function PhotosFeed({
     }
   }
 
+  // Handle MULTIPLE file uploads
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !userId || !canPost) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !userId || !canPost) return;
     
     setUploading(true);
+    setUploadProgress(0);
+    
     try {
-      const filename = `${Date.now()}-${file.name}`;
-      const path = `${userId}/${filename}`;
-
-      const up = await supabase.storage.from("event-photos").upload(path, file, {
-        cacheControl: "3600", 
-        upsert: false,
-      });
-      if (up.error) throw up.error;
-
-      // Create post with caption, description, visibility
-      const ins = await supabase.from("photo_posts").insert({
+      // Create the post first
+      const postData = {
         user_id: userId,
-        image_path: path,
+        image_path: "", // Will update with first image
         caption: caption.trim() || null,
         description: description.trim() || null,
         visibility,
-      }).select().single();
+      };
+
+      // Upload first file and create post
+      const firstFile = files[0];
+      const firstFilename = `${Date.now()}-0-${firstFile.name}`;
+      const firstPath = `${userId}/${firstFilename}`;
+
+      const firstUpload = await supabase.storage
+        .from("event-photos")
+        .upload(firstPath, firstFile, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+      
+      if (firstUpload.error) throw firstUpload.error;
+
+      // Create post with first image
+      postData.image_path = firstPath;
+      const ins = await supabase
+        .from("photo_posts")
+        .insert(postData)
+        .select()
+        .single();
       
       if (ins.error) throw ins.error;
 
-      // Handle tags
+      // Upload remaining files and add to post_media table
+      if (files.length > 1) {
+        for (let i = 1; i < files.length; i++) {
+          setUploadProgress(Math.round((i / files.length) * 100));
+          
+          const file = files[i];
+          const filename = `${Date.now()}-${i}-${file.name}`;
+          const path = `${userId}/${filename}`;
+
+          const upload = await supabase.storage
+            .from("event-photos")
+            .upload(path, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (!upload.error) {
+            // Add to post_media table
+            await supabase.from("post_media").insert({
+              post_id: ins.data.id,
+              storage_path: path,
+              media_type: file.type.startsWith('video') ? 'video' : 'image',
+              sort_order: i
+            });
+          }
+        }
+      }
+
+      // Handle tags - now with edit permissions for collaborators
       const tagEmails = tags.split(",").map(s => s.trim()).filter(Boolean);
       if (tagEmails.length) {
         const { data: profiles } = await supabase
@@ -250,9 +402,19 @@ export default function PhotosFeed({
         if (profiles?.length) {
           const tagRows = profiles.map(p => ({ 
             post_id: ins.data.id, 
-            tagged_user_id: p.id 
+            tagged_user_id: p.id,
+            can_edit: true // Allow tagged users to edit
           }));
           await supabase.from("photo_tags").insert(tagRows);
+
+          // Send notifications to tagged users
+          const notifications = profiles.map(p => ({
+            user_id: p.id,
+            type: 'photo_tag',
+            message: `You've been tagged in a photo post. You can add your own photos!`,
+            post_id: ins.data.id
+          }));
+          await supabase.from("notifications").insert(notifications);
         }
       }
 
@@ -261,15 +423,159 @@ export default function PhotosFeed({
       setDescription("");
       setTags("");
       setVisibility("friends");
+      setSelectedFiles(null);
+      setUploadProgress(0);
       
-      showMessage("success", "Photo uploaded successfully! 🎉");
+      showMessage("success", `${files.length} photo(s) uploaded successfully! 🎉`);
       await listPosts();
     } catch (err: any) {
       console.error("Upload error:", err);
       showMessage("error", err.message || "Upload failed");
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       e.currentTarget.value = "";
+    }
+  }
+
+  // Edit post with ability to add more media
+  async function saveEdit() {
+    if (!editingPostId) return;
+
+    try {
+      const post = posts.find(p => p.id === editingPostId);
+      if (!post) return;
+
+      // Update post details
+      const { error } = await supabase
+        .from("photo_posts")
+        .update({
+          caption: editCaption.trim() || null,
+          description: editDescription.trim() || null,
+          visibility: editVisibility,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", editingPostId);
+
+      if (error) throw error;
+
+      // Upload new files if any
+      if (editFiles && editFiles.length > 0) {
+        const existingMediaCount = post.media_files?.length || 0;
+        
+        for (let i = 0; i < editFiles.length; i++) {
+          const file = editFiles[i];
+          const filename = `${Date.now()}-${existingMediaCount + i}-${file.name}`;
+          const path = `${userId}/${filename}`;
+
+          const upload = await supabase.storage
+            .from("event-photos")
+            .upload(path, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (!upload.error) {
+            await supabase.from("post_media").insert({
+              post_id: editingPostId,
+              storage_path: path,
+              media_type: file.type.startsWith('video') ? 'video' : 'image',
+              sort_order: existingMediaCount + i
+            });
+          }
+        }
+      }
+
+      // Update tags
+      await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
+      
+      const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
+      if (tagNames.length) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id")
+          .in("full_name", tagNames);
+        
+        if (profiles?.length) {
+          const tagRows = profiles.map(p => ({ 
+            post_id: editingPostId, 
+            tagged_user_id: p.id,
+            can_edit: true
+          }));
+          await supabase.from("photo_tags").insert(tagRows);
+        }
+      }
+
+      setEditingPostId(null);
+      setEditFiles(null);
+      showMessage("success", "Post updated! ✨");
+      await listPosts();
+    } catch (err: any) {
+      console.error("Edit error:", err);
+      showMessage("error", "Failed to update post");
+    }
+  }
+
+  // Delete post with proper cleanup
+  async function deletePost(postId: string) {
+    if (!confirm("Delete this post? This cannot be undone.")) return;
+
+    setDeletingPostId(postId);
+    
+    try {
+      const post = posts.find(p => p.id === postId);
+      
+      // Delete media files from storage
+      if (post) {
+        // Delete main image
+        if (post.image_path) {
+          await supabase.storage
+            .from("event-photos")
+            .remove([post.image_path]);
+        }
+        
+        // Delete additional media
+        if (post.media_files && post.media_files.length > 0) {
+          const paths = post.media_files.map(m => m.path);
+          await supabase.storage
+            .from("event-photos")
+            .remove(paths);
+        }
+      }
+
+      // Delete from database (cascades to related tables)
+      const { error } = await supabase
+        .from("photo_posts")
+        .delete()
+        .eq("id", postId);
+
+      if (error) throw error;
+
+      showMessage("success", "Post deleted successfully");
+      await listPosts();
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      showMessage("error", "Failed to delete post. Please try again.");
+    } finally {
+      setDeletingPostId(null);
+    }
+  }
+
+  // Remove single media item
+  async function removeMedia(postId: string, mediaId: string, mediaPath: string) {
+    if (!confirm("Remove this photo/video?")) return;
+
+    try {
+      // Delete from storage
+      await supabase.storage.from("event-photos").remove([mediaPath]);
+      
+      // Delete from database
+      await supabase.from("post_media").delete().eq("id", mediaId);
+      
+      showMessage("success", "Media removed");
+      await listPosts();
+    } catch (err: any) {
+      showMessage("error", "Failed to remove media");
     }
   }
 
@@ -281,7 +587,6 @@ export default function PhotosFeed({
 
     try {
       if (likedPosts.has(postId)) {
-        // Unlike
         await supabase
           .from("photo_likes")
           .delete()
@@ -295,7 +600,6 @@ export default function PhotosFeed({
         });
         setLikeCounts(prev => ({ ...prev, [postId]: Math.max(0, prev[postId] - 1) }));
       } else {
-        // Like
         await supabase
           .from("photo_likes")
           .insert({ post_id: postId, user_id: viewerUserId });
@@ -310,77 +614,13 @@ export default function PhotosFeed({
   }
 
   async function startEdit(post: Post) {
-    if (post.user_id !== viewerUserId) return;
+    if (!canEditPost(post)) return;
     
     setEditingPostId(post.id);
     setEditCaption(post.caption || "");
     setEditDescription(post.description || "");
     setEditTags(post.tags.map(t => t.name).join(", "));
     setEditVisibility(post.visibility);
-  }
-
-  async function saveEdit() {
-    if (!editingPostId) return;
-
-    try {
-      // Update post
-      const { error } = await supabase
-        .from("photo_posts")
-        .update({
-          caption: editCaption.trim() || null,
-          description: editDescription.trim() || null,
-          visibility: editVisibility,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", editingPostId);
-
-      if (error) throw error;
-
-      // Update tags (delete old, insert new)
-      await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
-      
-      const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
-      if (tagNames.length) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id")
-          .in("full_name", tagNames);
-        
-        if (profiles?.length) {
-          const tagRows = profiles.map(p => ({ 
-            post_id: editingPostId, 
-            tagged_user_id: p.id 
-          }));
-          await supabase.from("photo_tags").insert(tagRows);
-        }
-      }
-
-      setEditingPostId(null);
-      showMessage("success", "Post updated! ✨");
-      await listPosts();
-    } catch (err: any) {
-      console.error("Edit error:", err);
-      showMessage("error", "Failed to update post");
-    }
-  }
-
-  async function deletePost(postId: string) {
-    if (!confirm("Delete this post? This cannot be undone.")) return;
-
-    try {
-      const { error } = await supabase
-        .from("photo_posts")
-        .delete()
-        .eq("id", postId);
-
-      if (error) throw error;
-
-      showMessage("success", "Post deleted");
-      await listPosts();
-    } catch (err: any) {
-      console.error("Delete error:", err);
-      showMessage("error", "Failed to delete post");
-    }
   }
 
   async function handleCommentSubmit(postId: string) {
@@ -404,46 +644,117 @@ export default function PhotosFeed({
     }
   }
 
-  // Helper function to safely render media
+  // Respond to collaboration invite
+  async function respondToCollabInvite(postId: string, accept: boolean) {
+    if (!viewerUserId) return;
+
+    try {
+      if (accept) {
+        // Update tag to allow editing
+        await supabase
+          .from("photo_tags")
+          .update({ can_edit: true })
+          .eq("post_id", postId)
+          .eq("tagged_user_id", viewerUserId);
+      } else {
+        // Remove tag
+        await supabase
+          .from("photo_tags")
+          .delete()
+          .eq("post_id", postId)
+          .eq("tagged_user_id", viewerUserId);
+      }
+
+      showMessage("success", accept ? "You can now add photos!" : "Tag removed");
+      await listPosts();
+    } catch (err: any) {
+      showMessage("error", "Failed to update");
+    }
+  }
+
+  // Render post media with support for multiple files
   const renderPostMedia = (post: Post) => {
-    // Check if post has multi-media files (future support)
-    if (post.media_files && Array.isArray(post.media_files) && post.media_files.length > 0) {
-      // Handle multi-media posts
-      const firstMedia = post.media_files[0];
-      const mediaUrl = firstMedia?.url || firstMedia?.file_path || post.url;
-      
-      return (
-        <>
-          <img 
-            src={mediaUrl} 
-            alt={post.caption || ""} 
-            className="post-image"
-            onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
-            onError={(e) => {
-              // Fallback to post.url if media_files URL fails
-              const img = e.target as HTMLImageElement;
-              if (img.src !== post.url) {
-                img.src = post.url;
-              }
-            }}
-          />
-          {post.media_files.length > 1 && (
-            <div className="media-count-badge">
-              +{post.media_files.length - 1} more
-            </div>
-          )}
-        </>
-      );
+    const allMedia: MediaFile[] = [];
+    
+    // Add main image
+    if (post.url) {
+      allMedia.push({
+        id: 'main',
+        url: post.url,
+        path: post.image_path,
+        type: 'image'
+      });
     }
     
-    // Default single image rendering
+    // Add additional media
+    if (post.media_files && post.media_files.length > 0) {
+      allMedia.push(...post.media_files);
+    }
+
+    if (allMedia.length === 0) return null;
+
+    const isExpanded = expandedMedia.has(post.id);
+    const displayMedia = isExpanded ? allMedia : allMedia.slice(0, 4);
+
     return (
-      <img 
-        src={post.url} 
-        alt={post.caption || ""} 
-        className="post-image"
-        onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
-      />
+      <>
+        <div className={`media-grid ${allMedia.length === 1 ? 'single' : ''}`}>
+          {displayMedia.map((media, idx) => (
+            <div key={media.id} className="media-item">
+              {media.type === 'video' ? (
+                <video 
+                  src={media.url} 
+                  controls
+                  className="post-media"
+                />
+              ) : (
+                <img 
+                  src={media.url} 
+                  alt=""
+                  className="post-media"
+                  onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
+                />
+              )}
+              
+              {/* Show count on 4th item if more exist */}
+              {!isExpanded && idx === 3 && allMedia.length > 4 && (
+                <div className="more-overlay">
+                  <span>+{allMedia.length - 4}</span>
+                </div>
+              )}
+              
+              {/* Delete button for media in edit mode */}
+              {editingPostId === post.id && canEditPost(post) && allMedia.length > 1 && (
+                <button
+                  className="media-delete"
+                  onClick={() => removeMedia(post.id, media.id, media.path)}
+                  aria-label="Remove media"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        {/* Show more/less button */}
+        {allMedia.length > 4 && (
+          <button
+            className="show-more-btn"
+            onClick={() => {
+              const newExpanded = new Set(expandedMedia);
+              if (isExpanded) {
+                newExpanded.delete(post.id);
+              } else {
+                newExpanded.add(post.id);
+              }
+              setExpandedMedia(newExpanded);
+            }}
+          >
+            {isExpanded ? "Show less" : `Show all ${allMedia.length} items`}
+          </button>
+        )}
+      </>
     );
   };
 
@@ -497,7 +808,7 @@ export default function PhotosFeed({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Tag Friends</label>
+                  <label className="form-label">Tag Friends (they can add photos too!)</label>
                   <input 
                     className="form-input" 
                     value={tags} 
@@ -521,16 +832,39 @@ export default function PhotosFeed({
                   </select>
                 </div>
 
+                {/* File selection preview */}
+                {selectedFiles && selectedFiles.length > 0 && (
+                  <div className="selected-files">
+                    <span className="files-count">
+                      {selectedFiles.length} file(s) selected
+                    </span>
+                  </div>
+                )}
+
                 <label className="upload-button">
                   <input 
                     type="file" 
                     accept="image/*,video/*" 
+                    multiple
                     className="file-input" 
-                    onChange={onUpload} 
+                    onChange={(e) => {
+                      setSelectedFiles(e.target.files);
+                      onUpload(e);
+                    }}
                     disabled={uploading}
                   />
-                  {uploading ? "Uploading..." : "📸 Upload Photo"}
+                  {uploading ? `Uploading... ${uploadProgress}%` : "📸 Upload Photos/Videos"}
                 </label>
+
+                {/* Upload progress bar */}
+                {uploading && uploadProgress > 0 && (
+                  <div className="upload-progress">
+                    <div 
+                      className="upload-progress-bar" 
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -539,188 +873,277 @@ export default function PhotosFeed({
 
       {/* Posts Grid */}
       <div className="posts-grid">
-        {posts.map(post => (
-          <div key={post.id} className="post-card">
-            <div className="post-image-container">
-              {renderPostMedia(post)}
-              
-              {/* Like button overlay */}
-              <button
-                className={`like-button ${likedPosts.has(post.id) ? 'liked' : ''}`}
-                onClick={() => toggleLike(post.id)}
-                aria-label={likedPosts.has(post.id) ? 'Unlike' : 'Like'}
-              >
-                {likedPosts.has(post.id) ? '❤️' : '🤍'}
-              </button>
-            </div>
-            
-            <div className="post-content">
-              {editingPostId === post.id ? (
-                /* Edit Mode */
-                <div className="edit-mode">
-                  <input
-                    className="edit-input"
-                    value={editCaption}
-                    onChange={(e) => setEditCaption(e.target.value.slice(0, 100))}
-                    placeholder="Caption"
-                  />
-                  <textarea
-                    className="edit-textarea"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value.slice(0, 500))}
-                    placeholder="Description"
-                    rows={2}
-                  />
-                  <input
-                    className="edit-input"
-                    value={editTags}
-                    onChange={(e) => setEditTags(e.target.value)}
-                    placeholder="Tags"
-                  />
-                  <select
-                    className="edit-select"
-                    value={editVisibility}
-                    onChange={(e) => setEditVisibility(e.target.value as any)}
-                  >
-                    {VISIBILITY_OPTIONS.map(v => (
-                      <option key={v.value} value={v.value}>
-                        {v.icon} {v.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="edit-actions">
-                    <button
-                      onClick={saveEdit}
-                      className="btn-save"
+        {posts.map(post => {
+          const isCollabInvite = post.tags.some(t => t.id === viewerUserId) && 
+                                 !post.tags.find(t => t.id === viewerUserId)?.can_edit;
+
+          return (
+            <div key={post.id} className="post-card">
+              {/* Collaboration Invite Banner */}
+              {isCollabInvite && (
+                <div className="collab-invite">
+                  <p>You've been tagged! Add your own photos to this post.</p>
+                  <div className="invite-actions">
+                    <button 
+                      className="invite-accept"
+                      onClick={() => respondToCollabInvite(post.id, true)}
                     >
-                      Save
+                      ✓ Accept & Add Photos
                     </button>
-                    <button
-                      onClick={() => setEditingPostId(null)}
-                      className="btn-cancel"
+                    <button 
+                      className="invite-decline"
+                      onClick={() => respondToCollabInvite(post.id, false)}
                     >
-                      Cancel
+                      × Untag Me
                     </button>
                   </div>
                 </div>
-              ) : (
-                /* View Mode */
-                <>
-                  {post.caption && (
-                    <h3 className="post-caption">{post.caption}</h3>
-                  )}
-                  
-                  {expandedPost === post.id && post.description && (
-                    <p className="post-description">{post.description}</p>
-                  )}
-                  
-                  {/* Tags with clickable profile links */}
-                  {post.tags.length > 0 && (
-                    <div className="post-tags">
-                      <span className="tag-label">Tagged:</span>
-                      {post.tags.map((tag, idx) => (
-                        <span key={tag.id}>
-                          <Link 
-                            href={`/profile/${tag.id}`}
-                            className="tag-link"
-                          >
-                            {tag.name}
-                          </Link>
-                          {idx < post.tags.length - 1 && ", "}
-                        </span>
+              )}
+
+              <div className="post-image-container">
+                {renderPostMedia(post)}
+                
+                {/* Like button overlay */}
+                <button
+                  className={`like-button ${likedPosts.has(post.id) ? 'liked' : ''}`}
+                  onClick={() => toggleLike(post.id)}
+                  aria-label={likedPosts.has(post.id) ? 'Unlike' : 'Like'}
+                >
+                  {likedPosts.has(post.id) ? '❤️' : '🤍'}
+                </button>
+              </div>
+              
+              <div className="post-content">
+                {editingPostId === post.id ? (
+                  /* Edit Mode */
+                  <div className="edit-mode">
+                    <input
+                      className="edit-input"
+                      value={editCaption}
+                      onChange={(e) => setEditCaption(e.target.value.slice(0, 100))}
+                      placeholder="Caption"
+                    />
+                    <textarea
+                      className="edit-textarea"
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value.slice(0, 500))}
+                      placeholder="Description"
+                      rows={2}
+                    />
+                    <input
+                      className="edit-input"
+                      value={editTags}
+                      onChange={(e) => setEditTags(e.target.value)}
+                      placeholder="Tags"
+                    />
+                    <select
+                      className="edit-select"
+                      value={editVisibility}
+                      onChange={(e) => setEditVisibility(e.target.value as any)}
+                    >
+                      {VISIBILITY_OPTIONS.map(v => (
+                        <option key={v.value} value={v.value}>
+                          {v.icon} {v.label}
+                        </option>
                       ))}
-                    </div>
-                  )}
-
-                  {/* Post Meta */}
-                  <div className="post-meta">
-                    <div className="meta-left">
-                      <span className="visibility-badge">
-                        {VISIBILITY_OPTIONS.find(v => v.value === post.visibility)?.icon}
-                      </span>
-                      <span className="like-count">
-                        {likeCounts[post.id] || 0} likes
-                      </span>
-                    </div>
-                    <span className="post-date">
-                      {new Date(post.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  {/* Action Buttons - Only for post owner */}
-                  {post.user_id === viewerUserId && (
-                    <div className="post-actions">
-                      <button
-                        onClick={() => startEdit(post)}
-                        className="btn-edit"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deletePost(post.id)}
-                        className="btn-delete"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Comments Section */}
-                  <div className="comments-section">
-                    <h4 className="comments-title">Comments</h4>
+                    </select>
                     
-                    {/* Display Comments */}
-                    <div className="comments-list">
-                      {comments[post.id]?.map(comment => (
-                        <div key={comment.id} className="comment">
-                          <Link 
-                            href={`/profile/${comment.user_id}`}
-                            className="comment-author"
-                          >
-                            {comment.user_avatar && (
-                              <img 
-                                src={comment.user_avatar} 
-                                alt={comment.user_name}
-                                className="comment-avatar"
-                              />
-                            )}
-                            {comment.user_name}
-                          </Link>
-                          <span className="comment-body">{comment.body}</span>
-                        </div>
-                      ))}
+                    {/* Add more media in edit mode */}
+                    <label className="add-media-btn">
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        multiple
+                        className="file-input"
+                        onChange={(e) => setEditFiles(e.target.files)}
+                      />
+                      + Add More Photos/Videos
+                    </label>
+                    {editFiles && editFiles.length > 0 && (
+                      <span className="edit-files-count">
+                        {editFiles.length} new file(s) selected
+                      </span>
+                    )}
+                    
+                    <div className="edit-actions">
+                      <button
+                        onClick={saveEdit}
+                        className="btn-save"
+                        disabled={uploading}
+                      >
+                        {uploading ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingPostId(null);
+                          setEditFiles(null);
+                        }}
+                        className="btn-cancel"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* View Mode */
+                  <>
+                    {/* Creator info with clickable link */}
+                    <div className="post-creator">
+                      <Link href={`/profile/${post.user_id}`} className="creator-link">
+                        {post.user_avatar && (
+                          <img 
+                            src={post.user_avatar} 
+                            alt={post.user_name}
+                            className="creator-avatar"
+                          />
+                        )}
+                        <span className="creator-name">{post.user_name}</span>
+                      </Link>
+                      
+                      {/* Show collaborators */}
+                      {post.tags.filter(t => t.can_edit).length > 0 && (
+                        <>
+                          <span className="with-text">with</span>
+                          {post.tags.filter(t => t.can_edit).map((tag, idx, arr) => (
+                            <span key={tag.id}>
+                              <Link href={`/profile/${tag.id}`} className="creator-link">
+                                {tag.name}
+                              </Link>
+                              {idx < arr.length - 1 && ", "}
+                            </span>
+                          ))}
+                        </>
+                      )}
                     </div>
 
-                    {/* Add Comment */}
-                    {viewerUserId && (
-                      <div className="comment-form">
-                        <input
-                          className="comment-input"
-                          placeholder="Add a comment..."
-                          value={commentText[post.id] || ""}
-                          onChange={(e) => setCommentText({
-                            ...commentText,
-                            [post.id]: e.target.value
-                          })}
-                          onKeyPress={(e) => {
-                            if (e.key === "Enter") handleCommentSubmit(post.id);
-                          }}
-                        />
-                        <button
-                          onClick={() => handleCommentSubmit(post.id)}
-                          className="comment-submit"
-                          disabled={!commentText[post.id]?.trim()}
-                        >
-                          Post
-                        </button>
+                    {post.caption && (
+                      <h3 className="post-caption">{post.caption}</h3>
+                    )}
+                    
+                    {(expandedPost === post.id || !post.description || post.description.length < 100) && post.description && (
+                      <p className="post-description">{post.description}</p>
+                    )}
+                    
+                    {post.description && post.description.length >= 100 && expandedPost !== post.id && (
+                      <button 
+                        className="read-more"
+                        onClick={() => setExpandedPost(post.id)}
+                      >
+                        Read more...
+                      </button>
+                    )}
+                    
+                    {/* Tags with clickable profile links */}
+                    {post.tags.filter(t => !t.can_edit).length > 0 && (
+                      <div className="post-tags">
+                        <span className="tag-label">Also tagged:</span>
+                        {post.tags.filter(t => !t.can_edit).map((tag, idx) => (
+                          <span key={tag.id}>
+                            <Link 
+                              href={`/profile/${tag.id}`}
+                              className="tag-link"
+                            >
+                              {tag.name}
+                            </Link>
+                            {idx < post.tags.filter(t => !t.can_edit).length - 1 && ", "}
+                          </span>
+                        ))}
                       </div>
                     )}
-                  </div>
-                </>
-              )}
+
+                    {/* Post Meta */}
+                    <div className="post-meta">
+                      <div className="meta-left">
+                        <span className="visibility-badge">
+                          {VISIBILITY_OPTIONS.find(v => v.value === post.visibility)?.icon}
+                        </span>
+                        <span className="like-count">
+                          {likeCounts[post.id] || 0} likes
+                        </span>
+                      </div>
+                      <span className="post-date">
+                        {new Date(post.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="post-actions">
+                      {canEditPost(post) && (
+                        <button
+                          onClick={() => startEdit(post)}
+                          className="btn-edit"
+                        >
+                          {post.user_id === viewerUserId ? "Edit" : "Add Photos"}
+                        </button>
+                      )}
+                      {canDeletePost(post) && (
+                        <button
+                          onClick={() => deletePost(post.id)}
+                          className="btn-delete"
+                          disabled={deletingPostId === post.id}
+                        >
+                          {deletingPostId === post.id ? "Deleting..." : "Delete"}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Comments Section */}
+                    <div className="comments-section">
+                      <h4 className="comments-title">Comments</h4>
+                      
+                      {/* Display Comments */}
+                      <div className="comments-list">
+                        {comments[post.id]?.map(comment => (
+                          <div key={comment.id} className="comment">
+                            <Link 
+                              href={`/profile/${comment.user_id}`}
+                              className="comment-author"
+                            >
+                              {comment.user_avatar && (
+                                <img 
+                                  src={comment.user_avatar} 
+                                  alt={comment.user_name}
+                                  className="comment-avatar"
+                                />
+                              )}
+                              {comment.user_name}
+                            </Link>
+                            <span className="comment-body">{comment.body}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add Comment */}
+                      {viewerUserId && (
+                        <div className="comment-form">
+                          <input
+                            className="comment-input"
+                            placeholder="Add a comment..."
+                            value={commentText[post.id] || ""}
+                            onChange={(e) => setCommentText({
+                              ...commentText,
+                              [post.id]: e.target.value
+                            })}
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") handleCommentSubmit(post.id);
+                            }}
+                          />
+                          <button
+                            onClick={() => handleCommentSubmit(post.id)}
+                            className="comment-submit"
+                            disabled={!commentText[post.id]?.trim()}
+                          >
+                            Post
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Empty State */}
@@ -860,6 +1283,18 @@ export default function PhotosFeed({
           color: #9ca3af;
         }
 
+        .selected-files {
+          padding: 0.5rem;
+          background: #f3f4f6;
+          border-radius: 0.375rem;
+        }
+
+        .files-count {
+          font-size: 0.875rem;
+          color: #10b981;
+          font-weight: 500;
+        }
+
         .upload-button {
           display: inline-flex;
           align-items: center;
@@ -885,6 +1320,19 @@ export default function PhotosFeed({
 
         .file-input {
           display: none;
+        }
+
+        .upload-progress {
+          height: 4px;
+          background: #e5e7eb;
+          border-radius: 2px;
+          overflow: hidden;
+        }
+
+        .upload-progress-bar {
+          height: 100%;
+          background: linear-gradient(135deg, #8b5cf6, #ec4899);
+          transition: width 0.3s ease;
         }
 
         /* Posts Grid */
@@ -921,14 +1369,75 @@ export default function PhotosFeed({
           }
         }
 
+        /* Collaboration Invite */
+        .collab-invite {
+          background: linear-gradient(135deg, #fef3c7, #fde68a);
+          padding: 1rem;
+          border-bottom: 2px solid #f59e0b;
+        }
+
+        .collab-invite p {
+          margin: 0 0 0.5rem 0;
+          color: #92400e;
+          font-weight: 500;
+        }
+
+        .invite-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .invite-accept, .invite-decline {
+          padding: 0.375rem 0.75rem;
+          border: none;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .invite-accept {
+          background: #10b981;
+          color: white;
+        }
+
+        .invite-accept:hover {
+          background: #059669;
+        }
+
+        .invite-decline {
+          background: #ef4444;
+          color: white;
+        }
+
+        .invite-decline:hover {
+          background: #dc2626;
+        }
+
+        /* Media Grid */
         .post-image-container {
           position: relative;
-          aspect-ratio: 1;
-          overflow: hidden;
           background: #f3f4f6;
         }
 
-        .post-image {
+        .media-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 2px;
+        }
+
+        .media-grid.single {
+          grid-template-columns: 1fr;
+        }
+
+        .media-item {
+          position: relative;
+          aspect-ratio: 1;
+          overflow: hidden;
+        }
+
+        .post-media {
           width: 100%;
           height: 100%;
           object-fit: cover;
@@ -936,26 +1445,58 @@ export default function PhotosFeed({
           transition: transform 0.2s;
         }
 
-        .post-image:hover {
+        .post-media:hover {
           transform: scale(1.05);
         }
 
         @media (hover: none) {
-          .post-image:hover {
+          .post-media:hover {
             transform: none;
           }
         }
 
-        .media-count-badge {
+        .more-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.7);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.5rem;
+          font-weight: bold;
+        }
+
+        .media-delete {
           position: absolute;
           top: 0.5rem;
           right: 0.5rem;
-          background: rgba(0,0,0,0.7);
+          width: 2rem;
+          height: 2rem;
+          background: rgba(239,68,68,0.9);
           color: white;
-          padding: 0.25rem 0.5rem;
-          border-radius: 0.25rem;
-          font-size: 0.75rem;
-          font-weight: 500;
+          border: none;
+          border-radius: 50%;
+          font-size: 1.25rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .show-more-btn {
+          width: 100%;
+          padding: 0.5rem;
+          background: #f3f4f6;
+          border: none;
+          font-size: 0.875rem;
+          color: #6b7280;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .show-more-btn:hover {
+          background: #e5e7eb;
         }
 
         .like-button {
@@ -974,7 +1515,7 @@ export default function PhotosFeed({
           font-size: 1.25rem;
           transition: all 0.2s;
           backdrop-filter: blur(10px);
-          -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+          -webkit-tap-highlight-color: transparent;
         }
 
         .like-button:hover {
@@ -989,7 +1530,6 @@ export default function PhotosFeed({
           background: rgba(239,68,68,0.1);
         }
 
-        /* Mobile touch target optimization */
         @media (max-width: 640px) {
           .like-button {
             width: 3rem;
@@ -1000,6 +1540,44 @@ export default function PhotosFeed({
 
         .post-content {
           padding: 1rem;
+        }
+
+        /* Creator Info */
+        .post-creator {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .creator-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.375rem;
+          color: #8b5cf6;
+          text-decoration: none;
+          font-weight: 600;
+        }
+
+        .creator-link:hover {
+          text-decoration: underline;
+        }
+
+        .creator-avatar {
+          width: 1.5rem;
+          height: 1.5rem;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+
+        .creator-name {
+          font-size: 0.875rem;
+        }
+
+        .with-text {
+          color: #6b7280;
+          font-size: 0.875rem;
         }
 
         .post-caption {
@@ -1016,6 +1594,20 @@ export default function PhotosFeed({
           line-height: 1.5;
           margin-bottom: 0.75rem;
           word-wrap: break-word;
+        }
+
+        .read-more {
+          color: #8b5cf6;
+          background: none;
+          border: none;
+          font-size: 0.875rem;
+          cursor: pointer;
+          padding: 0;
+          margin-bottom: 0.75rem;
+        }
+
+        .read-more:hover {
+          text-decoration: underline;
         }
 
         .post-tags {
@@ -1084,7 +1676,6 @@ export default function PhotosFeed({
           -webkit-tap-highlight-color: transparent;
         }
 
-        /* Mobile touch targets */
         @media (max-width: 640px) {
           .btn-edit, .btn-delete {
             padding: 0.5rem 1rem;
@@ -1136,7 +1727,7 @@ export default function PhotosFeed({
 
         @media (max-width: 640px) {
           .edit-input, .edit-textarea, .edit-select {
-            font-size: 16px; /* Prevent iOS zoom */
+            font-size: 16px;
             padding: 0.625rem;
           }
         }
@@ -1144,6 +1735,30 @@ export default function PhotosFeed({
         .edit-textarea {
           resize: vertical;
           min-height: 3rem;
+        }
+
+        .add-media-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.5rem;
+          background: #f3f4f6;
+          border: 2px dashed #d1d5db;
+          border-radius: 0.375rem;
+          color: #6b7280;
+          font-size: 0.875rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .add-media-btn:hover {
+          background: #e5e7eb;
+          border-color: #9ca3af;
+        }
+
+        .edit-files-count {
+          font-size: 0.75rem;
+          color: #10b981;
         }
 
         .edit-actions {
@@ -1265,7 +1880,7 @@ export default function PhotosFeed({
 
         @media (max-width: 640px) {
           .comment-input {
-            font-size: 16px; /* Prevent iOS zoom */
+            font-size: 16px;
             padding: 0.5rem;
           }
         }
@@ -1356,7 +1971,6 @@ export default function PhotosFeed({
             z-index: 10;
           }
 
-          /* Improve tap targets on mobile */
           button, .upload-button, .tag-link {
             min-height: 44px;
             min-width: 44px;
