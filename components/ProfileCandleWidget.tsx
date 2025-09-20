@@ -61,6 +61,8 @@ export default function ProfileCandleWidget({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isWidgetHidden, setIsWidgetHidden] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Load user preferences on mount
   useEffect(() => {
@@ -106,29 +108,64 @@ export default function ProfileCandleWidget({
     if (!userId) return;
     
     setLoading(true);
+    const debug: any = { userId, queries: [] };
+    
     try {
       // COMPREHENSIVE SEARCH - checks all possible fields where your candles might be stored
       // First try created_by (most common for purchases)
-      let { data: createdByData } = await supabase
+      let { data: createdByData, error: error1 } = await supabase
         .from("candle_offerings")
         .select("*")
         .eq('created_by', userId)
         .order('created_at', { ascending: false });
 
+      debug.queries.push({ 
+        field: 'created_by', 
+        found: createdByData?.length || 0,
+        error: error1 
+      });
+
       if (createdByData && createdByData.length > 0) {
         setVisibleCandle(createdByData[0]);
         setTotalCandles(createdByData.length);
+        setDebugInfo(debug);
         console.log("Found candles using created_by field:", createdByData.length);
         return;
       }
 
-      // If not found, try comprehensive search across ALL fields
-      const { data: allData } = await supabase
+      // Try user_id field
+      let { data: userIdData, error: error2 } = await supabase
+        .from("candle_offerings")
+        .select("*")
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      debug.queries.push({ 
+        field: 'user_id', 
+        found: userIdData?.length || 0,
+        error: error2 
+      });
+
+      if (userIdData && userIdData.length > 0) {
+        setVisibleCandle(userIdData[0]);
+        setTotalCandles(userIdData.length);
+        setDebugInfo(debug);
+        return;
+      }
+
+      // Try the comprehensive search across ALL fields
+      const { data: allData, error: error3 } = await supabase
         .from("candle_offerings")
         .select("*")
         .or(`created_by.eq.${userId},user_id.eq.${userId},created_for.eq.${userId},recipient_id.eq.${userId}`)
         .order('created_at', { ascending: false });
       
+      debug.queries.push({ 
+        field: 'all_fields_combined', 
+        found: allData?.length || 0,
+        error: error3 
+      });
+
       if (allData && allData.length > 0) {
         setVisibleCandle(allData[0]);
         setTotalCandles(allData.length);
@@ -136,8 +173,12 @@ export default function ProfileCandleWidget({
       } else {
         console.log("No candles found for user:", userId);
       }
+      
+      setDebugInfo(debug);
     } catch (error) {
       console.error('Error loading candles:', error);
+      debug.error = error;
+      setDebugInfo(debug);
     } finally {
       setLoading(false);
     }
@@ -246,8 +287,54 @@ export default function ProfileCandleWidget({
             <EyeOff />
             <span>Hide Candle Section</span>
           </button>
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="debug-button"
+            style={{
+              marginTop: '0.5rem',
+              width: '100%',
+              padding: '0.5rem',
+              background: 'rgba(139, 92, 246, 0.1)',
+              border: '1px solid rgba(139, 92, 246, 0.2)',
+              borderRadius: '0.375rem',
+              color: '#8b5cf6',
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            🐛 {showDebug ? 'Hide' : 'Show'} Debug Info
+          </button>
           <div className="settings-note">
             You can show it again from your profile settings
+          </div>
+        </div>
+      )}
+
+      {/* Debug Info Display */}
+      {showDebug && debugInfo && (
+        <div style={{
+          background: 'rgba(139, 92, 246, 0.05)',
+          padding: '1rem',
+          margin: '0 1rem',
+          borderRadius: '0.5rem',
+          fontSize: '0.75rem',
+          fontFamily: 'monospace',
+          color: '#1f2937'
+        }}>
+          <strong>Debug Info:</strong>
+          <div>User ID: {debugInfo.userId}</div>
+          {debugInfo.queries?.map((q: any, i: number) => (
+            <div key={i} style={{ marginTop: '0.5rem' }}>
+              <strong>Query {i+1}: {q.field}</strong>
+              <div>Found: {q.found} candles</div>
+              {q.error && <div style={{ color: 'red' }}>Error: {q.error.message}</div>}
+            </div>
+          ))}
+          <div style={{ marginTop: '0.5rem', fontWeight: 'bold' }}>
+            Total Candles Found: {totalCandles}
           </div>
         </div>
       )}
