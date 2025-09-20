@@ -21,8 +21,16 @@ function PhotoGrid({
   media: Array<{url: string; type: 'image' | 'video'}>;
   onPhotoClick: (index: number) => void;
 }) {
-  // Filter out any invalid media items
-  const validMedia = media.filter(m => m && m.url && m.type);
+  // More robust filtering to prevent undefined errors
+  if (!media || !Array.isArray(media)) {
+    return null;
+  }
+  
+  // Filter out any invalid media items with better null checking
+  const validMedia = media.filter(m => {
+    return m && typeof m === 'object' && m.url && typeof m.url === 'string' && m.type;
+  });
+  
   const images = validMedia.filter(m => m.type === 'image');
   const videos = validMedia.filter(m => m.type === 'video');
   
@@ -244,40 +252,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
   }, [currentUserId, post.co_creators]);
   
-  // Process media URLs to handle storage paths
-  useEffect(() => {
-    async function processMediaUrls() {
-      setLoadingMedia(true);
-      const processed = [];
-      
-      // Process existing single image/video URLs
-      if (post.image_url) {
-        processed.push({ url: post.image_url, type: 'image' as const });
-      }
-      if (post.video_url) {
-        processed.push({ url: post.video_url, type: 'video' as const });
-      }
-      
-      // Process additional_media array
-      if (post.additional_media && Array.isArray(post.additional_media)) {
-        for (const item of post.additional_media) {
-          if (!item) continue;
-          
-          // Check if it's already a URL or needs conversion from storage_path
-          if (typeof item === 'string') {
-            // It's a string - could be URL or storage path
-            if (item.startsWith('http')) {
-              processed.push({ url: item, type: 'image' as const });
-            } else {
-              // It's a storage path - need to get signed URL
-              try {
-                const path = item.replace(/^post-media\//, '');
-                const { data, error } = await supabase.storage
-                  .from('post-media')
-                  .createSignedUrl(path, 3600);
-                
-                if (!error && data) {
-                  const type = item.includes('.mp4') || item.includes('.mov') ? 'video' : 'image';
+.includes('.mp4') || item.includes('.mov') ? 'video' : 'image';
                   processed.push({ url: data.signedUrl, type });
                 }
               } catch (err) {
@@ -416,12 +391,18 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         <div className="post-content">
           {post.body && <p className="post-text">{post.body}</p>}
           
-          {/* Photo Grid */}
-          {mediaToDisplay && mediaToDisplay.length > 0 && (
-            <PhotoGrid 
-              media={mediaToDisplay} 
-              onPhotoClick={handlePhotoClick}
-            />
+          {/* Photo Grid with Loading State */}
+          {loadingMedia ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#718096' }}>
+              Loading media...
+            </div>
+          ) : (
+            mediaToDisplay && mediaToDisplay.length > 0 && (
+              <PhotoGrid 
+                media={mediaToDisplay} 
+                onPhotoClick={handlePhotoClick}
+              />
+            )
           )}
         </div>
         
