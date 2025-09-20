@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Post } from "@/lib/posts";
 import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
+import { supabase } from "@/lib/supabaseClient";
 
 interface PostCardProps {
   post: Post;
@@ -232,16 +233,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [showEditModal, setShowEditModal] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
   
-  // Build media array from all sources with null checks
-  const allMedia = [];
-  if (post.image_url) allMedia.push({ url: post.image_url, type: 'image' as const });
-  if (post.video_url) allMedia.push({ url: post.video_url, type: 'video' as const });
-  if (post.additional_media && Array.isArray(post.additional_media)) {
-    // Filter out any undefined/null items
-    const validMedia = post.additional_media.filter(m => m && m.url);
-    allMedia.push(...validMedia);
-  }
-  const mediaToDisplay = allMedia.length > 0 ? allMedia : (post.media || []);
+  // Add state for processed media URLs
+  const [processedMedia, setProcessedMedia] = useState<Array<{url: string; type: 'image' | 'video'}>>([]);
+  const [loadingMedia, setLoadingMedia] = useState(false);
   
   // Check if current user is a co-creator
   useEffect(() => {
@@ -249,6 +243,97 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       setIsCoCreator(post.co_creators.includes(currentUserId));
     }
   }, [currentUserId, post.co_creators]);
+  
+  // Process media URLs to handle storage paths
+  useEffect(() => {
+    async function processMediaUrls() {
+      setLoadingMedia(true);
+      const processed = [];
+      
+      // Process existing single image/video URLs
+      if (post.image_url) {
+        processed.push({ url: post.image_url, type: 'image' as const });
+      }
+      if (post.video_url) {
+        processed.push({ url: post.video_url, type: 'video' as const });
+      }
+      
+      // Process additional_media array
+      if (post.additional_media && Array.isArray(post.additional_media)) {
+        for (const item of post.additional_media) {
+          if (!item) continue;
+          
+          // Check if it's already a URL or needs conversion from storage_path
+          if (typeof item === 'string') {
+            // It's a string - could be URL or storage path
+            if (item.startsWith('http')) {
+              processed.push({ url: item, type: 'image' as const });
+            } else {
+              // It's a storage path - need to get signed URL
+              try {
+                const path = item.replace(/^post-media\//, '');
+                const { data, error } = await supabase.storage
+                  .from('post-media')
+                  .createSignedUrl(path, 3600);
+                
+                if (!error && data) {
+                  const type = item.includes('.mp4') || item.includes('.mov') ? 'video' : 'image';
+                  processed.push({ url: data.signedUrl, type });
+                }
+              } catch (err) {
+                console.error('Error creating signed URL:', err);
+              }
+            }
+          } else if (item && typeof item === 'object') {
+            // It's an object - check for url or storage_path
+            if (item.url) {
+              processed.push({ 
+                url: item.url, 
+                type: item.type || 'image' 
+              });
+            } else if (item.storage_path) {
+              // Need to convert storage_path to signed URL
+              try {
+                const path = item.storage_path.replace(/^post-media\//, '');
+                const { data, error } = await supabase.storage
+                  .from('post-media')
+                  .createSignedUrl(path, 3600);
+                
+                if (!error && data) {
+                  processed.push({ 
+                    url: data.signedUrl, 
+                    type: item.type || 'image' 
+                  });
+                }
+              } catch (err) {
+                console.error('Error creating signed URL:', err);
+              }
+            }
+          }
+        }
+      }
+      
+      // Fallback to post.media if nothing else
+      if (processed.length === 0 && post.media && Array.isArray(post.media)) {
+        for (const item of post.media) {
+          if (item && item.url) {
+            processed.push({
+              url: item.url,
+              type: item.type || 'image'
+            });
+          }
+        }
+      }
+      
+      setProcessedMedia(processed);
+      setLoadingMedia(false);
+    }
+    
+    processMediaUrls();
+  }, [post.image_url, post.video_url, post.additional_media, post.media]);
+  
+  // Use processed media for display
+  const mediaToDisplay = processedMedia;
   
   const handlePhotoClick = (index: number) => {
     setLightboxStartIndex(index);
