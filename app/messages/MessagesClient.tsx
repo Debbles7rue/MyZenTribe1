@@ -38,22 +38,28 @@ export default function MessagesClient() {
   async function fetchFriendIds(uid: string): Promise<string[]> {
     const supabase = supabaseRef.current;
     
-    // Try friends_view first (if you have this view set up)
+    // FIXED: friends_view is already filtered to current user server-side
+    // Just select friend_id, no need for user_id filter
     const { data: fv, error: fvErr } = await supabase
       .from("friends_view")
-      .select("friend_id")
-      .eq("user_id", uid);
+      .select("friend_id");
 
-    if (!fvErr && fv) {
+    if (!fvErr && fv && fv.length > 0) {
       console.log("Friends from friends_view:", fv.length);
       return fv.map((r: any) => r.friend_id);
     }
 
-    // FIXED: Fallback to friendships table with correct column names (user_id and friend_id)
-    const { data: pairs } = await supabase
+    // Fallback to friendships table if friends_view doesn't work
+    console.log("Falling back to friendships table");
+    const { data: pairs, error: pairsErr } = await supabase
       .from("friendships")
       .select("user_id, friend_id")
       .or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+    
+    if (pairsErr) {
+      console.error("Error fetching friendships:", pairsErr);
+      return [];
+    }
     
     // Extract friend IDs (get the other person's ID from each friendship)
     const friendIds = new Set<string>();
@@ -73,36 +79,46 @@ export default function MessagesClient() {
   useEffect(() => {
     if (!ready || !userId || !supabaseRef.current) return;
     (async () => {
-      const supabase = supabaseRef.current;
+      try {
+        const supabase = supabaseRef.current;
 
-      const ids = await fetchFriendIds(userId);
-      if (!ids.length) {
-        console.log("No friends found");
-        setFriends([]);
-        return;
-      }
-      
-      // Get profiles for all friend IDs
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .in("id", ids);
+        const ids = await fetchFriendIds(userId);
+        if (!ids.length) {
+          console.log("No friends found");
+          setFriends([]);
+          return;
+        }
         
-      const fr = (profiles ?? []).map((p: any) => ({
-        id: p.id,
-        full_name: p.full_name,
-        avatar_url: p.avatar_url,
-      }));
-      
-      console.log("Friend profiles loaded:", fr.length);
-      setFriends(fr);
+        // Get profiles for all friend IDs
+        const { data: profiles, error: profilesErr } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .in("id", ids);
+        
+        if (profilesErr) {
+          console.error("Error fetching profiles:", profilesErr);
+          return;
+        }
+          
+        const fr = (profiles ?? []).map((p: any) => ({
+          id: p.id,
+          full_name: p.full_name,
+          avatar_url: p.avatar_url,
+        }));
+        
+        console.log("Friend profiles loaded:", fr.length);
+        setFriends(fr);
 
-      // Handle URL param or auto-select first friend
-      const qto = search.get("to");
-      if (qto && fr.find((f: any) => f.id === qto)) {
-        setTo(qto);
-      } else if (!to && fr.length) {
-        setTo(fr[0].id);
+        // Handle URL param or auto-select first friend
+        const qto = search.get("to");
+        if (qto && fr.find((f: any) => f.id === qto)) {
+          setTo(qto);
+        } else if (!to && fr.length) {
+          setTo(fr[0].id);
+        }
+      } catch (err) {
+        console.error("Error loading friends:", err);
+        setFriends([]);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
