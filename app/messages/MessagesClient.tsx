@@ -37,17 +37,36 @@ export default function MessagesClient() {
 
   async function fetchFriendIds(uid: string): Promise<string[]> {
     const supabase = supabaseRef.current;
-    // Prefer friends_view(user_id, friend_id)
+    
+    // Try friends_view first (if you have this view set up)
     const { data: fv, error: fvErr } = await supabase
       .from("friends_view")
       .select("friend_id")
       .eq("user_id", uid);
 
-    if (!fvErr && fv) return fv.map((r: any) => r.friend_id);
+    if (!fvErr && fv) {
+      console.log("Friends from friends_view:", fv.length);
+      return fv.map((r: any) => r.friend_id);
+    }
 
-    // Fallback to friendships(a,b)
-    const { data: pairs } = await supabase.from("friendships").select("a,b").or(`a.eq.${uid},b.eq.${uid}`);
-    return [...new Set((pairs ?? []).map((p: any) => (p.a === uid ? p.b : p.a)))];
+    // FIXED: Fallback to friendships table with correct column names (user_id and friend_id)
+    const { data: pairs } = await supabase
+      .from("friendships")
+      .select("user_id, friend_id")
+      .or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+    
+    // Extract friend IDs (get the other person's ID from each friendship)
+    const friendIds = new Set<string>();
+    (pairs ?? []).forEach((p: any) => {
+      if (p.user_id === uid) {
+        friendIds.add(p.friend_id);
+      } else {
+        friendIds.add(p.user_id);
+      }
+    });
+    
+    console.log("Friends from friendships table:", friendIds.size);
+    return Array.from(friendIds);
   }
 
   // 2) Load friends after auth
@@ -58,23 +77,33 @@ export default function MessagesClient() {
 
       const ids = await fetchFriendIds(userId);
       if (!ids.length) {
+        console.log("No friends found");
         setFriends([]);
         return;
       }
+      
+      // Get profiles for all friend IDs
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
         .in("id", ids);
+        
       const fr = (profiles ?? []).map((p: any) => ({
         id: p.id,
         full_name: p.full_name,
         avatar_url: p.avatar_url,
       }));
+      
+      console.log("Friend profiles loaded:", fr.length);
       setFriends(fr);
 
+      // Handle URL param or auto-select first friend
       const qto = search.get("to");
-      if (qto && fr.find((f: any) => f.id === qto)) setTo(qto);
-      else if (!to && fr.length) setTo(fr[0].id);
+      if (qto && fr.find((f: any) => f.id === qto)) {
+        setTo(qto);
+      } else if (!to && fr.length) {
+        setTo(fr[0].id);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, userId]);
@@ -123,59 +152,136 @@ export default function MessagesClient() {
   function sameDate(a: Date, b: Date) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
+  
   function dayLabel(d: Date) {
     const today = new Date();
-    const yest = new Date(); yest.setDate(today.getDate() - 1);
+    const yest = new Date(); 
+    yest.setDate(today.getDate() - 1);
     if (sameDate(d, today)) return "Today";
     if (sameDate(d, yest)) return "Yesterday";
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
+    return d.toLocaleDateString(undefined, { 
+      month: "short", 
+      day: "numeric", 
+      year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined 
+    });
   }
+  
   function timeLabel(d: Date) {
     return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
 
-  if (!ready)
-    return <div className="max-w-5xl mx-auto p-4 sm:p-6">Loading…</div>;
-  if (!userId)
+  if (!ready) {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6">
-        <a className="btn btn-brand" href="/login">
-          Sign in to use Messages
-        </a>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+          Loading...
+        </div>
       </div>
     );
+  }
+  
+  if (!userId) {
+    return (
+      <div className="max-w-5xl mx-auto p-4 sm:p-6">
+        <div className="card p-6 text-center">
+          <h2 className="text-xl font-semibold mb-2">Sign In Required</h2>
+          <p className="text-gray-600 mb-4">Please sign in to access your messages</p>
+          <a className="btn btn-brand inline-block" href="/login">
+            Sign in to use Messages
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6">
-      <h1 className="text-xl font-semibold">Messages</h1>
+      <h1 className="text-2xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">
+        Messages
+      </h1>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-[220px_1fr]">
-        {/* Friends list */}
-        <div className="card p-3">
-          <div className="font-medium mb-2">Friends</div>
-          <div className="space-y-1">
-            {friends.map((f) => (
-              <button
-                key={f.id}
-                className={`w-full text-left px-2 py-2 rounded ${to === f.id ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
-                onClick={() => setTo(f.id)}
-              >
-                {f.full_name || "Member"}
-              </button>
-            ))}
-            {!friends.length && <div className="muted">You have no friends yet.</div>}
+      <div className="mt-4 grid gap-3 sm:grid-cols-[280px_1fr]">
+        {/* Friends list - Enhanced styling */}
+        <div className="card p-4 h-fit">
+          <div className="font-semibold mb-3 text-gray-700">Friends</div>
+          <div className="space-y-1 max-h-[400px] overflow-y-auto">
+            {friends.length > 0 ? (
+              friends.map((f) => (
+                <button
+                  key={f.id}
+                  className={`
+                    w-full text-left px-3 py-2.5 rounded-lg transition-all
+                    flex items-center gap-2
+                    ${to === f.id 
+                      ? "bg-purple-100 text-purple-700 shadow-sm" 
+                      : "hover:bg-gray-50"
+                    }
+                  `}
+                  onClick={() => setTo(f.id)}
+                >
+                  {/* Avatar */}
+                  {f.avatar_url ? (
+                    <img 
+                      src={f.avatar_url} 
+                      alt="" 
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                      {(f.full_name || "M")[0].toUpperCase()}
+                    </div>
+                  )}
+                  <span className="truncate flex-1">
+                    {f.full_name || "Member"}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="text-gray-500 p-3 text-center">
+                <div className="mb-2">👥</div>
+                <div className="text-sm">You have no friends yet.</div>
+                <a href="/friends" className="text-purple-600 hover:underline text-sm mt-1 inline-block">
+                  Find friends →
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Thread */}
-        <div className="card p-3 flex flex-col">
+        {/* Chat Thread - Enhanced styling */}
+        <div className="card p-4 flex flex-col h-[600px]">
           {active ? (
             <>
-              <div className="font-medium">Chat with {active.full_name || "Friend"}</div>
+              {/* Chat header */}
+              <div className="pb-3 mb-3 border-b flex items-center gap-2">
+                {active.avatar_url ? (
+                  <img 
+                    src={active.avatar_url} 
+                    alt="" 
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold">
+                    {(active.full_name || "M")[0].toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div className="font-semibold text-gray-800">
+                    {active.full_name || "Friend"}
+                  </div>
+                  <div className="text-xs text-gray-500">Active conversation</div>
+                </div>
+              </div>
+
+              {/* Messages area */}
               <div
                 ref={listRef}
-                className="mt-3 flex-1 overflow-auto p-2 rounded"
-                style={{ minHeight: 260, background: "linear-gradient(180deg,#f5f3ff 0%, #fff7ed 100%)" }}
+                className="flex-1 overflow-auto p-3 rounded-lg"
+                style={{ 
+                  background: "linear-gradient(180deg, #faf9ff 0%, #fff9f5 100%)",
+                  minHeight: "300px"
+                }}
               >
                 {(() => {
                   let lastDay: string | null = null;
@@ -183,22 +289,32 @@ export default function MessagesClient() {
                     const dt = new Date(m.created_at);
                     const dLabel = dayLabel(dt);
                     const isMine = m.sender_id === userId;
+                    
                     const bubble = (
                       <div
                         key={m.id}
-                        className={`max-w-[80%] inline-block px-3 py-2 rounded-2xl shadow-sm`}
+                        className={`
+                          max-w-[70%] inline-block px-4 py-2.5 rounded-2xl shadow-sm
+                          ${isMine ? "text-white" : "text-gray-800"}
+                        `}
                         style={{
-                          background: isMine ? "#ede9fe" : "#f4f4f5",
-                          border: "1px solid rgba(0,0,0,.06)",
+                          background: isMine 
+                            ? "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" 
+                            : "#f3f4f6",
+                          border: isMine ? "none" : "1px solid rgba(0,0,0,.06)",
                         }}
                       >
-                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.body}</div>
-                        <div className="muted text-[11px] mt-1">{timeLabel(dt)}</div>
+                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                          {m.body}
+                        </div>
+                        <div className={`text-[11px] mt-1 ${isMine ? "opacity-80" : "text-gray-500"}`}>
+                          {timeLabel(dt)}
+                        </div>
                       </div>
                     );
 
                     const row = (
-                      <div key={`${m.id}-row`} className={`my-1 flex ${isMine ? "justify-end" : "justify-start"}`}>
+                      <div key={`${m.id}-row`} className={`my-2 flex ${isMine ? "justify-end" : "justify-start"}`}>
                         {bubble}
                       </div>
                     );
@@ -207,11 +323,8 @@ export default function MessagesClient() {
                       lastDay = dLabel;
                       return (
                         <div key={`${m.id}-group`}>
-                          <div className="text-center my-2">
-                            <span
-                              className="text-xs px-2 py-1 rounded-full"
-                              style={{ background: "#fff", border: "1px solid rgba(0,0,0,.06)" }}
-                            >
+                          <div className="text-center my-3">
+                            <span className="text-xs px-3 py-1 rounded-full bg-white/80 text-gray-600 shadow-sm">
                               {dLabel}
                             </span>
                           </div>
@@ -222,27 +335,52 @@ export default function MessagesClient() {
                     return row;
                   });
                 })()}
-                {msgs.length === 0 && <div className="muted">No messages yet.</div>}
+                
+                {msgs.length === 0 && (
+                  <div className="text-gray-500 text-center mt-8">
+                    <div className="mb-2 text-3xl">💬</div>
+                    <div>No messages yet.</div>
+                    <div className="text-sm mt-1">Send a message to start the conversation!</div>
+                  </div>
+                )}
               </div>
 
+              {/* Message input */}
               <div className="mt-3 flex gap-2">
                 <input
-                  className="input flex-1"
-                  placeholder="Type a message…"
+                  className="input flex-1 px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Type a message..."
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") send();
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
                   }}
                   aria-label="Type a message"
                 />
-                <button className="btn btn-brand" onClick={send}>
+                <button 
+                  className="btn bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white px-6 py-2.5 rounded-lg font-medium transition-all hover:shadow-lg"
+                  onClick={send}
+                  disabled={!body.trim()}
+                >
                   Send
                 </button>
               </div>
             </>
           ) : (
-            <div className="muted">Select a friend to start chatting.</div>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <div className="text-5xl mb-3">💬</div>
+                <div className="text-lg font-medium">Select a friend to start chatting</div>
+                {friends.length === 0 && (
+                  <a href="/friends" className="text-purple-600 hover:underline text-sm mt-2 inline-block">
+                    Find friends to message →
+                  </a>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
