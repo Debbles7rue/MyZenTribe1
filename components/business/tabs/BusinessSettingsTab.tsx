@@ -33,7 +33,7 @@ interface Settings {
 
 export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateTabs }: Props) {
   const [settings, setSettings] = useState<Settings>({
-    visibility: 'public',
+    visibility: 'public',  // Always public
     discoverable: true,
     allow_messages: true,
     allow_reviews: true,
@@ -81,7 +81,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
 
       if (data) {
         setSettings({
-          visibility: data.visibility || 'public',
+          visibility: 'public',  // Always public now
           discoverable: true,  // Default since column doesn't exist
           allow_messages: true,  // Default since column doesn't exist
           allow_reviews: true,  // Default since column doesn't exist
@@ -109,9 +109,9 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
     setMessage('');
 
     try {
-      // Only save fields that exist in your database
+      // Always save as public - only save fields that exist in your database
       const updateData: any = {
-        visibility: settings.visibility,
+        visibility: 'public',  // Always public now
         enabled_tabs: tabConfig,
         updated_at: new Date().toISOString()
       };
@@ -174,14 +174,6 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Debug info - Remove this after fixing */}
-      <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-xs">
-        <p className="font-semibold">Debug Info:</p>
-        <p>Business ID: {businessId}</p>
-        <p>Current visibility: {settings.visibility}</p>
-        <p>Check console for detailed logs</p>
-      </div>
-
       {/* Tab Management Section */}
       <div className="space-y-4">
         <div>
@@ -251,73 +243,8 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
         </div>
       </div>
 
-      <hr className="border-gray-200" />
-
-      {/* Profile Visibility Settings */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Profile Visibility</h3>
-        
-        <div className="space-y-3">
-          <div className="grid gap-3">
-            <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-              <input
-                type="radio"
-                name="visibility"
-                value="public"
-                checked={settings.visibility === 'public'}
-                onChange={(e) => {
-                  console.log('Changing visibility to public');
-                  setSettings({ ...settings, visibility: 'public' });
-                }}
-                className="mt-1 text-purple-600"
-              />
-              <div>
-                <div className="font-medium">Public</div>
-                <div className="text-sm text-gray-600">Anyone can view your profile</div>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-              <input
-                type="radio"
-                name="visibility"
-                value="unlisted"
-                checked={settings.visibility === 'unlisted'}
-                onChange={(e) => {
-                  console.log('Changing visibility to unlisted');
-                  setSettings({ ...settings, visibility: 'unlisted' });
-                }}
-                className="mt-1 text-purple-600"
-              />
-              <div>
-                <div className="font-medium">Unlisted</div>
-                <div className="text-sm text-gray-600">Only people with the link can view</div>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-              <input
-                type="radio"
-                name="visibility"
-                value="private"
-                checked={settings.visibility === 'private'}
-                onChange={(e) => {
-                  console.log('Changing visibility to private');
-                  setSettings({ ...settings, visibility: 'private' });
-                }}
-                className="mt-1 text-purple-600"
-              />
-              <div>
-                <div className="font-medium">Private</div>
-                <div className="text-sm text-gray-600">Hidden from everyone</div>
-              </div>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <hr className="border-gray-200" />
-
+      {/* Removed Profile Visibility Section - All businesses are now public */}
+      
       {/* Discovery & Interaction Settings */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Discovery & Interactions</h3>
