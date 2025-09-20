@@ -252,60 +252,113 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
   }, [currentUserId, post.co_creators]);
   
-.includes('.mp4') || item.includes('.mov') ? 'video' : 'image';
-                  processed.push({ url: data.signedUrl, type });
+  // Process media URLs to handle storage paths
+  useEffect(() => {
+    async function processMediaUrls() {
+      console.log('Processing media for post:', post.id);
+      setLoadingMedia(true);
+      const processed = [];
+      
+      try {
+        // Process existing single image/video URLs
+        if (post.image_url && typeof post.image_url === 'string') {
+          processed.push({ url: post.image_url, type: 'image' as const });
+        }
+        if (post.video_url && typeof post.video_url === 'string') {
+          processed.push({ url: post.video_url, type: 'video' as const });
+        }
+        
+        // Process additional_media array
+        if (post.additional_media && Array.isArray(post.additional_media)) {
+          console.log('Processing additional_media:', post.additional_media);
+          
+          for (const item of post.additional_media) {
+            if (!item) continue;
+            
+            // Check if it's already a URL or needs conversion from storage_path
+            if (typeof item === 'string') {
+              // It's a string - could be URL or storage path
+              if (item.startsWith('http')) {
+                processed.push({ url: item, type: 'image' as const });
+              } else {
+                // It's a storage path - need to get signed URL
+                try {
+                  const path = item.replace(/^post-media\//, '');
+                  const { data, error } = await supabase.storage
+                    .from('post-media')
+                    .createSignedUrl(path, 3600);
+                  
+                  if (!error && data && data.signedUrl) {
+                    const fileType = item.includes('.mp4') || item.includes('.mov') ? 'video' : 'image';
+                    processed.push({ url: data.signedUrl, type: fileType as 'image' | 'video' });
+                  }
+                } catch (err) {
+                  console.error('Error creating signed URL for string path:', err);
                 }
-              } catch (err) {
-                console.error('Error creating signed URL:', err);
+              }
+            } else if (item && typeof item === 'object') {
+              // It's an object - check for url or storage_path
+              if (item.url && typeof item.url === 'string') {
+                processed.push({ 
+                  url: item.url, 
+                  type: (item.type || 'image') as 'image' | 'video'
+                });
+              } else if (item.storage_path && typeof item.storage_path === 'string') {
+                // Need to convert storage_path to signed URL
+                try {
+                  const path = item.storage_path.replace(/^post-media\//, '');
+                  const { data, error } = await supabase.storage
+                    .from('post-media')
+                    .createSignedUrl(path, 3600);
+                  
+                  if (!error && data && data.signedUrl) {
+                    processed.push({ 
+                      url: data.signedUrl, 
+                      type: (item.type || 'image') as 'image' | 'video'
+                    });
+                  }
+                } catch (err) {
+                  console.error('Error creating signed URL for object path:', err);
+                }
               }
             }
-          } else if (item && typeof item === 'object') {
-            // It's an object - check for url or storage_path
-            if (item.url) {
-              processed.push({ 
-                url: item.url, 
-                type: item.type || 'image' 
+          }
+        }
+        
+        // Fallback to post.media if nothing else
+        if (processed.length === 0 && post.media && Array.isArray(post.media)) {
+          console.log('Falling back to post.media:', post.media);
+          for (const item of post.media) {
+            if (item && item.url && typeof item.url === 'string') {
+              processed.push({
+                url: item.url,
+                type: (item.type || 'image') as 'image' | 'video'
               });
-            } else if (item.storage_path) {
-              // Need to convert storage_path to signed URL
-              try {
-                const path = item.storage_path.replace(/^post-media\//, '');
-                const { data, error } = await supabase.storage
-                  .from('post-media')
-                  .createSignedUrl(path, 3600);
-                
-                if (!error && data) {
-                  processed.push({ 
-                    url: data.signedUrl, 
-                    type: item.type || 'image' 
-                  });
-                }
-              } catch (err) {
-                console.error('Error creating signed URL:', err);
-              }
             }
           }
         }
+        
+        // Final validation - ensure all items have required properties
+        const validProcessed = processed.filter(item => 
+          item && 
+          typeof item === 'object' && 
+          item.url && 
+          typeof item.url === 'string' && 
+          item.type
+        );
+        
+        console.log('Processed media result:', validProcessed);
+        setProcessedMedia(validProcessed);
+      } catch (error) {
+        console.error('Error in processMediaUrls:', error);
+        setProcessedMedia([]);
+      } finally {
+        setLoadingMedia(false);
       }
-      
-      // Fallback to post.media if nothing else
-      if (processed.length === 0 && post.media && Array.isArray(post.media)) {
-        for (const item of post.media) {
-          if (item && item.url) {
-            processed.push({
-              url: item.url,
-              type: item.type || 'image'
-            });
-          }
-        }
-      }
-      
-      setProcessedMedia(processed);
-      setLoadingMedia(false);
     }
     
     processMediaUrls();
-  }, [post.image_url, post.video_url, post.additional_media, post.media]);
+  }, [post.id, post.image_url, post.video_url, post.additional_media, post.media]);
   
   // Use processed media for display
   const mediaToDisplay = processedMedia;
