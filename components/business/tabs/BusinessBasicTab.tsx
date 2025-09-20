@@ -29,6 +29,14 @@ const BUSINESS_CATEGORIES = [
   'Nutrition', 'Holistic Health', 'Alternative Medicine', 'Other'
 ];
 
+interface SectionConfig {
+  branding?: boolean;
+  identity?: boolean;
+  story?: boolean;
+  categories?: boolean;
+  values?: boolean;
+}
+
 export default function BusinessBasicTab({ businessId }: { businessId: string }) {
   const [data, setData] = useState({
     display_name: '',
@@ -40,9 +48,18 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
     categories: [] as string[],
     community_guidelines: '',
   });
+  
+  const [sectionConfig, setSectionConfig] = useState<SectionConfig>({
+    branding: true,
+    identity: true,
+    story: true,
+    categories: true,
+    values: true,
+  });
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [sectionMessages, setSectionMessages] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function load() {
@@ -63,38 +80,50 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           categories: biz.categories || [],
           community_guidelines: biz.community_guidelines || '',
         });
+        
+        // Load section config if stored
+        if (biz.section_config) {
+          setSectionConfig(biz.section_config);
+        }
       }
       setLoading(false);
     }
     load();
   }, [businessId]);
 
-  async function save() {
-    setSaving(true);
-    setMessage('');
+  async function saveSection(sectionName: string, fields: string[]) {
+    setSavingSection(sectionName);
+    setSectionMessages({});
+    
+    // Build update object with only specified fields
+    const updateObj: any = { updated_at: new Date().toISOString() };
+    fields.forEach(field => {
+      updateObj[field] = data[field as keyof typeof data];
+    });
     
     const { error } = await supabase
       .from('business_profiles')
-      .update({
-        display_name: data.display_name,
-        handle: data.handle,
-        tagline: data.tagline,
-        logo_url: data.logo_url,
-        cover_url: data.cover_url,
-        bio: data.bio,
-        categories: data.categories,
-        community_guidelines: data.community_guidelines,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateObj)
       .eq('id', businessId);
     
     if (error) {
-      setMessage('Error: ' + error.message);
+      setSectionMessages({ [sectionName]: '❌ Error saving' });
     } else {
-      setMessage('Saved successfully!');
-      setTimeout(() => setMessage(''), 3000);
+      setSectionMessages({ [sectionName]: '✅ Saved!' });
+      setTimeout(() => setSectionMessages({}), 3000);
     }
-    setSaving(false);
+    setSavingSection(null);
+  }
+
+  async function toggleSection(section: keyof SectionConfig) {
+    const newConfig = { ...sectionConfig, [section]: !sectionConfig[section] };
+    setSectionConfig(newConfig);
+    
+    // Save config to database
+    await supabase
+      .from('business_profiles')
+      .update({ section_config: newConfig })
+      .eq('id', businessId);
   }
 
   if (loading) {
@@ -109,35 +138,31 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
   }
 
   return (
-    <div className="max-w-4xl mx-auto -mt-6 -mx-6 relative pb-24">
-      {/* Beautiful Gradient Header */}
-      <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 p-8 text-white">
-        <h2 className="text-3xl font-bold">✨ Basic Information</h2>
-        <p className="mt-2 text-purple-100">Make your business shine with a complete profile</p>
-      </div>
-
-      <div className="p-6">
-        {/* Message Alert */}
-        {message && (
-          <div className={`
-            p-4 rounded-xl mb-6 flex items-center gap-2 animate-fade-in shadow-lg
-            ${message.includes('Error') 
-              ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white' 
-              : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-            }
-          `}>
-            {message}
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Branding Card */}
+      <div className={`bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 shadow-md transition-all ${!sectionConfig.branding ? 'opacity-60' : ''}`}>
+        <div className="p-4 border-b border-purple-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
+            <span className="text-2xl">🎨</span> Branding & Visuals
+          </h3>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm text-purple-700">Enable</span>
+              <input
+                type="checkbox"
+                checked={sectionConfig.branding}
+                onChange={() => toggleSection('branding')}
+                className="w-5 h-5 text-purple-600 rounded"
+              />
+            </label>
+            {sectionMessages.branding && (
+              <span className="text-sm font-medium">{sectionMessages.branding}</span>
+            )}
           </div>
-        )}
-
-        {/* Main Form - Colorful Cards */}
-        <div className="space-y-6">
-          
-          {/* Branding Card */}
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200 shadow-md">
-            <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🎨</span> Branding & Visuals
-            </h3>
+        </div>
+        
+        {sectionConfig.branding && (
+          <div className="p-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="text-center">
                 <p className="text-sm text-purple-700 font-medium mb-3">Business Logo</p>
@@ -169,14 +194,44 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Identity Card */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200 shadow-md">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🏢</span> Business Identity
-            </h3>
             
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => saveSection('branding', ['logo_url', 'cover_url'])}
+                disabled={savingSection === 'branding'}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingSection === 'branding' ? 'Saving...' : 'Save Branding'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Identity Card */}
+      <div className={`bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 shadow-md transition-all ${!sectionConfig.identity ? 'opacity-60' : ''}`}>
+        <div className="p-4 border-b border-blue-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
+            <span className="text-2xl">🏢</span> Business Identity
+          </h3>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm text-blue-700">Enable</span>
+              <input
+                type="checkbox"
+                checked={sectionConfig.identity}
+                onChange={() => toggleSection('identity')}
+                className="w-5 h-5 text-blue-600 rounded"
+              />
+            </label>
+            {sectionMessages.identity && (
+              <span className="text-sm font-medium">{sectionMessages.identity}</span>
+            )}
+          </div>
+        </div>
+        
+        {sectionConfig.identity && (
+          <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-blue-800 mb-2">
@@ -236,13 +291,44 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
                 {data.tagline.length}/150 • Make it memorable!
               </p>
             </div>
+            
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => saveSection('identity', ['display_name', 'handle', 'tagline'])}
+                disabled={savingSection === 'identity' || !data.display_name || !data.handle}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingSection === 'identity' ? 'Saving...' : 'Save Identity'}
+              </button>
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Story Card */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200 shadow-md">
-            <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">📖</span> Your Story
-            </h3>
+      {/* Story Card */}
+      <div className={`bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 shadow-md transition-all ${!sectionConfig.story ? 'opacity-60' : ''}`}>
+        <div className="p-4 border-b border-green-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+            <span className="text-2xl">📖</span> Your Story
+          </h3>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm text-green-700">Enable</span>
+              <input
+                type="checkbox"
+                checked={sectionConfig.story}
+                onChange={() => toggleSection('story')}
+                className="w-5 h-5 text-green-600 rounded"
+              />
+            </label>
+            {sectionMessages.story && (
+              <span className="text-sm font-medium">{sectionMessages.story}</span>
+            )}
+          </div>
+        </div>
+        
+        {sectionConfig.story && (
+          <div className="p-6">
             <textarea
               className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all bg-white text-base"
               style={{ fontSize: '16px' }}
@@ -252,20 +338,47 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
               placeholder="Share your journey, what makes you special, your mission..."
               maxLength={2000}
             />
-            <p className="text-xs text-green-600 mt-1">
-              {data.bio.length}/2000 • Tell your authentic story
-            </p>
+            <div className="mt-2 flex justify-between items-center">
+              <p className="text-xs text-green-600">
+                {data.bio.length}/2000 • Tell your authentic story
+              </p>
+              <button
+                onClick={() => saveSection('story', ['bio'])}
+                disabled={savingSection === 'story'}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingSection === 'story' ? 'Saving...' : 'Save Story'}
+              </button>
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Categories Card - Custom Input */}
-          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl p-6 border border-amber-200 shadow-md">
-            <h3 className="text-lg font-semibold text-amber-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🏷️</span> Business Categories
-              <span className="text-xs font-normal text-amber-600">
-                (Add up to 5)
-              </span>
-            </h3>
-            
+      {/* Categories Card */}
+      <div className={`bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl border border-amber-200 shadow-md transition-all ${!sectionConfig.categories ? 'opacity-60' : ''}`}>
+        <div className="p-4 border-b border-amber-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
+            <span className="text-2xl">🏷️</span> Business Categories
+            <span className="text-xs font-normal text-amber-600">(Add up to 5)</span>
+          </h3>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm text-amber-700">Enable</span>
+              <input
+                type="checkbox"
+                checked={sectionConfig.categories}
+                onChange={() => toggleSection('categories')}
+                className="w-5 h-5 text-amber-600 rounded"
+              />
+            </label>
+            {sectionMessages.categories && (
+              <span className="text-sm font-medium">{sectionMessages.categories}</span>
+            )}
+          </div>
+        </div>
+        
+        {sectionConfig.categories && (
+          <div className="p-6">
             {/* Custom Category Input */}
             <div className="mb-4">
               <div className="flex gap-2">
@@ -332,7 +445,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             )}
 
             {/* Suggestions */}
-            <details className="cursor-pointer">
+            <details className="cursor-pointer mb-4">
               <summary className="text-sm text-amber-700 hover:text-amber-900 transition-colors font-medium">
                 💡 Need inspiration? See suggestions
               </summary>
@@ -356,13 +469,44 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
                 </div>
               </div>
             </details>
+            
+            <div className="flex justify-end">
+              <button
+                onClick={() => saveSection('categories', ['categories'])}
+                disabled={savingSection === 'categories'}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingSection === 'categories' ? 'Saving...' : 'Save Categories'}
+              </button>
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Community Guidelines Card */}
-          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-6 border border-violet-200 shadow-md">
-            <h3 className="text-lg font-semibold text-violet-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">💜</span> Community Values & Offerings
-            </h3>
+      {/* Community Values Card */}
+      <div className={`bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl border border-violet-200 shadow-md transition-all ${!sectionConfig.values ? 'opacity-60' : ''}`}>
+        <div className="p-4 border-b border-violet-200 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-violet-900 flex items-center gap-2">
+            <span className="text-2xl">💜</span> Community Values & Offerings
+          </h3>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-sm text-violet-700">Enable</span>
+              <input
+                type="checkbox"
+                checked={sectionConfig.values}
+                onChange={() => toggleSection('values')}
+                className="w-5 h-5 text-violet-600 rounded"
+              />
+            </label>
+            {sectionMessages.values && (
+              <span className="text-sm font-medium">{sectionMessages.values}</span>
+            )}
+          </div>
+        </div>
+        
+        {sectionConfig.values && (
+          <div className="p-6">
             <textarea
               className="w-full px-4 py-3 border-2 border-violet-300 rounded-xl focus:ring-4 focus:ring-violet-200 focus:border-violet-500 transition-all bg-white text-base"
               style={{ fontSize: '16px' }}
@@ -372,64 +516,43 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
               placeholder="Share your values, special offerings, what makes your space unique..."
               maxLength={1000}
             />
-            <p className="text-xs text-violet-600 mt-1">
-              {data.community_guidelines.length}/1000 • Create a welcoming atmosphere
-            </p>
+            <div className="mt-2 flex justify-between items-center">
+              <p className="text-xs text-violet-600">
+                {data.community_guidelines.length}/1000 • Create a welcoming atmosphere
+              </p>
+              <button
+                onClick={() => saveSection('values', ['community_guidelines'])}
+                disabled={savingSection === 'values'}
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingSection === 'values' ? 'Saving...' : 'Save Values'}
+              </button>
+            </div>
           </div>
-
-        </div>
-
-        {/* Fun Stats */}
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl p-4 text-white shadow-lg">
-            <div className="text-3xl mb-2">👀</div>
-            <div className="text-2xl font-bold">0</div>
-            <div className="text-xs opacity-90">Profile Views</div>
-          </div>
-          <div className="bg-gradient-to-br from-pink-400 to-pink-600 rounded-xl p-4 text-white shadow-lg">
-            <div className="text-3xl mb-2">❤️</div>
-            <div className="text-2xl font-bold">0</div>
-            <div className="text-xs opacity-90">Followers</div>
-          </div>
-          <div className="bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
-            <div className="text-3xl mb-2">⭐</div>
-            <div className="text-2xl font-bold">N/A</div>
-            <div className="text-xs opacity-90">Rating</div>
-          </div>
-          <div className="bg-gradient-to-br from-green-400 to-green-600 rounded-xl p-4 text-white shadow-lg">
-            <div className="text-3xl mb-2">🎯</div>
-            <div className="text-2xl font-bold">0%</div>
-            <div className="text-xs opacity-90">Complete</div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Save Button - Fixed/Sticky at Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-purple-100 to-pink-100 border-t border-purple-200 p-4 sm:p-6 z-50 shadow-2xl">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-center sm:text-left">
-            <p className="text-sm font-semibold text-purple-900">
-              {data.display_name && data.handle 
-                ? '✅ Looking great! Ready to save' 
-                : '📝 Business name and handle required'}
-            </p>
-            <p className="text-xs text-purple-600 mt-1">
-              Make sure everything looks perfect before saving
-            </p>
-          </div>
-          <button
-            onClick={save}
-            disabled={saving || !data.display_name || !data.handle}
-            className={`
-              w-full sm:w-auto px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg transition-all shadow-lg
-              ${saving || !data.display_name || !data.handle
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transform hover:scale-105'
-              }
-            `}
-          >
-            {saving ? '✨ Saving...' : '💫 Save Changes'}
-          </button>
+      {/* Fun Stats - Always Visible */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+        <div className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="text-3xl mb-2">👀</div>
+          <div className="text-2xl font-bold">0</div>
+          <div className="text-xs opacity-90">Profile Views</div>
+        </div>
+        <div className="bg-gradient-to-br from-pink-400 to-pink-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="text-3xl mb-2">❤️</div>
+          <div className="text-2xl font-bold">0</div>
+          <div className="text-xs opacity-90">Followers</div>
+        </div>
+        <div className="bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="text-3xl mb-2">⭐</div>
+          <div className="text-2xl font-bold">N/A</div>
+          <div className="text-xs opacity-90">Rating</div>
+        </div>
+        <div className="bg-gradient-to-br from-green-400 to-green-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="text-3xl mb-2">🎯</div>
+          <div className="text-2xl font-bold">0%</div>
+          <div className="text-xs opacity-90">Complete</div>
         </div>
       </div>
     </div>
