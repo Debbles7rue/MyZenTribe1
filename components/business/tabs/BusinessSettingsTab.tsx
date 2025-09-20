@@ -4,368 +4,339 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
+interface TabConfig {
+  hours?: boolean;
+  services?: boolean;
+  store?: boolean;
+  gallery?: boolean;
+  social?: boolean;
+}
+
+interface Props {
+  businessId: string;
+  enabledTabs?: TabConfig;
+  onUpdateTabs?: (config: TabConfig) => void;
+}
+
 interface Settings {
   visibility: 'public' | 'private' | 'unlisted';
   discoverable: boolean;
   allow_messages: boolean;
   allow_reviews: boolean;
-  allow_collaboration: boolean;
-  verified: boolean;
-  rating_average?: number;
-  rating_count?: number;
-  view_count?: number;
+  notification_email?: string;
+  notification_preferences?: {
+    new_message?: boolean;
+    new_review?: boolean;
+    new_follower?: boolean;
+  };
 }
 
-interface Props {
-  businessId: string;
-  enabledTabs?: Record<string, boolean>;
-  onUpdateEnabledTabs?: (tabs: Record<string, boolean>) => void;
-}
-
-const TAB_INFO = [
-  { 
-    id: 'contact', 
-    label: 'Contact Information', 
-    icon: '📞',
-    description: 'Phone, email, website, and location details'
-  },
-  { 
-    id: 'hours', 
-    label: 'Business Hours', 
-    icon: '🕐',
-    description: 'Operating hours and special schedules'
-  },
-  { 
-    id: 'services', 
-    label: 'Services', 
-    icon: '💼',
-    description: 'List of services you offer'
-  },
-  { 
-    id: 'store', 
-    label: 'Product Showcase', 
-    icon: '🛍️',
-    description: 'External product links (Etsy, Amazon, etc.)'
-  },
-  { 
-    id: 'gallery', 
-    label: 'Photo Gallery', 
-    icon: '📸',
-    description: 'Showcase your work with images'
-  },
-  { 
-    id: 'social', 
-    label: 'Social Media', 
-    icon: '🔗',
-    description: 'Links to your social media profiles'
-  },
-];
-
-export default function BusinessSettingsTab({ 
-  businessId, 
-  enabledTabs = {
-    contact: true,
-    hours: false,
-    services: false,
-    store: false,
-    gallery: true,
-    social: true,
-  },
-  onUpdateEnabledTabs 
-}: Props) {
+export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateTabs }: Props) {
   const [settings, setSettings] = useState<Settings>({
     visibility: 'public',
     discoverable: true,
     allow_messages: true,
     allow_reviews: true,
-    allow_collaboration: false,
-    verified: false,
+    notification_preferences: {
+      new_message: true,
+      new_review: true,
+      new_follower: true,
+    }
   });
-  const [localEnabledTabs, setLocalEnabledTabs] = useState(enabledTabs);
+  
+  const [tabConfig, setTabConfig] = useState<TabConfig>(enabledTabs || {
+    hours: true,
+    services: true,
+    store: false,
+    gallery: true,
+    social: true,
+  });
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    async function load() {
-      const { data: biz } = await supabase
-        .from('business_profiles')
-        .select('visibility, discoverable, allow_messages, allow_reviews, allow_collaboration, verified, rating_average, rating_count, view_count, enabled_tabs')
-        .eq('id', businessId)
-        .single();
-      
-      if (biz) {
-        setSettings({
-          visibility: biz.visibility || 'public',
-          discoverable: biz.discoverable !== false,
-          allow_messages: biz.allow_messages !== false,
-          allow_reviews: biz.allow_reviews !== false,
-          allow_collaboration: biz.allow_collaboration || false,
-          verified: biz.verified || false,
-          rating_average: biz.rating_average,
-          rating_count: biz.rating_count,
-          view_count: biz.view_count,
-        });
-        
-        if (biz.enabled_tabs) {
-          setLocalEnabledTabs(biz.enabled_tabs);
-        }
-      }
-      setLoading(false);
-    }
-    load();
+    loadSettings();
   }, [businessId]);
 
-  async function save() {
+  useEffect(() => {
+    if (enabledTabs) {
+      setTabConfig(enabledTabs);
+    }
+  }, [enabledTabs]);
+
+  async function loadSettings() {
+    const { data, error } = await supabase
+      .from('business_profiles')
+      .select('visibility, discoverable, allow_messages, allow_reviews, notification_email, notification_preferences, enabled_tabs')
+      .eq('id', businessId)
+      .single();
+
+    if (data) {
+      setSettings({
+        visibility: data.visibility || 'public',
+        discoverable: data.discoverable ?? true,
+        allow_messages: data.allow_messages ?? true,
+        allow_reviews: data.allow_reviews ?? true,
+        notification_email: data.notification_email,
+        notification_preferences: data.notification_preferences || {
+          new_message: true,
+          new_review: true,
+          new_follower: true,
+        }
+      });
+      
+      if (data.enabled_tabs) {
+        setTabConfig(data.enabled_tabs);
+      }
+    }
+    setLoading(false);
+  }
+
+  async function saveSettings() {
     setSaving(true);
     setMessage('');
-    
+
     const { error } = await supabase
       .from('business_profiles')
       .update({
-        visibility: settings.visibility,
-        discoverable: settings.discoverable,
-        allow_messages: settings.allow_messages,
-        allow_reviews: settings.allow_reviews,
-        allow_collaboration: settings.allow_collaboration,
-        enabled_tabs: localEnabledTabs,
+        ...settings,
+        enabled_tabs: tabConfig,
+        updated_at: new Date().toISOString()
       })
       .eq('id', businessId);
-    
+
     if (error) {
-      setMessage('❌ Error: ' + error.message);
+      setMessage('Error saving settings');
     } else {
-      setMessage('✅ Settings saved!');
-      if (onUpdateEnabledTabs) {
-        onUpdateEnabledTabs(localEnabledTabs);
+      setMessage('Settings saved successfully!');
+      if (onUpdateTabs) {
+        onUpdateTabs(tabConfig);
       }
       setTimeout(() => setMessage(''), 3000);
     }
     setSaving(false);
   }
 
-  function toggleTab(tabId: string) {
-    const newTabs = { ...localEnabledTabs, [tabId]: !localEnabledTabs[tabId] };
-    setLocalEnabledTabs(newTabs);
-  }
+  const handleTabToggle = (tabId: keyof TabConfig) => {
+    const newConfig = { ...tabConfig, [tabId]: !tabConfig[tabId] };
+    setTabConfig(newConfig);
+  };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-purple-600 mx-auto"></div>
-          <p className="mt-3 text-purple-600 font-medium">Loading settings...</p>
+      <div className="animate-pulse space-y-4">
+        <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+        <div className="space-y-3">
+          <div className="h-12 bg-gray-100 rounded"></div>
+          <div className="h-12 bg-gray-100 rounded"></div>
         </div>
       </div>
     );
   }
 
+  const tabOptions = [
+    { id: 'hours' as keyof TabConfig, label: 'Business Hours', icon: '🕐', description: 'Show when you\'re open' },
+    { id: 'services' as keyof TabConfig, label: 'Services', icon: '💼', description: 'List your services and offerings' },
+    { id: 'gallery' as keyof TabConfig, label: 'Gallery', icon: '📸', description: 'Showcase photos of your work' },
+    { id: 'social' as keyof TabConfig, label: 'Social Links', icon: '🔗', description: 'Connect your social media' },
+    { id: 'store' as keyof TabConfig, label: 'Store', icon: '🛍️', description: 'Sell products online', comingSoon: true },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto -mt-6 -mx-6">
-      {/* Colorful Header */}
-      <div className="bg-gradient-to-r from-gray-600 to-gray-800 p-8 text-white">
-        <h2 className="text-3xl font-bold">⚙️ Settings & Privacy</h2>
-        <p className="mt-2 text-gray-300">Configure your profile visibility and features</p>
-      </div>
+    <div className="space-y-6 max-w-3xl">
+      {/* Tab Management Section */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Customize Your Tabs</h3>
+          <p className="text-sm text-gray-600">Choose which sections to show on your business profile</p>
+        </div>
 
-      <div className="p-6 space-y-6">
-        {/* Message */}
-        {message && (
-          <div className={`
-            p-4 rounded-xl flex items-center gap-2 animate-fade-in shadow-lg
-            ${message.includes('Error') 
-              ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white' 
-              : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-            }
-          `}>
-            {message}
-          </div>
-        )}
-
-        {/* Tab Management - NEW */}
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-200 shadow-md">
-          <h3 className="text-lg font-bold text-indigo-900 mb-2">
-            📑 Manage Profile Tabs
-          </h3>
-          <p className="text-sm text-indigo-600 mb-4">
-            Choose which tabs appear on your business profile
-          </p>
-          
-          <div className="space-y-3">
-            {TAB_INFO.map(tab => (
-              <label 
-                key={tab.id}
-                className="flex items-center justify-between p-4 bg-white rounded-xl cursor-pointer hover:bg-indigo-50 transition-colors border border-indigo-100"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl mt-0.5">{tab.icon}</span>
-                  <div>
-                    <div className="font-semibold text-gray-800">{tab.label}</div>
-                    <div className="text-sm text-gray-600">{tab.description}</div>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localEnabledTabs[tab.id] || false}
-                    onChange={() => toggleTab(tab.id)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-indigo-500 peer-checked:to-purple-500"></div>
-                </label>
-              </label>
-            ))}
-          </div>
-          <p className="text-xs text-indigo-600 mt-4">
-            💡 Tip: Disable tabs you don't need to keep your profile simple
+        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> Basic Info, Contact, and Settings tabs are always visible and cannot be disabled.
           </p>
         </div>
 
-        {/* Profile Visibility */}
-        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200 shadow-md">
-          <h3 className="text-lg font-bold text-blue-900 mb-4">
-            👁️ Profile Visibility
-          </h3>
-          
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 p-3 bg-white rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+        <div className="space-y-2">
+          {tabOptions.map(tab => (
+            <div 
+              key={tab.id}
+              className={`
+                border rounded-lg p-4 transition-all
+                ${tab.comingSoon ? 'opacity-60 bg-gray-50' : 'bg-white hover:shadow-sm'}
+              `}
+            >
+              <label className="flex items-start justify-between cursor-pointer">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl mt-0.5">{tab.icon}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{tab.label}</span>
+                      {tab.comingSoon && (
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                          Coming Soon
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-0.5">{tab.description}</p>
+                  </div>
+                </div>
+                
+                {!tab.comingSoon ? (
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={tabConfig[tab.id] ?? false}
+                      onChange={() => handleTabToggle(tab.id)}
+                      className="sr-only"
+                    />
+                    <div className={`
+                      w-12 h-6 rounded-full transition-colors duration-200 ease-in-out
+                      ${tabConfig[tab.id] ? 'bg-purple-600' : 'bg-gray-300'}
+                    `}>
+                      <div className={`
+                        w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ease-in-out
+                        transform ${tabConfig[tab.id] ? 'translate-x-6' : 'translate-x-0.5'} mt-0.5
+                      `} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-400">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <hr className="border-gray-200" />
+
+      {/* Profile Visibility Settings */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Profile Visibility</h3>
+        
+        <div className="space-y-3">
+          <div className="grid gap-3">
+            <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
               <input
                 type="radio"
                 name="visibility"
                 value="public"
                 checked={settings.visibility === 'public'}
                 onChange={(e) => setSettings({ ...settings, visibility: 'public' })}
-                className="text-purple-600"
+                className="mt-1 text-purple-600"
               />
               <div>
-                <div className="font-semibold">Public</div>
-                <div className="text-sm text-gray-600">Anyone can find and view your profile</div>
+                <div className="font-medium">Public</div>
+                <div className="text-sm text-gray-600">Anyone can view your profile</div>
               </div>
             </label>
-            
-            <label className="flex items-center gap-3 p-3 bg-white rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+
+            <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
               <input
                 type="radio"
                 name="visibility"
                 value="unlisted"
                 checked={settings.visibility === 'unlisted'}
                 onChange={(e) => setSettings({ ...settings, visibility: 'unlisted' })}
-                className="text-purple-600"
+                className="mt-1 text-purple-600"
               />
               <div>
-                <div className="font-semibold">Unlisted</div>
+                <div className="font-medium">Unlisted</div>
                 <div className="text-sm text-gray-600">Only people with the link can view</div>
               </div>
             </label>
-            
-            <label className="flex items-center gap-3 p-3 bg-white rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+
+            <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
               <input
                 type="radio"
                 name="visibility"
                 value="private"
                 checked={settings.visibility === 'private'}
                 onChange={(e) => setSettings({ ...settings, visibility: 'private' })}
-                className="text-purple-600"
+                className="mt-1 text-purple-600"
               />
               <div>
-                <div className="font-semibold">Private</div>
+                <div className="font-medium">Private</div>
                 <div className="text-sm text-gray-600">Hidden from everyone</div>
               </div>
             </label>
           </div>
         </div>
+      </div>
 
-        {/* Interaction Settings */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200 shadow-md">
-          <h3 className="text-lg font-bold text-green-900 mb-4">
-            💬 Interactions
-          </h3>
-          
-          <div className="space-y-3">
-            <label className="flex items-center justify-between p-3 bg-white rounded-xl cursor-pointer hover:bg-green-50 transition-colors">
-              <div>
-                <div className="font-semibold">Appear in search</div>
-                <div className="text-sm text-gray-600">Let people find you through search</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.discoverable}
-                onChange={(e) => setSettings({ ...settings, discoverable: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded"
-              />
-            </label>
+      <hr className="border-gray-200" />
 
-            <label className="flex items-center justify-between p-3 bg-white rounded-xl cursor-pointer hover:bg-green-50 transition-colors">
-              <div>
-                <div className="font-semibold">Allow messages</div>
-                <div className="text-sm text-gray-600">Customers can contact you</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.allow_messages}
-                onChange={(e) => setSettings({ ...settings, allow_messages: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded"
-              />
-            </label>
+      {/* Discovery & Interaction Settings */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Discovery & Interactions</h3>
+        
+        <div className="space-y-3">
+          <label className="flex items-center justify-between cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+            <div>
+              <div className="font-medium">Appear in search results</div>
+              <div className="text-sm text-gray-600">Let people find you through search</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.discoverable}
+              onChange={(e) => setSettings({ ...settings, discoverable: e.target.checked })}
+              className="w-5 h-5 text-purple-600 rounded"
+            />
+          </label>
 
-            <label className="flex items-center justify-between p-3 bg-white rounded-xl cursor-pointer hover:bg-green-50 transition-colors">
-              <div>
-                <div className="font-semibold">Allow reviews</div>
-                <div className="text-sm text-gray-600">Customers can leave reviews</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.allow_reviews}
-                onChange={(e) => setSettings({ ...settings, allow_reviews: e.target.checked })}
-                className="w-5 h-5 text-purple-600 rounded"
-              />
-            </label>
+          <label className="flex items-center justify-between cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+            <div>
+              <div className="font-medium">Allow messages</div>
+              <div className="text-sm text-gray-600">Customers can contact you directly</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.allow_messages}
+              onChange={(e) => setSettings({ ...settings, allow_messages: e.target.checked })}
+              className="w-5 h-5 text-purple-600 rounded"
+            />
+          </label>
+
+          <label className="flex items-center justify-between cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+            <div>
+              <div className="font-medium">Allow reviews</div>
+              <div className="text-sm text-gray-600">Customers can leave reviews</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.allow_reviews}
+              onChange={(e) => setSettings({ ...settings, allow_reviews: e.target.checked })}
+              className="w-5 h-5 text-purple-600 rounded"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="pt-4 border-t flex items-center justify-between">
+        {message && (
+          <div className={`
+            px-3 py-2 rounded-lg text-sm font-medium
+            ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}
+          `}>
+            {message}
           </div>
-        </div>
-
-        {/* Analytics */}
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200 shadow-md">
-          <h3 className="text-lg font-bold text-purple-900 mb-4">
-            📊 Profile Analytics
-          </h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl p-4 text-center">
-              <div className="text-3xl font-bold text-purple-600">
-                {settings.view_count || 0}
-              </div>
-              <div className="text-sm text-gray-600">Views</div>
-            </div>
-            <div className="bg-white rounded-xl p-4 text-center">
-              <div className="text-3xl font-bold text-purple-600">
-                {settings.rating_average ? `${settings.rating_average}⭐` : 'N/A'}
-              </div>
-              <div className="text-sm text-gray-600">Rating</div>
-            </div>
-            <div className="bg-white rounded-xl p-4 text-center">
-              <div className="text-3xl font-bold text-purple-600">
-                {settings.rating_count || 0}
-              </div>
-              <div className="text-sm text-gray-600">Reviews</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Save Button */}
-        <div className="flex justify-end pt-4">
-          <button
-            onClick={save}
-            disabled={saving}
-            className={`
-              px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg
-              ${saving
-                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transform hover:scale-105'
-              }
-            `}
-          >
-            {saving ? '✨ Saving...' : '💫 Save All Settings'}
-          </button>
-        </div>
+        )}
+        
+        <button
+          onClick={saveSettings}
+          disabled={saving}
+          className="ml-auto px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+        >
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
       </div>
     </div>
   );
