@@ -136,16 +136,21 @@ export default function ProfilePage() {
     loadProfile();
   }, [userId]);
 
-  // Load friends count
+  // Load friends count - FIXED to use correct column names
   useEffect(() => {
     if (!userId) return;
     (async () => {
       try {
+        // Using the correct column names: user_id and friend_id
         const { count } = await supabase
           .from("friendships")
-          .select("a", { count: "exact", head: true })
-          .or(`a.eq.${userId},b.eq.${userId}`);
-        if (typeof count === "number") setFriendsCount(count);
+          .select("*", { count: "exact", head: true })
+          .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+        
+        if (typeof count === "number") {
+          setFriendsCount(count);
+          console.log("Friends count loaded:", count); // Debug log
+        }
       } catch (err) {
         console.error("Error loading friends count:", err);
       }
