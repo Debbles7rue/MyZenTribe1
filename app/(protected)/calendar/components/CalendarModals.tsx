@@ -56,8 +56,9 @@ interface CalendarModalsProps {
   createCarpoolGroup: () => void;
   resetForm: () => void;
   
-  // Add showToast if not already present
+  // Add these if not already present
   showToast?: (toast: { type: string; message: string }) => void;
+  carpoolMatches?: any[];  // ADD THIS LINE
 }
 
 export default function CalendarModals({
@@ -102,7 +103,8 @@ export default function CalendarModals({
   createQuickItem,
   createCarpoolGroup,
   resetForm,
-  showToast
+  showToast,
+  carpoolMatches  // ADD THIS LINE
 }: CalendarModalsProps) {
   
   // State for pre/post events
@@ -269,7 +271,7 @@ export default function CalendarModals({
 
   // Prepare carpool data for EventCarpoolModal
   const carpoolData = {
-    carpoolMatches: [],
+    carpoolMatches: carpoolMatches || [],  // CHANGED THIS LINE - now uses the prop instead of empty array
     friends: friends || [],
     sendCarpoolInvite: async (matchId: string, message?: string) => {
       // Implement your carpool invite logic here
@@ -284,6 +286,7 @@ export default function CalendarModals({
     }
   };
 
+  // REST OF YOUR FILE REMAINS EXACTLY THE SAME FROM HERE...
   return (
     <>
       {/* Create Event Modal with Cover Photo and Pre/Post Events */}
