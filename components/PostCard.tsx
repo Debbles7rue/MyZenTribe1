@@ -247,10 +247,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   
   // Format the display name with co-creators
   const getDisplayName = () => {
-    // Try different possible field names
-    let name = post.author_name || post.user_name || post.full_name || 'User';
+    // Get name from the author object
+    let name = post.author?.full_name || 'User';
     if (post.co_creators && post.co_creators.length > 0) {
-      const coCreatorNames = post.co_creator_names || [];
+      const coCreatorNames = post.co_creators_info?.map(c => c.full_name).filter(Boolean) || [];
       if (coCreatorNames.length > 0) {
         name += ` with ${coCreatorNames.join(', ')}`;
       }
@@ -265,7 +265,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         <div className="post-header">
           <div className="author-info">
             <img 
-              src={post.author_avatar || '/default-avatar.png'} 
+              src={post.author?.avatar_url || '/default-avatar.png'} 
               alt=""
               className="author-avatar"
             />
