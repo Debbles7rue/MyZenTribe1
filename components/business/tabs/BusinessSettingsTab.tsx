@@ -70,7 +70,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
     try {
       const { data, error } = await supabase
         .from('business_profiles')
-        .select('visibility, discoverable, allow_messages, allow_reviews, notification_email, notification_preferences, enabled_tabs')
+        .select('visibility, enabled_tabs')  // Only select fields that exist
         .eq('id', businessId)
         .single();
 
@@ -82,11 +82,11 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
       if (data) {
         setSettings({
           visibility: data.visibility || 'public',
-          discoverable: data.discoverable !== false, // Default to true if null
-          allow_messages: data.allow_messages !== false, // Default to true if null
-          allow_reviews: data.allow_reviews !== false, // Default to true if null
-          notification_email: data.notification_email,
-          notification_preferences: data.notification_preferences || {
+          discoverable: true,  // Default since column doesn't exist
+          allow_messages: true,  // Default since column doesn't exist
+          allow_reviews: true,  // Default since column doesn't exist
+          notification_email: undefined,
+          notification_preferences: {
             new_message: true,
             new_review: true,
             new_follower: true,
@@ -109,26 +109,12 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
     setMessage('');
 
     try {
-      // Prepare update data - only include fields that exist in your database
+      // Only save fields that exist in your database
       const updateData: any = {
         visibility: settings.visibility,
+        enabled_tabs: tabConfig,
         updated_at: new Date().toISOString()
       };
-
-      // Only add these fields if they exist in your database schema
-      // Comment out any that don't exist
-      updateData.discoverable = settings.discoverable;
-      updateData.allow_messages = settings.allow_messages;
-      updateData.allow_reviews = settings.allow_reviews;
-      updateData.enabled_tabs = tabConfig;
-      
-      // Only add these if the columns exist
-      if (settings.notification_email) {
-        updateData.notification_email = settings.notification_email;
-      }
-      if (settings.notification_preferences) {
-        updateData.notification_preferences = settings.notification_preferences;
-      }
 
       console.log('Saving settings:', updateData);
 
@@ -141,34 +127,13 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
       if (error) {
         console.error('Save error:', error);
         setMessage(`Error: ${error.message}`);
-        
-        // If column doesn't exist error, try saving just the essential fields
-        if (error.message.includes('column') || error.code === '42703') {
-          console.log('Retrying with minimal fields...');
-          
-          const minimalUpdate = {
-            visibility: settings.visibility,
-            updated_at: new Date().toISOString()
-          };
-          
-          const { data: retryData, error: retryError } = await supabase
-            .from('business_profiles')
-            .update(minimalUpdate)
-            .eq('id', businessId)
-            .select();
-            
-          if (retryError) {
-            console.error('Retry error:', retryError);
-            setMessage(`Failed to save. Database error: ${retryError.message}`);
-          } else {
-            console.log('Minimal save successful:', retryData);
-            setMessage('Settings saved (visibility only)!');
-            setTimeout(() => setMessage(''), 3000);
-          }
-        }
       } else {
         console.log('Save successful:', data);
         setMessage('Settings saved successfully!');
+        
+        // Force reload the settings to confirm the save
+        await loadSettings();
+        
         if (onUpdateTabs) {
           onUpdateTabs(tabConfig);
         }
