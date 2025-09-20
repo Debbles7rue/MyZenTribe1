@@ -67,56 +67,119 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
   }, [enabledTabs]);
 
   async function loadSettings() {
-    const { data, error } = await supabase
-      .from('business_profiles')
-      .select('visibility, discoverable, allow_messages, allow_reviews, notification_email, notification_preferences, enabled_tabs')
-      .eq('id', businessId)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('business_profiles')
+        .select('visibility, discoverable, allow_messages, allow_reviews, notification_email, notification_preferences, enabled_tabs')
+        .eq('id', businessId)
+        .single();
 
-    if (data) {
-      setSettings({
-        visibility: data.visibility || 'public',
-        discoverable: data.discoverable ?? true,
-        allow_messages: data.allow_messages ?? true,
-        allow_reviews: data.allow_reviews ?? true,
-        notification_email: data.notification_email,
-        notification_preferences: data.notification_preferences || {
-          new_message: true,
-          new_review: true,
-          new_follower: true,
-        }
-      });
-      
-      if (data.enabled_tabs) {
-        setTabConfig(data.enabled_tabs);
+      if (error) {
+        console.error('Error loading settings:', error);
+        setMessage(`Error loading: ${error.message}`);
       }
+
+      if (data) {
+        setSettings({
+          visibility: data.visibility || 'public',
+          discoverable: data.discoverable !== false, // Default to true if null
+          allow_messages: data.allow_messages !== false, // Default to true if null
+          allow_reviews: data.allow_reviews !== false, // Default to true if null
+          notification_email: data.notification_email,
+          notification_preferences: data.notification_preferences || {
+            new_message: true,
+            new_review: true,
+            new_follower: true,
+          }
+        });
+        
+        if (data.enabled_tabs) {
+          setTabConfig(data.enabled_tabs);
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error loading settings:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function saveSettings() {
     setSaving(true);
     setMessage('');
 
-    const { error } = await supabase
-      .from('business_profiles')
-      .update({
-        ...settings,
-        enabled_tabs: tabConfig,
+    try {
+      // Prepare update data - only include fields that exist in your database
+      const updateData: any = {
+        visibility: settings.visibility,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', businessId);
+      };
 
-    if (error) {
-      setMessage('Error saving settings');
-    } else {
-      setMessage('Settings saved successfully!');
-      if (onUpdateTabs) {
-        onUpdateTabs(tabConfig);
+      // Only add these fields if they exist in your database schema
+      // Comment out any that don't exist
+      updateData.discoverable = settings.discoverable;
+      updateData.allow_messages = settings.allow_messages;
+      updateData.allow_reviews = settings.allow_reviews;
+      updateData.enabled_tabs = tabConfig;
+      
+      // Only add these if the columns exist
+      if (settings.notification_email) {
+        updateData.notification_email = settings.notification_email;
       }
-      setTimeout(() => setMessage(''), 3000);
+      if (settings.notification_preferences) {
+        updateData.notification_preferences = settings.notification_preferences;
+      }
+
+      console.log('Saving settings:', updateData);
+
+      const { data, error } = await supabase
+        .from('business_profiles')
+        .update(updateData)
+        .eq('id', businessId)
+        .select();
+
+      if (error) {
+        console.error('Save error:', error);
+        setMessage(`Error: ${error.message}`);
+        
+        // If column doesn't exist error, try saving just the essential fields
+        if (error.message.includes('column') || error.code === '42703') {
+          console.log('Retrying with minimal fields...');
+          
+          const minimalUpdate = {
+            visibility: settings.visibility,
+            updated_at: new Date().toISOString()
+          };
+          
+          const { data: retryData, error: retryError } = await supabase
+            .from('business_profiles')
+            .update(minimalUpdate)
+            .eq('id', businessId)
+            .select();
+            
+          if (retryError) {
+            console.error('Retry error:', retryError);
+            setMessage(`Failed to save. Database error: ${retryError.message}`);
+          } else {
+            console.log('Minimal save successful:', retryData);
+            setMessage('Settings saved (visibility only)!');
+            setTimeout(() => setMessage(''), 3000);
+          }
+        }
+      } else {
+        console.log('Save successful:', data);
+        setMessage('Settings saved successfully!');
+        if (onUpdateTabs) {
+          onUpdateTabs(tabConfig);
+        }
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (err) {
+      console.error('Unexpected save error:', err);
+      setMessage('Unexpected error occurred');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   const handleTabToggle = (tabId: keyof TabConfig) => {
@@ -146,6 +209,14 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
 
   return (
     <div className="space-y-6 max-w-3xl">
+      {/* Debug info - Remove this after fixing */}
+      <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-xs">
+        <p className="font-semibold">Debug Info:</p>
+        <p>Business ID: {businessId}</p>
+        <p>Current visibility: {settings.visibility}</p>
+        <p>Check console for detailed logs</p>
+      </div>
+
       {/* Tab Management Section */}
       <div className="space-y-4">
         <div>
@@ -229,7 +300,10 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
                 name="visibility"
                 value="public"
                 checked={settings.visibility === 'public'}
-                onChange={(e) => setSettings({ ...settings, visibility: 'public' })}
+                onChange={(e) => {
+                  console.log('Changing visibility to public');
+                  setSettings({ ...settings, visibility: 'public' });
+                }}
                 className="mt-1 text-purple-600"
               />
               <div>
@@ -244,7 +318,10 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
                 name="visibility"
                 value="unlisted"
                 checked={settings.visibility === 'unlisted'}
-                onChange={(e) => setSettings({ ...settings, visibility: 'unlisted' })}
+                onChange={(e) => {
+                  console.log('Changing visibility to unlisted');
+                  setSettings({ ...settings, visibility: 'unlisted' });
+                }}
                 className="mt-1 text-purple-600"
               />
               <div>
@@ -259,7 +336,10 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
                 name="visibility"
                 value="private"
                 checked={settings.visibility === 'private'}
-                onChange={(e) => setSettings({ ...settings, visibility: 'private' })}
+                onChange={(e) => {
+                  console.log('Changing visibility to private');
+                  setSettings({ ...settings, visibility: 'private' });
+                }}
                 className="mt-1 text-purple-600"
               />
               <div>
@@ -324,7 +404,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
         {message && (
           <div className={`
             px-3 py-2 rounded-lg text-sm font-medium
-            ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}
+            ${message.includes('Error') || message.includes('Failed') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}
           `}>
             {message}
           </div>
