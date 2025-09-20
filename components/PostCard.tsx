@@ -39,13 +39,16 @@ function PhotoGrid({
   // Different layouts based on photo count
   if (images.length === 1 && videos.length === 0) {
     // Single image - full width
+    const img = images[0];
+    if (!img || !img.url) return null;
+    
     return (
       <div className="photo-grid single">
         <div 
           className="photo-item"
           onClick={() => onPhotoClick(0)}
         >
-          <img src={images[0].url} alt="" />
+          <img src={img.url} alt="" />
         </div>
       </div>
     );
@@ -56,13 +59,15 @@ function PhotoGrid({
     return (
       <div className="photo-grid two">
         {images.map((img, idx) => (
-          <div 
-            key={idx}
-            className="photo-item"
-            onClick={() => onPhotoClick(idx)}
-          >
-            <img src={img.url} alt="" />
-          </div>
+          img && img.url ? (
+            <div 
+              key={idx}
+              className="photo-item"
+              onClick={() => onPhotoClick(idx)}
+            >
+              <img src={img.url} alt="" />
+            </div>
+          ) : null
         ))}
       </div>
     );
@@ -70,23 +75,28 @@ function PhotoGrid({
   
   if (images.length === 3) {
     // Three images - one big, two small
+    const mainImg = images[0];
+    if (!mainImg || !mainImg.url) return null;
+    
     return (
       <div className="photo-grid three">
         <div 
           className="photo-item main"
           onClick={() => onPhotoClick(0)}
         >
-          <img src={images[0].url} alt="" />
+          <img src={mainImg.url} alt="" />
         </div>
         <div className="side-photos">
           {images.slice(1, 3).map((img, idx) => (
-            <div 
-              key={idx}
-              className="photo-item"
-              onClick={() => onPhotoClick(idx + 1)}
-            >
-              <img src={img.url} alt="" />
-            </div>
+            img && img.url ? (
+              <div 
+                key={idx}
+                className="photo-item"
+                onClick={() => onPhotoClick(idx + 1)}
+              >
+                <img src={img.url} alt="" />
+              </div>
+            ) : null
           ))}
         </div>
       </div>
@@ -98,19 +108,25 @@ function PhotoGrid({
     return (
       <div className="photo-grid four">
         {images.map((img, idx) => (
-          <div 
-            key={idx}
-            className="photo-item"
-            onClick={() => onPhotoClick(idx)}
-          >
-            <img src={img.url} alt="" />
-          </div>
+          img && img.url ? (
+            <div 
+              key={idx}
+              className="photo-item"
+              onClick={() => onPhotoClick(idx)}
+            >
+              <img src={img.url} alt="" />
+            </div>
+          ) : null
         ))}
       </div>
     );
   }
   
   // 5 or more images
+  const firstImg = images[0];
+  const secondImg = images[1];
+  if (!firstImg || !firstImg.url || !secondImg || !secondImg.url) return null;
+  
   return (
     <div className="photo-grid many">
       <div className="main-row">
@@ -118,29 +134,31 @@ function PhotoGrid({
           className="photo-item large"
           onClick={() => onPhotoClick(0)}
         >
-          <img src={images[0].url} alt="" />
+          <img src={firstImg.url} alt="" />
         </div>
         <div 
           className="photo-item large"
           onClick={() => onPhotoClick(1)}
         >
-          <img src={images[1].url} alt="" />
+          <img src={secondImg.url} alt="" />
         </div>
       </div>
       <div className="bottom-row">
         {images.slice(2, 5).map((img, idx) => (
-          <div 
-            key={idx}
-            className="photo-item"
-            onClick={() => onPhotoClick(idx + 2)}
-          >
-            <img src={img.url} alt="" />
-            {idx === 2 && images.length > 5 && (
-              <div className="more-overlay">
-                <span>+{images.length - 5}</span>
-              </div>
-            )}
-          </div>
+          img && img.url ? (
+            <div 
+              key={idx}
+              className="photo-item"
+              onClick={() => onPhotoClick(idx + 2)}
+            >
+              <img src={img.url} alt="" />
+              {idx === 2 && images.length > 5 && (
+                <div className="more-overlay">
+                  <span>+{images.length - 5}</span>
+                </div>
+              )}
+            </div>
+          ) : null
         ))}
       </div>
       
@@ -148,9 +166,11 @@ function PhotoGrid({
       {videos.length > 0 && (
         <div className="videos-row">
           {videos.map((vid, idx) => (
-            <div key={idx} className="video-item">
-              <video src={vid.url} controls />
-            </div>
+            vid && vid.url ? (
+              <div key={idx} className="video-item">
+                <video src={vid.url} controls />
+              </div>
+            ) : null
           ))}
         </div>
       )}
@@ -168,8 +188,20 @@ function PhotoLightbox({
   startIndex: number;
   onClose: () => void;
 }) {
+  // Ensure media is valid
+  if (!media || !Array.isArray(media) || media.length === 0) {
+    onClose();
+    return null;
+  }
+  
   const [currentIndex, setCurrentIndex] = useState(startIndex);
-  const images = media.filter(m => m.type === 'image');
+  const images = media.filter(m => m && m.type === 'image');
+  
+  // Ensure we have images to display
+  if (!images || images.length === 0) {
+    onClose();
+    return null;
+  }
   
   const goNext = () => {
     setCurrentIndex((prev) => (prev + 1) % images.length);
@@ -195,6 +227,15 @@ function PhotoLightbox({
     };
   }, []);
   
+  // Ensure currentIndex is valid
+  const safeIndex = Math.min(currentIndex, images.length - 1);
+  const currentImage = images[safeIndex];
+  
+  if (!currentImage || !currentImage.url) {
+    onClose();
+    return null;
+  }
+  
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
@@ -207,11 +248,11 @@ function PhotoLightbox({
           </>
         )}
         
-        <img src={images[currentIndex].url} alt="" />
+        <img src={currentImage.url} alt="" />
         
         {images.length > 1 && (
           <div className="lightbox-counter">
-            {currentIndex + 1} / {images.length}
+            {safeIndex + 1} / {images.length}
           </div>
         )}
         
@@ -219,13 +260,15 @@ function PhotoLightbox({
         {images.length > 1 && (
           <div className="lightbox-thumbnails">
             {images.map((img, idx) => (
-              <div
-                key={idx}
-                className={`thumbnail ${idx === currentIndex ? 'active' : ''}`}
-                onClick={() => setCurrentIndex(idx)}
-              >
-                <img src={img.url} alt="" />
-              </div>
+              img && img.url ? (
+                <div
+                  key={idx}
+                  className={`thumbnail ${idx === safeIndex ? 'active' : ''}`}
+                  onClick={() => setCurrentIndex(idx)}
+                >
+                  <img src={img.url} alt="" />
+                </div>
+              ) : null
             ))}
           </div>
         )}
@@ -364,8 +407,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const mediaToDisplay = processedMedia;
   
   const handlePhotoClick = (index: number) => {
-    setLightboxStartIndex(index);
-    setShowLightbox(true);
+    // Only show lightbox if we have media
+    if (mediaToDisplay && mediaToDisplay.length > 0) {
+      setLightboxStartIndex(index);
+      setShowLightbox(true);
+    }
   };
   
   const canEdit = currentUserId === post.user_id || isCoCreator;
