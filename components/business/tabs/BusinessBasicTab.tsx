@@ -29,12 +29,6 @@ const BUSINESS_CATEGORIES = [
   'Nutrition', 'Holistic Health', 'Alternative Medicine', 'Other'
 ];
 
-const LANGUAGES = [
-  'English', 'Spanish', 'French', 'German', 'Italian', 
-  'Portuguese', 'Chinese', 'Japanese', 'Korean', 'Hindi',
-  'Arabic', 'Russian', 'Dutch', 'Swedish', 'Polish'
-];
-
 export default function BusinessBasicTab({ businessId }: { businessId: string }) {
   const [data, setData] = useState({
     display_name: '',
@@ -44,7 +38,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
     cover_url: '',
     bio: '',
     categories: [] as string[],
-    languages: [] as string[],
     community_guidelines: '',
   });
   const [loading, setLoading] = useState(true);
@@ -68,7 +61,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           cover_url: biz.cover_url || '',
           bio: biz.bio || '',
           categories: biz.categories || [],
-          languages: biz.languages || ['English'],
           community_guidelines: biz.community_guidelines || '',
         });
       }
@@ -91,7 +83,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         cover_url: data.cover_url,
         bio: data.bio,
         categories: data.categories,
-        languages: data.languages,
         community_guidelines: data.community_guidelines,
         updated_at: new Date().toISOString()
       })
@@ -365,70 +356,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
                 </div>
               </div>
             </details>
-          </div>
-
-          {/* Languages Card */}
-          <div className="bg-gradient-to-br from-cyan-50 to-sky-50 rounded-2xl p-6 border border-cyan-200 shadow-md">
-            <h3 className="text-lg font-semibold text-cyan-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🌍</span> Languages Spoken
-            </h3>
-            
-            <div className="mb-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add languages you speak..."
-                  className="flex-1 px-4 py-3 border-2 border-cyan-300 rounded-xl focus:ring-4 focus:ring-cyan-200 focus:border-cyan-500 transition-all bg-white text-base"
-                  style={{ fontSize: '16px' }}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const input = e.target as HTMLInputElement;
-                      const value = input.value.trim();
-                      if (value && !data.languages.includes(value)) {
-                        setData({ ...data, languages: [...data.languages, value] });
-                        input.value = '';
-                      }
-                    }
-                  }}
-                  id="language-input"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const input = document.getElementById('language-input') as HTMLInputElement;
-                    const value = input.value.trim();
-                    if (value && !data.languages.includes(value)) {
-                      setData({ ...data, languages: [...data.languages, value] });
-                      input.value = '';
-                    }
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl hover:from-cyan-600 hover:to-blue-600 transition-all font-semibold shadow-lg"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-
-            {data.languages.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {data.languages.map((lang, index) => (
-                  <div
-                    key={index}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-400 to-blue-400 text-white rounded-full shadow-md"
-                  >
-                    <span className="text-sm">{lang}</span>
-                    <button
-                      type="button"
-                      onClick={() => setData({ ...data, languages: data.languages.filter(l => l !== lang) })}
-                      className="hover:bg-white/20 rounded-full p-0.5 transition-colors text-sm"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Community Guidelines Card */}
