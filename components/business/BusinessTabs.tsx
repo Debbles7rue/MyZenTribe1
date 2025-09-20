@@ -158,9 +158,9 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
           {/* Tabs container with horizontal scroll */}
           <div 
             ref={tabsContainerRef}
-            className="flex overflow-x-auto scrollbar-hide px-2 py-1"
+            className="flex overflow-x-auto px-2 py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             onScroll={checkScrollPosition}
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
           >
             <nav className="flex space-x-1">
               {visibleTabs.map(tab => (
@@ -289,10 +289,3 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
     </div>
   );
 }
-
-<style jsx>{`
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-`}</style>
