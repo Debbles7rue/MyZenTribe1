@@ -400,22 +400,12 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Sacred Candles Widget - Wrapped in Suspense */}
+      {/* Sacred Candles Widget - ONLY ONE, COLLAPSIBLE */}
       {componentsReady && userId && (
         <Suspense fallback={null}>
           <LazyProfileCandleWidget userId={userId} isOwner={true} />
         </Suspense>
       )}
-
-      {/* Sacred Candles Card */}
-      <div className="card candles-card">
-        <div className="candles-icon">🕯️</div>
-        <h3 className="candles-title">My Sacred Candles</h3>
-        <p className="candles-description">View your eternal memorials and prayer candles</p>
-        <Link href="/profile/candles" className="btn btn-candles">
-          View My Candles ✨
-        </Link>
-      </div>
 
       {/* Post Composer and Posts Feed Section */}
       {userId && (
@@ -783,64 +773,6 @@ export default function ProfilePage() {
 
         .save-button {
           margin-top: 0.5rem;
-        }
-
-        .candles-card {
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(254,243,199,0.1));
-          border: 1px solid rgba(245,158,11,0.2);
-          text-align: center;
-          transition: all 0.3s ease;
-        }
-
-        .candles-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(245,158,11,0.15);
-          background: linear-gradient(135deg, rgba(255,255,255,1), rgba(254,243,199,0.15));
-        }
-
-        .candles-icon {
-          font-size: 2rem;
-          margin-bottom: 0.5rem;
-          animation: flicker 2s ease-in-out infinite;
-        }
-
-        @keyframes flicker {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.05); }
-        }
-
-        .candles-title {
-          margin: 0 0 0.5rem 0;
-          color: #78350f;
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-
-        .candles-description {
-          margin: 0 0 1rem 0;
-          color: #92400e;
-          opacity: 0.8;
-          font-size: 0.875rem;
-        }
-
-        .btn-candles {
-          background: linear-gradient(135deg, #f59e0b, #d97706);
-          color: white;
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.5rem;
-          font-weight: 500;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          text-decoration: none;
-          font-size: 16px;
-          border: none;
-        }
-
-        .btn-candles:hover {
-          background: linear-gradient(135deg, #d97706, #b45309);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(245,158,11,0.3);
         }
 
         .posts-section {
