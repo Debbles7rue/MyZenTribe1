@@ -247,7 +247,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   
   // Format the display name with co-creators
   const getDisplayName = () => {
-    let name = post.author_name || 'User';
+    // Try different possible field names
+    let name = post.author_name || post.user_name || post.full_name || 'User';
     if (post.co_creators && post.co_creators.length > 0) {
       const coCreatorNames = post.co_creator_names || [];
       if (coCreatorNames.length > 0) {
