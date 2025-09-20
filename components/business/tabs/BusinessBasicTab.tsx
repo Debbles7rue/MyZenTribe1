@@ -45,7 +45,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
     bio: '',
     categories: [] as string[],
     languages: [] as string[],
-    price_range: '$$',
     community_guidelines: '',
   });
   const [loading, setLoading] = useState(true);
@@ -70,7 +69,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           bio: biz.bio || '',
           categories: biz.categories || [],
           languages: biz.languages || ['English'],
-          price_range: biz.price_range || '$$',
           community_guidelines: biz.community_guidelines || '',
         });
       }
@@ -94,15 +92,15 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         bio: data.bio,
         categories: data.categories,
         languages: data.languages,
-        price_range: data.price_range,
         community_guidelines: data.community_guidelines,
+        updated_at: new Date().toISOString()
       })
       .eq('id', businessId);
     
     if (error) {
-      setMessage('❌ Error: ' + error.message);
+      setMessage('Error: ' + error.message);
     } else {
-      setMessage('✨ Saved successfully!');
+      setMessage('Saved successfully!');
       setTimeout(() => setMessage(''), 3000);
     }
     setSaving(false);
@@ -120,7 +118,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
   }
 
   return (
-    <div className="max-w-4xl mx-auto -mt-6 -mx-6">
+    <div className="max-w-4xl mx-auto -mt-6 -mx-6 relative pb-24">
       {/* Beautiful Gradient Header */}
       <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 p-8 text-white">
         <h2 className="text-3xl font-bold">✨ Basic Information</h2>
@@ -433,40 +431,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             )}
           </div>
 
-          {/* Price Range Card */}
-          <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl p-6 border border-rose-200 shadow-md">
-            <h3 className="text-lg font-semibold text-rose-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">💰</span> Price Range
-            </h3>
-            <div className="flex gap-2">
-              {['$', '$$', '$$$', '$$$$'].map(range => (
-                <button
-                  key={range}
-                  type="button"
-                  onClick={() => setData({ ...data, price_range: range })}
-                  className={`
-                    px-6 py-4 rounded-xl font-bold text-lg transition-all flex-1 shadow-md
-                    ${data.price_range === range
-                      ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white transform scale-105'
-                      : 'bg-white text-rose-600 hover:bg-rose-100 border-2 border-rose-200'
-                    }
-                  `}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 text-xs text-rose-600 text-center">
-              <span className="font-semibold">$ </span>Budget-friendly
-              <span className="mx-2">•</span>
-              <span className="font-semibold">$$ </span>Moderate
-              <span className="mx-2">•</span>
-              <span className="font-semibold">$$$ </span>Premium
-              <span className="mx-2">•</span>
-              <span className="font-semibold">$$$$ </span>Luxury
-            </div>
-          </div>
-
           {/* Community Guidelines Card */}
           <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-6 border border-violet-200 shadow-md">
             <h3 className="text-lg font-semibold text-violet-900 mb-4 flex items-center gap-2">
@@ -486,35 +450,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             </p>
           </div>
 
-        </div>
-
-        {/* Save Button - Colorful */}
-        <div className="mt-8 bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl p-6 border border-purple-200">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-sm font-semibold text-purple-900">
-                {data.display_name && data.handle 
-                  ? '✅ Looking great! Ready to save' 
-                  : '📝 Business name and handle required'}
-              </p>
-              <p className="text-xs text-purple-600 mt-1">
-                Make sure everything looks perfect before saving
-              </p>
-            </div>
-            <button
-              onClick={save}
-              disabled={saving || !data.display_name || !data.handle}
-              className={`
-                px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg
-                ${saving || !data.display_name || !data.handle
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transform hover:scale-105'
-                }
-              `}
-            >
-              {saving ? '✨ Saving...' : '💫 Save Changes'}
-            </button>
-          </div>
         </div>
 
         {/* Fun Stats */}
@@ -539,6 +474,35 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             <div className="text-2xl font-bold">0%</div>
             <div className="text-xs opacity-90">Complete</div>
           </div>
+        </div>
+      </div>
+
+      {/* Save Button - Fixed/Sticky at Bottom */}
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-purple-100 to-pink-100 border-t border-purple-200 p-4 sm:p-6 z-50 shadow-2xl">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-center sm:text-left">
+            <p className="text-sm font-semibold text-purple-900">
+              {data.display_name && data.handle 
+                ? '✅ Looking great! Ready to save' 
+                : '📝 Business name and handle required'}
+            </p>
+            <p className="text-xs text-purple-600 mt-1">
+              Make sure everything looks perfect before saving
+            </p>
+          </div>
+          <button
+            onClick={save}
+            disabled={saving || !data.display_name || !data.handle}
+            className={`
+              w-full sm:w-auto px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg transition-all shadow-lg
+              ${saving || !data.display_name || !data.handle
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transform hover:scale-105'
+              }
+            `}
+          >
+            {saving ? '✨ Saving...' : '💫 Save Changes'}
+          </button>
         </div>
       </div>
     </div>
