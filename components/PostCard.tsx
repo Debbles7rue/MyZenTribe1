@@ -20,10 +20,12 @@ function PhotoGrid({
   media: Array<{url: string; type: 'image' | 'video'}>;
   onPhotoClick: (index: number) => void;
 }) {
-  const images = media.filter(m => m.type === 'image');
-  const videos = media.filter(m => m.type === 'video');
+  // Filter out any invalid media items
+  const validMedia = media.filter(m => m && m.url && m.type);
+  const images = validMedia.filter(m => m.type === 'image');
+  const videos = validMedia.filter(m => m.type === 'video');
   
-  if (media.length === 0) return null;
+  if (validMedia.length === 0) return null;
   
   // Different layouts based on photo count
   if (images.length === 1 && videos.length === 0) {
@@ -230,12 +232,16 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [showEditModal, setShowEditModal] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
   
-  // Build media array from all sources
+  // Build media array from all sources with null checks
   const allMedia = [];
-  if (post.image_url) allMedia.push({ url: post.image_url, type: 'image' });
-  if (post.video_url) allMedia.push({ url: post.video_url, type: 'video' });
-  if (post.additional_media) allMedia.push(...post.additional_media);
-  const mediaToDisplay = allMedia.length > 0 ? allMedia : post.media;
+  if (post.image_url) allMedia.push({ url: post.image_url, type: 'image' as const });
+  if (post.video_url) allMedia.push({ url: post.video_url, type: 'video' as const });
+  if (post.additional_media && Array.isArray(post.additional_media)) {
+    // Filter out any undefined/null items
+    const validMedia = post.additional_media.filter(m => m && m.url);
+    allMedia.push(...validMedia);
+  }
+  const mediaToDisplay = allMedia.length > 0 ? allMedia : (post.media || []);
   
   // Check if current user is a co-creator
   useEffect(() => {
