@@ -8,10 +8,13 @@ import BusinessDetailsTab from './tabs/BusinessDetailsTab';
 import BusinessGalleryTab from './tabs/BusinessGalleryTab';
 import BusinessStoreTab from './tabs/BusinessStoreTab';
 import BusinessSettingsTab from './tabs/BusinessSettingsTab';
+import BusinessCalendar from './BusinessCalendar';
+import UnifiedEventCreator from '@/components/events/UnifiedEventCreator';
 
 const allTabs = [
   { id: 'basic', label: 'Basic Info', icon: '📝', color: 'purple', required: true },
   { id: 'details', label: 'Details', icon: '📋', color: 'blue', required: true },
+  { id: 'calendar', label: 'Calendar', icon: '📅', color: 'green' }, // NEW TAB
   { id: 'store', label: 'Store', icon: '🛍️', color: 'rose' },
   { id: 'gallery', label: 'Gallery', icon: '📸', color: 'pink' },
   { id: 'settings', label: 'Settings', icon: '⚙️', color: 'gray', required: true },
@@ -21,24 +24,38 @@ interface Props {
   businessId: string;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isOwner?: boolean; // Add this to know if current user owns this business
+  currentUserId?: string; // Current logged-in user ID
 }
 
 interface TabConfig {
   details?: boolean;
+  calendar?: boolean; // Add calendar to config
   store?: boolean;
   gallery?: boolean;
 }
 
-export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Props) {
+export default function BusinessTabs({ 
+  businessId, 
+  activeTab, 
+  setActiveTab,
+  isOwner = false,
+  currentUserId
+}: Props) {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [enabledTabs, setEnabledTabs] = useState<TabConfig>({
-    hours: true,
-    services: true,
+    details: true,
+    calendar: true, // Enable calendar by default
     store: true,
     gallery: true,
-    social: true,
   });
   const [loading, setLoading] = useState(true);
+  
+  // Calendar-specific state
+  const [showEventCreator, setShowEventCreator] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<any>(null);
+  const [selectedService, setSelectedService] = useState<any>(null);
 
   // Load tab configuration from database
   useEffect(() => {
@@ -135,18 +152,69 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
       .eq('id', businessId);
   };
 
+  // Handle appointment booking
+  const handleBookAppointment = async (slot: any, service: any) => {
+    if (!currentUserId) {
+      alert('Please log in to book an appointment');
+      return;
+    }
+    
+    setSelectedTimeSlot(slot);
+    setSelectedService(service);
+    setShowBookingModal(true);
+    
+    // Here you would implement the actual booking logic
+    try {
+      const { bookAppointment } = await import('@/lib/appointmentManager');
+      const result = await bookAppointment({
+        business_id: businessId,
+        service_id: service.id,
+        start_time: slot.start.toISOString(),
+        customer_notes: ''
+      }, currentUserId);
+      
+      if (result.appointment) {
+        alert('Appointment booked successfully!');
+        setShowBookingModal(false);
+      } else {
+        alert('Failed to book appointment');
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      alert('Error booking appointment');
+    }
+  };
+
+  // Handle RSVP to event
+  const handleRSVPEvent = async (event: any) => {
+    if (!currentUserId) {
+      alert('Please log in to RSVP');
+      return;
+    }
+    
+    try {
+      const { rsvpToEvent } = await import('@/lib/eventManager');
+      const result = await rsvpToEvent(event.id, currentUserId, 'going');
+      
+      if (result.success) {
+        alert('RSVP successful!');
+      } else {
+        alert('Failed to RSVP');
+      }
+    } catch (error) {
+      console.error('RSVP error:', error);
+      alert('Error with RSVP');
+    }
+  };
+
   // Don't show loading state - render with defaults immediately
   if (loading) {
-    // Still render but with all default tabs while loading
-    const defaultTabs = allTabs;
-    const defaultActiveTab = defaultTabs.find(t => t.id === activeTab);
-    
     return (
       <div className="bg-gray-50 rounded-xl shadow-sm overflow-hidden">
         <div className="bg-white border-b border-gray-200">
           <div className="relative">
             <nav className="hidden sm:flex p-1 bg-gray-50">
-              {defaultTabs.map(tab => (
+              {allTabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -161,30 +229,6 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
                 </button>
               ))}
             </nav>
-            <div className="sm:hidden overflow-x-auto scrollbar-hide">
-              <nav className="flex p-2 gap-2 min-w-max">
-                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-purple-50 text-purple-700 border-purple-300 shadow-md scale-105">
-                  <span className="text-xl">📝</span>
-                  <span>Basic Info</span>
-                </button>
-                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
-                  <span className="text-xl">📋</span>
-                  <span>Details</span>
-                </button>
-                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
-                  <span className="text-xl">🛍️</span>
-                  <span>Store</span>
-                </button>
-                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
-                  <span className="text-xl">📸</span>
-                  <span>Gallery</span>
-                </button>
-                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
-                  <span className="text-xl">⚙️</span>
-                  <span>Settings</span>
-                </button>
-              </nav>
-            </div>
           </div>
         </div>
         <div className="bg-white p-6">
@@ -267,18 +311,31 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
           <div className="border-b border-gray-100 px-6 py-4">
             <div className="flex items-center gap-3">
               <span className="text-2xl">{activeTabData.icon}</span>
-              <div>
+              <div className="flex-1">
                 <h3 className="text-lg font-semibold text-gray-900">
                   {activeTabData.label}
                 </h3>
                 <p className="text-sm text-gray-500">
                   {activeTab === 'basic' && 'Manage your business profile information'}
                   {activeTab === 'details' && 'Contact, services, hours, and social links'}
+                  {activeTab === 'calendar' && 'Events, appointments, and booking management'}
                   {activeTab === 'store' && 'Showcase products with external purchase links'}
                   {activeTab === 'gallery' && 'Showcase your work and space'}
                   {activeTab === 'settings' && 'Privacy and visibility settings'}
                 </p>
               </div>
+              
+              {/* Add Event Button - Only show on calendar tab for owners */}
+              {activeTab === 'calendar' && isOwner && (
+                <button
+                  onClick={() => setShowEventCreator(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all font-medium flex items-center gap-2 shadow-lg"
+                >
+                  <span>+</span>
+                  <span className="hidden sm:inline">Create Event</span>
+                  <span className="sm:hidden">Event</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -287,6 +344,15 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
         <div className="p-6">
           {activeTab === 'basic' && <BusinessBasicTab businessId={businessId} />}
           {activeTab === 'details' && <BusinessDetailsTab businessId={businessId} />}
+          {activeTab === 'calendar' && (
+            <BusinessCalendar 
+              businessId={businessId}
+              userId={currentUserId}
+              isOwner={isOwner}
+              onBookAppointment={handleBookAppointment}
+              onRSVPEvent={handleRSVPEvent}
+            />
+          )}
           {activeTab === 'store' && <BusinessStoreTab businessId={businessId} />}
           {activeTab === 'gallery' && <BusinessGalleryTab businessId={businessId} />}
           {activeTab === 'settings' && (
@@ -298,6 +364,79 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
           )}
         </div>
       </div>
+
+      {/* Event Creator Modal */}
+      {showEventCreator && (
+        <UnifiedEventCreator
+          open={showEventCreator}
+          onClose={() => setShowEventCreator(false)}
+          userId={businessId}
+          context="business"
+          businessId={businessId}
+          onSuccess={(event) => {
+            console.log('Event created:', event);
+            setShowEventCreator(false);
+            // You might want to refresh the calendar here
+          }}
+        />
+      )}
+
+      {/* Booking Confirmation Modal (Simple version - you can enhance this) */}
+      {showBookingModal && selectedTimeSlot && selectedService && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Confirm Booking</h3>
+            <div className="space-y-3 mb-6">
+              <div>
+                <span className="text-sm text-gray-600">Service:</span>
+                <p className="font-medium">{selectedService.service_name}</p>
+              </div>
+              <div>
+                <span className="text-sm text-gray-600">Time:</span>
+                <p className="font-medium">
+                  {selectedTimeSlot.start.toLocaleString()} - {selectedTimeSlot.end.toLocaleTimeString()}
+                </p>
+              </div>
+              {selectedService.price && (
+                <div>
+                  <span className="text-sm text-gray-600">Price:</span>
+                  <p className="font-medium">${selectedService.price}</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes (optional)
+              </label>
+              <textarea
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                rows={3}
+                placeholder="Any special requests or information..."
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBookingModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Booking logic is handled in handleBookAppointment
+                  alert('Booking confirmed!');
+                  setShowBookingModal(false);
+                }}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Confirm Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
