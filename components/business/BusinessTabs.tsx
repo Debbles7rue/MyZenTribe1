@@ -4,22 +4,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import BusinessBasicTab from './tabs/BusinessBasicTab';
-import BusinessContactTab from './tabs/BusinessContactTab';
-import BusinessHoursTab from './tabs/BusinessHoursTab';
+import BusinessDetailsTab from './tabs/BusinessDetailsTab';
 import BusinessGalleryTab from './tabs/BusinessGalleryTab';
-import BusinessSocialTab from './tabs/BusinessSocialTab';
-import BusinessServicesTab from './tabs/BusinessServicesTab';
 import BusinessStoreTab from './tabs/BusinessStoreTab';
 import BusinessSettingsTab from './tabs/BusinessSettingsTab';
 
 const allTabs = [
   { id: 'basic', label: 'Basic Info', icon: '📝', color: 'purple', required: true },
-  { id: 'contact', label: 'Contact', icon: '📞', color: 'blue', required: true },
-  { id: 'hours', label: 'Hours', icon: '🕐', color: 'green' },
-  { id: 'services', label: 'Services', icon: '💼', color: 'amber' },
+  { id: 'details', label: 'Details', icon: '📋', color: 'blue', required: true },
   { id: 'store', label: 'Store', icon: '🛍️', color: 'rose' },
   { id: 'gallery', label: 'Gallery', icon: '📸', color: 'pink' },
-  { id: 'social', label: 'Social', icon: '🔗', color: 'indigo' },
   { id: 'settings', label: 'Settings', icon: '⚙️', color: 'gray', required: true },
 ];
 
@@ -30,11 +24,9 @@ interface Props {
 }
 
 interface TabConfig {
-  hours?: boolean;
-  services?: boolean;
+  details?: boolean;
   store?: boolean;
   gallery?: boolean;
-  social?: boolean;
 }
 
 export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Props) {
@@ -171,21 +163,26 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
             </nav>
             <div className="sm:hidden overflow-x-auto scrollbar-hide">
               <nav className="flex p-2 gap-2 min-w-max">
-                {defaultTabs.map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`
-                      flex flex-col items-center gap-1 px-4 py-3 rounded-lg
-                      font-medium text-xs min-w-[80px] transition-all border
-                      ${getColorClasses(activeTab === tab.id, tab.color)}
-                      ${activeTab === tab.id ? 'shadow-md scale-105' : ''}
-                    `}
-                  >
-                    <span className="text-xl">{tab.icon}</span>
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
+                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-purple-50 text-purple-700 border-purple-300 shadow-md scale-105">
+                  <span className="text-xl">📝</span>
+                  <span>Basic Info</span>
+                </button>
+                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
+                  <span className="text-xl">📋</span>
+                  <span>Details</span>
+                </button>
+                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
+                  <span className="text-xl">🛍️</span>
+                  <span>Store</span>
+                </button>
+                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
+                  <span className="text-xl">📸</span>
+                  <span>Gallery</span>
+                </button>
+                <button className="flex flex-col items-center gap-1 px-4 py-3 rounded-lg font-medium text-xs min-w-[80px] transition-all border bg-white text-gray-600 hover:bg-gray-50 border-gray-200">
+                  <span className="text-xl">⚙️</span>
+                  <span>Settings</span>
+                </button>
               </nav>
             </div>
           </div>
@@ -276,12 +273,9 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
                 </h3>
                 <p className="text-sm text-gray-500">
                   {activeTab === 'basic' && 'Manage your business profile information'}
-                  {activeTab === 'contact' && 'Set up how customers can reach you'}
-                  {activeTab === 'hours' && 'Configure your business hours'}
-                  {activeTab === 'services' && 'List your services and offerings'}
+                  {activeTab === 'details' && 'Contact, services, hours, and social links'}
                   {activeTab === 'store' && 'Showcase products with external purchase links'}
                   {activeTab === 'gallery' && 'Showcase your work and space'}
-                  {activeTab === 'social' && 'Connect your social media accounts'}
                   {activeTab === 'settings' && 'Privacy and visibility settings'}
                 </p>
               </div>
@@ -292,12 +286,9 @@ export default function BusinessTabs({ businessId, activeTab, setActiveTab }: Pr
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === 'basic' && <BusinessBasicTab businessId={businessId} />}
-          {activeTab === 'contact' && <BusinessContactTab businessId={businessId} />}
-          {activeTab === 'hours' && <BusinessHoursTab businessId={businessId} />}
-          {activeTab === 'services' && <BusinessServicesTab businessId={businessId} />}
+          {activeTab === 'details' && <BusinessDetailsTab businessId={businessId} />}
           {activeTab === 'store' && <BusinessStoreTab businessId={businessId} />}
           {activeTab === 'gallery' && <BusinessGalleryTab businessId={businessId} />}
-          {activeTab === 'social' && <BusinessSocialTab businessId={businessId} />}
           {activeTab === 'settings' && (
             <BusinessSettingsTab 
               businessId={businessId}
