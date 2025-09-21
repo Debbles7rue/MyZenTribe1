@@ -11,6 +11,7 @@ interface User {
   avatar_url: string | null;
   location_text: string | null;
   bio: string | null;
+  email: string | null;
 }
 
 interface FriendStatus {
@@ -25,6 +26,7 @@ export default function FindFriendsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [friendStatuses, setFriendStatuses] = useState<FriendStatus>({});
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -44,17 +46,45 @@ export default function FindFriendsPage() {
 
     setSearching(true);
     setLoading(true);
+    setSearchError(null);
 
     try {
-      // Search for users by name (case-insensitive)
+      // First, get the user's own email to exclude from results
+      const { data: currentUserProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', currentUserId)
+        .single();
+
+      // Search for users by name OR email (case-insensitive)
+      // Using OR to search both full_name and email fields
       const { data: users, error } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, location_text, bio')
-        .ilike('full_name', `%${searchQuery}%`)
-        .neq('id', currentUserId) // Don't show current user
+        .select('id, full_name, avatar_url, location_text, bio, email')
+        .or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
+        .neq('id', currentUserId)
         .limit(20);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Search error:', error);
+        setSearchError('Search failed. Please try again.');
+        setSearchResults([]);
+        return;
+      }
+
+      // If no results, try to check if any users exist at all (for debugging)
+      if (!users || users.length === 0) {
+        console.log('No users found for query:', searchQuery);
+        
+        // Let's also try a simpler query to debug
+        const { data: allProfiles, error: allError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .neq('id', currentUserId)
+          .limit(5);
+        
+        console.log('Sample profiles in database:', allProfiles);
+      }
 
       setSearchResults(users || []);
 
@@ -114,6 +144,7 @@ export default function FindFriendsPage() {
       }
     } catch (error) {
       console.error('Search error:', error);
+      setSearchError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -136,9 +167,13 @@ export default function FindFriendsPage() {
           ...prev,
           [userId]: 'sent'
         }));
+      } else if (error.code === '23505') {
+        // Duplicate key - request already exists
+        alert('Friend request already sent!');
       }
     } catch (error) {
       console.error('Error sending friend request:', error);
+      alert('Failed to send friend request. Please try again.');
     }
   }
 
@@ -163,7 +198,7 @@ export default function FindFriendsPage() {
           friend_id: userId
         });
 
-      if (!friendshipError) {
+      if (!friendshipError || friendshipError.code === '23505') {
         setFriendStatuses(prev => ({
           ...prev,
           [userId]: 'friend'
@@ -171,6 +206,7 @@ export default function FindFriendsPage() {
       }
     } catch (error) {
       console.error('Error accepting friend request:', error);
+      alert('Failed to accept friend request. Please try again.');
     }
   }
 
@@ -193,16 +229,16 @@ export default function FindFriendsPage() {
             Find Friends
           </h1>
           <p className="text-gray-600">
-            Search for people by name to connect with them
+            Search for people by name or email to connect with them
           </p>
         </div>
 
         {/* Search Bar */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
-              placeholder="Search by name..."
+              placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -211,15 +247,18 @@ export default function FindFriendsPage() {
             <button
               onClick={handleSearch}
               disabled={!searchQuery.trim() || loading}
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full sm:w-auto"
             >
               {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
+          {searchError && (
+            <p className="mt-2 text-sm text-red-600">{searchError}</p>
+          )}
         </div>
 
         {/* Search Results */}
-        {searching && !loading && searchResults.length === 0 && (
+        {searching && !loading && searchResults.length === 0 && !searchError && (
           <div className="bg-white rounded-xl shadow-sm p-8 text-center">
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -227,91 +266,108 @@ export default function FindFriendsPage() {
             <h3 className="text-lg font-semibold text-gray-700 mb-2">
               No results found
             </h3>
-            <p className="text-gray-500">
-              Try searching with a different name
+            <p className="text-gray-500 mb-2">
+              No users found matching "{searchQuery}"
+            </p>
+            <p className="text-gray-400 text-sm">
+              Try searching with a different name or email address
             </p>
           </div>
         )}
 
         {searchResults.length > 0 && (
           <div className="space-y-4">
-            {searchResults.map(user => (
-              <div
-                key={user.id}
-                className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start gap-4">
-                  {/* Avatar */}
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
-                    {user.avatar_url ? (
-                      <img
-                        src={user.avatar_url}
-                        alt={user.full_name || 'User'}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span>{user.full_name?.charAt(0) || '?'}</span>
-                    )}
-                  </div>
+            {searchResults.map(user => {
+              // Display name with fallback to email
+              const displayName = user.full_name || user.email?.split('@')[0] || 'Anonymous User';
+              const showEmail = user.email && (!user.full_name || user.full_name !== displayName);
 
-                  {/* User Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900">
-                      {user.full_name || 'Anonymous User'}
-                    </h3>
-                    
-                    {user.location_text && (
-                      <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span>{user.location_text}</span>
+              return (
+                <div
+                  key={user.id}
+                  className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    {/* Avatar */}
+                    <div className="flex items-center sm:block">
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
+                        {user.avatar_url ? (
+                          <img
+                            src={user.avatar_url}
+                            alt={displayName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span>{displayName.charAt(0).toUpperCase()}</span>
+                        )}
                       </div>
-                    )}
+                    </div>
 
-                    {user.bio && (
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                        {user.bio}
-                      </p>
-                    )}
-                  </div>
+                    {/* User Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900">
+                        {displayName}
+                      </h3>
+                      
+                      {showEmail && (
+                        <div className="text-sm text-gray-600 mt-0.5">
+                          {user.email}
+                        </div>
+                      )}
+                      
+                      {user.location_text && (
+                        <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="truncate">{user.location_text}</span>
+                        </div>
+                      )}
 
-                  {/* Action Button */}
-                  <div className="flex-shrink-0">
-                    {friendStatuses[user.id] === 'friend' ? (
-                      <button
-                        onClick={() => router.push(`/profile/${user.id}`)}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                      >
-                        View Profile
-                      </button>
-                    ) : friendStatuses[user.id] === 'sent' ? (
-                      <button
-                        disabled
-                        className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
-                      >
-                        Request Sent
-                      </button>
-                    ) : friendStatuses[user.id] === 'pending' ? (
-                      <button
-                        onClick={() => acceptFriendRequest(user.id)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        Accept Request
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => sendFriendRequest(user.id)}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                      >
-                        Add Friend
-                      </button>
-                    )}
+                      {user.bio && (
+                        <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                          {user.bio}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Action Button - Mobile Responsive */}
+                    <div className="w-full sm:w-auto">
+                      {friendStatuses[user.id] === 'friend' ? (
+                        <button
+                          onClick={() => router.push(`/profile/${user.id}`)}
+                          className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          View Profile
+                        </button>
+                      ) : friendStatuses[user.id] === 'sent' ? (
+                        <button
+                          disabled
+                          className="w-full px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
+                        >
+                          Request Sent
+                        </button>
+                      ) : friendStatuses[user.id] === 'pending' ? (
+                        <button
+                          onClick={() => acceptFriendRequest(user.id)}
+                          className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          Accept Request
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => sendFriendRequest(user.id)}
+                          className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                        >
+                          Add Friend
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -325,7 +381,7 @@ export default function FindFriendsPage() {
               Find People You Know
             </h3>
             <p className="text-gray-500">
-              Enter a name above to search for friends
+              Enter a name or email above to search for friends
             </p>
           </div>
         )}
