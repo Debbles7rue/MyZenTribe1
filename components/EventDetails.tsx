@@ -1,12 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EventDetails.tsx - Updated with Pre/Post Events and Comments</title>
-</head>
-<body>
-<pre><code>// components/EventDetails.tsx
+// components/EventDetails.tsx
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -64,7 +56,7 @@ export default function EventDetails({
   const [isSendingComment, setIsSendingComment] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Fetch RSVP data
+  // Fetch RSVP data and comments
   useEffect(() => {
     if (event && event.allows_rsvp) {
       fetchRSVPData();
@@ -509,6 +501,27 @@ export default function EventDetails({
                       })() : 'Not specified'}
                     </span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Duration:</span>
+                    <span className="font-medium">
+                      {(() => {
+                        try {
+                          const start = new Date(event.start_time);
+                          const end = new Date(event.end_time);
+                          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                            const minutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+                            if (minutes < 60) return `${minutes} minutes`;
+                            const hours = Math.floor(minutes / 60);
+                            const mins = minutes % 60;
+                            return mins > 0 ? `${hours}h ${mins}m` : `${hours} hour${hours !== 1 ? 's' : ''}`;
+                          }
+                        } catch {
+                          // Fallback if date parsing fails
+                        }
+                        return 'N/A';
+                      })()}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -543,6 +556,18 @@ export default function EventDetails({
                   </div>
                 </div>
               )}
+
+              {/* Visibility */}
+              <div>
+                <h3 className="font-semibold text-gray-700 mb-2">Visibility</h3>
+                <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm">
+                  <span>
+                    {event.visibility === 'private' && '🔒 Private'}
+                    {event.visibility === 'friends' && '👥 Friends'}
+                    {event.visibility === 'everyone' && '🌍 Everyone'}
+                  </span>
+                </div>
+              </div>
 
               {/* Comments Section */}
               <div className="border-t pt-6">
@@ -756,6 +781,3 @@ export default function EventDetails({
   // Portal render to document.body
   return ReactDOM.createPortal(modalContent, document.body);
 }
-</code></pre>
-</body>
-</html>
