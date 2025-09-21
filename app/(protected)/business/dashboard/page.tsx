@@ -139,7 +139,9 @@ export default function BusinessDashboardPage() {
             <BusinessTabs 
               businessId={businessId} 
               activeTab={activeTab} 
-              setActiveTab={setActiveTab} 
+              setActiveTab={setActiveTab}
+              isOwner={true}  // Always true since this is their own dashboard
+              currentUserId={userId}  // Pass the user ID for calendar functionality
             />
           </div>
         </div>
