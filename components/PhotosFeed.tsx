@@ -1,3 +1,4 @@
+// components/PhotosFeed.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -16,6 +17,10 @@ type Post = {
   user_id: string;
   user_name?: string;
   user_avatar?: string;
+  profile_type?: 'personal' | 'business';
+  business_id?: string | null;
+  business_name?: string;
+  business_logo?: string;
   image_path: string;
   caption: string | null;
   description: string | null;
@@ -46,6 +51,8 @@ interface PhotosFeedProps {
   viewerUserId?: string | null; // Current logged-in user
   isPublicView?: boolean; // True when viewing someone else's profile
   relationshipType?: RelationshipType; // Relationship between viewer and profile owner
+  profileType?: 'personal' | 'business'; // NEW: Type of profile
+  businessId?: string | null; // NEW: Business ID if business profile
 }
 
 const VISIBILITY_OPTIONS = [
@@ -55,11 +62,18 @@ const VISIBILITY_OPTIONS = [
   { value: "public", label: "Public (Everyone)", icon: "🌍" },
 ] as const;
 
+const BUSINESS_VISIBILITY_OPTIONS = [
+  { value: "private", label: "Private (Only us)", icon: "🔒" },
+  { value: "public", label: "Public (All Followers)", icon: "🌍" },
+] as const;
+
 export default function PhotosFeed({ 
   userId, 
   viewerUserId, 
   isPublicView = false,
-  relationshipType = 'none' 
+  relationshipType = 'none',
+  profileType = 'personal',
+  businessId = null
 }: PhotosFeedProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({});
@@ -84,12 +98,17 @@ export default function PhotosFeed({
   const [likeCounts, setLikeCounts] = useState<{ [postId: string]: number }>({});
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
 
-  // Determine if current user can post (only on their own profile)
+  // Determine if current user can post
   const canPost = useMemo(() => {
+    if (profileType === 'business') {
+      // For business profiles, check if viewer is the owner
+      return !isPublicView && userId && userId === viewerUserId && businessId;
+    }
+    // For personal profiles, same as before
     return !isPublicView && userId && userId === viewerUserId;
-  }, [userId, viewerUserId, isPublicView]);
+  }, [userId, viewerUserId, isPublicView, profileType, businessId]);
 
-  // Check if user can edit a post (creator OR accepted collaborator)
+  // Check if user can edit a post
   const canEditPost = (post: Post) => {
     if (!viewerUserId) return false;
     
@@ -127,6 +146,11 @@ export default function PhotosFeed({
       return posts;
     }
 
+    // For business profiles, different logic
+    if (profileType === 'business') {
+      return posts.filter(post => post.visibility === 'public');
+    }
+
     return posts.filter(post => {
       switch (post.visibility) {
         case 'public':
@@ -144,38 +168,73 @@ export default function PhotosFeed({
   };
 
   async function listPosts() {
-    if (!userId) return setPosts([]);
+    if (!userId && !businessId) return setPosts([]);
 
     try {
-      // Get posts where user is creator
-      const { data: createdPosts, error: createdError } = await supabase
-        .from("photo_posts")
-        .select(`
-          id, user_id, image_path, caption, description, 
-          visibility, created_at, updated_at
-        `)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+      let query;
+      let allPosts: any[] = [];
 
-      if (createdError) throw createdError;
+      if (profileType === 'business' && businessId) {
+        // Get business posts from new posts table
+        const { data: businessPosts, error: bizError } = await supabase
+          .from("posts")
+          .select(`
+            id, user_id, business_id, profile_type, image_paths,
+            caption, description, visibility, tags,
+            created_at, updated_at
+          `)
+          .eq("business_id", businessId)
+          .eq("profile_type", "business")
+          .order("created_at", { ascending: false });
 
-      // Get posts where user is a collaborator
-      const { data: collabPosts, error: collabError } = await supabase
-        .from("photo_posts")
-        .select(`
-          id, user_id, image_path, caption, description, 
-          visibility, created_at, updated_at
-        `)
-        .in("id", 
-          await supabase
-            .from("photo_tags")
-            .select("post_id")
-            .eq("tagged_user_id", userId)
-            .then(res => res.data?.map(r => r.post_id) || [])
-        );
+        if (bizError) throw bizError;
 
-      // Combine and deduplicate posts
-      const allPosts = [...(createdPosts || []), ...(collabPosts || [])];
+        // Get business info
+        const { data: bizInfo } = await supabase
+          .from("profiles")
+          .select("business_name, business_logo_url")
+          .eq("id", userId)
+          .single();
+
+        // Process business posts
+        allPosts = (businessPosts || []).map(post => ({
+          ...post,
+          image_path: post.image_paths?.[0] || '',
+          business_name: bizInfo?.business_name || 'Business',
+          business_logo: bizInfo?.business_logo_url
+        }));
+      } else {
+        // Get personal posts (existing logic)
+        const { data: createdPosts, error: createdError } = await supabase
+          .from("photo_posts")
+          .select(`
+            id, user_id, image_path, caption, description, 
+            visibility, created_at, updated_at
+          `)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+
+        if (createdError) throw createdError;
+
+        // Get posts where user is a collaborator
+        const { data: collabPosts, error: collabError } = await supabase
+          .from("photo_posts")
+          .select(`
+            id, user_id, image_path, caption, description, 
+            visibility, created_at, updated_at
+          `)
+          .in("id", 
+            await supabase
+              .from("photo_tags")
+              .select("post_id")
+              .eq("tagged_user_id", userId)
+              .then(res => res.data?.map(r => r.post_id) || [])
+          );
+
+        // Combine and deduplicate posts
+        allPosts = [...(createdPosts || []), ...(collabPosts || [])];
+      }
+
       const uniquePosts = Array.from(new Map(allPosts.map(p => [p.id, p])).values());
 
       const items = await Promise.all(uniquePosts.map(async (r) => {
@@ -187,9 +246,18 @@ export default function PhotosFeed({
           .single();
 
         // Get main image URL
-        const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_path);
+        let mainImageUrl = '';
+        if (r.image_paths && r.image_paths.length > 0) {
+          // For new posts table with image_paths array
+          const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_paths[0]);
+          mainImageUrl = pub.publicUrl;
+        } else if (r.image_path) {
+          // For old photo_posts table
+          const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_path);
+          mainImageUrl = pub.publicUrl;
+        }
         
-        // Get additional media files if they exist
+        // Get additional media files
         const { data: mediaFiles } = await supabase
           .from("post_media")
           .select("id, storage_path, media_type")
@@ -255,7 +323,10 @@ export default function PhotosFeed({
           ...r,
           user_name: creator?.full_name || "User",
           user_avatar: creator?.avatar_url,
-          url: pub.publicUrl,
+          profile_type: r.profile_type || 'personal',
+          business_name: r.business_name,
+          business_logo: r.business_logo,
+          url: mainImageUrl,
           tags: taggedUsers,
           media_files: processedMedia.length > 0 ? processedMedia : undefined,
           collaborators
@@ -321,7 +392,7 @@ export default function PhotosFeed({
     }
   }
 
-  // Handle MULTIPLE file uploads
+  // Handle MULTIPLE file uploads with unlimited support
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0 || !userId || !canPost) return;
@@ -330,47 +401,30 @@ export default function PhotosFeed({
     setUploadProgress(0);
     
     try {
-      // Create the post first
-      const postData = {
-        user_id: userId,
-        image_path: "", // Will update with first image
-        caption: caption.trim() || null,
-        description: description.trim() || null,
-        visibility,
-      };
+      let postId: string;
+      let firstPath: string = "";
 
-      // Upload first file and create post
-      const firstFile = files[0];
-      const firstFilename = `${Date.now()}-0-${firstFile.name}`;
-      const firstPath = `${userId}/${firstFilename}`;
+      // Different handling for business vs personal posts
+      if (profileType === 'business' && businessId) {
+        // Create business post in new posts table
+        const postData = {
+          user_id: userId,
+          business_id: businessId,
+          profile_type: 'business' as const,
+          image_paths: [] as string[],
+          caption: caption.trim() || null,
+          description: description.trim() || null,
+          visibility: visibility as any,
+          tags: tags.split(",").map(s => s.trim()).filter(Boolean)
+        };
 
-      const firstUpload = await supabase.storage
-        .from("event-photos")
-        .upload(firstPath, firstFile, {
-          cacheControl: "3600",
-          upsert: false,
-        });
-      
-      if (firstUpload.error) throw firstUpload.error;
-
-      // Create post with first image
-      postData.image_path = firstPath;
-      const ins = await supabase
-        .from("photo_posts")
-        .insert(postData)
-        .select()
-        .single();
-      
-      if (ins.error) throw ins.error;
-
-      // Upload remaining files and add to post_media table
-      if (files.length > 1) {
-        for (let i = 1; i < files.length; i++) {
-          setUploadProgress(Math.round((i / files.length) * 100));
+        // Upload all files
+        for (let i = 0; i < files.length; i++) {
+          setUploadProgress(Math.round(((i + 1) / files.length) * 100));
           
           const file = files[i];
           const filename = `${Date.now()}-${i}-${file.name}`;
-          const path = `${userId}/${filename}`;
+          const path = `business/${businessId}/${filename}`;
 
           const upload = await supabase.storage
             .from("event-photos")
@@ -378,43 +432,112 @@ export default function PhotosFeed({
               cacheControl: "3600",
               upsert: false,
             });
+          
+          if (upload.error) throw upload.error;
+          postData.image_paths.push(path);
+          if (i === 0) firstPath = path;
+        }
 
-          if (!upload.error) {
-            // Add to post_media table
-            await supabase.from("post_media").insert({
-              post_id: ins.data.id,
-              storage_path: path,
-              media_type: file.type.startsWith('video') ? 'video' : 'image',
-              sort_order: i
-            });
+        // Create post with all image paths
+        const { data: newPost, error } = await supabase
+          .from("posts")
+          .insert(postData)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        postId = newPost.id;
+      } else {
+        // Personal post (use existing photo_posts table)
+        const postData = {
+          user_id: userId,
+          image_path: "", // Will update with first image
+          caption: caption.trim() || null,
+          description: description.trim() || null,
+          visibility,
+        };
+
+        // Upload first file and create post
+        const firstFile = files[0];
+        const firstFilename = `${Date.now()}-0-${firstFile.name}`;
+        firstPath = `${userId}/${firstFilename}`;
+
+        const firstUpload = await supabase.storage
+          .from("event-photos")
+          .upload(firstPath, firstFile, {
+            cacheControl: "3600",
+            upsert: false,
+          });
+        
+        if (firstUpload.error) throw firstUpload.error;
+
+        // Create post with first image
+        postData.image_path = firstPath;
+        const ins = await supabase
+          .from("photo_posts")
+          .insert(postData)
+          .select()
+          .single();
+        
+        if (ins.error) throw ins.error;
+        postId = ins.data.id;
+
+        // Upload remaining files to post_media table
+        if (files.length > 1) {
+          for (let i = 1; i < files.length; i++) {
+            setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+            
+            const file = files[i];
+            const filename = `${Date.now()}-${i}-${file.name}`;
+            const path = `${userId}/${filename}`;
+
+            const upload = await supabase.storage
+              .from("event-photos")
+              .upload(path, file, {
+                cacheControl: "3600",
+                upsert: false,
+              });
+
+            if (!upload.error) {
+              // Add to post_media table
+              await supabase.from("post_media").insert({
+                post_id: postId,
+                storage_path: path,
+                media_type: file.type.startsWith('video') ? 'video' : 'image',
+                sort_order: i,
+                uploaded_by: userId
+              });
+            }
           }
         }
-      }
 
-      // Handle tags - now with edit permissions for collaborators
-      const tagEmails = tags.split(",").map(s => s.trim()).filter(Boolean);
-      if (tagEmails.length) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id")
-          .in("full_name", tagEmails);
-        
-        if (profiles?.length) {
-          const tagRows = profiles.map(p => ({ 
-            post_id: ins.data.id, 
-            tagged_user_id: p.id,
-            can_edit: true // Allow tagged users to edit
-          }));
-          await supabase.from("photo_tags").insert(tagRows);
+        // Handle tags for personal posts
+        if (profileType === 'personal') {
+          const tagEmails = tags.split(",").map(s => s.trim()).filter(Boolean);
+          if (tagEmails.length) {
+            const { data: profiles } = await supabase
+              .from("profiles")
+              .select("id")
+              .in("full_name", tagEmails);
+            
+            if (profiles?.length) {
+              const tagRows = profiles.map(p => ({ 
+                post_id: postId, 
+                tagged_user_id: p.id,
+                can_edit: true // Allow tagged users to edit
+              }));
+              await supabase.from("photo_tags").insert(tagRows);
 
-          // Send notifications to tagged users
-          const notifications = profiles.map(p => ({
-            user_id: p.id,
-            type: 'photo_tag',
-            message: `You've been tagged in a photo post. You can add your own photos!`,
-            post_id: ins.data.id
-          }));
-          await supabase.from("notifications").insert(notifications);
+              // Send notifications to tagged users
+              const notifications = profiles.map(p => ({
+                user_id: p.id,
+                type: 'photo_tag',
+                message: `You've been tagged in a photo post. You can add your own photos!`,
+                post_id: postId
+              }));
+              await supabase.from("notifications").insert(notifications);
+            }
+          }
         }
       }
 
@@ -422,7 +545,7 @@ export default function PhotosFeed({
       setCaption("");
       setDescription("");
       setTags("");
-      setVisibility("friends");
+      setVisibility(profileType === 'business' ? 'public' : 'friends');
       setSelectedFiles(null);
       setUploadProgress(0);
       
@@ -438,7 +561,7 @@ export default function PhotosFeed({
     }
   }
 
-  // Edit post with ability to add more media
+  // Edit post with ability to add more media (unlimited)
   async function saveEdit() {
     if (!editingPostId) return;
 
@@ -446,27 +569,45 @@ export default function PhotosFeed({
       const post = posts.find(p => p.id === editingPostId);
       if (!post) return;
 
-      // Update post details
-      const { error } = await supabase
-        .from("photo_posts")
-        .update({
-          caption: editCaption.trim() || null,
-          description: editDescription.trim() || null,
-          visibility: editVisibility,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", editingPostId);
+      // Different handling for business vs personal posts
+      if (post.profile_type === 'business') {
+        // Update business post
+        const { error } = await supabase
+          .from("posts")
+          .update({
+            caption: editCaption.trim() || null,
+            description: editDescription.trim() || null,
+            visibility: editVisibility,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", editingPostId);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Update personal post
+        const { error } = await supabase
+          .from("photo_posts")
+          .update({
+            caption: editCaption.trim() || null,
+            description: editDescription.trim() || null,
+            visibility: editVisibility,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", editingPostId);
 
-      // Upload new files if any
+        if (error) throw error;
+      }
+
+      // Upload new files if any (unlimited)
       if (editFiles && editFiles.length > 0) {
         const existingMediaCount = post.media_files?.length || 0;
         
         for (let i = 0; i < editFiles.length; i++) {
           const file = editFiles[i];
           const filename = `${Date.now()}-${existingMediaCount + i}-${file.name}`;
-          const path = `${userId}/${filename}`;
+          const path = post.profile_type === 'business' && businessId
+            ? `business/${businessId}/${filename}`
+            : `${userId}/${filename}`;
 
           const upload = await supabase.storage
             .from("event-photos")
@@ -480,29 +621,32 @@ export default function PhotosFeed({
               post_id: editingPostId,
               storage_path: path,
               media_type: file.type.startsWith('video') ? 'video' : 'image',
-              sort_order: existingMediaCount + i
+              sort_order: existingMediaCount + i,
+              uploaded_by: viewerUserId
             });
           }
         }
       }
 
-      // Update tags
-      await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
-      
-      const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
-      if (tagNames.length) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id")
-          .in("full_name", tagNames);
+      // Update tags for personal posts only
+      if (post.profile_type !== 'business') {
+        await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
         
-        if (profiles?.length) {
-          const tagRows = profiles.map(p => ({ 
-            post_id: editingPostId, 
-            tagged_user_id: p.id,
-            can_edit: true
-          }));
-          await supabase.from("photo_tags").insert(tagRows);
+        const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
+        if (tagNames.length) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id")
+            .in("full_name", tagNames);
+          
+          if (profiles?.length) {
+            const tagRows = profiles.map(p => ({ 
+              post_id: editingPostId, 
+              tagged_user_id: p.id,
+              can_edit: true
+            }));
+            await supabase.from("photo_tags").insert(tagRows);
+          }
         }
       }
 
@@ -516,7 +660,10 @@ export default function PhotosFeed({
     }
   }
 
-  // Delete post with proper cleanup
+  // All other existing functions remain the same...
+  // (deletePost, removeMedia, toggleLike, startEdit, handleCommentSubmit, 
+  // respondToCollabInvite, renderPostMedia - keeping all your original functionality)
+
   async function deletePost(postId: string) {
     if (!confirm("Delete this post? This cannot be undone.")) return;
 
@@ -527,29 +674,35 @@ export default function PhotosFeed({
       
       // Delete media files from storage
       if (post) {
-        // Delete main image
-        if (post.image_path) {
-          await supabase.storage
-            .from("event-photos")
-            .remove([post.image_path]);
+        // Delete main image(s)
+        if (post.profile_type === 'business' && (post as any).image_paths) {
+          const paths = (post as any).image_paths;
+          await supabase.storage.from("event-photos").remove(paths);
+        } else if (post.image_path) {
+          await supabase.storage.from("event-photos").remove([post.image_path]);
         }
         
         // Delete additional media
         if (post.media_files && post.media_files.length > 0) {
           const paths = post.media_files.map(m => m.path);
-          await supabase.storage
-            .from("event-photos")
-            .remove(paths);
+          await supabase.storage.from("event-photos").remove(paths);
         }
       }
 
-      // Delete from database (cascades to related tables)
-      const { error } = await supabase
-        .from("photo_posts")
-        .delete()
-        .eq("id", postId);
-
-      if (error) throw error;
+      // Delete from appropriate table
+      if (post?.profile_type === 'business') {
+        const { error } = await supabase
+          .from("posts")
+          .delete()
+          .eq("id", postId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("photo_posts")
+          .delete()
+          .eq("id", postId);
+        if (error) throw error;
+      }
 
       showMessage("success", "Post deleted successfully");
       await listPosts();
@@ -561,7 +714,6 @@ export default function PhotosFeed({
     }
   }
 
-  // Remove single media item
   async function removeMedia(postId: string, mediaId: string, mediaPath: string) {
     if (!confirm("Remove this photo/video?")) return;
 
@@ -644,7 +796,6 @@ export default function PhotosFeed({
     }
   }
 
-  // Respond to collaboration invite
   async function respondToCollabInvite(postId: string, accept: boolean) {
     if (!viewerUserId) return;
 
@@ -653,7 +804,7 @@ export default function PhotosFeed({
         // Update tag to allow editing
         await supabase
           .from("photo_tags")
-          .update({ can_edit: true })
+          .update({ can_edit: true, status: 'accepted' })
           .eq("post_id", postId)
           .eq("tagged_user_id", viewerUserId);
       } else {
@@ -672,12 +823,25 @@ export default function PhotosFeed({
     }
   }
 
-  // Render post media with support for multiple files
+  // Render post media with support for unlimited files
   const renderPostMedia = (post: Post) => {
     const allMedia: MediaFile[] = [];
     
-    // Add main image
-    if (post.url) {
+    // Add main image(s)
+    if (post.profile_type === 'business' && (post as any).image_paths) {
+      // Business posts may have multiple images in image_paths
+      const paths = (post as any).image_paths;
+      paths.forEach((path: string, idx: number) => {
+        const { data } = supabase.storage.from("event-photos").getPublicUrl(path);
+        allMedia.push({
+          id: `main-${idx}`,
+          url: data.publicUrl,
+          path: path,
+          type: 'image'
+        });
+      });
+    } else if (post.url) {
+      // Personal posts with single main image
       allMedia.push({
         id: 'main',
         url: post.url,
@@ -706,12 +870,15 @@ export default function PhotosFeed({
                   src={media.url} 
                   controls
                   className="post-media"
+                  playsInline
+                  preload="metadata"
                 />
               ) : (
                 <img 
                   src={media.url} 
                   alt=""
                   className="post-media"
+                  loading="lazy"
                   onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
                 />
               )}
@@ -760,15 +927,18 @@ export default function PhotosFeed({
 
   useEffect(() => { 
     listPosts(); 
-  }, [userId, viewerUserId, relationshipType]);
+  }, [userId, viewerUserId, relationshipType, profileType, businessId]);
+
+  // Get appropriate visibility options
+  const visibilityOptions = profileType === 'business' ? BUSINESS_VISIBILITY_OPTIONS : VISIBILITY_OPTIONS;
 
   return (
     <section className="photos-feed">
-      {/* Only show title and upload on own profile */}
+      {/* Keep ALL your existing JSX and styles - just updating the creator info display */}
       {!isPublicView && (
         <>
           <h2 className="feed-title">
-            Photos & Memories
+            {profileType === 'business' ? 'Business Posts' : 'Photos & Memories'}
           </h2>
 
           {/* Message Toast */}
@@ -788,7 +958,7 @@ export default function PhotosFeed({
                     className="form-input" 
                     value={caption} 
                     onChange={(e) => setCaption(e.target.value.slice(0, 100))} 
-                    placeholder="Share this moment..." 
+                    placeholder={profileType === 'business' ? "What's new with your business..." : "Share this moment..."} 
                     maxLength={100}
                   />
                   <span className="char-count">{caption.length}/100</span>
@@ -800,22 +970,24 @@ export default function PhotosFeed({
                     className="form-textarea" 
                     value={description} 
                     onChange={(e) => setDescription(e.target.value.slice(0, 500))} 
-                    placeholder="Tell the story..."
+                    placeholder={profileType === 'business' ? "Tell your followers more..." : "Tell the story..."}
                     rows={2}
                     maxLength={500}
                   />
                   <span className="char-count">{description.length}/500</span>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Tag Friends (they can add photos too!)</label>
-                  <input 
-                    className="form-input" 
-                    value={tags} 
-                    onChange={(e) => setTags(e.target.value)} 
-                    placeholder="Names separated by commas" 
-                  />
-                </div>
+                {profileType === 'personal' && (
+                  <div className="form-group">
+                    <label className="form-label">Tag Friends (they can add photos too!)</label>
+                    <input 
+                      className="form-input" 
+                      value={tags} 
+                      onChange={(e) => setTags(e.target.value)} 
+                      placeholder="Names separated by commas" 
+                    />
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label className="form-label">Visibility</label>
@@ -824,7 +996,7 @@ export default function PhotosFeed({
                     value={visibility} 
                     onChange={(e) => setVisibility(e.target.value as any)}
                   >
-                    {VISIBILITY_OPTIONS.map(v => (
+                    {visibilityOptions.map(v => (
                       <option key={v.value} value={v.value}>
                         {v.icon} {v.label}
                       </option>
@@ -836,7 +1008,7 @@ export default function PhotosFeed({
                 {selectedFiles && selectedFiles.length > 0 && (
                   <div className="selected-files">
                     <span className="files-count">
-                      {selectedFiles.length} file(s) selected
+                      {selectedFiles.length} file(s) selected - NO LIMIT! 🎉
                     </span>
                   </div>
                 )}
@@ -853,7 +1025,7 @@ export default function PhotosFeed({
                     }}
                     disabled={uploading}
                   />
-                  {uploading ? `Uploading... ${uploadProgress}%` : "📸 Upload Photos/Videos"}
+                  {uploading ? `Uploading... ${uploadProgress}%` : "📸 Upload Photos/Videos (Unlimited!)"}
                 </label>
 
                 {/* Upload progress bar */}
@@ -871,7 +1043,7 @@ export default function PhotosFeed({
         </>
       )}
 
-      {/* Posts Grid */}
+      {/* Posts Grid - with business profile support */}
       <div className="posts-grid">
         {posts.map(post => {
           const isCollabInvite = post.tags.some(t => t.id === viewerUserId) && 
@@ -930,18 +1102,20 @@ export default function PhotosFeed({
                       placeholder="Description"
                       rows={2}
                     />
-                    <input
-                      className="edit-input"
-                      value={editTags}
-                      onChange={(e) => setEditTags(e.target.value)}
-                      placeholder="Tags"
-                    />
+                    {post.profile_type !== 'business' && (
+                      <input
+                        className="edit-input"
+                        value={editTags}
+                        onChange={(e) => setEditTags(e.target.value)}
+                        placeholder="Tags"
+                      />
+                    )}
                     <select
                       className="edit-select"
                       value={editVisibility}
                       onChange={(e) => setEditVisibility(e.target.value as any)}
                     >
-                      {VISIBILITY_OPTIONS.map(v => (
+                      {(post.profile_type === 'business' ? BUSINESS_VISIBILITY_OPTIONS : VISIBILITY_OPTIONS).map(v => (
                         <option key={v.value} value={v.value}>
                           {v.icon} {v.label}
                         </option>
@@ -957,7 +1131,7 @@ export default function PhotosFeed({
                         className="file-input"
                         onChange={(e) => setEditFiles(e.target.files)}
                       />
-                      + Add More Photos/Videos
+                      + Add More Photos/Videos (No Limit!)
                     </label>
                     {editFiles && editFiles.length > 0 && (
                       <span className="edit-files-count">
@@ -987,18 +1161,36 @@ export default function PhotosFeed({
                 ) : (
                   /* View Mode */
                   <>
-                    {/* Creator info with clickable link */}
+                    {/* Creator info - NOW WITH BUSINESS SUPPORT! */}
                     <div className="post-creator">
-                      <Link href={`/profile/${post.user_id}`} className="creator-link">
-                        {post.user_avatar && (
-                          <img 
-                            src={post.user_avatar} 
-                            alt={post.user_name}
-                            className="creator-avatar"
-                          />
-                        )}
-                        <span className="creator-name">{post.user_name}</span>
-                      </Link>
+                      {post.profile_type === 'business' ? (
+                        <>
+                          {post.business_logo && (
+                            <img 
+                              src={post.business_logo} 
+                              alt={post.business_name}
+                              className="creator-avatar business-logo"
+                            />
+                          )}
+                          <Link href={`/business/${post.business_id}`} className="creator-link business-link">
+                            <span className="creator-name">{post.business_name || 'Business'}</span>
+                          </Link>
+                          <span className="business-badge">Business</span>
+                        </>
+                      ) : (
+                        <>
+                          <Link href={`/profile/${post.user_id}`} className="creator-link">
+                            {post.user_avatar && (
+                              <img 
+                                src={post.user_avatar} 
+                                alt={post.user_name}
+                                className="creator-avatar"
+                              />
+                            )}
+                            <span className="creator-name">{post.user_name}</span>
+                          </Link>
+                        </>
+                      )}
                       
                       {/* Show collaborators */}
                       {post.tags.filter(t => t.can_edit).length > 0 && (
@@ -1033,8 +1225,8 @@ export default function PhotosFeed({
                       </button>
                     )}
                     
-                    {/* Tags with clickable profile links */}
-                    {post.tags.filter(t => !t.can_edit).length > 0 && (
+                    {/* Tags with clickable profile links - not for business posts */}
+                    {post.profile_type !== 'business' && post.tags.filter(t => !t.can_edit).length > 0 && (
                       <div className="post-tags">
                         <span className="tag-label">Also tagged:</span>
                         {post.tags.filter(t => !t.can_edit).map((tag, idx) => (
@@ -1055,7 +1247,7 @@ export default function PhotosFeed({
                     <div className="post-meta">
                       <div className="meta-left">
                         <span className="visibility-badge">
-                          {VISIBILITY_OPTIONS.find(v => v.value === post.visibility)?.icon}
+                          {visibilityOptions.find(v => v.value === post.visibility)?.icon}
                         </span>
                         <span className="like-count">
                           {likeCounts[post.id] || 0} likes
@@ -1087,7 +1279,7 @@ export default function PhotosFeed({
                       )}
                     </div>
 
-                    {/* Comments Section */}
+                    {/* Comments Section - Keep all your existing comment code */}
                     <div className="comments-section">
                       <h4 className="comments-title">Comments</h4>
                       
@@ -1152,13 +1344,17 @@ export default function PhotosFeed({
           {isPublicView && relationshipType === 'none' ? (
             <>
               <p className="empty-title">No public photos</p>
-              <p className="empty-subtitle">Connect as friends to see more content</p>
+              <p className="empty-subtitle">
+                {profileType === 'business' ? 'Follow this business to see updates' : 'Connect as friends to see more content'}
+              </p>
             </>
           ) : (
             <>
               <p className="empty-title">No photos yet</p>
               <p className="empty-subtitle">
-                {canPost ? "Share your first memory!" : "Check back later for updates"}
+                {canPost ? 
+                  (profileType === 'business' ? "Share your business updates!" : "Share your first memory!") 
+                  : "Check back later for updates"}
               </p>
             </>
           )}
@@ -1166,6 +1362,32 @@ export default function PhotosFeed({
       )}
 
       <style jsx>{`
+        /* ALL YOUR EXISTING STYLES REMAIN - just adding business-specific styles */
+        
+        .business-link {
+          color: #7c3aed;
+          font-weight: 600;
+        }
+
+        .business-logo {
+          width: 2rem;
+          height: 2rem;
+          border-radius: 0.25rem;
+          object-fit: cover;
+        }
+
+        .business-badge {
+          background: linear-gradient(135deg, #7c3aed, #a855f7);
+          color: white;
+          font-size: 0.625rem;
+          padding: 0.125rem 0.5rem;
+          border-radius: 0.25rem;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+
+        /* Keep ALL your existing styles below - they're perfect! */
+        
         .photos-feed {
           position: relative;
         }
@@ -1336,687 +1558,4 @@ export default function PhotosFeed({
         }
 
         /* Posts Grid */
-        .posts-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-          .posts-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-          }
-        }
-
-        .post-card {
-          background: white;
-          border-radius: 1rem;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-          overflow: hidden;
-          transition: all 0.2s;
-        }
-
-        .post-card:hover {
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-          transform: translateY(-2px);
-        }
-
-        @media (hover: none) {
-          .post-card:hover {
-            transform: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-          }
-        }
-
-        /* Collaboration Invite */
-        .collab-invite {
-          background: linear-gradient(135deg, #fef3c7, #fde68a);
-          padding: 1rem;
-          border-bottom: 2px solid #f59e0b;
-        }
-
-        .collab-invite p {
-          margin: 0 0 0.5rem 0;
-          color: #92400e;
-          font-weight: 500;
-        }
-
-        .invite-actions {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .invite-accept, .invite-decline {
-          padding: 0.375rem 0.75rem;
-          border: none;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .invite-accept {
-          background: #10b981;
-          color: white;
-        }
-
-        .invite-accept:hover {
-          background: #059669;
-        }
-
-        .invite-decline {
-          background: #ef4444;
-          color: white;
-        }
-
-        .invite-decline:hover {
-          background: #dc2626;
-        }
-
-        /* Media Grid */
-        .post-image-container {
-          position: relative;
-          background: #f3f4f6;
-        }
-
-        .media-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 2px;
-        }
-
-        .media-grid.single {
-          grid-template-columns: 1fr;
-        }
-
-        .media-item {
-          position: relative;
-          aspect-ratio: 1;
-          overflow: hidden;
-        }
-
-        .post-media {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          cursor: pointer;
-          transition: transform 0.2s;
-        }
-
-        .post-media:hover {
-          transform: scale(1.05);
-        }
-
-        @media (hover: none) {
-          .post-media:hover {
-            transform: none;
-          }
-        }
-
-        .more-overlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(0,0,0,0.7);
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.5rem;
-          font-weight: bold;
-        }
-
-        .media-delete {
-          position: absolute;
-          top: 0.5rem;
-          right: 0.5rem;
-          width: 2rem;
-          height: 2rem;
-          background: rgba(239,68,68,0.9);
-          color: white;
-          border: none;
-          border-radius: 50%;
-          font-size: 1.25rem;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .show-more-btn {
-          width: 100%;
-          padding: 0.5rem;
-          background: #f3f4f6;
-          border: none;
-          font-size: 0.875rem;
-          color: #6b7280;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-
-        .show-more-btn:hover {
-          background: #e5e7eb;
-        }
-
-        .like-button {
-          position: absolute;
-          bottom: 0.75rem;
-          right: 0.75rem;
-          width: 2.5rem;
-          height: 2.5rem;
-          background: rgba(255,255,255,0.9);
-          border: none;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          font-size: 1.25rem;
-          transition: all 0.2s;
-          backdrop-filter: blur(10px);
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        .like-button:hover {
-          transform: scale(1.1);
-        }
-
-        .like-button:active {
-          transform: scale(0.95);
-        }
-
-        .like-button.liked {
-          background: rgba(239,68,68,0.1);
-        }
-
-        @media (max-width: 640px) {
-          .like-button {
-            width: 3rem;
-            height: 3rem;
-            font-size: 1.5rem;
-          }
-        }
-
-        .post-content {
-          padding: 1rem;
-        }
-
-        /* Creator Info */
-        .post-creator {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 0.75rem;
-          flex-wrap: wrap;
-        }
-
-        .creator-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.375rem;
-          color: #8b5cf6;
-          text-decoration: none;
-          font-weight: 600;
-        }
-
-        .creator-link:hover {
-          text-decoration: underline;
-        }
-
-        .creator-avatar {
-          width: 1.5rem;
-          height: 1.5rem;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-
-        .creator-name {
-          font-size: 0.875rem;
-        }
-
-        .with-text {
-          color: #6b7280;
-          font-size: 0.875rem;
-        }
-
-        .post-caption {
-          font-size: 1rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 0.5rem 0;
-          word-wrap: break-word;
-        }
-
-        .post-description {
-          color: #6b7280;
-          font-size: 0.875rem;
-          line-height: 1.5;
-          margin-bottom: 0.75rem;
-          word-wrap: break-word;
-        }
-
-        .read-more {
-          color: #8b5cf6;
-          background: none;
-          border: none;
-          font-size: 0.875rem;
-          cursor: pointer;
-          padding: 0;
-          margin-bottom: 0.75rem;
-        }
-
-        .read-more:hover {
-          text-decoration: underline;
-        }
-
-        .post-tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.25rem;
-          margin-bottom: 0.75rem;
-          font-size: 0.875rem;
-        }
-
-        .tag-label {
-          color: #6b7280;
-        }
-
-        .tag-link {
-          color: #8b5cf6;
-          text-decoration: none;
-        }
-
-        .tag-link:hover {
-          text-decoration: underline;
-        }
-
-        .post-meta {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding-top: 0.5rem;
-          border-top: 1px solid #f3f4f6;
-          font-size: 0.75rem;
-          color: #6b7280;
-        }
-
-        .meta-left {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .visibility-badge {
-          font-size: 0.875rem;
-        }
-
-        .like-count {
-          font-weight: 500;
-        }
-
-        .post-date {
-          color: #9ca3af;
-        }
-
-        .post-actions {
-          display: flex;
-          gap: 0.5rem;
-          margin-top: 0.75rem;
-        }
-
-        .btn-edit, .btn-delete {
-          padding: 0.375rem 0.75rem;
-          border-radius: 0.375rem;
-          border: none;
-          font-size: 0.875rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (max-width: 640px) {
-          .btn-edit, .btn-delete {
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-          }
-        }
-
-        .btn-edit {
-          background: #3b82f6;
-          color: white;
-        }
-
-        .btn-edit:hover {
-          background: #2563eb;
-        }
-
-        .btn-edit:active {
-          transform: scale(0.95);
-        }
-
-        .btn-delete {
-          background: #ef4444;
-          color: white;
-        }
-
-        .btn-delete:hover {
-          background: #dc2626;
-        }
-
-        .btn-delete:active {
-          transform: scale(0.95);
-        }
-
-        /* Edit Mode */
-        .edit-mode {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .edit-input, .edit-textarea, .edit-select {
-          width: 100%;
-          padding: 0.5rem;
-          border: 1px solid #d1d5db;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          -webkit-appearance: none;
-        }
-
-        @media (max-width: 640px) {
-          .edit-input, .edit-textarea, .edit-select {
-            font-size: 16px;
-            padding: 0.625rem;
-          }
-        }
-
-        .edit-textarea {
-          resize: vertical;
-          min-height: 3rem;
-        }
-
-        .add-media-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0.5rem;
-          background: #f3f4f6;
-          border: 2px dashed #d1d5db;
-          border-radius: 0.375rem;
-          color: #6b7280;
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .add-media-btn:hover {
-          background: #e5e7eb;
-          border-color: #9ca3af;
-        }
-
-        .edit-files-count {
-          font-size: 0.75rem;
-          color: #10b981;
-        }
-
-        .edit-actions {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .btn-save, .btn-cancel {
-          flex: 1;
-          padding: 0.5rem;
-          border-radius: 0.375rem;
-          border: none;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (max-width: 640px) {
-          .btn-save, .btn-cancel {
-            padding: 0.625rem;
-            font-size: 1rem;
-          }
-        }
-
-        .btn-save {
-          background: #10b981;
-          color: white;
-        }
-
-        .btn-save:hover {
-          background: #059669;
-        }
-
-        .btn-save:active {
-          transform: scale(0.95);
-        }
-
-        .btn-cancel {
-          background: #6b7280;
-          color: white;
-        }
-
-        .btn-cancel:hover {
-          background: #4b5563;
-        }
-
-        .btn-cancel:active {
-          transform: scale(0.95);
-        }
-
-        /* Comments Section */
-        .comments-section {
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid #f3f4f6;
-        }
-
-        .comments-title {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #374151;
-          margin: 0 0 0.75rem 0;
-        }
-
-        .comments-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          margin-bottom: 0.75rem;
-          max-height: 200px;
-          overflow-y: auto;
-        }
-
-        .comment {
-          font-size: 0.875rem;
-          line-height: 1.5;
-          word-wrap: break-word;
-        }
-
-        .comment-author {
-          font-weight: 600;
-          color: #8b5cf6;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.25rem;
-          margin-right: 0.25rem;
-        }
-
-        .comment-author:hover {
-          text-decoration: underline;
-        }
-
-        .comment-avatar {
-          width: 1.25rem;
-          height: 1.25rem;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-
-        .comment-body {
-          color: #4b5563;
-        }
-
-        .comment-form {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .comment-input {
-          flex: 1;
-          padding: 0.375rem 0.5rem;
-          border: 1px solid #d1d5db;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          -webkit-appearance: none;
-        }
-
-        @media (max-width: 640px) {
-          .comment-input {
-            font-size: 16px;
-            padding: 0.5rem;
-          }
-        }
-
-        .comment-input:focus {
-          outline: none;
-          border-color: #8b5cf6;
-        }
-
-        .comment-submit {
-          padding: 0.375rem 0.75rem;
-          background: #8b5cf6;
-          color: white;
-          border: none;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (max-width: 640px) {
-          .comment-submit {
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-          }
-        }
-
-        .comment-submit:hover:not(:disabled) {
-          background: #7c3aed;
-        }
-
-        .comment-submit:active {
-          transform: scale(0.95);
-        }
-
-        .comment-submit:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        /* Empty State */
-        .empty-state {
-          text-align: center;
-          padding: 4rem 2rem;
-          color: #6b7280;
-        }
-
-        .empty-title {
-          font-size: 1.125rem;
-          font-weight: 500;
-          margin-bottom: 0.5rem;
-        }
-
-        .empty-subtitle {
-          font-size: 0.875rem;
-          color: #9ca3af;
-        }
-
-        /* Mobile Optimizations */
-        @media (max-width: 640px) {
-          .message-toast {
-            right: 0.5rem;
-            left: 0.5rem;
-            font-size: 0.875rem;
-          }
-
-          .posts-grid {
-            padding: 0;
-          }
-
-          .post-card {
-            border-radius: 0.75rem;
-          }
-
-          .post-content {
-            padding: 0.75rem;
-          }
-
-          .comment-form {
-            position: sticky;
-            bottom: 0;
-            background: white;
-            padding: 0.5rem;
-            border-top: 1px solid #e5e7eb;
-            margin: 0 -0.75rem -0.75rem;
-            z-index: 10;
-          }
-
-          button, .upload-button, .tag-link {
-            min-height: 44px;
-            min-width: 44px;
-          }
-        }
-
-        /* Touch-friendly on mobile */
-        @media (hover: none) {
-          .post-image:hover {
-            transform: none;
-          }
-          
-          .like-button:hover {
-            transform: none;
-          }
-        }
-
-        /* Accessibility improvements */
-        button:focus-visible,
-        .upload-button:focus-visible,
-        .tag-link:focus-visible,
-        input:focus-visible,
-        textarea:focus-visible,
-        select:focus-visible {
-          outline: 2px solid #8b5cf6;
-          outline-offset: 2px;
-        }
-
-        /* Smooth scrolling for comments */
-        .comments-list::-webkit-scrollbar {
-          width: 4px;
-        }
-
-        .comments-list::-webkit-scrollbar-track {
-          background: #f3f4f6;
-        }
-
-        .comments-list::-webkit-scrollbar-thumb {
-          background: #d1d5db;
-          border-radius: 2px;
-        }
-
-        .comments-list::-webkit-scrollbar-thumb:hover {
-          background: #9ca3af;
-        }
-      `}</style>
-    </section>
-  );
-}
+        .posts-gri
