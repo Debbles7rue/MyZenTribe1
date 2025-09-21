@@ -43,6 +43,15 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
     verified: false
   });
 
+  // NEW: Communication Settings
+  const [communicationSettings, setCommunicationSettings] = useState({
+    business_allow_messages: true,
+    business_allow_reviews: true,
+    business_allow_posts: true,
+    business_message_auto_reply: '',
+    business_response_time: 'within_24h'
+  });
+
   useEffect(() => {
     loadSettings();
   }, [businessId]);
@@ -55,36 +64,63 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
 
   async function loadSettings() {
     try {
-      const { data, error } = await supabase
+      // Load from business_profiles table
+      const { data: bizData, error: bizError } = await supabase
         .from('business_profiles')
         .select('enabled_tabs, view_count, rating_average, rating_count, verified, visibility')
         .eq('id', businessId)
         .single();
 
-      if (error) {
-        console.error('Error loading settings:', error);
-        // Don't show error to user if fields don't exist
+      if (bizError) {
+        console.error('Error loading business settings:', bizError);
       }
 
-      if (data) {
-        if (data.enabled_tabs) {
-          setTabConfig(data.enabled_tabs);
+      // Load from profiles table for communication settings
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select(`
+          business_allow_messages,
+          business_allow_reviews,
+          business_allow_posts,
+          business_message_auto_reply,
+          business_response_time
+        `)
+        .eq('id', businessId)
+        .single();
+
+      if (profileError) {
+        console.error('Error loading profile settings:', profileError);
+      }
+
+      if (bizData) {
+        if (bizData.enabled_tabs) {
+          setTabConfig(bizData.enabled_tabs);
         }
         
         setStats({
-          view_count: data.view_count || 0,
-          rating_average: data.rating_average || null,
-          rating_count: data.rating_count || 0,
-          verified: data.verified || false
+          view_count: bizData.view_count || 0,
+          rating_average: bizData.rating_average || null,
+          rating_count: bizData.rating_count || 0,
+          verified: bizData.verified || false
         });
         
         // If visibility field exists and is 'private', update it to 'public'
-        if (data.visibility === 'private') {
+        if (bizData.visibility === 'private') {
           await supabase
             .from('business_profiles')
             .update({ visibility: 'public' })
             .eq('id', businessId);
         }
+      }
+
+      if (profileData) {
+        setCommunicationSettings({
+          business_allow_messages: profileData.business_allow_messages !== false,
+          business_allow_reviews: profileData.business_allow_reviews !== false,
+          business_allow_posts: profileData.business_allow_posts !== false,
+          business_message_auto_reply: profileData.business_message_auto_reply || '',
+          business_response_time: profileData.business_response_time || 'within_24h'
+        });
       }
     } catch (err) {
       console.error('Unexpected error loading settings:', err);
@@ -98,7 +134,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
     setMessage('');
 
     try {
-      // Only save fields we know exist
+      // Save to business_profiles table
       const updateData: any = {
         enabled_tabs: tabConfig,
         updated_at: new Date().toISOString()
@@ -115,23 +151,42 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
         updateData.visibility = 'public';
       }
 
-      const { error } = await supabase
+      const { error: bizError } = await supabase
         .from('business_profiles')
         .update(updateData)
         .eq('id', businessId);
 
-      if (error) {
-        console.error('Save error:', error);
+      if (bizError) {
+        console.error('Save error:', bizError);
         setMessage('Error saving settings');
-      } else {
-        setMessage('Settings saved successfully! ✨');
-        
-        if (onUpdateTabs) {
-          onUpdateTabs(tabConfig);
-        }
-        
-        setTimeout(() => setMessage(''), 3000);
+        return;
       }
+
+      // Save communication settings to profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          business_allow_messages: communicationSettings.business_allow_messages,
+          business_allow_reviews: communicationSettings.business_allow_reviews,
+          business_allow_posts: communicationSettings.business_allow_posts,
+          business_message_auto_reply: communicationSettings.business_message_auto_reply,
+          business_response_time: communicationSettings.business_response_time
+        })
+        .eq('id', businessId);
+
+      if (profileError) {
+        console.error('Profile save error:', profileError);
+        setMessage('Error saving communication settings');
+        return;
+      }
+
+      setMessage('Settings saved successfully! ✨');
+      
+      if (onUpdateTabs) {
+        onUpdateTabs(tabConfig);
+      }
+      
+      setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       console.error('Unexpected save error:', err);
       setMessage('Unexpected error occurred');
@@ -180,7 +235,165 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
         </div>
       </div>
 
-      {/* Tab Management Section */}
+      {/* NEW: Communication Settings Section */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Communication Settings</h3>
+          <p className="text-sm text-gray-600">Control how customers can interact with your business</p>
+        </div>
+
+        <div className="space-y-3">
+          {/* Allow Messages Toggle */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+            <label className="flex items-start justify-between cursor-pointer">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl mt-0.5">💬</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-blue-900">Allow Direct Messages</div>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Let customers message you directly from your profile
+                  </p>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={communicationSettings.business_allow_messages}
+                  onChange={(e) => setCommunicationSettings({
+                    ...communicationSettings,
+                    business_allow_messages: e.target.checked
+                  })}
+                  className="sr-only"
+                />
+                <div className={`
+                  w-12 h-6 rounded-full transition-colors duration-200
+                  ${communicationSettings.business_allow_messages ? 'bg-blue-600' : 'bg-gray-300'}
+                `}>
+                  <div className={`
+                    w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200
+                    transform ${communicationSettings.business_allow_messages ? 'translate-x-6' : 'translate-x-0.5'} mt-0.5
+                  `} />
+                </div>
+              </div>
+            </label>
+
+            {/* Auto-Reply Message - Shows when messages are enabled */}
+            {communicationSettings.business_allow_messages && (
+              <div className="mt-4 space-y-2">
+                <label className="block text-sm font-medium text-blue-800">
+                  Auto-Reply Message (Optional)
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 text-base border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  value={communicationSettings.business_message_auto_reply}
+                  onChange={(e) => setCommunicationSettings({
+                    ...communicationSettings,
+                    business_message_auto_reply: e.target.value
+                  })}
+                  placeholder="Thanks for reaching out! I typically respond within 24 hours..."
+                  style={{ fontSize: '16px' }}
+                />
+                
+                <div className="mt-2">
+                  <label className="block text-sm font-medium text-blue-800 mb-1">
+                    Typical Response Time
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 text-base border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    value={communicationSettings.business_response_time}
+                    onChange={(e) => setCommunicationSettings({
+                      ...communicationSettings,
+                      business_response_time: e.target.value
+                    })}
+                    style={{ fontSize: '16px', minHeight: '44px' }}
+                  >
+                    <option value="within_1h">Within 1 hour</option>
+                    <option value="within_24h">Within 24 hours</option>
+                    <option value="within_2d">Within 2 days</option>
+                    <option value="within_week">Within a week</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Allow Reviews Toggle */}
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-4">
+            <label className="flex items-start justify-between cursor-pointer">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl mt-0.5">⭐</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-amber-900">Allow Reviews</div>
+                  <p className="text-sm text-amber-700 mt-1">
+                    Let customers leave reviews and ratings
+                  </p>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={communicationSettings.business_allow_reviews}
+                  onChange={(e) => setCommunicationSettings({
+                    ...communicationSettings,
+                    business_allow_reviews: e.target.checked
+                  })}
+                  className="sr-only"
+                />
+                <div className={`
+                  w-12 h-6 rounded-full transition-colors duration-200
+                  ${communicationSettings.business_allow_reviews ? 'bg-amber-600' : 'bg-gray-300'}
+                `}>
+                  <div className={`
+                    w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200
+                    transform ${communicationSettings.business_allow_reviews ? 'translate-x-6' : 'translate-x-0.5'} mt-0.5
+                  `} />
+                </div>
+              </div>
+            </label>
+          </div>
+
+          {/* Allow Posts Toggle */}
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
+            <label className="flex items-start justify-between cursor-pointer">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl mt-0.5">📝</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-purple-900">Business Posts</div>
+                  <p className="text-sm text-purple-700 mt-1">
+                    Share updates and photos from your business profile
+                  </p>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={communicationSettings.business_allow_posts}
+                  onChange={(e) => setCommunicationSettings({
+                    ...communicationSettings,
+                    business_allow_posts: e.target.checked
+                  })}
+                  className="sr-only"
+                />
+                <div className={`
+                  w-12 h-6 rounded-full transition-colors duration-200
+                  ${communicationSettings.business_allow_posts ? 'bg-purple-600' : 'bg-gray-300'}
+                `}>
+                  <div className={`
+                    w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200
+                    transform ${communicationSettings.business_allow_posts ? 'translate-x-6' : 'translate-x-0.5'} mt-0.5
+                  `} />
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Management Section - KEPT ORIGINAL */}
       <div className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold mb-1">Customize Your Profile Tabs</h3>
@@ -231,7 +444,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
         </div>
       </div>
 
-      {/* Analytics Section - Read Only */}
+      {/* Analytics Section - KEPT ORIGINAL */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Profile Analytics</h3>
         
@@ -269,7 +482,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
         )}
       </div>
 
-      {/* Save Button - Mobile Optimized */}
+      {/* Save Button - KEPT ORIGINAL WITH MOBILE OPTIMIZATION */}
       <div className="pt-4 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {message && (
           <div className={`
@@ -286,6 +499,7 @@ export default function BusinessSettingsTab({ businessId, enabledTabs, onUpdateT
           onClick={saveSettings}
           disabled={saving}
           className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors min-h-[48px] touch-manipulation"
+          style={{ fontSize: '16px' }}
         >
           {saving ? (
             <span className="flex items-center justify-center gap-2">
