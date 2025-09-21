@@ -697,3 +697,79 @@ export default function UnifiedEventCreator({
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Recurring Pattern
+                        </label>
+                        <select
+                          value={form.recurring_pattern}
+                          onChange={(e) => setForm(prev => ({ ...prev, recurring_pattern: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
+                        >
+                          <option value="">Does not repeat</option>
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="biweekly">Bi-weekly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </div>
+
+                      {/* Capacity */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Maximum Capacity
+                        </label>
+                        <input
+                          type="number"
+                          value={form.capacity || ''}
+                          onChange={(e) => setForm(prev => ({ 
+                            ...prev, 
+                            capacity: e.target.value ? parseInt(e.target.value) : undefined 
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
+                          placeholder="Maximum attendees"
+                          min="1"
+                        />
+                      </div>
+
+                      {/* Tags */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Tags (comma-separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={form.tags?.join(', ')}
+                          onChange={(e) => setForm(prev => ({ 
+                            ...prev, 
+                            tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
+                          placeholder="wellness, meditation, community..."
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions - Mobile Friendly */}
+            <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 flex flex-col sm:flex-row gap-3 justify-end">
+              <button
+                onClick={onClose}
+                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !form.title || !form.start}
+                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {saving ? 'Saving...' : (editingEvent ? 'Update Event' : 'Create Event')}
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
