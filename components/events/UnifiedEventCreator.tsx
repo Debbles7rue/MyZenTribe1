@@ -21,6 +21,21 @@ interface Props {
   defaultVisibility?: Visibility;
 }
 
+// Extended form type to include pre/post events
+interface ExtendedEventForm extends EventForm {
+  pre_event?: {
+    title: string;
+    time: string;
+    location?: string;
+  };
+  post_event?: {
+    title: string;
+    time: string;
+    location?: string;
+  };
+  cover_photo?: string;
+}
+
 export default function UnifiedEventCreator({
   open,
   onClose,
@@ -33,8 +48,8 @@ export default function UnifiedEventCreator({
   defaultDate,
   defaultVisibility = 'public'
 }: Props) {
-  // Form state - preserves ALL existing functionality
-  const [form, setForm] = useState<EventForm>({
+  // Form state - preserves ALL existing functionality plus pre/post events
+  const [form, setForm] = useState<ExtendedEventForm>({
     title: '',
     description: '',
     location: '',
@@ -52,7 +67,10 @@ export default function UnifiedEventCreator({
     virtual_link: '',
     capacity: undefined,
     recurring_pattern: '',
-    tags: []
+    tags: [],
+    pre_event: undefined,
+    post_event: undefined,
+    cover_photo: ''
   });
 
   // UI state
@@ -63,6 +81,8 @@ export default function UnifiedEventCreator({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [showPreEvent, setShowPreEvent] = useState(false);
+  const [showPostEvent, setShowPostEvent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize form when editing
@@ -86,11 +106,17 @@ export default function UnifiedEventCreator({
         virtual_link: editingEvent.virtual_link || '',
         capacity: editingEvent.capacity || undefined,
         recurring_pattern: editingEvent.recurring_pattern || '',
-        tags: editingEvent.tags || []
+        tags: editingEvent.tags || [],
+        pre_event: (editingEvent as any).pre_event,
+        post_event: (editingEvent as any).post_event,
+        cover_photo: (editingEvent as any).cover_photo || editingEvent.image_path || ''
       });
-      if (editingEvent.image_path) {
-        setImagePreview(editingEvent.image_path);
+      if (editingEvent.image_path || (editingEvent as any).cover_photo) {
+        setImagePreview(editingEvent.image_path || (editingEvent as any).cover_photo);
       }
+      // Set pre/post event visibility if they exist
+      if ((editingEvent as any).pre_event) setShowPreEvent(true);
+      if ((editingEvent as any).post_event) setShowPostEvent(true);
     } else if (defaultDate) {
       const startStr = defaultDate.toISOString().slice(0, 16);
       const endDate = new Date(defaultDate.getTime() + 60 * 60 * 1000);
@@ -140,7 +166,7 @@ export default function UnifiedEventCreator({
         .getPublicUrl(filePath);
 
       setImagePreview(publicUrl);
-      setForm(prev => ({ ...prev, image_path: publicUrl }));
+      setForm(prev => ({ ...prev, image_path: publicUrl, cover_photo: publicUrl }));
     } catch (error) {
       console.error('Upload failed:', error);
       setError('Failed to upload image');
@@ -170,11 +196,18 @@ export default function UnifiedEventCreator({
         throw new Error('Title and start time are required');
       }
 
+      // Include pre/post events in the save data
+      const eventData = {
+        ...form,
+        pre_event: showPreEvent && form.pre_event?.title ? form.pre_event : undefined,
+        post_event: showPostEvent && form.post_event?.title ? form.post_event : undefined
+      };
+
       let result;
       if (editingEvent) {
-        result = await updateEvent(editingEvent.id, form, userId);
+        result = await updateEvent(editingEvent.id, eventData, userId);
       } else {
-        result = await createEvent(form, userId, context);
+        result = await createEvent(eventData, userId, context);
       }
 
       if (result.error) {
@@ -204,10 +237,15 @@ export default function UnifiedEventCreator({
         virtual_link: '',
         capacity: undefined,
         recurring_pattern: '',
-        tags: []
+        tags: [],
+        pre_event: undefined,
+        post_event: undefined,
+        cover_photo: ''
       });
       setImagePreview(null);
       setShowAdvanced(false);
+      setShowPreEvent(false);
+      setShowPostEvent(false);
       onClose();
     } catch (error: any) {
       setError(error.message || 'Failed to save event');
@@ -292,7 +330,7 @@ export default function UnifiedEventCreator({
                     type="text"
                     value={form.title}
                     onChange={(e) => setForm(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
                     placeholder="Enter event title..."
                   />
                 </div>
@@ -304,13 +342,12 @@ export default function UnifiedEventCreator({
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
                     rows={3}
-                    placeholder="Describe your event..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                    placeholder="What's this event about?"
                   />
                 </div>
 
-                {/* Date/Time - Mobile Responsive Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -320,10 +357,10 @@ export default function UnifiedEventCreator({
                       type="datetime-local"
                       value={form.start}
                       onChange={(e) => setForm(prev => ({ ...prev, start: e.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       End Time
@@ -332,12 +369,11 @@ export default function UnifiedEventCreator({
                       type="datetime-local"
                       value={form.end}
                       onChange={(e) => setForm(prev => ({ ...prev, end: e.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
                     />
                   </div>
                 </div>
 
-                {/* Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Location
@@ -346,9 +382,159 @@ export default function UnifiedEventCreator({
                     type="text"
                     value={form.location}
                     onChange={(e) => setForm(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
-                    placeholder="Event location or 'Virtual'"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                    placeholder="Where is this happening?"
                   />
+                </div>
+
+                {/* Pre/Post Event Options - Mobile Optimized */}
+                <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showPreEvent}
+                        onChange={(e) => {
+                          setShowPreEvent(e.target.checked);
+                          if (!e.target.checked) {
+                            setForm(prev => ({ ...prev, pre_event: undefined }));
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-purple-500 focus:ring-purple-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Add Pre-Event (e.g., dinner before)
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {showPreEvent && (
+                    <div className="ml-6 space-y-2 animate-in slide-in-from-top-1">
+                      <input
+                        type="text"
+                        value={form.pre_event?.title || ''}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          pre_event: { 
+                            title: e.target.value,
+                            time: prev.pre_event?.time || '',
+                            location: prev.pre_event?.location || ''
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Pre-event title (e.g., Dinner at Joe's)"
+                      />
+                      <input
+                        type="datetime-local"
+                        value={form.pre_event?.time || ''}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          pre_event: { 
+                            title: prev.pre_event?.title || '',
+                            time: e.target.value,
+                            location: prev.pre_event?.location || ''
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={form.pre_event?.location || ''}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          pre_event: { 
+                            title: prev.pre_event?.title || '',
+                            time: prev.pre_event?.time || '',
+                            location: e.target.value
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Pre-event location (optional)"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showPostEvent}
+                        onChange={(e) => {
+                          setShowPostEvent(e.target.checked);
+                          if (!e.target.checked) {
+                            setForm(prev => ({ ...prev, post_event: undefined }));
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-purple-500 focus:ring-purple-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Add Post-Event (e.g., drinks after)
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {showPostEvent && (
+                    <div className="ml-6 space-y-2 animate-in slide-in-from-top-1">
+                      <input
+                        type="text"
+                        value={form.post_event?.title || ''}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          post_event: { 
+                            title: e.target.value,
+                            time: prev.post_event?.time || '',
+                            location: prev.post_event?.location || ''
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Post-event title (e.g., Drinks at the bar)"
+                      />
+                      <input
+                        type="datetime-local"
+                        value={form.post_event?.time || ''}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          post_event: { 
+                            title: prev.post_event?.title || '',
+                            time: e.target.value,
+                            location: prev.post_event?.location || ''
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={form.post_event?.location || ''}
+                        onChange={(e) => setForm(prev => ({ 
+                          ...prev, 
+                          post_event: { 
+                            title: prev.post_event?.title || '',
+                            time: prev.post_event?.time || '',
+                            location: e.target.value
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Post-event location (optional)"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Visibility Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Visibility
+                  </label>
+                  <select
+                    value={form.visibility}
+                    onChange={(e) => setForm(prev => ({ ...prev, visibility: e.target.value as Visibility }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="private">Private</option>
+                    <option value="friends">Friends Only</option>
+                    <option value="public">Public</option>
+                    {context === 'community' && <option value="community">Community Only</option>}
+                  </select>
                 </div>
 
                 {/* Event Type with Suggestions */}
@@ -360,21 +546,21 @@ export default function UnifiedEventCreator({
                     type="text"
                     value={form.event_type}
                     onChange={(e) => handleEventTypeChange(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
-                    placeholder="e.g., Workshop, Meditation, Social..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
+                    placeholder="Concert, Meeting, Workout..."
                   />
                   
-                  {/* Suggestions Dropdown */}
                   {searchSuggestions.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg">
                       {searchSuggestions.map((suggestion, idx) => (
                         <button
                           key={idx}
+                          type="button"
                           onClick={() => {
                             setForm(prev => ({ ...prev, event_type: suggestion }));
                             setSearchSuggestions([]);
                           }}
-                          className="w-full px-4 py-2 text-left hover:bg-purple-50 dark:hover:bg-purple-900/20 text-sm"
+                          className="w-full px-3 py-2 text-left hover:bg-purple-50 dark:hover:bg-purple-900/20 text-sm"
                         >
                           {suggestion}
                         </button>
@@ -383,31 +569,11 @@ export default function UnifiedEventCreator({
                   )}
                 </div>
 
-                {/* Visibility - Mobile Friendly */}
+                {/* Image Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Visibility
+                    Cover Photo
                   </label>
-                  <select
-                    value={form.visibility}
-                    onChange={(e) => setForm(prev => ({ ...prev, visibility: e.target.value as Visibility }))}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="private">Private (Only Me)</option>
-                    <option value="friends">Friends Only</option>
-                    {context === 'community' && (
-                      <option value="community">Community Members</option>
-                    )}
-                    <option value="public">Public (Everyone)</option>
-                  </select>
-                </div>
-
-                {/* Image Upload - Mobile Friendly */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Event Image
-                  </label>
-                  
                   {imagePreview ? (
                     <div className="relative">
                       <img
@@ -418,7 +584,7 @@ export default function UnifiedEventCreator({
                       <button
                         onClick={() => {
                           setImagePreview(null);
-                          setForm(prev => ({ ...prev, image_path: '' }));
+                          setForm(prev => ({ ...prev, image_path: '', cover_photo: '' }));
                         }}
                         className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
                       >
@@ -470,122 +636,64 @@ export default function UnifiedEventCreator({
                   </button>
                   
                   {showAdvanced && (
-                    <div className="mt-3 space-y-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="mt-3 space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       {/* Privacy Options */}
                       <div className="space-y-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={form.hide_exact_address}
                             onChange={(e) => setForm(prev => ({ ...prev, hide_exact_address: e.target.checked }))}
-                            className="w-4 h-4 text-purple-600 rounded"
+                            className="rounded text-purple-500"
                           />
-                          <span className="text-sm">Hide exact address until RSVP confirmed</span>
+                          <span className="text-sm">Hide exact address</span>
                         </label>
                         
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={form.show_email_only}
                             onChange={(e) => setForm(prev => ({ ...prev, show_email_only: e.target.checked }))}
-                            className="w-4 h-4 text-purple-600 rounded"
+                            className="rounded text-purple-500"
                           />
-                          <span className="text-sm">Show email only (hide phone)</span>
+                          <span className="text-sm">Show contact email only</span>
                         </label>
                         
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={form.hide_attendee_count}
                             onChange={(e) => setForm(prev => ({ ...prev, hide_attendee_count: e.target.checked }))}
-                            className="w-4 h-4 text-purple-600 rounded"
+                            className="rounded text-purple-500"
                           />
                           <span className="text-sm">Hide attendee count</span>
                         </label>
                       </div>
 
-                      {/* Virtual Event */}
-                      <div>
-                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                      {/* Virtual Event Options */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={form.is_virtual}
                             onChange={(e) => setForm(prev => ({ ...prev, is_virtual: e.target.checked }))}
-                            className="w-4 h-4 text-purple-600 rounded"
+                            className="rounded text-purple-500"
                           />
-                          <span className="text-sm font-medium">Virtual Event</span>
+                          <span className="text-sm">Virtual Event</span>
                         </label>
                         
                         {form.is_virtual && (
                           <input
-                            type="url"
+                            type="text"
                             value={form.virtual_link}
                             onChange={(e) => setForm(prev => ({ ...prev, virtual_link: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
-                            placeholder="Meeting link (Zoom, Google Meet, etc.)"
+                            placeholder="Meeting link (Zoom, Meet, etc.)"
                           />
                         )}
                       </div>
 
-                      {/* Capacity */}
+                      {/* Recurring Pattern */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Event Capacity (optional)
-                        </label>
-                        <input
-                          type="number"
-                          value={form.capacity || ''}
-                          onChange={(e) => setForm(prev => ({ 
-                            ...prev, 
-                            capacity: e.target.value ? parseInt(e.target.value) : undefined 
-                          }))}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
-                          placeholder="Maximum attendees"
-                          min="1"
-                        />
-                      </div>
-
-                      {/* Tags */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Tags (comma-separated)
-                        </label>
-                        <input
-                          type="text"
-                          value={form.tags?.join(', ')}
-                          onChange={(e) => setForm(prev => ({ 
-                            ...prev, 
-                            tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
-                          }))}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm"
-                          placeholder="wellness, meditation, community..."
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer Actions - Mobile Friendly */}
-            <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 flex flex-col sm:flex-row gap-3 justify-end">
-              <button
-                onClick={onClose}
-                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !form.title || !form.start}
-                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {saving ? 'Saving...' : (editingEvent ? 'Update Event' : 'Create Event')}
-              </button>
-            </div>
-          </Dialog.Panel>
-        </div>
-      </div>
-    </Dialog>
-  );
-}
+                          Recurring Pattern
