@@ -1,4 +1,12 @@
-// components/EventDetails.tsx
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventDetails.tsx - Updated with Pre/Post Events and Comments</title>
+</head>
+<body>
+<pre><code>// components/EventDetails.tsx
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -22,6 +30,18 @@ interface RSVPData {
   userStatus: 'going' | 'interested' | null;
 }
 
+interface Comment {
+  id: string;
+  event_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  user?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+}
+
 export default function EventDetails({ 
   event, 
   onClose, 
@@ -38,6 +58,10 @@ export default function EventDetails({
   });
   const [loading, setLoading] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isSendingComment, setIsSendingComment] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Fetch RSVP data
@@ -47,8 +71,32 @@ export default function EventDetails({
     }
     if (event) {
       fetchEventMedia();
+      fetchComments();
     }
   }, [event]);
+
+  // Subscribe to real-time comment updates
+  useEffect(() => {
+    if (!event?.id) return;
+
+    const channel = supabase
+      .channel(`event-comments-${event.id}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'event_comments', 
+          filter: `event_id=eq.${event.id}` 
+        },
+        () => fetchComments()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [event?.id]);
 
   // Handle escape key
   useEffect(() => {
@@ -113,9 +161,61 @@ export default function EventDetails({
           })
         );
         setImageUrls(urls);
+      } else if ((event as any).image_path || (event as any).cover_photo) {
+        // Fallback to single image if no media entries
+        setImageUrls([(event as any).image_path || (event as any).cover_photo]);
       }
     } catch (error) {
       console.error("Error fetching media:", error);
+    }
+  };
+
+  const fetchComments = async () => {
+    if (!event?.id) return;
+
+    setIsLoadingComments(true);
+    try {
+      const { data, error } = await supabase
+        .from('event_comments')
+        .select(`
+          *,
+          user:profiles!event_comments_user_id_fkey(full_name, avatar_url)
+        `)
+        .eq('event_id', event.id)
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        setComments(data as any);
+      }
+    } catch (err) {
+      console.error('Error loading comments:', err);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
+
+  const handleSendComment = async () => {
+    if (!currentUserId || !event?.id || !newComment.trim()) return;
+
+    setIsSendingComment(true);
+    try {
+      const { error } = await supabase
+        .from('event_comments')
+        .insert({
+          event_id: event.id,
+          user_id: currentUserId,
+          body: newComment.trim()
+        });
+
+      if (!error) {
+        setNewComment('');
+        showToast({ type: 'success', message: 'Comment posted!' });
+      }
+    } catch (err) {
+      console.error('Error sending comment:', err);
+      showToast({ type: 'error', message: 'Failed to post comment' });
+    } finally {
+      setIsSendingComment(false);
     }
   };
 
@@ -209,12 +309,14 @@ export default function EventDetails({
   const eventType = (event as any).event_type;
   const isReminder = eventType === 'reminder';
   const isTodo = eventType === 'todo';
+  const preEvent = (event as any).pre_event;
+  const postEvent = (event as any).post_event;
 
   // Determine background colors based on event type
   const getHeaderColor = () => {
     if (isReminder) return 'from-amber-500 to-orange-600';
     if (isTodo) return 'from-green-500 to-emerald-600';
-    if ((event as any).source === 'business') return 'from-gray-800 to-purple-900';
+    if ((event as any).source === 'business') return 'from-purple-700 to-pink-700';
     return 'from-purple-600 to-blue-600';
   };
 
@@ -271,6 +373,11 @@ export default function EventDetails({
                       </span>
                     </>
                   )}
+                  {(event as any).source === 'business' && (
+                    <span className="bg-white/20 px-2 py-1 rounded text-xs">
+                      BUSINESS EVENT
+                    </span>
+                  )}
                 </div>
               </div>
               <button
@@ -300,8 +407,41 @@ export default function EventDetails({
           {/* Body - Scrollable content */}
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
             <div className="p-6 space-y-6">
+              
+              {/* Pre-Event Gathering */}
+              {preEvent && preEvent.title && (
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-orange-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">🍽️</span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-orange-900 mb-1">Pre-Event Gathering</h3>
+                      <p className="font-medium text-orange-800">{preEvent.title}</p>
+                      <div className="mt-2 space-y-1 text-sm text-orange-700">
+                        <div className="flex items-center gap-2">
+                          <span>📅</span>
+                          <span>
+                            {new Date(preEvent.time).toLocaleString([], {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        {preEvent.location && (
+                          <div className="flex items-center gap-2">
+                            <span>📍</span>
+                            <span>{preEvent.location}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Image Gallery */}
-              {imageUrls.length > 0 && (
+              {imageUrls.length > 0 && imageUrls[0] && (
                 <div className="grid grid-cols-2 gap-2">
                   {imageUrls.map((url, index) => (
                     <img
@@ -369,40 +509,130 @@ export default function EventDetails({
                       })() : 'Not specified'}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Duration:</span>
-                    <span className="font-medium">
-                      {(() => {
-                        try {
-                          const start = new Date(event.start_time);
-                          const end = new Date(event.end_time);
-                          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                            const minutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
-                            if (minutes < 60) return `${minutes} minutes`;
-                            const hours = Math.floor(minutes / 60);
-                            const mins = minutes % 60;
-                            return mins > 0 ? `${hours}h ${mins}m` : `${hours} hour${hours !== 1 ? 's' : ''}`;
-                          }
-                        } catch {
-                          // Fallback if date parsing fails
-                        }
-                        return 'N/A';
-                      })()}
-                    </span>
-                  </div>
                 </div>
               </div>
 
-              {/* Visibility */}
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-2">Visibility</h3>
-                <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm">
-                  <span>
-                    {event.visibility === 'private' && '🔒 Private'}
-                    {event.visibility === 'friends' && '👥 Friends'}
-                    {event.visibility === 'everyone' && '🌍 Everyone'}
-                  </span>
+              {/* Post-Event Gathering */}
+              {postEvent && postEvent.title && (
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">☕</span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-purple-900 mb-1">Post-Event Gathering</h3>
+                      <p className="font-medium text-purple-800">{postEvent.title}</p>
+                      <div className="mt-2 space-y-1 text-sm text-purple-700">
+                        <div className="flex items-center gap-2">
+                          <span>📅</span>
+                          <span>
+                            {new Date(postEvent.time).toLocaleString([], {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        {postEvent.location && (
+                          <div className="flex items-center gap-2">
+                            <span>📍</span>
+                            <span>{postEvent.location}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* Comments Section */}
+              <div className="border-t pt-6">
+                <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  💬 Comments & Discussion
+                  {comments.length > 0 && (
+                    <span className="text-sm bg-gray-100 px-2 py-1 rounded-full font-normal">
+                      {comments.length}
+                    </span>
+                  )}
+                </h3>
+
+                {/* Comments List */}
+                <div className="space-y-3 mb-4" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {isLoadingComments ? (
+                    <div className="text-center py-4 text-gray-500">
+                      Loading comments...
+                    </div>
+                  ) : comments.length > 0 ? (
+                    comments.map((comment) => (
+                      <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-start gap-3">
+                          {comment.user?.avatar_url ? (
+                            <img
+                              src={comment.user.avatar_url}
+                              alt=""
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs">
+                              👤
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-baseline gap-2">
+                              <span className="font-medium text-sm text-gray-900">
+                                {comment.user?.full_name || 'Anonymous'}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(comment.created_at).toLocaleString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-gray-700">{comment.body}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No comments yet</p>
+                      <p className="text-sm mt-1">Be the first to comment!</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Comment Input */}
+                {currentUserId ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendComment();
+                        }
+                      }}
+                      placeholder="Write a comment..."
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      disabled={isSendingComment}
+                    />
+                    <button
+                      onClick={handleSendComment}
+                      disabled={!newComment.trim() || isSendingComment}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                    >
+                      {isSendingComment ? '...' : 'Post'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 bg-gray-50 rounded-lg text-gray-600">
+                    Please sign in to comment
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -526,3 +756,6 @@ export default function EventDetails({
   // Portal render to document.body
   return ReactDOM.createPortal(modalContent, document.body);
 }
+</code></pre>
+</body>
+</html>
