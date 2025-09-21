@@ -15,16 +15,51 @@ interface Friend {
   is_online?: boolean;
 }
 
+interface PendingRequestCount {
+  received: number;
+  sent: number;
+}
+
 export default function FriendsPage() {
   const router = useRouter();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequestCount>({ received: 0, sent: 0 });
 
   useEffect(() => {
     loadFriends();
+    loadPendingRequestsCount();
   }, []);
+
+  async function loadPendingRequestsCount() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Count received pending requests
+      const { count: receivedCount } = await supabase
+        .from('friend_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('to_user', user.id)
+        .eq('status', 'pending');
+
+      // Count sent pending requests
+      const { count: sentCount } = await supabase
+        .from('friend_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('from_user', user.id)
+        .eq('status', 'pending');
+
+      setPendingRequests({
+        received: receivedCount || 0,
+        sent: sentCount || 0
+      });
+    } catch (err) {
+      console.error('Error loading request counts:', err);
+    }
+  }
 
   async function loadFriends() {
     try {
@@ -124,7 +159,7 @@ export default function FriendsPage() {
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <h1 className="text-2xl font-bold text-gray-900">
               My Friends
               <span className="ml-3 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
@@ -132,15 +167,49 @@ export default function FriendsPage() {
               </span>
             </h1>
             
-            <Link
-              href="/find-friends"
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-              <span className="hidden sm:inline">Find Friends</span>
-            </Link>
+            {/* Action Buttons - Mobile Responsive */}
+            <div className="flex flex-wrap gap-2">
+              {/* Friend Requests Button */}
+              {pendingRequests.received > 0 && (
+                <Link
+                  href="/friend-requests"
+                  className="relative flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  <span className="hidden sm:inline">Requests</span>
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {pendingRequests.received}
+                  </span>
+                </Link>
+              )}
+              
+              {/* All Requests Link (if no pending) */}
+              {pendingRequests.received === 0 && (
+                <Link
+                  href="/friend-requests"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  <span className="hidden sm:inline">Friend Requests</span>
+                </Link>
+              )}
+              
+              {/* Find Friends Button */}
+              <Link
+                href="/find-friends"
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                <span className="hidden sm:inline">Find Friends</span>
+                <span className="sm:hidden">Find</span>
+              </Link>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -192,19 +261,30 @@ export default function FriendsPage() {
                     : 'Start connecting with people to build your friend list'}
                 </p>
                 {!searchQuery && (
-                  <Link
-                    href="/find-friends"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                    </svg>
-                    Find Friends
-                  </Link>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Link
+                      href="/find-friends"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Search for Friends
+                    </Link>
+                    <Link
+                      href="/profile"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Share Your QR Code
+                    </Link>
+                  </div>
                 )}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredFriends.map((friend, index) => (
                   <div
                     key={friend.friend_id || index}
@@ -238,7 +318,7 @@ export default function FriendsPage() {
                         {/* Location */}
                         {friend.friend_location && (
                           <div className="flex items-center gap-1 mt-2 text-sm text-gray-500">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
