@@ -16,21 +16,11 @@ interface BusinessHeader {
   verified?: boolean;
 }
 
-const tabs = [
-  { id: 'basic', label: 'Basic Info', icon: '📝' },
-  { id: 'calendar', label: 'Calendar', icon: '📅' },
-  { id: 'store', label: 'Store', icon: '🛍️' },
-  { id: 'gallery', label: 'Gallery', icon: '📸' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' }
-];
-
 interface Props {
   businessId: string;
-  activeTab: string;
-  onTabChange: (tab: string) => void;
 }
 
-export default function BusinessHeader({ businessId, activeTab, onTabChange }: Props) {
+export default function BusinessHeader({ businessId }: Props) {
   const [business, setBusiness] = useState<BusinessHeader | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -141,7 +131,7 @@ export default function BusinessHeader({ businessId, activeTab, onTabChange }: P
       </div>
 
       {/* Status Bar */}
-      <div className="px-6 py-3 bg-gray-50 border-b flex items-center justify-between">
+      <div className="px-6 py-3 bg-gray-50 rounded-b-lg border-b flex items-center justify-between">
         <div className="flex items-center gap-4 text-sm">
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
             business?.visibility === 'public' 
@@ -157,28 +147,6 @@ export default function BusinessHeader({ businessId, activeTab, onTabChange }: P
             <span className="text-gray-600">@{business.handle}</span>
           )}
         </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="px-2 py-2 bg-white rounded-b-lg">
-        <nav className="flex gap-1 overflow-x-auto scrollbar-hide">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm
-                whitespace-nowrap transition-all
-                ${activeTab === tab.id 
-                  ? 'bg-purple-100 text-purple-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'}
-              `}
-            >
-              <span className="text-lg">{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </nav>
       </div>
     </div>
   );
