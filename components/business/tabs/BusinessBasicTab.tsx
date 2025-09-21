@@ -13,6 +13,7 @@ interface BusinessBasic {
   logo_url?: string;
   cover_url?: string;
   categories?: string[];
+  amenities?: string[];
   
   // Contact fields
   phone?: string;
@@ -34,6 +35,12 @@ const categoryOptions = [
   'Wellness', 'Spiritual', 'Health', 'Beauty', 'Fitness',
   'Meditation', 'Yoga', 'Healing', 'Coaching', 'Education',
   'Art', 'Music', 'Food', 'Retail', 'Services'
+];
+
+const amenityOptions = [
+  'Wheelchair Accessible', 'Parking', 'WiFi', 'Pet Friendly',
+  'Gender Neutral Restroom', 'Air Conditioning', 'Outdoor Seating',
+  'Private Rooms', 'Group Sessions', 'Online Services'
 ];
 
 const socialPlatforms = [
@@ -72,6 +79,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           logo_url: biz.logo_url || '',
           cover_url: biz.cover_url || '',
           categories: biz.categories || [],
+          amenities: biz.amenities || [],
           phone: biz.phone || '',
           phone_public: biz.phone_public || false,
           email: biz.email || '',
@@ -255,6 +263,35 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Amenities & Accessibility */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Amenities & Accessibility</label>
+          <div className="flex flex-wrap gap-2">
+            {amenityOptions.map(amenity => (
+              <button
+                key={amenity}
+                type="button"
+                onClick={() => {
+                  const amens = data.amenities || [];
+                  if (amens.includes(amenity)) {
+                    setData({ ...data, amenities: amens.filter(a => a !== amenity) });
+                  } else {
+                    setData({ ...data, amenities: [...amens, amenity] });
+                  }
+                }}
+                className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                  data.amenities?.includes(amenity)
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {amenity}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">Select all that apply to help customers know what to expect</p>
         </div>
       </div>
 
