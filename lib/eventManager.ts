@@ -94,6 +94,39 @@ export async function createEvent(
       throw new Error('Event title and start time are required');
     }
 
+    // Verify user is authenticated and get their actual ID
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('User not authenticated. Please log in and try again.');
+    }
+    
+    // Use the authenticated user's ID to ensure it matches auth.uid()
+    const actualUserId = user.id;
+    
+    // Check if user has a profile (to avoid foreign key constraint)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', actualUserId)
+      .single();
+    
+    if (profileError || !profile) {
+      // Create profile if it doesn't exist
+      const { error: createProfileError } = await supabase
+        .from('profiles')
+        .insert({ 
+          id: actualUserId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (createProfileError) {
+        console.error('Failed to create profile:', createProfileError);
+      }
+    }
+
     const payload: any = {
       title: event.title.trim(),
       description: event.description?.trim() || null,
@@ -103,7 +136,7 @@ export async function createEvent(
         ? new Date(event.end).toISOString() 
         : new Date(new Date(event.start).getTime() + 60 * 60 * 1000).toISOString(),
       visibility: event.visibility || 'public',
-      created_by: userId,
+      created_by: actualUserId,  // Use the verified user ID
       event_type: event.event_type || null,
       rsvp_public: event.visibility !== 'private',
       community_id: event.community_id || null,
