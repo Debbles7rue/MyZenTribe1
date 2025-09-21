@@ -1,12 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CalendarGrid.tsx - Updated with Pre/Post Event Indicators</title>
-</head>
-<body>
-<pre><code>// components/CalendarGrid.tsx
+// components/CalendarGrid.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -837,6 +829,3 @@ export default function CalendarGrid({
     </div>
   );
 }
-</code></pre>
-</body>
-</html>
