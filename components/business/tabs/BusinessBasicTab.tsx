@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import AvatarUploader from '@/components/AvatarUploader';
+import BusinessInviteQR from '@/components/business/BusinessInviteQR';
 
 interface BusinessBasic {
   display_name: string;
@@ -12,7 +13,6 @@ interface BusinessBasic {
   bio?: string;
   logo_url?: string;
   cover_url?: string;
-  categories?: string[];
   amenities?: string[];
   
   // Contact fields
@@ -30,12 +30,6 @@ interface BusinessBasic {
   // Social links
   social_links?: Record<string, string>;
 }
-
-const categoryOptions = [
-  'Wellness', 'Spiritual', 'Health', 'Beauty', 'Fitness',
-  'Meditation', 'Yoga', 'Healing', 'Coaching', 'Education',
-  'Art', 'Music', 'Food', 'Retail', 'Services'
-];
 
 const amenityOptions = [
   'Wheelchair Accessible', 'Parking', 'WiFi', 'Pet Friendly',
@@ -78,7 +72,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           bio: biz.bio || '',
           logo_url: biz.logo_url || '',
           cover_url: biz.cover_url || '',
-          categories: biz.categories || [],
           amenities: biz.amenities || [],
           phone: biz.phone || '',
           phone_public: biz.phone_public || false,
@@ -243,56 +236,38 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             style={{ fontSize: '16px' }}
           />
         </div>
+      </div>
 
-        {/* Categories */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Categories</label>
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map(cat => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => toggleCategory(cat)}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  data.categories?.includes(cat)
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+      {/* Amenities & Accessibility Box */}
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200 shadow-md">
+        <h3 className="text-xl font-bold text-green-900 mb-6 flex items-center gap-2">
+          <span className="text-2xl">✨</span> Amenities & Accessibility
+        </h3>
+        
+        <div className="flex flex-wrap gap-3">
+          {amenityOptions.map(amenity => (
+            <button
+              key={amenity}
+              type="button"
+              onClick={() => {
+                const amens = data.amenities || [];
+                if (amens.includes(amenity)) {
+                  setData({ ...data, amenities: amens.filter(a => a !== amenity) });
+                } else {
+                  setData({ ...data, amenities: [...amens, amenity] });
+                }
+              }}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                data.amenities?.includes(amenity)
+                  ? 'bg-green-600 text-white shadow-md transform scale-105'
+                  : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-green-300'
+              }`}
+            >
+              {amenity}
+            </button>
+          ))}
         </div>
-
-        {/* Amenities & Accessibility */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Amenities & Accessibility</label>
-          <div className="flex flex-wrap gap-2">
-            {amenityOptions.map(amenity => (
-              <button
-                key={amenity}
-                type="button"
-                onClick={() => {
-                  const amens = data.amenities || [];
-                  if (amens.includes(amenity)) {
-                    setData({ ...data, amenities: amens.filter(a => a !== amenity) });
-                  } else {
-                    setData({ ...data, amenities: [...amens, amenity] });
-                  }
-                }}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  data.amenities?.includes(amenity)
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {amenity}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Select all that apply to help customers know what to expect</p>
-        </div>
+        <p className="text-xs text-green-700 mt-4">Select all that apply to help customers know what to expect</p>
       </div>
 
       {/* Contact Information Box */}
@@ -441,6 +416,15 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           ))}
         </div>
       </div>
+
+      {/* Business QR Code */}
+      <BusinessInviteQR 
+        businessId={businessId}
+        businessHandle={data.handle}
+        businessName={data.display_name}
+        mode="full"
+        size={200}
+      />
 
       {/* Save Button */}
       <div className="flex justify-end">
