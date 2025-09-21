@@ -1,4 +1,12 @@
-// components/CalendarGrid.tsx
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CalendarGrid.tsx - Updated with Pre/Post Event Indicators</title>
+</head>
+<body>
+<pre><code>// components/CalendarGrid.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -77,6 +85,8 @@ interface Props {
     info: { start: Date; end: Date; allDay?: boolean },
     type: 'reminder' | 'todo'
   ) => void;
+  context?: 'calendar' | 'business' | 'community';
+  businessId?: string;
 }
 
 // Check if device is touch-enabled
@@ -163,6 +173,8 @@ export default function CalendarGrid({
   externalDragType = 'none',
   externalDragTitle,
   onExternalDrop,
+  context = 'calendar',
+  businessId,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -179,17 +191,43 @@ export default function CalendarGrid({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Convert DB events to UI events
+  // Filter events based on context for business calendar
+  const filteredDbEvents = useMemo(() => {
+    if (context === 'business' && businessId) {
+      // Show events created by this business OR with this business as source
+      return dbEvents.filter((event: DBEvent) => {
+        const e = event as any;
+        return (
+          e.created_by === businessId ||
+          e.business_id === businessId ||
+          e.host_business_id === businessId ||
+          (e.source === 'business' && e.business_creator_id === businessId)
+        );
+      });
+    }
+    return dbEvents;
+  }, [dbEvents, context, businessId]);
+
+  // Convert DB events to UI events with pre/post event indicators
   const dbUiEvents = useMemo<UiEvent[]>(() => 
-    (dbEvents || []).map((e: DBEvent) => ({
-      id: e.id,
-      title: e.title,
-      start: new Date(e.start_time),
-      end: new Date(e.end_time),
-      allDay: e.all_day || false,
-      resource: e,
-    })),
-    [dbEvents]
+    (filteredDbEvents || []).map((e: DBEvent) => {
+      const event = e as any;
+      return {
+        id: e.id,
+        title: e.title,
+        start: new Date(e.start_time),
+        end: new Date(e.end_time),
+        allDay: e.all_day || false,
+        resource: {
+          ...e,
+          hasPreEvent: !!(event.pre_event && event.pre_event.title),
+          hasPostEvent: !!(event.post_event && event.post_event.title),
+          preEvent: event.pre_event,
+          postEvent: event.post_event,
+        },
+      };
+    }),
+    [filteredDbEvents]
   );
 
   // Merge regular events with moon events
@@ -201,7 +239,7 @@ export default function CalendarGrid({
     return events;
   }, [dbUiEvents, moonEvents, showMoon]);
 
-  // Event styling based on type
+  // Event styling based on type with pre/post event indicators
   const eventStyleGetter = (event: UiEvent): any => {
     const resource = event.resource as any;
 
@@ -223,19 +261,31 @@ export default function CalendarGrid({
       };
     }
 
+    // Base styles for all events
+    let baseStyle = {
+      borderRadius: "6px",
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: isMobile ? "10px" : "11px",
+      padding: isMobile ? "3px 5px" : "4px 6px",
+      minHeight: isMobile ? "22px" : "24px",
+      position: "relative" as const,
+      overflow: "visible" as const,
+    };
+
+    // Add thicker border for events with pre/post gatherings
+    const borderWidth = (resource?.hasPreEvent || resource?.hasPostEvent) ? "2px" : "1px";
+    const borderStyle = (resource?.hasPreEvent || resource?.hasPostEvent) ? "solid" : "solid";
+
     // Reminder events
     if (resource?.event_type === "reminder") {
       return {
         style: {
+          ...baseStyle,
           backgroundColor: "#fbbf24",
-          border: "1px solid #f59e0b",
-          borderRadius: "6px",
+          border: `${borderWidth} ${borderStyle} #f59e0b`,
           color: "#92400e",
-          cursor: "pointer",
-          fontWeight: 600,
-          fontSize: isMobile ? "10px" : "11px",
-          padding: isMobile ? "3px 5px" : "4px 6px",
-          minHeight: isMobile ? "22px" : "24px",
+          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #f59e0b" : "none",
         },
       };
     }
@@ -244,33 +294,26 @@ export default function CalendarGrid({
     if (resource?.event_type === "todo") {
       return {
         style: {
+          ...baseStyle,
           backgroundColor: resource?.completed ? "#86efac" : "#34d399",
-          border: `1px solid ${resource?.completed ? "#22c55e" : "#10b981"}`,
-          borderRadius: "6px",
+          border: `${borderWidth} ${borderStyle} ${resource?.completed ? "#22c55e" : "#10b981"}`,
           color: "#064e3b",
-          cursor: "pointer",
-          fontWeight: 600,
-          fontSize: isMobile ? "10px" : "11px",
-          padding: isMobile ? "3px 5px" : "4px 6px",
-          minHeight: isMobile ? "22px" : "24px",
           textDecoration: resource?.completed ? "line-through" : "none",
+          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #10b981" : "none",
         },
       };
     }
 
-    // Business events
+    // Business events - special gradient styling
     if (resource?.source === "business" || resource?.kind === "business") {
       return {
         style: {
-          backgroundColor: "#1f2937",
-          border: "2px solid #374151",
-          borderRadius: "6px",
-          color: "#f3f4f6",
-          cursor: "pointer",
+          ...baseStyle,
+          background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+          border: `2px solid #6b21a8`,
+          color: "#ffffff",
           fontWeight: 700,
-          fontSize: isMobile ? "10px" : "11px",
-          padding: isMobile ? "3px 5px" : "4px 6px",
-          minHeight: isMobile ? "22px" : "24px",
+          boxShadow: "0 2px 4px rgba(124, 58, 237, 0.3)",
         },
       };
     }
@@ -279,15 +322,12 @@ export default function CalendarGrid({
     if (resource?.by_friend) {
       return {
         style: {
+          ...baseStyle,
           backgroundColor: "#c7d2fe",
-          border: "1px solid #8b5cf6",
-          borderRadius: "6px",
+          border: `${borderWidth} ${borderStyle} #8b5cf6`,
           color: "#5b21b6",
-          cursor: "pointer",
           fontWeight: resource?.rsvp_me ? 700 : 500,
-          fontSize: isMobile ? "10px" : "11px",
-          padding: isMobile ? "3px 5px" : "4px 6px",
-          minHeight: isMobile ? "22px" : "24px",
+          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #8b5cf6" : "none",
         },
       };
     }
@@ -296,15 +336,11 @@ export default function CalendarGrid({
     if (resource?.kind === "community") {
       return {
         style: {
+          ...baseStyle,
           backgroundColor: "#fce7f3",
-          border: "1px solid #ec4899",
-          borderRadius: "6px",
+          border: `${borderWidth} ${borderStyle} #ec4899`,
           color: "#be185d",
-          cursor: "pointer",
-          fontWeight: 600,
-          fontSize: isMobile ? "10px" : "11px",
-          padding: isMobile ? "3px 5px" : "4px 6px",
-          minHeight: isMobile ? "22px" : "24px",
+          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #ec4899" : "none",
         },
       };
     }
@@ -312,24 +348,21 @@ export default function CalendarGrid({
     // Default personal events
     return {
       style: {
+        ...baseStyle,
         backgroundColor: "#93c5fd",
-        border: "1px solid #3b82f6",
-        borderRadius: "6px",
+        border: `${borderWidth} ${borderStyle} #3b82f6`,
         color: "#1e40af",
-        cursor: "pointer",
         fontWeight: resource?.rsvp_me ? 700 : 500,
-        fontSize: isMobile ? "10px" : "11px",
-        padding: isMobile ? "3px 5px" : "4px 6px",
-        minHeight: isMobile ? "22px" : "24px",
+        boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #3b82f6" : "none",
       },
     };
   };
 
-  // Custom event component for moon phases and other events
+  // Custom event component with pre/post indicators
   const EventComponent = ({ event }: EventProps<UiEvent>) => {
     const resource = event.resource as any;
     
-    // Handle moon phases - use MoonPhaseIcon if available, otherwise use emoji
+    // Handle moon phases
     if (resource?.moonPhase) {
       if (MoonPhaseIcon && getMoonPhaseFromResource) {
         const moonPhase = getMoonPhaseFromResource(resource);
@@ -341,7 +374,6 @@ export default function CalendarGrid({
           );
         }
       }
-      // Fallback to emoji if MoonPhaseDisplay isn't available
       return (
         <div className="flex items-center justify-center w-full h-full text-base">
           {getMoonEmoji(resource.moonPhase)}
@@ -349,16 +381,22 @@ export default function CalendarGrid({
       );
     }
 
+    // Build event display with indicators
+    const hasPreEvent = resource?.hasPreEvent;
+    const hasPostEvent = resource?.hasPostEvent;
+
     // Render todo with checkbox
     if (resource?.event_type === "todo") {
       return (
-        <div className="flex items-center gap-1 px-1">
+        <div className="flex items-center gap-1 px-1 w-full">
+          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
           <span className="text-[10px]">
             {resource?.completed ? "✓" : "○"}
           </span>
           <span className="truncate flex-1 text-[10px] md:text-xs">
             {event.title}
           </span>
+          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
         </div>
       );
     }
@@ -366,19 +404,41 @@ export default function CalendarGrid({
     // Render reminder with icon
     if (resource?.event_type === "reminder") {
       return (
-        <div className="flex items-center gap-1 px-1">
+        <div className="flex items-center gap-1 px-1 w-full">
+          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
           <span className="text-[10px]">⏰</span>
           <span className="truncate flex-1 text-[10px] md:text-xs">
             {event.title}
           </span>
+          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
+        </div>
+      );
+    }
+
+    // Business events with special badge
+    if (resource?.source === "business") {
+      return (
+        <div className="flex items-center gap-1 px-1 w-full">
+          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
+          <span className="truncate flex-1 text-[10px] md:text-xs font-bold">
+            {event.title}
+          </span>
+          {context !== 'business' && (
+            <span className="text-[8px] bg-white/30 px-1 rounded">BIZ</span>
+          )}
+          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
         </div>
       );
     }
     
-    // Render normal event title
+    // Render normal event with pre/post indicators
     return (
-      <div className="px-1 truncate text-[10px] md:text-xs">
-        {event.title}
+      <div className="flex items-center gap-1 px-1 w-full">
+        {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
+        <span className="truncate flex-1 text-[10px] md:text-xs">
+          {event.title}
+        </span>
+        {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
       </div>
     );
   };
@@ -420,12 +480,39 @@ export default function CalendarGrid({
 
   return (
     <div 
-      className="calendar-wrapper rounded-xl overflow-hidden shadow-lg bg-white"
+      className="calendar-wrapper rounded-xl overflow-hidden shadow-lg bg-white relative"
       style={{
         padding: isMobile ? '0.5rem' : '1rem',
-        position: 'relative',
       }}
     >
+      {/* Legend for pre/post event indicators */}
+      {(context === 'business' || dbUiEvents.some(e => e.resource?.hasPreEvent || e.resource?.hasPostEvent)) && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "10px",
+            right: "10px",
+            background: "rgba(255,255,255,0.95)",
+            backdropFilter: "blur(8px)",
+            borderRadius: "8px",
+            padding: "6px 10px",
+            fontSize: "11px",
+            border: "1px solid rgba(0,0,0,0.1)",
+            zIndex: 10,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: "4px", color: "#374151" }}>
+            Event Indicators:
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", color: "#6b7280" }}>
+            <div>🍽️ = Pre-event gathering</div>
+            <div>☕ = Post-event gathering</div>
+            {context === 'business' && <div>BIZ = Business event</div>}
+          </div>
+        </div>
+      )}
+
       {/* Optional weather overlay */}
       {showWeather && view === "month" && !isMobile && (
         <div
@@ -494,7 +581,7 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* Comprehensive styles */}
+      {/* Comprehensive styles - keeping all existing styles */}
       <style jsx global>{`
         /* Base calendar container */
         .calendar-wrapper {
@@ -750,3 +837,6 @@ export default function CalendarGrid({
     </div>
   );
 }
+</code></pre>
+</body>
+</html>
