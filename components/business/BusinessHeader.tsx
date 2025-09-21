@@ -2,199 +2,183 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
 
-export default function BusinessHeader({ businessId }: { businessId: string }) {
-  const router = useRouter();
-  const [business, setBusiness] = useState<any>(null);
+interface BusinessHeader {
+  id: string;
+  display_name?: string;
+  tagline?: string;
+  logo_url?: string;
+  cover_url?: string;
+  handle?: string;
+  visibility?: 'public' | 'private' | 'unlisted';
+  verified?: boolean;
+}
+
+const tabs = [
+  { id: 'basic', label: 'Basic Info', icon: '📝' },
+  { id: 'calendar', label: 'Calendar', icon: '📅' },
+  { id: 'store', label: 'Store', icon: '🛍️' },
+  { id: 'gallery', label: 'Gallery', icon: '📸' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' }
+];
+
+interface Props {
+  businessId: string;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+}
+
+export default function BusinessHeader({ businessId, activeTab, onTabChange }: Props) {
+  const [business, setBusiness] = useState<BusinessHeader | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 640);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const router = useRouter();
 
   useEffect(() => {
-    async function load() {
-      // businessId is actually the owner_id (user.id)
-      const { data, error } = await supabase
-        .from('business_profiles')
-        .select('display_name, handle, verified, logo_url, rating_average, rating_count')
-        .eq('owner_id', businessId)
-        .single();
-      
-      if (error) {
-        console.error('Error loading business header:', error);
-      }
-      
-      if (data) {
-        // Force visibility to always be public
-        setBusiness({
-          ...data,
-          visibility: 'public'
-        });
-      }
-      setLoading(false);
-    }
-    load();
+    loadBusiness();
   }, [businessId]);
 
-  // Build the public profile URL (no @ symbol in URL)
-  const profileUrl = business?.handle 
-    ? `/business/${business.handle}`
-    : null;
-
-  const handleShare = () => {
-    if (profileUrl) {
-      const fullUrl = window.location.origin + profileUrl;
-      navigator.clipboard.writeText(fullUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  async function loadBusiness() {
+    const { data } = await supabase
+      .from('business_profiles')
+      .select('id, display_name, tagline, logo_url, cover_url, handle, visibility, verified')
+      .eq('id', businessId)
+      .single();
+    
+    if (data) {
+      setBusiness(data);
     }
-  };
+    setLoading(false);
+  }
 
-  return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      {/* Desktop Header */}
-      <div className="hidden sm:block p-6">
-        <div className="flex justify-between items-start gap-4">
-          <div className="flex items-start gap-4">
-            {/* Logo */}
-            {business?.logo_url && (
-              <img
-                src={business.logo_url}
-                alt={business.display_name}
-                className="w-16 h-16 rounded-lg object-cover"
-              />
-            )}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {loading ? (
-                    <span className="animate-pulse bg-gray-200 rounded h-8 w-48 inline-block"></span>
-                  ) : (
-                    business?.display_name || 'My Business'
-                  )}
-                </h1>
-                {business?.verified && (
-                  <span className="text-blue-500 text-xl" title="Verified Business">✓</span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-sm font-medium text-green-600">
-                  🟢 Public
-                </span>
-                {business?.handle && (
-                  <span className="text-sm text-gray-600">@{business.handle}</span>
-                )}
-                {business?.rating_average && (
-                  <span className="text-sm text-gray-600">
-                    {business.rating_average}⭐ ({business.rating_count || 0})
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            {profileUrl && (
-              <Link 
-                href={profileUrl}
-                target="_blank"
-                className="px-4 py-2 border border-gray-300 rounded-lg text-center hover:bg-gray-50 font-medium transition-colors"
-              >
-                👁️ Preview
-              </Link>
-            )}
-            <button 
-              onClick={handleShare}
-              disabled={!profileUrl}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors relative"
-            >
-              {copied ? '✓ Copied!' : '📋 Share'}
-            </button>
-          </div>
+  function handleShare() {
+    if (business?.handle) {
+      const url = `${window.location.origin}/business/${business.handle}`;
+      if (navigator.share) {
+        navigator.share({
+          title: business.display_name || 'Check out this business',
+          url: url
+        });
+      } else {
+        navigator.clipboard.writeText(url);
+        alert('Link copied to clipboard!');
+      }
+    }
+  }
+
+  function handlePreview() {
+    if (business?.handle) {
+      window.open(`/business/${business.handle}`, '_blank');
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="animate-pulse">
+          <div className="h-32 bg-gray-200 rounded-lg mb-4"></div>
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
         </div>
       </div>
+    );
+  }
 
-      {/* Mobile Header */}
-      <div className="sm:hidden">
-        <div className="p-4">
-          {/* Top Row - Name & Status */}
-          <div className="flex items-start justify-between gap-2 mb-3">
-            <div className="flex items-center gap-3">
+  return (
+    <div className="bg-white rounded-lg shadow-sm mb-6">
+      {/* Cover Section */}
+      <div className="relative h-48 sm:h-64 rounded-t-lg overflow-hidden">
+        {business?.cover_url ? (
+          <img 
+            src={business.cover_url} 
+            alt="Cover" 
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-purple-400 to-pink-400" />
+        )}
+        
+        {/* Overlay with business info */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent">
+          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+            <div className="flex items-end gap-4">
               {business?.logo_url && (
                 <img
                   src={business.logo_url}
-                  alt={business.display_name}
-                  className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                  alt={business.display_name || 'Logo'}
+                  className="w-20 h-20 rounded-lg border-4 border-white shadow-lg object-cover"
                 />
               )}
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold text-gray-900 truncate flex items-center gap-1">
-                  {loading ? (
-                    <span className="animate-pulse bg-gray-200 rounded h-6 w-32 inline-block"></span>
-                  ) : (
-                    <>
-                      {business?.display_name || 'My Business'}
-                      {business?.verified && (
-                        <span className="text-blue-500 text-sm" title="Verified">✓</span>
-                      )}
-                    </>
-                  )}
+              <div className="flex-1">
+                <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                  {business?.display_name || 'My Business'}
+                  {business?.verified && <span className="text-blue-400">✓</span>}
                 </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-medium text-green-600">
-                    🟢 Public
-                  </span>
-                  {business?.rating_average && (
-                    <span className="text-xs text-gray-600">
-                      {business.rating_average}⭐
-                    </span>
-                  )}
-                </div>
+                {business?.tagline && (
+                  <p className="text-sm sm:text-base opacity-90">{business.tagline}</p>
+                )}
               </div>
             </div>
           </div>
-
-          {/* Handle */}
-          {business?.handle && (
-            <div className="text-sm text-gray-600 mb-3">
-              @{business.handle}
-            </div>
-          )}
-
-          {/* Action Buttons - Full Width on Mobile */}
-          <div className="grid grid-cols-2 gap-2">
-            {profileUrl && (
-              <Link 
-                href={profileUrl}
-                target="_blank"
-                className="px-3 py-2 border border-gray-300 rounded-lg text-center hover:bg-gray-50 font-medium text-sm transition-colors"
-              >
-                👁️ Preview
-              </Link>
-            )}
-            <button 
-              onClick={handleShare}
-              disabled={!profileUrl}
-              className={`px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                !profileUrl ? 'col-span-2' : ''
-              }`}
-            >
-              {copied ? '✓ Copied!' : '📋 Share'}
-            </button>
-          </div>
         </div>
+
+        {/* Action buttons */}
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button
+            onClick={handleShare}
+            className="px-3 py-1.5 bg-white/90 backdrop-blur text-gray-700 rounded-lg text-sm font-medium hover:bg-white transition-colors"
+          >
+            🔗 Share
+          </button>
+          <button
+            onClick={handlePreview}
+            className="px-3 py-1.5 bg-white/90 backdrop-blur text-gray-700 rounded-lg text-sm font-medium hover:bg-white transition-colors"
+          >
+            👁️ Preview
+          </button>
+        </div>
+      </div>
+
+      {/* Status Bar */}
+      <div className="px-6 py-3 bg-gray-50 border-b flex items-center justify-between">
+        <div className="flex items-center gap-4 text-sm">
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+            business?.visibility === 'public' 
+              ? 'bg-green-100 text-green-700' 
+              : business?.visibility === 'unlisted'
+              ? 'bg-yellow-100 text-yellow-700'
+              : 'bg-gray-100 text-gray-700'
+          }`}>
+            {business?.visibility === 'public' ? '🌍 Public' : 
+             business?.visibility === 'unlisted' ? '🔗 Unlisted' : '🔒 Private'}
+          </span>
+          {business?.handle && (
+            <span className="text-gray-600">@{business.handle}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="px-2 py-2 bg-white rounded-b-lg">
+        <nav className="flex gap-1 overflow-x-auto scrollbar-hide">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm
+                whitespace-nowrap transition-all
+                ${activeTab === tab.id 
+                  ? 'bg-purple-100 text-purple-700 shadow-sm' 
+                  : 'text-gray-600 hover:bg-gray-100'}
+              `}
+            >
+              <span className="text-lg">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
     </div>
   );
