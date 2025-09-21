@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import BusinessBasicTab from './tabs/BusinessBasicTab';
-import BusinessDetailsTab from './tabs/BusinessDetailsTab';
 import BusinessGalleryTab from './tabs/BusinessGalleryTab';
 import BusinessStoreTab from './tabs/BusinessStoreTab';
 import BusinessSettingsTab from './tabs/BusinessSettingsTab';
@@ -13,8 +12,7 @@ import UnifiedEventCreator from '@/components/events/UnifiedEventCreator';
 
 const allTabs = [
   { id: 'basic', label: 'Basic Info', icon: '📝', color: 'purple', required: true },
-  { id: 'details', label: 'Details', icon: '📋', color: 'blue', required: true },
-  { id: 'calendar', label: 'Calendar', icon: '📅', color: 'green' }, // NEW TAB
+  { id: 'calendar', label: 'Calendar', icon: '📅', color: 'green' },
   { id: 'store', label: 'Store', icon: '🛍️', color: 'rose' },
   { id: 'gallery', label: 'Gallery', icon: '📸', color: 'pink' },
   { id: 'settings', label: 'Settings', icon: '⚙️', color: 'gray', required: true },
@@ -24,13 +22,12 @@ interface Props {
   businessId: string;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  isOwner?: boolean; // Add this to know if current user owns this business
-  currentUserId?: string; // Current logged-in user ID
+  isOwner?: boolean;
+  currentUserId?: string;
 }
 
 interface TabConfig {
-  details?: boolean;
-  calendar?: boolean; // Add calendar to config
+  calendar?: boolean;
   store?: boolean;
   gallery?: boolean;
 }
@@ -44,8 +41,7 @@ export default function BusinessTabs({
 }: Props) {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [enabledTabs, setEnabledTabs] = useState<TabConfig>({
-    details: true,
-    calendar: true, // Enable calendar by default
+    calendar: true,
     store: true,
     gallery: true,
   });
@@ -80,7 +76,7 @@ export default function BusinessTabs({
 
   // Filter tabs based on enabled configuration
   const tabs = allTabs.filter(tab => {
-    // Always show required tabs (Basic Info, Contact, Settings)
+    // Always show required tabs (Basic Info, Settings)
     if (tab.required) return true;
     
     // For optional tabs, check if they're enabled
@@ -317,7 +313,6 @@ export default function BusinessTabs({
                 </h3>
                 <p className="text-sm text-gray-500">
                   {activeTab === 'basic' && 'Manage your business profile information'}
-                  {activeTab === 'details' && 'Contact, services, hours, and social links'}
                   {activeTab === 'calendar' && 'Events, appointments, and booking management'}
                   {activeTab === 'store' && 'Showcase products with external purchase links'}
                   {activeTab === 'gallery' && 'Showcase your work and space'}
@@ -343,7 +338,6 @@ export default function BusinessTabs({
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === 'basic' && <BusinessBasicTab businessId={businessId} />}
-          {activeTab === 'details' && <BusinessDetailsTab businessId={businessId} />}
           {activeTab === 'calendar' && (
             <BusinessCalendar 
               businessId={businessId}
@@ -381,7 +375,7 @@ export default function BusinessTabs({
         />
       )}
 
-      {/* Booking Confirmation Modal (Simple version - you can enhance this) */}
+      {/* Booking Confirmation Modal */}
       {showBookingModal && selectedTimeSlot && selectedService && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
@@ -425,7 +419,6 @@ export default function BusinessTabs({
               </button>
               <button
                 onClick={() => {
-                  // Booking logic is handled in handleBookAppointment
                   alert('Booking confirmed!');
                   setShowBookingModal(false);
                 }}
@@ -440,7 +433,3 @@ export default function BusinessTabs({
     </div>
   );
 }
-
-// Add this to your global CSS or Tailwind config if not already there
-// .scrollbar-hide::-webkit-scrollbar { display: none; }
-// .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
