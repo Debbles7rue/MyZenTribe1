@@ -48,7 +48,7 @@ export default function BusinessDashboardPage() {
             user_id: user.id,
             display_name: 'My Business',
             handle: `business-${user.id.slice(0, 8)}`,
-            visibility: 'private',
+            visibility: 'public',  // Changed to public as per your earlier request
             allow_messages: false,
             allow_reviews: false,
             discoverable: false,
@@ -149,23 +149,30 @@ export default function BusinessDashboardPage() {
           <BusinessSidebar businessId={businessId} />
         </div>
 
-        {/* Business Posts Section */}
-        {userId && (
+        {/* Business Posts Section - ONLY SHOW ON CALENDAR TAB */}
+        {userId && activeTab === 'calendar' && (
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div className="lg:col-span-1"></div>
             <div className="lg:col-span-3">
               {/* Post Composer */}
               <div className="bg-white rounded-lg shadow p-6 mb-6">
-                <h3 className="text-lg font-semibold mb-4">Share Business Update</h3>
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <span>📅</span>
+                  Share Event Reminder
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Post updates about upcoming events, schedule changes, or special announcements
+                </p>
                 <PostComposer 
                   onPostCreated={loadBusinessPosts}
                   className="business-composer"
+                  placeholder="Share an update about upcoming events..."
                 />
               </div>
 
               {/* Business Posts Feed */}
               <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold mb-4">Your Business Posts</h3>
+                <h3 className="text-lg font-semibold mb-4">Recent Event Updates</h3>
                 {postsLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="text-gray-500">Loading posts...</div>
@@ -184,8 +191,8 @@ export default function BusinessDashboardPage() {
                 ) : (
                   <div className="text-center py-8">
                     <div className="text-4xl mb-3">📢</div>
-                    <div className="text-lg font-medium text-gray-700">No business posts yet</div>
-                    <div className="text-gray-500 mt-2">Share updates about your business, promotions, or news!</div>
+                    <div className="text-lg font-medium text-gray-700">No event updates yet</div>
+                    <div className="text-gray-500 mt-2">Share reminders about upcoming events or important announcements!</div>
                   </div>
                 )}
               </div>
