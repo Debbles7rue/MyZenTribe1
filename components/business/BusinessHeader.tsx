@@ -28,7 +28,7 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
       // businessId is actually the owner_id (user.id)
       const { data, error } = await supabase
         .from('business_profiles')
-        .select('display_name, handle, verified, visibility, logo_url, rating_average, rating_count')
+        .select('display_name, handle, verified, logo_url, rating_average, rating_count')
         .eq('owner_id', businessId)
         .single();
       
@@ -36,7 +36,13 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
         console.error('Error loading business header:', error);
       }
       
-      setBusiness(data);
+      if (data) {
+        // Force visibility to always be public
+        setBusiness({
+          ...data,
+          visibility: 'public'
+        });
+      }
       setLoading(false);
     }
     load();
@@ -55,20 +61,6 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
       setTimeout(() => setCopied(false), 2000);
     }
   };
-
-  const getVisibilityBadge = () => {
-    switch (business?.visibility) {
-      case 'public':
-        return { icon: '🟢', text: 'Public', color: 'text-green-600' };
-      case 'unlisted':
-        return { icon: '🟡', text: 'Unlisted', color: 'text-yellow-600' };
-      case 'private':
-      default:
-        return { icon: '🔴', text: 'Private', color: 'text-red-600' };
-    }
-  };
-
-  const visibilityStatus = getVisibilityBadge();
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -98,8 +90,8 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
                 )}
               </div>
               <div className="flex items-center gap-3 mt-1">
-                <span className={`text-sm font-medium ${visibilityStatus.color}`}>
-                  {visibilityStatus.icon} {visibilityStatus.text}
+                <span className="text-sm font-medium text-green-600">
+                  🟢 Public
                 </span>
                 {business?.handle && (
                   <span className="text-sm text-gray-600">@{business.handle}</span>
@@ -114,7 +106,7 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
           </div>
           
           <div className="flex gap-2">
-            {profileUrl && business?.visibility === 'public' && (
+            {profileUrl && (
               <Link 
                 href={profileUrl}
                 target="_blank"
@@ -125,7 +117,7 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
             )}
             <button 
               onClick={handleShare}
-              disabled={!profileUrl || business?.visibility === 'private'}
+              disabled={!profileUrl}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors relative"
             >
               {copied ? '✓ Copied!' : '📋 Share'}
@@ -161,8 +153,8 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
                   )}
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`text-xs font-medium ${visibilityStatus.color}`}>
-                    {visibilityStatus.icon} {visibilityStatus.text}
+                  <span className="text-xs font-medium text-green-600">
+                    🟢 Public
                   </span>
                   {business?.rating_average && (
                     <span className="text-xs text-gray-600">
@@ -183,7 +175,7 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
 
           {/* Action Buttons - Full Width on Mobile */}
           <div className="grid grid-cols-2 gap-2">
-            {profileUrl && business?.visibility === 'public' && (
+            {profileUrl && (
               <Link 
                 href={profileUrl}
                 target="_blank"
@@ -194,23 +186,14 @@ export default function BusinessHeader({ businessId }: { businessId: string }) {
             )}
             <button 
               onClick={handleShare}
-              disabled={!profileUrl || business?.visibility === 'private'}
+              disabled={!profileUrl}
               className={`px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                !profileUrl || business?.visibility !== 'public' ? 'col-span-2' : ''
+                !profileUrl ? 'col-span-2' : ''
               }`}
             >
               {copied ? '✓ Copied!' : '📋 Share'}
             </button>
           </div>
-
-          {/* Warning for non-public profiles */}
-          {business?.visibility !== 'public' && (
-            <div className="mt-3 p-2 bg-yellow-50 rounded-lg">
-              <p className="text-xs text-yellow-800">
-                ⚠️ Your business is {business?.visibility}. Make it public in Settings to share.
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
