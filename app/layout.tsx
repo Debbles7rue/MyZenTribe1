@@ -11,7 +11,7 @@ import Script from 'next/script';
 export const metadata: Metadata = {
   title: "MyZenTribe",
   description: "Meditation • Community • Presence",
-  viewport: "width=device-width, initial-scale=1",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=5",
   themeColor: "#7c3aed",
 };
 
