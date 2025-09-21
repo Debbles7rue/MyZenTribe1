@@ -94,9 +94,9 @@ export default function BusinessCalendar({
   const loadBusinessData = async () => {
     setLoading(true);
     try {
-      // Get business info
+      // Get business info from business_profiles
       const { data: bizData } = await supabase
-        .from('businesses')
+        .from('business_profiles')
         .select('*')
         .eq('id', businessId)
         .single();
@@ -143,16 +143,21 @@ export default function BusinessCalendar({
 
   const loadCalendarData = async () => {
     try {
-      // Load events if showing events
+      // Load events if showing events - check multiple possible fields for business association
       if (calendarDisplay === 'events' || calendarDisplay === 'both') {
         const { data, error } = await supabase
           .from('events')
           .select('*')
-          .or(`created_by.eq.${businessId},business_id.eq.${businessId},host_business_id.eq.${businessId}`)
+          .or(`created_by.eq.${businessId},source.eq.business`)
           .order('start_time', { ascending: true });
 
         if (data) {
-          setEvents(data);
+          // Filter to only show events actually created by this business
+          const businessEvents = data.filter(event => 
+            event.created_by === businessId || 
+            (event.source === 'business' && event.created_by === businessId)
+          );
+          setEvents(businessEvents);
         }
       }
 
@@ -551,7 +556,7 @@ export default function BusinessCalendar({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <CalendarIcon className="w-5 sm:w-6 h-5 sm:h-6" />
-              <span className="truncate">{businessInfo?.business_name || 'Business'} Calendar</span>
+              <span className="truncate">{businessInfo?.display_name || 'Business'} Calendar</span>
             </h2>
             <p className="text-purple-100 mt-1 text-sm sm:text-base">
               {businessSettings?.service_type === 'both' 
