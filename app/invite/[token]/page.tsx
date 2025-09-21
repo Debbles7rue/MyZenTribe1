@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import FriendQuestionnaire from "@/components/FriendQuestionnaire";
 
 type InviteData = {
   token: string;
@@ -26,6 +27,8 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
   const [success, setSuccess] = useState(false);
   const [inviterProfile, setInviterProfile] = useState<ProfileData | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>({});
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [newFriendshipId, setNewFriendshipId] = useState<string | null>(null);
 
   useEffect(() => {
     handleInvite();
@@ -46,6 +49,8 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
       const user = userData?.user;
 
       if (!user) {
+        // Store the token for after signin/signup
+        localStorage.setItem("pending_invite_token", params.token);
         // Redirect to sign in with return URL
         const returnUrl = `/invite/${params.token}`;
         router.push(`/signin?returnUrl=${encodeURIComponent(returnUrl)}`);
@@ -143,17 +148,24 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
         
         // Try creating them one by one if bulk insert fails
         let successCount = 0;
+        let lastCreatedId = null;
+        
         for (const record of friendshipRecords) {
-          const { error: singleError } = await supabase
+          const { data: singleData, error: singleError } = await supabase
             .from("friendships")
-            .insert(record);
+            .insert(record)
+            .select()
+            .single();
           
-          if (!singleError) {
+          if (!singleError && singleData) {
             successCount++;
+            if (successCount === 1) {
+              lastCreatedId = singleData.id;
+            }
           } else {
             setDebugInfo(prev => ({ 
               ...prev, 
-              [`singleError_${successCount}`]: singleError.message 
+              [`singleError_${successCount}`]: singleError?.message 
             }));
           }
         }
@@ -162,7 +174,11 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
           setError("Failed to create friendship. You might already be friends or there was a database error.");
           setLoading(false);
           return;
+        } else if (lastCreatedId) {
+          setNewFriendshipId(lastCreatedId);
         }
+      } else if (createdFriendships && createdFriendships.length > 0) {
+        setNewFriendshipId(createdFriendships[0].id);
       }
 
       setDebugInfo(prev => ({ ...prev, createdFriendships }));
@@ -206,12 +222,15 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
         setDebugInfo(prev => ({ ...prev, notificationCreated: notifData }));
       }
 
+      // Clear any pending invite token
+      localStorage.removeItem("pending_invite_token");
+      
       setSuccess(true);
       
-      // Redirect to friends list after 3 seconds
+      // Show questionnaire after a short delay
       setTimeout(() => {
-        router.push(`/friends`);
-      }, 3000);
+        setShowQuestionnaire(true);
+      }, 1000);
 
     } catch (err: any) {
       console.error("Invite acceptance error:", err);
@@ -227,8 +246,8 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50">
-        <div className="card p-8 max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50 p-4">
+        <div className="card p-8 max-w-md w-full text-center">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-48 mx-auto mb-4"></div>
             <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
@@ -255,8 +274,8 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50">
-        <div className="card p-8 max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50 p-4">
+        <div className="card p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-4">😕</div>
           <h1 className="text-2xl font-bold mb-4 text-gray-800">Invite Issue</h1>
           <p className="text-red-600 mb-6">{error}</p>
@@ -297,8 +316,8 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
   if (success) {
     return (
       <>
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50">
-          <div className="card p-8 max-w-md text-center">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-lavender-50 p-4">
+          <div className="card p-8 max-w-md w-full text-center">
             <div className="text-6xl mb-4">🎉</div>
             <h1 className="text-2xl font-bold mb-4 text-gray-800">You're Now Friends!</h1>
             {inviterProfile && (
@@ -320,16 +339,28 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
             )}
             
             {!showQuestionnaire && (
-              <p className="text-sm text-gray-500">Preparing friend questionnaire...</p>
+              <p className="text-sm text-gray-500 mb-4">
+                You can categorize your friend to personalize your connection
+              </p>
             )}
             
-            <div className="mt-4">
-              <button
-                onClick={() => setShowQuestionnaire(true)}
-                className="btn btn-brand"
-              >
-                Categorize Friend
-              </button>
+            <div className="mt-4 space-y-2">
+              {!showQuestionnaire && (
+                <>
+                  <button
+                    onClick={() => setShowQuestionnaire(true)}
+                    className="btn btn-brand w-full"
+                  >
+                    Categorize Friend
+                  </button>
+                  <button
+                    onClick={() => router.push("/friends")}
+                    className="btn btn-neutral w-full"
+                  >
+                    Skip for Now
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Debug info for success case */}
@@ -349,13 +380,14 @@ export default function InviteAcceptPage({ params }: { params: { token: string }
         </div>
 
         {/* Friend Questionnaire Modal */}
-        {inviterProfile && (
+        {inviterProfile && showQuestionnaire && (
           <FriendQuestionnaire
             isOpen={showQuestionnaire}
             onClose={() => {
               setShowQuestionnaire(false);
               router.push("/friends");
             }}
+            friendshipId={newFriendshipId || undefined}
             friendId={inviterProfile.id}
             friendName={inviterProfile.full_name || inviterProfile.email || "Friend"}
             isNewFriend={true}
