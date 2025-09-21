@@ -1,6 +1,16 @@
 // app/(protected)/calendar/components/CalendarModals.tsx
 
 import React, { useRef, useEffect, useState } from 'react';
+import UnifiedEventCreator from '@/components/events/UnifiedEventCreator';
+import EventDetails from '@/components/EventDetails';
+import CalendarAnalytics from '@/components/CalendarAnalytics';
+import SmartTemplates from '@/components/SmartTemplates';
+import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
+import KeyboardShortcutsHelp from '@/hooks/useKeyboardShortcuts';
+import PomodoroTimer from '@/components/PomodoroTimer';
+import TimeBlockingModal from '@/components/TimeBlockingModal';
+import CarpoolChatModal from '@/components/CarpoolChatModal';
+import Modal from '@/components/Modal';
 import type { DBEvent } from '@/lib/types';
 import type { Friend, CalendarForm, QuickModalForm, FeedEvent } from '../types';
 // Import the EventCarpoolModal component
@@ -18,6 +28,7 @@ interface CalendarModalsProps {
   showCarpoolChat: boolean;
   quickModalOpen: boolean;
   showTimeBlocking: boolean;
+  showPomodoroTimer?: boolean;
   
   // Modal setters
   setOpenCreate: (open: boolean) => void;
@@ -30,6 +41,7 @@ interface CalendarModalsProps {
   setShowCarpoolChat: (show: boolean) => void;
   setQuickModalOpen: (open: boolean) => void;
   setShowTimeBlocking: (show: boolean) => void;
+  setShowPomodoroTimer?: (show: boolean) => void;
   
   // Data
   me: string | null;
@@ -56,9 +68,11 @@ interface CalendarModalsProps {
   createCarpoolGroup: () => void;
   resetForm: () => void;
   
-  // Add these if not already present
+  // Additional props that may be present
   showToast?: (toast: { type: string; message: string }) => void;
-  carpoolMatches?: any[];  // ADD THIS LINE
+  carpoolMatches?: any[];
+  gamificationEnabled?: boolean;
+  setGamificationEnabled?: (enabled: boolean) => void;
 }
 
 export default function CalendarModals({
@@ -72,6 +86,7 @@ export default function CalendarModals({
   showCarpoolChat,
   quickModalOpen,
   showTimeBlocking,
+  showPomodoroTimer,
   setOpenCreate,
   setOpenEdit,
   setDetailsOpen,
@@ -82,6 +97,7 @@ export default function CalendarModals({
   setShowCarpoolChat,
   setQuickModalOpen,
   setShowTimeBlocking,
+  setShowPomodoroTimer,
   me,
   selected,
   selectedFeedEvent,
@@ -104,7 +120,9 @@ export default function CalendarModals({
   createCarpoolGroup,
   resetForm,
   showToast,
-  carpoolMatches  // ADD THIS LINE
+  carpoolMatches,
+  gamificationEnabled,
+  setGamificationEnabled
 }: CalendarModalsProps) {
   
   // State for pre/post events
@@ -271,7 +289,7 @@ export default function CalendarModals({
 
   // Prepare carpool data for EventCarpoolModal
   const carpoolData = {
-    carpoolMatches: carpoolMatches || [],  // CHANGED THIS LINE - now uses the prop instead of empty array
+    carpoolMatches: carpoolMatches || [],
     friends: friends || [],
     sendCarpoolInvite: async (matchId: string, message?: string) => {
       // Implement your carpool invite logic here
@@ -286,318 +304,59 @@ export default function CalendarModals({
     }
   };
 
-  // REST OF YOUR FILE REMAINS EXACTLY THE SAME FROM HERE...
   return (
     <>
-      {/* Create Event Modal with Cover Photo and Pre/Post Events */}
-      <Modal isOpen={openCreate} onClose={() => {
-        setOpenCreate(false);
-        resetForm();
-        setShowPreEvent(false);
-        setShowPostEvent(false);
-        clearCoverPhoto();
-      }} title="Create Event" size="xl">
-        <div className="space-y-4">
-          {/* Cover Photo Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Cover Photo
-            </label>
-            <div 
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center hover:border-purple-500 transition-colors cursor-pointer"
-            >
-              {coverPhotoPreview || form.cover_photo ? (
-                <div className="space-y-2">
-                  <img 
-                    src={coverPhotoPreview || form.cover_photo} 
-                    alt="Cover" 
-                    className="w-full h-32 object-cover rounded-lg"
-                    onError={(e) => {
-                      // Hide image if it fails to load
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      showToast?.({ type: 'error', message: 'Failed to load image' });
-                    }}
-                  />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      clearCoverPhoto();
-                    }}
-                    className="text-sm text-red-500 hover:text-red-700"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Click to upload cover photo
-                  </div>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleCoverPhotoUpload}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title *
-            </label>
-            <StableInput
-              ref={titleInputRef}
-              type="text"
-              value={form.title}
-              onChange={(value: string) => setForm(prev => ({ ...prev, title: value }))}
-              placeholder="Event title"
-              autoFocus
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
-            </label>
-            <StableTextarea
-              value={form.description}
-              onChange={(value: string) => setForm(prev => ({ ...prev, description: value }))}
-              rows={3}
-              placeholder="Event description"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Location
-            </label>
-            <StableInput
-              type="text"
-              value={form.location}
-              onChange={(value: string) => setForm(prev => ({ ...prev, location: value }))}
-              placeholder="Event location"
-            />
-          </div>
-          
-          <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-4'}`}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Start Time *
-              </label>
-              <StableInput
-                type="datetime-local"
-                value={form.start}
-                onChange={(value: string) => setForm(prev => ({ ...prev, start: value }))}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                End Time *
-              </label>
-              <StableInput
-                type="datetime-local"
-                value={form.end}
-                onChange={(value: string) => setForm(prev => ({ ...prev, end: value }))}
-              />
-            </div>
-          </div>
-          
-          {/* Pre/Post Event Options */}
-          <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showPreEvent}
-                  onChange={(e) => setShowPreEvent(e.target.checked)}
-                  className="rounded text-purple-500"
-                />
-                <span className={`${isMobile ? 'text-base' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300`}>
-                  Add Pre-Event (e.g., dinner before)
-                </span>
-              </label>
-            </div>
-            
-            {showPreEvent && (
-              <div className="ml-6 space-y-2">
-                <StableInput
-                  type="text"
-                  value={form.pre_event?.title || ''}
-                  onChange={(value: string) => setForm(prev => ({ 
-                    ...prev, 
-                    pre_event: { ...prev.pre_event, title: value }
-                  }))}
-                  placeholder="Pre-event title (e.g., Dinner at Joe's)"
-                />
-                <StableInput
-                  type="datetime-local"
-                  value={form.pre_event?.time || ''}
-                  onChange={(value: string) => setForm(prev => ({ 
-                    ...prev, 
-                    pre_event: { ...prev.pre_event, time: value }
-                  }))}
-                />
-              </div>
-            )}
-            
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showPostEvent}
-                  onChange={(e) => setShowPostEvent(e.target.checked)}
-                  className="rounded text-purple-500"
-                />
-                <span className={`${isMobile ? 'text-base' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300`}>
-                  Add Post-Event (e.g., drinks after)
-                </span>
-              </label>
-            </div>
-            
-            {showPostEvent && (
-              <div className="ml-6 space-y-2">
-                <StableInput
-                  type="text"
-                  value={form.post_event?.title || ''}
-                  onChange={(value: string) => setForm(prev => ({ 
-                    ...prev, 
-                    post_event: { ...prev.post_event, title: value }
-                  }))}
-                  placeholder="Post-event title (e.g., Drinks at the bar)"
-                />
-                <StableInput
-                  type="datetime-local"
-                  value={form.post_event?.time || ''}
-                  onChange={(value: string) => setForm(prev => ({ 
-                    ...prev, 
-                    post_event: { ...prev.post_event, time: value }
-                  }))}
-                />
-              </div>
-            )}
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Visibility
-            </label>
-            <select
-              value={form.visibility}
-              onChange={(e) => setForm(prev => ({ ...prev, visibility: e.target.value as any }))}
-              className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white ${isMobile ? 'text-base' : 'text-sm'}`}
-            >
-              <option value="private">Private</option>
-              <option value="friends">Friends Only</option>
-              <option value="public">Public</option>
-            </select>
-          </div>
-          
-          <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4`}>
-            <button
-              onClick={handleCreateEvent}
-              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all`}
-            >
-              Create Event
-            </button>
-            <button
-              onClick={() => {
-                setOpenCreate(false);
-                resetForm();
-                setShowPreEvent(false);
-                setShowPostEvent(false);
-                clearCoverPhoto();
-              }}
-              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Event Details Modal */}
+      <EventDetails 
+        event={detailsOpen ? (selectedFeedEvent || selected) : null} 
+        onClose={() => {
+          setDetailsOpen(false);
+        }}
+        onEdit={handleEdit}
+        isOwner={selected?.created_by === me}
+      />
 
-      {/* Edit Event Modal */}
-      <Modal isOpen={openEdit} onClose={() => {
-        setOpenEdit(false);
-        resetForm();
-        clearCoverPhoto();
-      }} title="Edit Event" size="xl">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title *
-            </label>
-            <StableInput
-              type="text"
-              value={form.title}
-              onChange={(value: string) => setForm(prev => ({ ...prev, title: value }))}
-              autoFocus
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
-            </label>
-            <StableTextarea
-              value={form.description}
-              onChange={(value: string) => setForm(prev => ({ ...prev, description: value }))}
-              rows={3}
-            />
-          </div>
-          
-          <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-4'}`}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Start Time *
-              </label>
-              <StableInput
-                type="datetime-local"
-                value={form.start}
-                onChange={(value: string) => setForm(prev => ({ ...prev, start: value }))}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                End Time *
-              </label>
-              <StableInput
-                type="datetime-local"
-                value={form.end}
-                onChange={(value: string) => setForm(prev => ({ ...prev, end: value }))}
-              />
-            </div>
-          </div>
-          
-          <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4`}>
-            <button
-              onClick={handleUpdateEvent}
-              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all`}
-            >
-              Update Event
-            </button>
-            <button
-              onClick={() => {
-                setOpenEdit(false);
-                resetForm();
-                clearCoverPhoto();
-              }}
-              className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Create Event Modal - Using UnifiedEventCreator */}
+      <UnifiedEventCreator
+        open={openCreate}
+        onClose={() => {
+          setOpenCreate(false);
+          resetForm();
+          setShowPreEvent(false);
+          setShowPostEvent(false);
+          clearCoverPhoto();
+        }}
+        userId={me || ''}
+        context="calendar"
+        onSuccess={(event) => {
+          handleCreateEvent();
+          setOpenCreate(false);
+          resetForm();
+          setShowPreEvent(false);
+          setShowPostEvent(false);
+          clearCoverPhoto();
+        }}
+        defaultVisibility="private"
+      />
+
+      {/* Edit Event Modal - Using UnifiedEventCreator */}
+      <UnifiedEventCreator
+        open={openEdit}
+        onClose={() => {
+          setOpenEdit(false);
+          resetForm();
+          clearCoverPhoto();
+        }}
+        userId={me || ''}
+        context="calendar"
+        editingEvent={selected || undefined}
+        onSuccess={(event) => {
+          handleUpdateEvent();
+          setOpenEdit(false);
+          resetForm();
+          clearCoverPhoto();
+        }}
+      />
 
       {/* Time Blocking Modal */}
       <Modal 
@@ -707,120 +466,6 @@ export default function CalendarModals({
             </div>
           </div>
         </div>
-      </Modal>
-
-      {/* Event Details Modal */}
-      <Modal 
-        isOpen={detailsOpen} 
-        onClose={() => setDetailsOpen(false)} 
-        title="Event Details"
-      >
-        {(selected || selectedFeedEvent) && (
-          <div className="space-y-4">
-            {/* Cover photo if exists */}
-            {(selected?.cover_photo || selectedFeedEvent?.cover_photo) && (
-              <img 
-                src={selected?.cover_photo || selectedFeedEvent?.cover_photo} 
-                alt="Event cover" 
-                className="w-full h-48 object-cover rounded-lg"
-                onError={(e) => {
-                  // Hide image if it fails to load
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {selected?.title || selectedFeedEvent?.title}
-              </h3>
-              {(selected?.description || selectedFeedEvent?.description) && (
-                <p className="mt-2 text-gray-600 dark:text-gray-400">
-                  {selected?.description || selectedFeedEvent?.description}
-                </p>
-              )}
-            </div>
-            
-            {/* Pre-event info */}
-            {(selected?.pre_event || selectedFeedEvent?.pre_event) && (
-              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
-                <div className="text-sm font-medium text-purple-800 dark:text-purple-300">
-                  Pre-Event: {selected?.pre_event?.title || selectedFeedEvent?.pre_event?.title}
-                </div>
-                <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                  {new Date(selected?.pre_event?.time || selectedFeedEvent?.pre_event?.time).toLocaleString()}
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span>
-                  {new Date(selected?.start_time || selectedFeedEvent?.start_time || '').toLocaleString()}
-                </span>
-              </div>
-              
-              {(selected?.location || selectedFeedEvent?.location) && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span>{selected?.location || selectedFeedEvent?.location}</span>
-                </div>
-              )}
-              
-              {/* Add Carpool Option Button */}
-              {selected && (
-                <button
-                  onClick={() => {
-                    setDetailsOpen(false);
-                    setShowCarpoolChat(true);
-                  }}
-                  className="w-full mt-3 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m0-1V8m0 0a1 1 0 011-1h2a1 1 0 011 1v9" />
-                  </svg>
-                  Coordinate Carpool
-                </button>
-              )}
-            </div>
-            
-            {/* Post-event info */}
-            {(selected?.post_event || selectedFeedEvent?.post_event) && (
-              <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-3">
-                <div className="text-sm font-medium text-pink-800 dark:text-pink-300">
-                  Post-Event: {selected?.post_event?.title || selectedFeedEvent?.post_event?.title}
-                </div>
-                <div className="text-xs text-pink-600 dark:text-pink-400 mt-1">
-                  {new Date(selected?.post_event?.time || selectedFeedEvent?.post_event?.time).toLocaleString()}
-                </div>
-              </div>
-            )}
-            
-            {selected && selected.created_by === me && (
-              <div className={`${isMobile ? 'space-y-3' : 'flex gap-3'} pt-4 border-t dark:border-gray-700`}>
-                <button
-                  onClick={() => handleEdit(selected)}
-                  className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all`}
-                >
-                  Edit Event
-                </button>
-                <button
-                  onClick={() => setDetailsOpen(false)}
-                  className={`${isMobile ? 'w-full' : 'flex-1'} px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all`}
-                >
-                  Close
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </Modal>
 
       {/* Quick Add Modal (Reminder/Todo) */}
@@ -1117,247 +762,77 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Analytics Modal - COMPLETE */}
-      <Modal 
-        isOpen={showAnalytics} 
-        onClose={() => setShowAnalytics(false)} 
-        title="Calendar Analytics"
-        size="2xl"
-      >
-        <div className="space-y-6">
-          {/* Quick Stats */}
-          <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-4`}>
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{events.length}</div>
-              <div className="text-xs text-blue-700 dark:text-blue-300">Total Events</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {events.filter(e => new Date(e.start_time) >= new Date()).length}
-              </div>
-              <div className="text-xs text-green-700 dark:text-green-300">Upcoming</div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {Math.round(events.length / 4)}
-              </div>
-              <div className="text-xs text-purple-700 dark:text-purple-300">Per Week</div>
-            </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{friends.length}</div>
-              <div className="text-xs text-orange-700 dark:text-orange-300">Friends</div>
-            </div>
-          </div>
+      {/* Analytics Modal */}
+      {showAnalytics && (
+        <CalendarAnalytics
+          events={events}
+          userId={me!}
+          onClose={() => setShowAnalytics(false)}
+        />
+      )}
 
-          {/* Busiest Days */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Busiest Days</h3>
-            <div className="space-y-2">
-              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, idx) => {
-                const percentage = Math.random() * 100;
-                return (
-                  <div key={day} className="flex items-center gap-3">
-                    <div className={`${isMobile ? 'w-16' : 'w-20'} text-sm text-gray-600 dark:text-gray-400`}>{day}</div>
-                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-1000"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-500">{Math.round(percentage)}%</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Event Types */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Event Categories</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="text-xl mb-1">💼</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Work</div>
-                <div className="text-lg font-semibold">32%</div>
-              </div>
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="text-xl mb-1">🎉</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Social</div>
-                <div className="text-lg font-semibold">45%</div>
-              </div>
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="text-xl mb-1">🏃</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Personal</div>
-                <div className="text-lg font-semibold">23%</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Export Button */}
-          <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all">
-            Export Analytics Report
-          </button>
-        </div>
-      </Modal>
+      {/* Templates Modal using SmartTemplates component */}
+      {showTemplates && (
+        <SmartTemplates
+          open={showTemplates}
+          onClose={() => setShowTemplates(false)}
+          onApply={handleApplyTemplate}
+          userId={me!}
+        />
+      )}
 
       {/* Meeting Coordinator Modal */}
-      <Modal 
-        isOpen={showMeetingCoordinator} 
-        onClose={() => setShowMeetingCoordinator(false)} 
-        title="Smart Meeting Coordinator"
-        size="xl"
-      >
-        <div className="space-y-4">
-          {/* Meeting Setup */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Meeting Duration
-            </label>
-            <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white">
-              <option value="30">30 minutes</option>
-              <option value="45">45 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="90">1.5 hours</option>
-              <option value="120">2 hours</option>
-            </select>
-          </div>
+      {showMeetingCoordinator && (
+        <SmartMeetingCoordinator
+          open={showMeetingCoordinator}
+          onClose={() => setShowMeetingCoordinator(false)}
+          userId={me!}
+          friends={friends}
+          userEvents={events}
+          onSchedule={async (event) => {
+            handleCreateEvent();
+            setShowMeetingCoordinator(false);
+          }}
+        />
+      )}
 
-          {/* Attendees */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Select Attendees
-            </label>
-            <div className="space-y-2 max-h-32 overflow-y-auto border dark:border-gray-700 rounded-lg p-2">
-              {friends.map((friend) => (
-                <label key={friend.friend_id} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded text-purple-500" />
-                  <span className="text-sm">{friend.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+      {/* Keyboard Shortcuts Help - Desktop only */}
+      {!isMobile && (
+        <KeyboardShortcutsHelp 
+          open={showShortcutsHelp} 
+          onClose={() => setShowShortcutsHelp(false)} 
+        />
+      )}
 
-          {/* Date Range */}
-          <div className={`${isMobile ? 'space-y-3' : 'grid grid-cols-2 gap-3'}`}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                From Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                defaultValue={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                To Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                defaultValue={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-              />
-            </div>
-          </div>
+      {/* Pomodoro Timer Modal */}
+      {showPomodoroTimer && setShowPomodoroTimer && (
+        <PomodoroTimer
+          open={showPomodoroTimer}
+          onClose={() => setShowPomodoroTimer(false)}
+        />
+      )}
 
-          {/* Suggested Times */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-            <h4 className="font-medium text-green-800 dark:text-green-300 mb-3">Suggested Times</h4>
-            <div className="space-y-2">
-              <button className="w-full text-left p-2 bg-white dark:bg-gray-700 rounded hover:shadow-md transition-all">
-                <div className="font-medium text-sm">Tomorrow, 2:00 PM - 3:00 PM</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">All attendees available</div>
-              </button>
-              <button className="w-full text-left p-2 bg-white dark:bg-gray-700 rounded hover:shadow-md transition-all">
-                <div className="font-medium text-sm">Friday, 10:00 AM - 11:00 AM</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Best time for everyone</div>
-              </button>
-              <button className="w-full text-left p-2 bg-white dark:bg-gray-700 rounded hover:shadow-md transition-all">
-                <div className="font-medium text-sm">Next Monday, 3:00 PM - 4:00 PM</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Good availability</div>
-              </button>
-            </div>
-          </div>
+      {/* Time Blocking Modal using TimeBlockingModal component */}
+      {showTimeBlocking && (
+        <TimeBlockingModal
+          open={showTimeBlocking}
+          onClose={() => setShowTimeBlocking(false)}
+          events={events}
+        />
+      )}
 
-          <button className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:shadow-lg transition-all">
-            Find More Times
-          </button>
-        </div>
-      </Modal>
-
-      {/* Shortcuts Help Modal */}
-      <Modal 
-        isOpen={showShortcutsHelp} 
-        onClose={() => setShowShortcutsHelp(false)} 
-        title="Keyboard Shortcuts"
-      >
-        <div className="space-y-4">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {isMobile ? 'Swipe gestures and voice commands available on mobile' : 'Use these shortcuts for faster navigation'}
-          </div>
-
-          {isMobile ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <span className="font-medium">Swipe Left/Right</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Navigate dates</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <span className="font-medium">Swipe Up</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Create event</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <span className="font-medium">Swipe Down</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Refresh</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <span className="font-medium">Long Press FAB</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Quick reminder</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <span className="font-medium">Voice Commands</span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Say "create event"</span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">C</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Create event</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">T</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Today</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">M</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Month view</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">W</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Week view</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">D</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Day view</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">←/→</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Previous/Next</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">R</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Add reminder</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm">?</kbd>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Show shortcuts</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
+      {/* Carpool Chat Modal using CarpoolChatModal component */}
+      {showCarpoolChat && (
+        <CarpoolChatModal
+          open={showCarpoolChat}
+          event={selectedCarpoolEvent}
+          friends={friends}
+          selectedFriends={selectedCarpoolFriends}
+          setSelectedFriends={setSelectedCarpoolFriends}
+          onClose={() => setShowCarpoolChat(false)}
+          onCreate={createCarpoolGroup}
+        />
+      )}
     </>
   );
 }
