@@ -226,7 +226,7 @@ export default function PhotosFeed({
 
         const { data: mediaFiles } = await supabase
           .from("post_media")
-          .select("id, storage_path, type, sort_order")  // Changed from media_type to type
+          .select("id, storage_path, type, sort_order")
           .eq("post_id", r.id)
           .order("sort_order", { ascending: true });
 
@@ -240,7 +240,7 @@ export default function PhotosFeed({
               id: media.id,
               url: mediaUrl.publicUrl,
               path: media.storage_path,
-              type: media.type as 'image' | 'video'  // Changed from media.media_type
+              type: media.type as 'image' | 'video'
             });
           }
         }
@@ -336,7 +336,7 @@ export default function PhotosFeed({
     }
   }
 
-  // Create new post with multiple files
+  // FIXED: Create new post with multiple files
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0 || !userId || !canPost) return;
@@ -346,7 +346,9 @@ export default function PhotosFeed({
     
     try {
       let postId: string;
+      let tableUsed: 'posts' | 'photo_posts' = 'photo_posts';
 
+      // Create the post first
       if (profileType === 'business' && businessId) {
         const postData = {
           user_id: userId,
@@ -365,6 +367,7 @@ export default function PhotosFeed({
         
         if (error) throw error;
         postId = newPost.id;
+        tableUsed = 'posts';
       } else {
         const postData = {
           user_id: userId,
@@ -383,13 +386,24 @@ export default function PhotosFeed({
         postId = newPost.id;
       }
 
-      // Upload ALL files to storage and post_media
+      // Upload ALL files - FIXED: Batch insert for efficiency
+      const uploadedFiles: Array<{
+        post_id: string;
+        storage_path: string;
+        type: 'image' | 'video';
+        sort_order: number;
+        created_by: string;
+        uploaded_by: string;
+      }> = [];
+
       for (let i = 0; i < files.length; i++) {
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
         
         const file = files[i];
         const timestamp = Date.now();
-        const filename = `${timestamp}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const randomStr = Math.random().toString(36).substring(7);
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filename = `${timestamp}-${randomStr}-${cleanName}`;
         const path = profileType === 'business' && businessId 
           ? `business/${businessId}/${filename}`
           : `${userId}/${filename}`;
@@ -402,21 +416,33 @@ export default function PhotosFeed({
           });
 
         if (uploadError) {
-          console.error(`Failed to upload file ${i}:`, uploadError);
+          console.error(`Failed to upload file ${i + 1}:`, uploadError);
+          // Continue with other files even if one fails
           continue;
         }
 
-        const { error: mediaError } = await supabase.from("post_media").insert({
+        // Collect file data for batch insert
+        uploadedFiles.push({
           post_id: postId,
           storage_path: path,
-          type: file.type.startsWith('video') ? 'video' : 'image',  // Changed from media_type to type
+          type: file.type.startsWith('video') ? 'video' : 'image',
           sort_order: i,
-          created_by: userId,  // Added created_by since it's required
+          created_by: userId,
           uploaded_by: userId
         });
+      }
+
+      // Batch insert all media records at once
+      if (uploadedFiles.length > 0) {
+        const { error: mediaError } = await supabase
+          .from("post_media")
+          .insert(uploadedFiles);
 
         if (mediaError) {
-          console.error(`Failed to save media record ${i}:`, mediaError);
+          console.error("Failed to save media records:", mediaError);
+          // Clean up the post if media insertion fails
+          await supabase.from(tableUsed).delete().eq("id", postId);
+          throw new Error("Failed to save media records");
         }
       }
 
@@ -455,7 +481,7 @@ export default function PhotosFeed({
       setVisibility(profileType === 'business' ? 'public' : 'friends');
       setSelectedFiles(null);
       
-      showMessage("success", `${files.length} photo(s) uploaded! 🎉`);
+      showMessage("success", `${uploadedFiles.length} photo(s) uploaded successfully! 🎉`);
       await listPosts();
     } catch (err: any) {
       console.error("Upload error:", err);
@@ -467,7 +493,7 @@ export default function PhotosFeed({
     }
   }
 
-  // Co-creator adds photos to existing post
+  // FIXED: Co-creator adds photos to existing post
   async function addPhotosToPost(postId: string, files: FileList) {
     if (!files || files.length === 0 || !viewerUserId) return;
 
@@ -481,13 +507,23 @@ export default function PhotosFeed({
         .eq("post_id", postId);
 
       const startIndex = existingMedia?.length || 0;
+      const uploadedFiles: Array<{
+        post_id: string;
+        storage_path: string;
+        type: 'image' | 'video';
+        sort_order: number;
+        created_by: string;
+        uploaded_by: string;
+      }> = [];
 
       for (let i = 0; i < files.length; i++) {
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
         
         const file = files[i];
         const timestamp = Date.now();
-        const filename = `${timestamp}-${startIndex + i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const randomStr = Math.random().toString(36).substring(7);
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filename = `${timestamp}-${randomStr}-${cleanName}`;
         const path = `${viewerUserId}/${filename}`;
 
         const { error: uploadError } = await supabase.storage
@@ -498,25 +534,33 @@ export default function PhotosFeed({
           });
 
         if (uploadError) {
-          console.error(`Failed to upload file ${i}:`, uploadError);
+          console.error(`Failed to upload file ${i + 1}:`, uploadError);
           continue;
         }
 
-        const { error: mediaError } = await supabase.from("post_media").insert({
+        uploadedFiles.push({
           post_id: postId,
           storage_path: path,
-          type: file.type.startsWith('video') ? 'video' : 'image',  // Changed from media_type
+          type: file.type.startsWith('video') ? 'video' : 'image',
           sort_order: startIndex + i,
-          created_by: viewerUserId,  // Added created_by
+          created_by: viewerUserId,
           uploaded_by: viewerUserId
         });
+      }
+
+      // Batch insert all media records
+      if (uploadedFiles.length > 0) {
+        const { error: mediaError } = await supabase
+          .from("post_media")
+          .insert(uploadedFiles);
 
         if (mediaError) {
-          console.error(`Failed to save media record ${i}:`, mediaError);
+          console.error("Failed to save media records:", mediaError);
+          throw new Error("Failed to save media records");
         }
       }
 
-      showMessage("success", `Added ${files.length} photo(s)! 🎊`);
+      showMessage("success", `Added ${uploadedFiles.length} photo(s)! 🎊`);
       await listPosts();
     } catch (err: any) {
       console.error("Add photos error:", err);
@@ -527,10 +571,10 @@ export default function PhotosFeed({
     }
   }
 
+  // FIXED: Save edit function with proper multi-file handling
   async function saveEdit() {
     if (!editingPostId) return;
 
-    alert("Starting save process..."); // Temporary debug alert
     setUploading(true);
     setUploadProgress(0);
     
@@ -540,61 +584,47 @@ export default function PhotosFeed({
         throw new Error("Post not found");
       }
 
-      console.log("Saving edit for post:", editingPostId);
-      console.log("Current user:", viewerUserId);
-      console.log("Files to upload:", editFiles?.length || 0);
-
       // Update post metadata
-      if (post.profile_type === 'business') {
-        const { error } = await supabase
-          .from("posts")
-          .update({
-            caption: editCaption.trim() || null,
-            description: editDescription.trim() || null,
-            visibility: editVisibility,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", editingPostId);
-        if (error) {
-          console.error("Error updating business post:", error);
-          throw error;
-        }
-      } else {
-        const { error } = await supabase
-          .from("photo_posts")
-          .update({
-            caption: editCaption.trim() || null,
-            description: editDescription.trim() || null,
-            visibility: editVisibility,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", editingPostId);
-        if (error) {
-          console.error("Error updating photo post:", error);
-          throw error;
-        }
+      const tableToUpdate = post.profile_type === 'business' ? 'posts' : 'photo_posts';
+      
+      const { error: updateError } = await supabase
+        .from(tableToUpdate)
+        .update({
+          caption: editCaption.trim() || null,
+          description: editDescription.trim() || null,
+          visibility: editVisibility,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", editingPostId);
+      
+      if (updateError) {
+        console.error(`Error updating ${tableToUpdate}:`, updateError);
+        throw updateError;
       }
 
       // Upload new files if any
       if (editFiles && editFiles.length > 0 && viewerUserId) {
-        console.log(`Uploading ${editFiles.length} new files`);
+        console.log(`Processing ${editFiles.length} new files for upload`);
         
         // Get existing media count for sort order
-        const { data: existingMedia, error: mediaCountError } = await supabase
+        const { data: existingMedia } = await supabase
           .from("post_media")
           .select("id")
           .eq("post_id", editingPostId);
 
-        if (mediaCountError) {
-          console.error("Error getting existing media count:", mediaCountError);
-        }
-
         const startIndex = existingMedia?.length || 0;
-        console.log(`Starting at index ${startIndex}`);
+        const uploadedFiles: Array<{
+          post_id: string;
+          storage_path: string;
+          type: 'image' | 'video';
+          sort_order: number;
+          created_by: string;
+          uploaded_by: string;
+        }> = [];
 
+        // Upload all files first, collect successful uploads
         for (let i = 0; i < editFiles.length; i++) {
-          const progress = Math.round(((i + 1) / editFiles.length) * 100);
-          setUploadProgress(progress);
+          setUploadProgress(Math.round(((i + 1) / editFiles.length) * 100));
           
           const file = editFiles[i];
           const timestamp = Date.now();
@@ -603,10 +633,9 @@ export default function PhotosFeed({
           const filename = `${timestamp}-${randomStr}-${cleanName}`;
           const path = `${viewerUserId}/${filename}`;
 
-          console.log(`Uploading file ${i + 1}: ${path}`);
+          console.log(`Uploading file ${i + 1}/${editFiles.length}: ${filename}`);
 
-          // First, let's check if the file uploads to storage
-          const { data: uploadData, error: uploadError } = await supabase.storage
+          const { error: uploadError } = await supabase.storage
             .from("event-photos")
             .upload(path, file, {
               cacheControl: "3600",
@@ -615,14 +644,12 @@ export default function PhotosFeed({
 
           if (uploadError) {
             console.error(`Storage upload failed for file ${i + 1}:`, uploadError);
-            throw new Error(`Upload failed: ${uploadError.message}`);
+            continue; // Skip this file but continue with others
           }
 
-          console.log(`File ${i + 1} uploaded to storage successfully`);
+          console.log(`File ${i + 1} uploaded successfully`);
 
-          // Now try to insert into post_media
-          console.log(`Inserting media record for file ${i + 1}...`);
-          console.log('Insert data:', {
+          uploadedFiles.push({
             post_id: editingPostId,
             storage_path: path,
             type: file.type.startsWith('video') ? 'video' : 'image',
@@ -630,54 +657,42 @@ export default function PhotosFeed({
             created_by: viewerUserId,
             uploaded_by: viewerUserId
           });
+        }
 
-          const { data: mediaData, error: mediaError } = await supabase
+        // Batch insert all successful uploads
+        if (uploadedFiles.length > 0) {
+          console.log(`Inserting ${uploadedFiles.length} media records into database`);
+          
+          const { data: insertedMedia, error: mediaError } = await supabase
             .from("post_media")
-            .insert({
-              post_id: editingPostId,
-              storage_path: path,
-              type: file.type.startsWith('video') ? 'video' : 'image',
-              sort_order: startIndex + i,
-              created_by: viewerUserId,
-              uploaded_by: viewerUserId
-            })
+            .insert(uploadedFiles)
             .select();
 
           if (mediaError) {
-            console.error(`Database insert failed for file ${i + 1}:`, mediaError);
-            console.error('Full error details:', JSON.stringify(mediaError, null, 2));
-            // Try to clean up the uploaded file
-            await supabase.storage.from("event-photos").remove([path]);
-            throw new Error(`Database error: ${mediaError.message || JSON.stringify(mediaError)}`);
+            console.error("Database insert failed:", mediaError);
+            // Clean up uploaded files on database error
+            const pathsToDelete = uploadedFiles.map(f => f.storage_path);
+            await supabase.storage.from("event-photos").remove(pathsToDelete);
+            throw new Error(`Database error: ${mediaError.message}`);
           }
 
-          console.log(`Media record ${i + 1} saved successfully:`, mediaData);
+          console.log(`Successfully inserted ${insertedMedia?.length} media records`);
         }
       }
 
       // Update tags for personal posts (only if post owner)
       if (post.profile_type !== 'business' && post.user_id === viewerUserId) {
-        console.log("Updating tags...");
-        
-        const { error: deleteTagsError } = await supabase
+        await supabase
           .from("photo_tags")
           .delete()
           .eq("post_id", editingPostId);
         
-        if (deleteTagsError) {
-          console.error("Error deleting existing tags:", deleteTagsError);
-        }
-        
         const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
         if (tagNames.length) {
-          const { data: profiles, error: profilesError } = await supabase
+          const { data: profiles } = await supabase
             .from("profiles")
             .select("id")
             .in("full_name", tagNames);
-          
-          if (profilesError) {
-            console.error("Error finding profiles:", profilesError);
-          }
           
           if (profiles?.length) {
             const tagRows = profiles.map(p => ({ 
@@ -687,25 +702,18 @@ export default function PhotosFeed({
               status: 'invited'
             }));
             
-            const { error: insertTagsError } = await supabase
-              .from("photo_tags")
-              .insert(tagRows);
-            
-            if (insertTagsError) {
-              console.error("Error inserting tags:", insertTagsError);
-            }
+            await supabase.from("photo_tags").insert(tagRows);
           }
         }
       }
 
-      console.log("Edit saved successfully!");
       setEditingPostId(null);
       setEditFiles(null);
       setUploadProgress(0);
-      showMessage("success", "Post updated! ✨");
+      showMessage("success", "Post updated successfully! ✨");
       await listPosts();
     } catch (err: any) {
-      console.error("Edit error details:", err);
+      console.error("Edit error:", err);
       showMessage("error", `Failed to update: ${err.message || "Unknown error"}`);
     } finally {
       setUploading(false);
@@ -2158,7 +2166,3 @@ export default function PhotosFeed({
         @media (prefers-color-scheme: dark) {
           /* Add dark mode styles here when needed */
         }
-      `}</style>
-    </section>
-  );
-}
