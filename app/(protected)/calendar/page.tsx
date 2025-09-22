@@ -14,6 +14,7 @@ import { useSwipeGestures } from "./hooks/useSwipeGestures";
 import { useVoiceCommands } from "./hooks/useVoiceCommands";
 import { useNotifications } from "./hooks/useNotifications";
 import { useGameification } from "./hooks/useGameification";
+import { useCarpoolMatches } from "./hooks/useCarpoolMatches";
 import CalendarHeader from "./components/CalendarHeader";
 import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
@@ -21,7 +22,8 @@ import FeedView from "./components/FeedView";
 import CalendarModals from "./components/CalendarModals";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
-import { CalendarTheme, Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
+import HolidayReminders from "./components/HolidayReminders";
+import { Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
 const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), { 
@@ -49,7 +51,7 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
   )
 });
 
-// ADD: Lists Bottom Sheet Component for Mobile
+// Mobile Lists Bottom Sheet Component
 function MobileListsBottomSheet({ 
   open, 
   onClose, 
@@ -182,24 +184,6 @@ function MobileListsBottomSheet({
             </svg>
           </button>
         </div>
-
-        {/* Quick Stats */}
-        <div className="px-6 pb-8 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">12</div>
-              <div className="text-xs text-gray-500">Todos</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">5</div>
-              <div className="text-xs text-gray-500">Reminders</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">8</div>
-              <div className="text-xs text-gray-500">Shopping</div>
-            </div>
-          </div>
-        </div>
       </div>
     </>
   );
@@ -210,9 +194,7 @@ export default function CalendarPage() {
   const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
   const [view, setView] = useState<View>("month");
-  const [calendarTheme, setCalendarTheme] = useState<CalendarTheme>("default");
   const [showMoon, setShowMoon] = useState(true);
-  const [showWeather, setShowWeather] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -222,9 +204,10 @@ export default function CalendarPage() {
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
   const [gamificationEnabled, setGamificationEnabled] = useState(false);
   
-  // ADD: Lists sidebar state
+  // Lists sidebar state
   const [showListsSidebar, setShowListsSidebar] = useState(false);
   const [showMobileListsSheet, setShowMobileListsSheet] = useState(false);
+  const [showCompletedItems, setShowCompletedItems] = useState(false);
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -239,8 +222,9 @@ export default function CalendarPage() {
   const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
   const [showTimeBlocking, setShowTimeBlocking] = useState(false);
+  const [showHolidayReminders, setShowHolidayReminders] = useState(false);
 
-  // ===== DRAG STATES FOR SIDEBAR (minimal for calendar integration) =====
+  // ===== DRAG STATES FOR SIDEBAR =====
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
   const [dragType, setDragType] = useState<'reminder' | 'todo' | 'none'>('none');
 
@@ -265,7 +249,6 @@ export default function CalendarPage() {
     reminders,
     todos,
     friends,
-    carpoolMatches,
     selectedCarpoolEvent,
     setSelectedCarpoolEvent,
     selectedCarpoolFriends,
@@ -279,15 +262,21 @@ export default function CalendarPage() {
     resetForm
   } = useCalendarData();
 
+  // FIXED: Use carpool matches hook
+  const carpoolMatches = useCarpoolMatches(events, friends);
+
   const {
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
     handleExternalDrop,
     handleApplyTemplate,
+    handleToggleComplete,
+    handleDeleteItem,
     handleShowInterest,
     handleRSVP,
     dismissFeedEvent,
+    createQuickItem,
     createCarpoolGroup,
     onDrop,
     onResize
@@ -385,18 +374,8 @@ export default function CalendarPage() {
     }
   }, [isMobile]);
 
-  // ===== FORMAT DATE FOR TOAST =====
-  const formatDateForToast = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  // ADD: Navigation handler for lists
+  // Navigation handler for lists
   const handleListNavigation = useCallback((path: string) => {
-    // Use your router to navigate
     window.location.href = path;
   }, []);
 
@@ -410,7 +389,6 @@ export default function CalendarPage() {
       else if (view === 'week') newDate.setDate(newDate.getDate() + 7);
       else newDate.setDate(newDate.getDate() + 1);
       setDate(newDate);
-      showToast({ type: 'info', message: `📅 ${formatDateForToast(newDate)}` });
     },
     onSwipeRight: () => {
       if (!isMobile) return;
@@ -420,7 +398,6 @@ export default function CalendarPage() {
       else if (view === 'week') newDate.setDate(newDate.getDate() - 7);
       else newDate.setDate(newDate.getDate() - 1);
       setDate(newDate);
-      showToast({ type: 'info', message: `📅 ${formatDateForToast(newDate)}` });
     },
     onSwipeUp: () => {
       if (!isMobile) return;
@@ -433,7 +410,7 @@ export default function CalendarPage() {
     }
   });
 
-  // ===== VOICE COMMANDS =====
+  // ===== VOICE COMMANDS (FIXED: Now fully connected) =====
   const { isListening, startListening } = useVoiceCommands({
     onCommand: (command: string) => {
       const lower = command.toLowerCase();
@@ -449,6 +426,7 @@ export default function CalendarPage() {
           setQuickModalOpen(true);
         }
         vibrate();
+        showToast({ type: 'success', message: '🎤 Command recognized!' });
       } else if (lower.includes('next')) {
         const newDate = new Date(date);
         if (view === 'month') newDate.setMonth(newDate.getMonth() + 1);
@@ -474,6 +452,9 @@ export default function CalendarPage() {
         vibrate();
       } else if (lower.includes('day')) {
         setView('day');
+        vibrate();
+      } else if (lower.includes('holidays')) {
+        setShowHolidayReminders(true);
         vibrate();
       }
     }
@@ -517,16 +498,9 @@ export default function CalendarPage() {
       vibrate();
     }
     
-    if (view === 'month') {
+    if (view === 'month' && isMobile) {
       setDate(slotInfo.start);
       setView('day');
-      if (isMobile) {
-        showToast({ 
-          type: 'info', 
-          message: `Viewing ${formatDateForToast(slotInfo.start)}`,
-          duration: 1500
-        });
-      }
       return;
     }
     
@@ -541,11 +515,19 @@ export default function CalendarPage() {
       }));
       setOpenCreate(true);
     }
-  }, [view, batchMode, isMobile, setForm, showToast, vibrate]);
+  }, [view, batchMode, isMobile, setForm, vibrate]);
 
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
-    if (r?.moonPhase) return;
+    if (r?.moonPhase) {
+      // FIXED: Moon icons now clickable - show moon info
+      showToast({ 
+        type: 'info', 
+        message: `🌙 Moon Phase: ${r.moonPhase}`,
+        duration: 3000
+      });
+      return;
+    }
     
     vibrate();
     
@@ -567,44 +549,11 @@ export default function CalendarPage() {
       setSelected(r);
       setDetailsOpen(true);
     }
-  }, [batchMode, setSelected, vibrate]);
-
-  // ===== BATCH ACTIONS =====
-  const handleBatchDelete = useCallback(async () => {
-    if (selectedBatchEvents.size === 0) return;
-    
-    if (confirm(`Delete ${selectedBatchEvents.size} events?`)) {
-      for (const eventId of selectedBatchEvents) {
-        await handleDeleteEvent(eventId);
-      }
-      
-      if (gamificationEnabled) {
-        showConfetti();
-        addPoints(selectedBatchEvents.size * 10, 'batch-delete');
-      }
-      setSelectedBatchEvents(new Set());
-      setBatchMode(false);
-    }
-  }, [selectedBatchEvents, handleDeleteEvent, gamificationEnabled, showConfetti, addPoints]);
-
-  const handleBatchMove = useCallback((days: number) => {
-    if (selectedBatchEvents.size === 0) return;
-    
-    showToast({ 
-      type: 'success', 
-      message: `Moved ${selectedBatchEvents.size} events ${days > 0 ? 'forward' : 'backward'} ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
-    });
-    
-    if (gamificationEnabled) {
-      addPoints(selectedBatchEvents.size * 5, 'batch-move');
-    }
-    setSelectedBatchEvents(new Set());
-    setBatchMode(false);
-  }, [selectedBatchEvents, showToast, gamificationEnabled, addPoints]);
+  }, [batchMode, setSelected, vibrate, showToast]);
 
   // ===== CARPOOL CHAT HELPER =====
-  const openCarpoolChat = useCallback((event: any) => {
-    setSelectedCarpoolEvent(event);
+  const openCarpoolChat = useCallback((event?: any) => {
+    setSelectedCarpoolEvent(event || null);
     setShowCarpoolChat(true);
   }, [setSelectedCarpoolEvent]);
 
@@ -613,25 +562,16 @@ export default function CalendarPage() {
     [mode, events]
   );
 
-  // ===== HANDLE EDIT FROM DETAILS =====
-  const handleEditFromDetails = useCallback((event: any) => {
-    setSelected(event);
-    setForm({
-      title: event.title || "",
-      description: event.description || "",
-      location: event.location || "",
-      start: new Date(event.start_time).toISOString().slice(0, 16),
-      end: new Date(event.end_time).toISOString().slice(0, 16),
-      visibility: event.visibility,
-      event_type: event.event_type || "",
-      community_id: event.community_id || "",
-      source: event.source || "personal",
-      image_path: event.image_path || "",
-    });
-    setOpenEdit(true);
-    setDetailsOpen(false);
-    vibrate();
-  }, [setSelected, setForm, vibrate]);
+  // FIXED: Filter visible reminders and todos based on showCompletedItems
+  const visibleReminders = useMemo(() => 
+    showCompletedItems ? reminders : reminders.filter(r => !r.completed),
+    [reminders, showCompletedItems]
+  );
+
+  const visibleTodos = useMemo(() => 
+    showCompletedItems ? todos : todos.filter(t => !t.completed),
+    [todos, showCompletedItems]
+  );
 
   return (
     <div 
@@ -654,16 +594,12 @@ export default function CalendarPage() {
           </div>
         )}
         
-        {/* Header Component - Now includes all mobile buttons */}
+        {/* FIXED HEADER - No more weather/theme selectors */}
         <CalendarHeader
           mode={mode}
           setMode={setMode}
-          calendarTheme={calendarTheme}
-          setCalendarTheme={setCalendarTheme}
           showMoon={showMoon}
           setShowMoon={setShowMoon}
-          showWeather={showWeather}
-          setShowWeather={setShowWeather}
           isMobile={isMobile}
           setOpenCreate={setOpenCreate}
           setMobileMenuOpen={setMobileMenuOpen}
@@ -684,7 +620,6 @@ export default function CalendarPage() {
           setGamificationEnabled={setGamificationEnabled}
           setShowCarpoolChat={setShowCarpoolChat}
           setSelectedCarpoolEvent={setSelectedCarpoolEvent}
-          // Lists button handlers
           showListsSidebar={showListsSidebar}
           setShowListsSidebar={setShowListsSidebar}
           onListsClick={() => {
@@ -694,52 +629,34 @@ export default function CalendarPage() {
               setShowListsSidebar(!showListsSidebar);
             }
           }}
-          // Time blocking for mobile
           setShowTimeBlocking={setShowTimeBlocking}
         />
 
-        {/* Batch Mode Actions Bar */}
-        {batchMode && selectedBatchEvents.size > 0 && (
-          <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              {selectedBatchEvents.size} events selected
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleBatchMove(1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-all"
-              >
-                Move +1 day
-              </button>
-              <button
-                onClick={() => handleBatchMove(-1)}
-                className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-all"
-              >
-                Move -1 day
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-all"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Holiday Reminders Button - FIXED: Added for issue #8 */}
+        <div className="mb-2 flex justify-end">
+          <button
+            onClick={() => setShowHolidayReminders(true)}
+            className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-green-500 text-white rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+          >
+            🎄 Holiday Reminders
+          </button>
+        </div>
 
         {/* Main Content Area */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Enhanced Desktop Sidebar - Now Collapsible */}
+            {/* Desktop Sidebar - FIXED: Now properly handles drag & drop and todo/reminder checkoff */}
             {mode === 'my' && !isMobile && (
               <div className={`transition-all duration-300 ${showListsSidebar ? 'w-80' : 'w-0'}`}>
                 {showListsSidebar && (
                   <CalendarSidebar
-                    carpoolMatches={carpoolMatches || []}
-                    friends={friends || []}
-                    visibleReminders={reminders || []}
-                    visibleTodos={todos || []}
+                    carpoolMatches={carpoolMatches}
+                    friends={friends}
+                    visibleReminders={visibleReminders}
+                    visibleTodos={visibleTodos}
+                    showCompletedItems={showCompletedItems}
+                    setShowCompletedItems={setShowCompletedItems}
                     openCarpoolChat={openCarpoolChat}
                     setQuickModalType={setQuickModalType}
                     setQuickModalOpen={setQuickModalOpen}
@@ -751,17 +668,9 @@ export default function CalendarPage() {
                       setDraggedItem(null);
                       setDragType('none');
                     }}
+                    onToggleComplete={handleToggleComplete}
+                    onDeleteItem={handleDeleteItem}
                     userStats={gamificationEnabled ? userStats : null}
-                    // ADD: Shopping navigation
-                    onNavigateToLists={(listType: string) => {
-                      if (listType === 'shopping') {
-                        handleListNavigation('/shopping');
-                      } else if (listType === 'reminders') {
-                        handleListNavigation('/reminders');
-                      } else if (listType === 'todos') {
-                        handleListNavigation('/todos');
-                      }
-                    }}
                   />
                 )}
               </div>
@@ -787,8 +696,8 @@ export default function CalendarPage() {
                   dbEvents={calendarEvents}
                   moonEvents={moonEvents}
                   showMoon={showMoon}
-                  showWeather={showWeather}
-                  theme={calendarTheme}
+                  showWeather={false}
+                  theme="default"
                   date={date}
                   setDate={setDate}
                   view={view}
@@ -834,10 +743,12 @@ export default function CalendarPage() {
           <MobileSidebar
             open={mobileMenuOpen}
             onClose={() => setMobileMenuOpen(false)}
-            carpoolMatches={carpoolMatches || []}
-            friends={friends || []}
-            visibleReminders={reminders || []}
-            visibleTodos={todos || []}
+            carpoolMatches={carpoolMatches}
+            friends={friends}
+            visibleReminders={visibleReminders}
+            visibleTodos={visibleTodos}
+            showCompletedItems={showCompletedItems}
+            setShowCompletedItems={setShowCompletedItems}
             openCarpoolChat={(event) => {
               openCarpoolChat(event);
               setMobileMenuOpen(false);
@@ -847,9 +758,28 @@ export default function CalendarPage() {
             setShowTemplates={setShowTemplates}
             setShowAnalytics={setShowAnalytics}
             setShowMeetingCoordinator={setShowMeetingCoordinator}
+            onToggleComplete={handleToggleComplete}
+            onDeleteItem={handleDeleteItem}
             userStats={gamificationEnabled ? userStats : null}
-            gamificationEnabled={gamificationEnabled}
-            setGamificationEnabled={setGamificationEnabled}
+          />
+        )}
+
+        {/* Holiday Reminders Modal */}
+        {showHolidayReminders && (
+          <HolidayReminders
+            onClose={() => setShowHolidayReminders(false)}
+            onAddToCalendar={(holiday: any) => {
+              // Add holiday to calendar
+              setForm({
+                ...form,
+                title: holiday.name,
+                start: holiday.date,
+                end: holiday.date,
+                event_type: 'holiday'
+              });
+              setOpenCreate(true);
+              setShowHolidayReminders(false);
+            }}
           />
         )}
 
@@ -885,8 +815,8 @@ export default function CalendarPage() {
           selectedCarpoolEvent={selectedCarpoolEvent}
           selectedCarpoolFriends={selectedCarpoolFriends}
           setSelectedCarpoolFriends={setSelectedCarpoolFriends}
-          events={events || []}
-          friends={friends || []}
+          events={events}
+          friends={friends}
           form={form}
           setForm={setForm}
           quickModalForm={quickModalForm}
@@ -902,8 +832,24 @@ export default function CalendarPage() {
             }
           }}
           handleUpdateEvent={handleUpdateEvent}
-          handleEdit={handleEditFromDetails}
+          handleEdit={(event: any) => {
+            setSelected(event);
+            setForm({
+              ...form,
+              title: event.title || "",
+              description: event.description || "",
+              location: event.location || "",
+              start: new Date(event.start_time).toISOString().slice(0, 16),
+              end: new Date(event.end_time).toISOString().slice(0, 16),
+              visibility: event.visibility,
+              event_type: event.event_type || ""
+            });
+            setOpenEdit(true);
+            setDetailsOpen(false);
+            vibrate();
+          }}
           handleApplyTemplate={handleApplyTemplate}
+          createQuickItem={createQuickItem}
           createCarpoolGroup={async () => {
             await createCarpoolGroup();
             if (gamificationEnabled) {
@@ -912,8 +858,6 @@ export default function CalendarPage() {
             }
           }}
           resetForm={resetForm}
-          gamificationEnabled={gamificationEnabled}
-          setGamificationEnabled={setGamificationEnabled}
         />
       </div>
 
