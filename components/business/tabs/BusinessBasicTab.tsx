@@ -631,17 +631,65 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         </div>
       </div>
 
-
+      {/* Services & Offerings Box */}
+      <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200 shadow-md">
+        <h3 className="text-xl font-bold text-amber-900 mb-6 flex items-center gap-2">
+          <span className="text-2xl">⭐</span> Services & Offerings
+        </h3>
+        
+        {/* Service List */}
+        <div className="space-y-3 mb-4">
+          {(data.services || []).map(service => (
+            <div key={service.id} className="bg-white rounded-xl p-4 shadow-sm border border-amber-200">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold text-amber-900">{service.name}</h4>
+                    {!service.available && (
+                      <span className="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded">Unavailable</span>
+                    )}
+                  </div>
+                  {service.description && (
+                    <p className="text-sm text-gray-600 mb-2">{service.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    {service.duration && (
+                      <span className="text-amber-700">⏱️ {service.duration}</span>
+                    )}
+                    {service.price && (
+                      <span className="text-amber-700">💰 {service.price}</span>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={() => removeService(service.id)}
-                  className="text-red-500 hover:text-red-700 p-2"
-                  title="Remove service"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2 ml-4">
+                  <button
+                    onClick={() => editService(service)}
+                    className="text-amber-600 hover:text-amber-800 p-2"
+                    title="Edit service"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => updateService(service.id, { available: !service.available })}
+                    className={`p-2 ${service.available ? 'text-green-600 hover:text-green-800' : 'text-gray-400 hover:text-gray-600'}`}
+                    title="Toggle availability"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={service.available ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"} />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => removeService(service.id)}
+                    className="text-red-500 hover:text-red-700 p-2"
+                    title="Remove service"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
