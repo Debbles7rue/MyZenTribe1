@@ -381,6 +381,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
     available: true
   });
   const [showServiceForm, setShowServiceForm] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -466,15 +467,26 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
       return;
     }
 
-    const service: Service = {
-      ...newService,
-      id: crypto.randomUUID()
-    };
-
-    setData({
-      ...data,
-      services: [...(data.services || []), service]
-    });
+    if (editingServiceId) {
+      // Update existing service
+      setData({
+        ...data,
+        services: (data.services || []).map(s =>
+          s.id === editingServiceId ? { ...newService, id: editingServiceId } : s
+        )
+      });
+      setEditingServiceId(null);
+    } else {
+      // Add new service
+      const service: Service = {
+        ...newService,
+        id: crypto.randomUUID()
+      };
+      setData({
+        ...data,
+        services: [...(data.services || []), service]
+      });
+    }
 
     setNewService({
       id: '',
@@ -485,6 +497,12 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
       available: true
     });
     setShowServiceForm(false);
+  }
+
+  function editService(service: Service) {
+    setNewService(service);
+    setEditingServiceId(service.id);
+    setShowServiceForm(true);
   }
 
   function removeService(serviceId: string) {
@@ -613,41 +631,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         </div>
       </div>
 
-      {/* NEW Services Section */}
-      <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200 shadow-md">
-        <h3 className="text-xl font-bold text-amber-900 mb-6 flex items-center gap-2">
-          <span className="text-2xl">🛠️</span> Services Offered
-        </h3>
-        
-        {/* Display existing services */}
-        <div className="space-y-3 mb-4">
-          {(data.services || []).map((service) => (
-            <div key={service.id} className="bg-white rounded-xl p-4 border border-amber-200">
-              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                <div className="flex-1">
-                  <h4 className="font-semibold text-amber-900">{service.name}</h4>
-                  {service.description && (
-                    <p className="text-sm text-gray-600 mt-1">{service.description}</p>
-                  )}
-                  <div className="flex flex-wrap gap-3 mt-2 text-xs">
-                    {service.duration && (
-                      <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded">
-                        ⏱️ {service.duration}
-                      </span>
-                    )}
-                    {service.price && (
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
-                        💰 {service.price}
-                      </span>
-                    )}
-                    <span className={`px-2 py-1 rounded ${
-                      service.available 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {service.available ? '✅ Available' : '❌ Unavailable'}
-                    </span>
-                  </div>
+
                 </div>
                 <button
                   onClick={() => removeService(service.id)}
@@ -666,7 +650,9 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         {/* Add new service form */}
         {showServiceForm ? (
           <div className="bg-white rounded-xl p-4 border-2 border-amber-300">
-            <h4 className="font-semibold text-amber-900 mb-3">Add New Service</h4>
+            <h4 className="font-semibold text-amber-900 mb-3">
+              {editingServiceId ? 'Edit Service' : 'Add New Service'}
+            </h4>
             <div className="space-y-3">
               <input
                 type="text"
@@ -702,17 +688,27 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
                   style={{ fontSize: '16px', minHeight: '44px' }}
                 />
               </div>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={newService.available}
+                  onChange={(e) => setNewService({ ...newService, available: e.target.checked })}
+                  className="w-4 h-4 text-amber-600 rounded"
+                />
+                <span className="text-sm text-gray-700">Service is currently available</span>
+              </label>
               <div className="flex gap-3">
                 <button
                   onClick={addService}
                   className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
                   style={{ minHeight: '44px' }}
                 >
-                  Add Service
+                  {editingServiceId ? 'Update Service' : 'Add Service'}
                 </button>
                 <button
                   onClick={() => {
                     setShowServiceForm(false);
+                    setEditingServiceId(null);
                     setNewService({
                       id: '',
                       name: '',
