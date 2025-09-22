@@ -1,0 +1,429 @@
+<!-- FILE NAME: icon-generator.html -->
+<!-- LOCATION: Save this anywhere on your computer (like Desktop) -->
+<!-- HOW TO USE: Double-click to open in browser, then generate icons -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyZenTribe Icon Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #9333EA;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .icon-preview {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .icon-box {
+            text-align: center;
+        }
+        .icon-box canvas {
+            border-radius: 20%;
+            box-shadow: 0 4px 20px rgba(147, 51, 234, 0.3);
+            margin-bottom: 10px;
+        }
+        .icon-box label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+        }
+        .controls {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .control-group label {
+            flex: 0 0 120px;
+            font-weight: 500;
+            color: #333;
+        }
+        .control-group input, .control-group select {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .control-group input[type="color"] {
+            height: 42px;
+            cursor: pointer;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .download-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .download-btn {
+            padding: 8px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .download-btn:hover {
+            background: #e8e8e8;
+        }
+        .instructions {
+            background: #f0e6ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+        .instructions h3 {
+            color: #9333EA;
+            margin-bottom: 10px;
+        }
+        .instructions ol {
+            margin-left: 20px;
+            color: #666;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 MyZenTribe Icon Generator</h1>
+        <p class="subtitle">Create all icon sizes for your PWA in one click!</p>
+
+        <div class="icon-preview">
+            <div class="icon-box">
+                <canvas id="preview512" width="512" height="512"></canvas>
+                <label>512x512 (Main)</label>
+            </div>
+            <div class="icon-box">
+                <canvas id="preview192" width="192" height="192"></canvas>
+                <label>192x192</label>
+            </div>
+            <div class="icon-box">
+                <canvas id="preview144" width="144" height="144"></canvas>
+                <label>144x144</label>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Icon Style:</label>
+                <select id="iconStyle">
+                    <option value="lotus">🪷 Lotus Flower</option>
+                    <option value="zen">☯️ Zen Circle</option>
+                    <option value="mandala">🔮 Mandala</option>
+                    <option value="tree">🌳 Tree of Life</option>
+                    <option value="heart">💜 Heart Chakra</option>
+                    <option value="custom">✍️ Custom Text</option>
+                </select>
+            </div>
+            <div class="control-group" id="textControl" style="display: none;">
+                <label>Custom Text:</label>
+                <input type="text" id="customText" value="ZT" maxlength="3" placeholder="2-3 letters">
+            </div>
+            <div class="control-group">
+                <label>Background:</label>
+                <input type="color" id="bgColor" value="#9333EA">
+            </div>
+            <div class="control-group">
+                <label>Icon Color:</label>
+                <input type="color" id="iconColor" value="#FFFFFF">
+            </div>
+            <div class="control-group">
+                <label>Corner Style:</label>
+                <select id="cornerStyle">
+                    <option value="rounded">Rounded (iOS style)</option>
+                    <option value="circle">Circle</option>
+                    <option value="square">Square</option>
+                </select>
+            </div>
+        </div>
+
+        <button onclick="generateAllIcons()">🎨 Generate All Icon Sizes</button>
+
+        <div class="download-section" id="downloadSection" style="display: none;">
+            <h3>📥 Download Your Icons</h3>
+            <p style="color: #666; margin-bottom: 10px; font-size: 14px;">Click each size to download:</p>
+            <div class="download-grid" id="downloadGrid"></div>
+        </div>
+
+        <div class="instructions">
+            <h3>📱 How to Install on Your Phone:</h3>
+            <ol>
+                <li>Download all icon sizes and place them in your <code>public/icons/</code> folder</li>
+                <li>Add the manifest.json file to your <code>public/</code> folder</li>
+                <li>Add the meta tags to your layout file</li>
+                <li>Deploy to Netlify</li>
+                <li><strong>On iPhone:</strong> Visit your site in Safari → tap Share button → "Add to Home Screen"</li>
+                <li><strong>On Android:</strong> Visit in Chrome → tap menu → "Add to Home Screen" or "Install App"</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        let generatedIcons = {};
+
+        function drawIcon(canvas, size, style, bgColor, iconColor, cornerStyle, customText) {
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Draw background
+            ctx.fillStyle = bgColor;
+            
+            if (cornerStyle === 'circle') {
+                ctx.beginPath();
+                ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (cornerStyle === 'rounded') {
+                const radius = size * 0.2;
+                ctx.beginPath();
+                ctx.moveTo(radius, 0);
+                ctx.lineTo(size - radius, 0);
+                ctx.quadraticCurveTo(size, 0, size, radius);
+                ctx.lineTo(size, size - radius);
+                ctx.quadraticCurveTo(size, size, size - radius, size);
+                ctx.lineTo(radius, size);
+                ctx.quadraticCurveTo(0, size, 0, size - radius);
+                ctx.lineTo(0, radius);
+                ctx.quadraticCurveTo(0, 0, radius, 0);
+                ctx.fill();
+            } else {
+                ctx.fillRect(0, 0, size, size);
+            }
+            
+            // Draw icon
+            ctx.fillStyle = iconColor;
+            ctx.strokeStyle = iconColor;
+            ctx.lineWidth = size * 0.03;
+            
+            const centerX = size / 2;
+            const centerY = size / 2;
+            
+            switch(style) {
+                case 'lotus':
+                    // Draw lotus petals
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    for (let i = 0; i < 8; i++) {
+                        ctx.rotate(Math.PI / 4);
+                        ctx.beginPath();
+                        ctx.ellipse(0, -size * 0.2, size * 0.1, size * 0.25, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                    // Center circle
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, size * 0.12, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                    
+                case 'zen':
+                    // Zen circle (Ensō)
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, size * 0.35, 0, Math.PI * 1.8);
+                    ctx.stroke();
+                    // Yin yang in center
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, size * 0.15, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                    
+                case 'mandala':
+                    // Simplified mandala pattern
+                    for (let r = 0.35; r > 0.1; r -= 0.1) {
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, size * r, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    // Add decorative dots
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (Math.PI * 2 / 8) * i;
+                        const x = centerX + Math.cos(angle) * size * 0.25;
+                        const y = centerY + Math.sin(angle) * size * 0.25;
+                        ctx.beginPath();
+                        ctx.arc(x, y, size * 0.03, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    break;
+                    
+                case 'tree':
+                    // Tree of life
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY * 0.7, size * 0.25, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Trunk
+                    ctx.fillRect(centerX - size * 0.05, centerY * 0.7, size * 0.1, size * 0.4);
+                    // Roots
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY * 1.1);
+                    ctx.lineTo(centerX - size * 0.15, size * 0.9);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY * 1.1);
+                    ctx.lineTo(centerX + size * 0.15, size * 0.9);
+                    ctx.stroke();
+                    break;
+                    
+                case 'heart':
+                    // Heart chakra symbol
+                    ctx.beginPath();
+                    const heartSize = size * 0.3;
+                    ctx.moveTo(centerX, centerY + heartSize * 0.3);
+                    ctx.bezierCurveTo(
+                        centerX - heartSize/2, centerY - heartSize * 0.3,
+                        centerX - heartSize, centerY + heartSize * 0.1,
+                        centerX, centerY + heartSize * 0.7
+                    );
+                    ctx.bezierCurveTo(
+                        centerX + heartSize, centerY + heartSize * 0.1,
+                        centerX + heartSize/2, centerY - heartSize * 0.3,
+                        centerX, centerY + heartSize * 0.3
+                    );
+                    ctx.fill();
+                    break;
+                    
+                case 'custom':
+                    // Custom text
+                    ctx.font = `bold ${size * 0.4}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(customText || 'ZT', centerX, centerY);
+                    break;
+            }
+        }
+
+        function updatePreviews() {
+            const style = document.getElementById('iconStyle').value;
+            const bgColor = document.getElementById('bgColor').value;
+            const iconColor = document.getElementById('iconColor').value;
+            const cornerStyle = document.getElementById('cornerStyle').value;
+            const customText = document.getElementById('customText').value;
+            
+            // Show/hide custom text input
+            document.getElementById('textControl').style.display = 
+                style === 'custom' ? 'flex' : 'none';
+            
+            // Update preview canvases
+            drawIcon(document.getElementById('preview512'), 512, style, bgColor, iconColor, cornerStyle, customText);
+            drawIcon(document.getElementById('preview192'), 192, style, bgColor, iconColor, cornerStyle, customText);
+            drawIcon(document.getElementById('preview144'), 144, style, bgColor, iconColor, cornerStyle, customText);
+        }
+
+        function generateAllIcons() {
+            const style = document.getElementById('iconStyle').value;
+            const bgColor = document.getElementById('bgColor').value;
+            const iconColor = document.getElementById('iconColor').value;
+            const cornerStyle = document.getElementById('cornerStyle').value;
+            const customText = document.getElementById('customText').value;
+            
+            generatedIcons = {};
+            const downloadGrid = document.getElementById('downloadGrid');
+            downloadGrid.innerHTML = '';
+            
+            sizes.forEach(size => {
+                const canvas = document.createElement('canvas');
+                drawIcon(canvas, size, style, bgColor, iconColor, cornerStyle, customText);
+                
+                canvas.toBlob(blob => {
+                    generatedIcons[size] = blob;
+                    
+                    const downloadBtn = document.createElement('div');
+                    downloadBtn.className = 'download-btn';
+                    downloadBtn.innerHTML = `${size}x${size}`;
+                    downloadBtn.onclick = () => downloadIcon(size);
+                    downloadGrid.appendChild(downloadBtn);
+                });
+            });
+            
+            document.getElementById('downloadSection').style.display = 'block';
+        }
+
+        function downloadIcon(size) {
+            const blob = generatedIcons[size];
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `icon-${size}x${size}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('iconStyle').addEventListener('change', updatePreviews);
+        document.getElementById('bgColor').addEventListener('input', updatePreviews);
+        document.getElementById('iconColor').addEventListener('input', updatePreviews);
+        document.getElementById('cornerStyle').addEventListener('change', updatePreviews);
+        document.getElementById('customText').addEventListener('input', updatePreviews);
+
+        // Initial render
+        updatePreviews();
+    </script>
+</body>
+</html>
