@@ -6,6 +6,7 @@ import EventDetails from '@/components/EventDetails';
 import CalendarAnalytics from '@/components/CalendarAnalytics';
 import SmartTemplates from '@/components/SmartTemplates';
 import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
+import EventCarpoolModal from './EventCarpoolModal';
 import type { DBEvent } from '@/lib/types';
 import type { Friend, CalendarForm, QuickModalForm, FeedEvent } from '../types';
 
@@ -789,37 +790,31 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Rest of your modals remain the same... */}
-      {/* Carpool Chat Modal - Placeholder */}
-      {showCarpoolChat && (
-        <Modal
-          isOpen={showCarpoolChat}
-          onClose={() => setShowCarpoolChat(false)}
-          title="Carpool Coordination"
-        >
-          <div className="space-y-4">
-            <p className="text-gray-600 dark:text-gray-400">
-              Carpool coordination feature coming soon...
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCarpoolChat(false)}
-                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
-              >
-                Close
-              </button>
-              {createCarpoolGroup && (
-                <button
-                  onClick={createCarpoolGroup}
-                  className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg"
-                >
-                  Create Group
-                </button>
-              )}
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Carpool Chat Modal - Using Full EventCarpoolModal Component */}
+      <EventCarpoolModal
+        isOpen={showCarpoolChat}
+        onClose={() => setShowCarpoolChat(false)}
+        event={selectedCarpoolEvent}
+        userId={me}
+        carpoolData={{
+          carpoolMatches: carpoolMatches || [],
+          friends: friends || [],
+          sendCarpoolInvite: async (matchId: string, message?: string) => {
+            // Implement your invite logic here
+            showToast?.({ type: 'success', message: 'Invite sent!' });
+            return { success: true };
+          },
+          createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
+            if (createCarpoolGroup) {
+              createCarpoolGroup();
+            }
+            showToast?.({ type: 'success', message: 'Carpool group created!' });
+            return { success: true };
+          }
+        }}
+        showToast={showToast}
+        isMobile={isMobile}
+      />
 
       {/* Keyboard Shortcuts Help - Desktop only */}
       {!isMobile && showShortcutsHelp && (
