@@ -21,17 +21,13 @@ type Post = {
   business_id?: string | null;
   business_name?: string;
   business_logo?: string;
-  image_path: string;
   caption: string | null;
   description: string | null;
   visibility: "private" | "friends" | "acquaintances" | "public";
   created_at: string;
   updated_at: string;
-  url: string;
-  tags: { id: string; name: string; can_edit?: boolean }[];
-  media_files?: MediaFile[];
-  post_media?: any[];
-  collaborators?: { user_id: string; name: string; status: 'invited' | 'accepted' | 'declined'; can_edit: boolean }[];
+  tags: { id: string; name: string; can_edit?: boolean; status?: string }[];
+  media_files: MediaFile[];
 };
 
 type Comment = {
@@ -47,12 +43,12 @@ type Comment = {
 type RelationshipType = 'friend' | 'acquaintance' | 'restricted' | 'none';
 
 interface PhotosFeedProps {
-  userId: string | null; // Profile being viewed
-  viewerUserId?: string | null; // Current logged-in user
-  isPublicView?: boolean; // True when viewing someone else's profile
-  relationshipType?: RelationshipType; // Relationship between viewer and profile owner
-  profileType?: 'personal' | 'business'; // NEW: Type of profile
-  businessId?: string | null; // NEW: Business ID if business profile
+  userId: string | null;
+  viewerUserId?: string | null;
+  isPublicView?: boolean;
+  relationshipType?: RelationshipType;
+  profileType?: 'personal' | 'business';
+  businessId?: string | null;
 }
 
 const VISIBILITY_OPTIONS = [
@@ -97,72 +93,56 @@ export default function PhotosFeed({
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [likeCounts, setLikeCounts] = useState<{ [postId: string]: number }>({});
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [addingToPost, setAddingToPost] = useState<string | null>(null);
 
   // Determine if current user can post
   const canPost = useMemo(() => {
     if (profileType === 'business') {
-      // For business profiles, check if viewer is the owner
       return !isPublicView && userId && userId === viewerUserId && businessId;
     }
-    // For personal profiles, same as before
     return !isPublicView && userId && userId === viewerUserId;
   }, [userId, viewerUserId, isPublicView, profileType, businessId]);
 
   // Check if user can edit a post
   const canEditPost = (post: Post) => {
     if (!viewerUserId) return false;
-    
-    // Creator can always edit
     if (post.user_id === viewerUserId) return true;
-    
-    // Check if user is a tagged collaborator with edit permissions
     const taggedUser = post.tags?.find(t => t.id === viewerUserId);
-    if (taggedUser?.can_edit) return true;
-    
-    // Check collaborators list
-    const collaborator = post.collaborators?.find(
-      c => c.user_id === viewerUserId && c.status === 'accepted' && c.can_edit
-    );
-    return !!collaborator;
+    return !!(taggedUser?.can_edit && taggedUser?.status === 'accepted');
   };
 
-  // Check if user can delete (only creator)
+  // Check if user can add photos to post
+  const canAddPhotos = (post: Post) => {
+    if (!viewerUserId) return false;
+    if (post.user_id === viewerUserId) return true;
+    const taggedUser = post.tags?.find(t => t.id === viewerUserId);
+    return !!(taggedUser?.can_edit && taggedUser?.status === 'accepted');
+  };
+
+  // Check if user can delete
   const canDeletePost = (post: Post) => {
     return viewerUserId && post.user_id === viewerUserId;
   };
 
-  // Determine if current user is viewing their own profile
   const isOwnProfile = userId === viewerUserId;
 
-  // Show temporary message
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
   };
 
-  // Filter posts based on relationship
   const filterPostsByRelationship = (posts: Post[]): Post[] => {
-    if (isOwnProfile) {
-      return posts;
-    }
-
-    // For business profiles, different logic
+    if (isOwnProfile) return posts;
     if (profileType === 'business') {
       return posts.filter(post => post.visibility === 'public');
     }
-
     return posts.filter(post => {
       switch (post.visibility) {
-        case 'public':
-          return true;
-        case 'acquaintances':
-          return relationshipType === 'friend' || relationshipType === 'acquaintance';
-        case 'friends':
-          return relationshipType === 'friend';
-        case 'private':
-          return false;
-        default:
-          return false;
+        case 'public': return true;
+        case 'acquaintances': return relationshipType === 'friend' || relationshipType === 'acquaintance';
+        case 'friends': return relationshipType === 'friend';
+        case 'private': return false;
+        default: return false;
       }
     });
   };
@@ -171,16 +151,14 @@ export default function PhotosFeed({
     if (!userId && !businessId) return setPosts([]);
 
     try {
-      let query;
       let allPosts: any[] = [];
 
       if (profileType === 'business' && businessId) {
-        // Get business posts from new posts table
         const { data: businessPosts, error: bizError } = await supabase
           .from("posts")
           .select(`
-            id, user_id, business_id, profile_type, image_paths,
-            caption, description, visibility, tags,
+            id, user_id, business_id, profile_type,
+            caption, description, visibility,
             created_at, updated_at
           `)
           .eq("business_id", businessId)
@@ -189,26 +167,22 @@ export default function PhotosFeed({
 
         if (bizError) throw bizError;
 
-        // Get business info
         const { data: bizInfo } = await supabase
           .from("profiles")
           .select("business_name, business_logo_url")
           .eq("id", userId)
           .single();
 
-        // Process business posts
         allPosts = (businessPosts || []).map(post => ({
           ...post,
-          image_path: post.image_paths?.[0] || '',
           business_name: bizInfo?.business_name || 'Business',
           business_logo: bizInfo?.business_logo_url
         }));
       } else {
-        // Get personal posts (existing logic)
         const { data: createdPosts, error: createdError } = await supabase
           .from("photo_posts")
           .select(`
-            id, user_id, image_path, caption, description, 
+            id, user_id, caption, description, 
             visibility, created_at, updated_at
           `)
           .eq("user_id", userId)
@@ -216,51 +190,43 @@ export default function PhotosFeed({
 
         if (createdError) throw createdError;
 
-        // Get posts where user is a collaborator
-        const { data: collabPosts, error: collabError } = await supabase
-          .from("photo_posts")
-          .select(`
-            id, user_id, image_path, caption, description, 
-            visibility, created_at, updated_at
-          `)
-          .in("id", 
-            await supabase
-              .from("photo_tags")
-              .select("post_id")
-              .eq("tagged_user_id", userId)
-              .then(res => res.data?.map(r => r.post_id) || [])
-          );
+        const { data: taggedPostIds, error: tagError } = await supabase
+          .from("photo_tags")
+          .select("post_id")
+          .eq("tagged_user_id", userId)
+          .eq("status", "accepted");
 
-        // Combine and deduplicate posts
-        allPosts = [...(createdPosts || []), ...(collabPosts || [])];
+        if (!tagError && taggedPostIds?.length) {
+          const { data: taggedPosts } = await supabase
+            .from("photo_posts")
+            .select(`
+              id, user_id, caption, description, 
+              visibility, created_at, updated_at
+            `)
+            .in("id", taggedPostIds.map(t => t.post_id));
+
+          if (taggedPosts) {
+            allPosts = [...(createdPosts || []), ...taggedPosts];
+          } else {
+            allPosts = createdPosts || [];
+          }
+        } else {
+          allPosts = createdPosts || [];
+        }
       }
 
       const uniquePosts = Array.from(new Map(allPosts.map(p => [p.id, p])).values());
 
       const items = await Promise.all(uniquePosts.map(async (r) => {
-        // Get creator info
         const { data: creator } = await supabase
           .from("profiles")
           .select("id, full_name, avatar_url")
           .eq("id", r.user_id)
           .single();
 
-        // Get main image URL
-        let mainImageUrl = '';
-        if (r.image_paths && r.image_paths.length > 0) {
-          // For new posts table with image_paths array
-          const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_paths[0]);
-          mainImageUrl = pub.publicUrl;
-        } else if (r.image_path) {
-          // For old photo_posts table
-          const { data: pub } = supabase.storage.from("event-photos").getPublicUrl(r.image_path);
-          mainImageUrl = pub.publicUrl;
-        }
-        
-        // Get additional media files
         const { data: mediaFiles } = await supabase
           .from("post_media")
-          .select("id, storage_path, media_type")
+          .select("id, storage_path, media_type, sort_order")
           .eq("post_id", r.id)
           .order("sort_order", { ascending: true });
 
@@ -279,13 +245,12 @@ export default function PhotosFeed({
           }
         }
         
-        // Get tags with user info and edit permissions
         const { data: tagsRows } = await supabase
           .from("photo_tags")
-          .select("tagged_user_id, can_edit")
+          .select("tagged_user_id, can_edit, status")
           .eq("post_id", r.id);
 
-        let taggedUsers: { id: string; name: string; can_edit?: boolean }[] = [];
+        let taggedUsers: { id: string; name: string; can_edit?: boolean; status?: string }[] = [];
         if (tagsRows?.length) {
           const ids = tagsRows.map(t => t.tagged_user_id);
           const { data: profs } = await supabase
@@ -298,26 +263,11 @@ export default function PhotosFeed({
             return { 
               id: p.id, 
               name: p.full_name ?? "User",
-              can_edit: tagRow?.can_edit || false
+              can_edit: tagRow?.can_edit || false,
+              status: tagRow?.status || 'invited'
             };
           });
         }
-
-        // Get collaborators
-        const { data: collabs } = await supabase
-          .from("post_collaborators")
-          .select(`
-            user_id, status, can_edit,
-            profiles!inner(full_name)
-          `)
-          .eq("post_id", r.id);
-
-        const collaborators = collabs?.map(c => ({
-          user_id: c.user_id,
-          name: (c as any).profiles?.full_name || "User",
-          status: c.status as 'invited' | 'accepted' | 'declined',
-          can_edit: c.can_edit
-        })) || [];
 
         return {
           ...r,
@@ -326,18 +276,14 @@ export default function PhotosFeed({
           profile_type: r.profile_type || 'personal',
           business_name: r.business_name,
           business_logo: r.business_logo,
-          url: mainImageUrl,
-          tags: taggedUsers,
-          media_files: processedMedia.length > 0 ? processedMedia : undefined,
-          collaborators
+          media_files: processedMedia,
+          tags: taggedUsers
         };
       }));
 
-      // Filter posts based on relationship
       const filteredPosts = filterPostsByRelationship(items);
       setPosts(filteredPosts);
 
-      // Load comments for visible posts
       const postIds = filteredPosts.map(p => p.id);
       if (postIds.length > 0) {
         const { data: allComments } = await supabase
@@ -364,7 +310,6 @@ export default function PhotosFeed({
         });
         setComments(commentsByPost);
 
-        // Load likes
         if (viewerUserId) {
           const { data: likes } = await supabase
             .from("photo_likes")
@@ -375,7 +320,6 @@ export default function PhotosFeed({
           setLikedPosts(new Set(likes?.map(l => l.post_id) ?? []));
         }
 
-        // Load like counts
         const { data: likeCounts } = await supabase
           .from("photo_likes")
           .select("post_id")
@@ -392,7 +336,7 @@ export default function PhotosFeed({
     }
   }
 
-  // Handle MULTIPLE file uploads with unlimited support
+  // Create new post with multiple files
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0 || !userId || !canPost) return;
@@ -402,43 +346,17 @@ export default function PhotosFeed({
     
     try {
       let postId: string;
-      let firstPath: string = "";
 
-      // Different handling for business vs personal posts
       if (profileType === 'business' && businessId) {
-        // Create business post in new posts table
         const postData = {
           user_id: userId,
           business_id: businessId,
           profile_type: 'business' as const,
-          image_paths: [] as string[],
           caption: caption.trim() || null,
           description: description.trim() || null,
           visibility: visibility as any,
-          tags: tags.split(",").map(s => s.trim()).filter(Boolean)
         };
 
-        // Upload all files
-        for (let i = 0; i < files.length; i++) {
-          setUploadProgress(Math.round(((i + 1) / files.length) * 100));
-          
-          const file = files[i];
-          const filename = `${Date.now()}-${i}-${file.name}`;
-          const path = `business/${businessId}/${filename}`;
-
-          const upload = await supabase.storage
-            .from("event-photos")
-            .upload(path, file, {
-              cacheControl: "3600",
-              upsert: false,
-            });
-          
-          if (upload.error) throw upload.error;
-          postData.image_paths.push(path);
-          if (i === 0) firstPath = path;
-        }
-
-        // Create post with all image paths
         const { data: newPost, error } = await supabase
           .from("posts")
           .insert(postData)
@@ -448,108 +366,95 @@ export default function PhotosFeed({
         if (error) throw error;
         postId = newPost.id;
       } else {
-        // Personal post (use existing photo_posts table)
         const postData = {
           user_id: userId,
-          image_path: "", // Will update with first image
           caption: caption.trim() || null,
           description: description.trim() || null,
           visibility,
         };
 
-        // Upload first file and create post
-        const firstFile = files[0];
-        const firstFilename = `${Date.now()}-0-${firstFile.name}`;
-        firstPath = `${userId}/${firstFilename}`;
-
-        const firstUpload = await supabase.storage
-          .from("event-photos")
-          .upload(firstPath, firstFile, {
-            cacheControl: "3600",
-            upsert: false,
-          });
-        
-        if (firstUpload.error) throw firstUpload.error;
-
-        // Create post with first image
-        postData.image_path = firstPath;
-        const ins = await supabase
+        const { data: newPost, error } = await supabase
           .from("photo_posts")
           .insert(postData)
           .select()
           .single();
         
-        if (ins.error) throw ins.error;
-        postId = ins.data.id;
+        if (error) throw error;
+        postId = newPost.id;
+      }
 
-        // Upload remaining files to post_media table
-        if (files.length > 1) {
-          for (let i = 1; i < files.length; i++) {
-            setUploadProgress(Math.round(((i + 1) / files.length) * 100));
-            
-            const file = files[i];
-            const filename = `${Date.now()}-${i}-${file.name}`;
-            const path = `${userId}/${filename}`;
+      // Upload ALL files to storage and post_media
+      for (let i = 0; i < files.length; i++) {
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+        
+        const file = files[i];
+        const timestamp = Date.now();
+        const filename = `${timestamp}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const path = profileType === 'business' && businessId 
+          ? `business/${businessId}/${filename}`
+          : `${userId}/${filename}`;
 
-            const upload = await supabase.storage
-              .from("event-photos")
-              .upload(path, file, {
-                cacheControl: "3600",
-                upsert: false,
-              });
+        const { error: uploadError } = await supabase.storage
+          .from("event-photos")
+          .upload(path, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
 
-            if (!upload.error) {
-              // Add to post_media table
-              await supabase.from("post_media").insert({
-                post_id: postId,
-                storage_path: path,
-                media_type: file.type.startsWith('video') ? 'video' : 'image',
-                sort_order: i,
-                uploaded_by: userId
-              });
-            }
-          }
+        if (uploadError) {
+          console.error(`Failed to upload file ${i}:`, uploadError);
+          continue;
         }
 
-        // Handle tags for personal posts
-        if (profileType === 'personal') {
-          const tagEmails = tags.split(",").map(s => s.trim()).filter(Boolean);
-          if (tagEmails.length) {
-            const { data: profiles } = await supabase
-              .from("profiles")
-              .select("id")
-              .in("full_name", tagEmails);
-            
-            if (profiles?.length) {
-              const tagRows = profiles.map(p => ({ 
-                post_id: postId, 
-                tagged_user_id: p.id,
-                can_edit: true // Allow tagged users to edit
-              }));
-              await supabase.from("photo_tags").insert(tagRows);
+        const { error: mediaError } = await supabase.from("post_media").insert({
+          post_id: postId,
+          storage_path: path,
+          media_type: file.type.startsWith('video') ? 'video' : 'image',
+          sort_order: i,
+          uploaded_by: userId
+        });
 
-              // Send notifications to tagged users
-              const notifications = profiles.map(p => ({
-                user_id: p.id,
-                type: 'photo_tag',
-                message: `You've been tagged in a photo post. You can add your own photos!`,
-                post_id: postId
-              }));
-              await supabase.from("notifications").insert(notifications);
-            }
+        if (mediaError) {
+          console.error(`Failed to save media record ${i}:`, mediaError);
+        }
+      }
+
+      // Handle tags for personal posts
+      if (profileType === 'personal' && tags.trim()) {
+        const tagNames = tags.split(",").map(s => s.trim()).filter(Boolean);
+        if (tagNames.length) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id")
+            .in("full_name", tagNames);
+          
+          if (profiles?.length) {
+            const tagRows = profiles.map(p => ({ 
+              post_id: postId, 
+              tagged_user_id: p.id,
+              can_edit: true,
+              status: 'invited'
+            }));
+            await supabase.from("photo_tags").insert(tagRows);
+
+            const notifications = profiles.map(p => ({
+              user_id: p.id,
+              type: 'photo_tag',
+              message: `You've been tagged in a photo post. Accept to add your own photos!`,
+              post_id: postId
+            }));
+            await supabase.from("notifications").insert(notifications);
           }
         }
       }
 
-      // Reset form
       setCaption("");
       setDescription("");
       setTags("");
       setVisibility(profileType === 'business' ? 'public' : 'friends');
       setSelectedFiles(null);
-      setUploadProgress(0);
       
-      showMessage("success", `${files.length} photo(s) uploaded successfully! 🎉`);
+      showMessage("success", `${files.length} photo(s) uploaded! 🎉`);
       await listPosts();
     } catch (err: any) {
       console.error("Upload error:", err);
@@ -557,11 +462,69 @@ export default function PhotosFeed({
     } finally {
       setUploading(false);
       setUploadProgress(0);
-      e.currentTarget.value = "";
+      e.target.value = "";
     }
   }
 
-  // Edit post with ability to add more media (unlimited)
+  // Co-creator adds photos to existing post
+  async function addPhotosToPost(postId: string, files: FileList) {
+    if (!files || files.length === 0 || !viewerUserId) return;
+
+    setAddingToPost(postId);
+    setUploadProgress(0);
+
+    try {
+      const { data: existingMedia } = await supabase
+        .from("post_media")
+        .select("id")
+        .eq("post_id", postId);
+
+      const startIndex = existingMedia?.length || 0;
+
+      for (let i = 0; i < files.length; i++) {
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+        
+        const file = files[i];
+        const timestamp = Date.now();
+        const filename = `${timestamp}-${startIndex + i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const path = `${viewerUserId}/${filename}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("event-photos")
+          .upload(path, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error(`Failed to upload file ${i}:`, uploadError);
+          continue;
+        }
+
+        const { error: mediaError } = await supabase.from("post_media").insert({
+          post_id: postId,
+          storage_path: path,
+          media_type: file.type.startsWith('video') ? 'video' : 'image',
+          sort_order: startIndex + i,
+          uploaded_by: viewerUserId
+        });
+
+        if (mediaError) {
+          console.error(`Failed to save media record ${i}:`, mediaError);
+        }
+      }
+
+      showMessage("success", `Added ${files.length} photo(s)! 🎊`);
+      await listPosts();
+    } catch (err: any) {
+      console.error("Add photos error:", err);
+      showMessage("error", "Failed to add photos");
+    } finally {
+      setAddingToPost(null);
+      setUploadProgress(0);
+    }
+  }
+
   async function saveEdit() {
     if (!editingPostId) return;
 
@@ -569,9 +532,7 @@ export default function PhotosFeed({
       const post = posts.find(p => p.id === editingPostId);
       if (!post) return;
 
-      // Different handling for business vs personal posts
       if (post.profile_type === 'business') {
-        // Update business post
         const { error } = await supabase
           .from("posts")
           .update({
@@ -581,10 +542,8 @@ export default function PhotosFeed({
             updated_at: new Date().toISOString()
           })
           .eq("id", editingPostId);
-
         if (error) throw error;
       } else {
-        // Update personal post
         const { error } = await supabase
           .from("photo_posts")
           .update({
@@ -594,42 +553,14 @@ export default function PhotosFeed({
             updated_at: new Date().toISOString()
           })
           .eq("id", editingPostId);
-
         if (error) throw error;
       }
 
-      // Upload new files if any (unlimited)
-      if (editFiles && editFiles.length > 0) {
-        const existingMediaCount = post.media_files?.length || 0;
-        
-        for (let i = 0; i < editFiles.length; i++) {
-          const file = editFiles[i];
-          const filename = `${Date.now()}-${existingMediaCount + i}-${file.name}`;
-          const path = post.profile_type === 'business' && businessId
-            ? `business/${businessId}/${filename}`
-            : `${userId}/${filename}`;
-
-          const upload = await supabase.storage
-            .from("event-photos")
-            .upload(path, file, {
-              cacheControl: "3600",
-              upsert: false,
-            });
-
-          if (!upload.error) {
-            await supabase.from("post_media").insert({
-              post_id: editingPostId,
-              storage_path: path,
-              media_type: file.type.startsWith('video') ? 'video' : 'image',
-              sort_order: existingMediaCount + i,
-              uploaded_by: viewerUserId
-            });
-          }
-        }
+      if (editFiles && editFiles.length > 0 && viewerUserId) {
+        await addPhotosToPost(editingPostId, editFiles);
       }
 
-      // Update tags for personal posts only
-      if (post.profile_type !== 'business') {
+      if (post.profile_type !== 'business' && post.user_id === viewerUserId) {
         await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
         
         const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
@@ -643,7 +574,8 @@ export default function PhotosFeed({
             const tagRows = profiles.map(p => ({ 
               post_id: editingPostId, 
               tagged_user_id: p.id,
-              can_edit: true
+              can_edit: true,
+              status: 'invited'
             }));
             await supabase.from("photo_tags").insert(tagRows);
           }
@@ -656,11 +588,10 @@ export default function PhotosFeed({
       await listPosts();
     } catch (err: any) {
       console.error("Edit error:", err);
-      showMessage("error", "Failed to update post");
+      showMessage("error", "Failed to update");
     }
   }
 
-  // Delete post function
   async function deletePost(postId: string) {
     if (!confirm("Delete this post? This cannot be undone.")) return;
 
@@ -669,24 +600,11 @@ export default function PhotosFeed({
     try {
       const post = posts.find(p => p.id === postId);
       
-      // Delete media files from storage
-      if (post) {
-        // Delete main image(s)
-        if (post.profile_type === 'business' && (post as any).image_paths) {
-          const paths = (post as any).image_paths;
-          await supabase.storage.from("event-photos").remove(paths);
-        } else if (post.image_path) {
-          await supabase.storage.from("event-photos").remove([post.image_path]);
-        }
-        
-        // Delete additional media
-        if (post.media_files && post.media_files.length > 0) {
-          const paths = post.media_files.map(m => m.path);
-          await supabase.storage.from("event-photos").remove(paths);
-        }
+      if (post?.media_files && post.media_files.length > 0) {
+        const paths = post.media_files.map(m => m.path);
+        await supabase.storage.from("event-photos").remove(paths);
       }
 
-      // Delete from appropriate table
       if (post?.profile_type === 'business') {
         const { error } = await supabase
           .from("posts")
@@ -701,35 +619,39 @@ export default function PhotosFeed({
         if (error) throw error;
       }
 
-      showMessage("success", "Post deleted successfully");
+      showMessage("success", "Post deleted");
       await listPosts();
     } catch (err: any) {
       console.error("Delete error:", err);
-      showMessage("error", "Failed to delete post. Please try again.");
+      showMessage("error", "Failed to delete");
     } finally {
       setDeletingPostId(null);
     }
   }
 
-  // Remove media function
   async function removeMedia(postId: string, mediaId: string, mediaPath: string) {
     if (!confirm("Remove this photo/video?")) return;
 
     try {
+      const post = posts.find(p => p.id === postId);
+      if (post?.media_files.length === 1) {
+        showMessage("error", "Cannot remove last media. Delete the post instead.");
+        return;
+      }
+
       await supabase.storage.from("event-photos").remove([mediaPath]);
       await supabase.from("post_media").delete().eq("id", mediaId);
       
       showMessage("success", "Media removed");
       await listPosts();
     } catch (err: any) {
-      showMessage("error", "Failed to remove media");
+      showMessage("error", "Failed to remove");
     }
   }
 
-  // Toggle like function
   async function toggleLike(postId: string) {
     if (!viewerUserId) {
-      showMessage("error", "Please sign in to like posts");
+      showMessage("error", "Sign in to like posts");
       return;
     }
 
@@ -756,12 +678,10 @@ export default function PhotosFeed({
         setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
       }
     } catch (err: any) {
-      console.error("Like error:", err);
-      showMessage("error", "Failed to update like");
+      showMessage("error", "Failed to like");
     }
   }
 
-  // Start edit function
   async function startEdit(post: Post) {
     if (!canEditPost(post)) return;
     
@@ -772,7 +692,6 @@ export default function PhotosFeed({
     setEditVisibility(post.visibility);
   }
 
-  // Handle comment submit
   async function handleCommentSubmit(postId: string) {
     if (!viewerUserId || !commentText[postId]?.trim()) return;
 
@@ -789,12 +708,10 @@ export default function PhotosFeed({
       showMessage("success", "Comment added! 💬");
       await listPosts();
     } catch (err: any) {
-      console.error("Comment error:", err);
-      showMessage("error", "Failed to add comment");
+      showMessage("error", "Failed to comment");
     }
   }
 
-  // Respond to collaboration invite
   async function respondToCollabInvite(postId: string, accept: boolean) {
     if (!viewerUserId) return;
 
@@ -802,52 +719,26 @@ export default function PhotosFeed({
       if (accept) {
         await supabase
           .from("photo_tags")
-          .update({ can_edit: true, status: 'accepted' })
+          .update({ status: 'accepted' })
           .eq("post_id", postId)
           .eq("tagged_user_id", viewerUserId);
+        showMessage("success", "You can now add photos!");
       } else {
         await supabase
           .from("photo_tags")
-          .delete()
+          .update({ status: 'declined' })
           .eq("post_id", postId)
           .eq("tagged_user_id", viewerUserId);
+        showMessage("success", "Invite declined");
       }
-
-      showMessage("success", accept ? "You can now add photos!" : "Tag removed");
       await listPosts();
     } catch (err: any) {
-      showMessage("error", "Failed to update");
+      showMessage("error", "Failed to respond");
     }
   }
 
-  // Render post media
   const renderPostMedia = (post: Post) => {
-    const allMedia: MediaFile[] = [];
-    
-    if (post.profile_type === 'business' && (post as any).image_paths) {
-      const paths = (post as any).image_paths;
-      paths.forEach((path: string, idx: number) => {
-        const { data } = supabase.storage.from("event-photos").getPublicUrl(path);
-        allMedia.push({
-          id: `main-${idx}`,
-          url: data.publicUrl,
-          path: path,
-          type: 'image'
-        });
-      });
-    } else if (post.url) {
-      allMedia.push({
-        id: 'main',
-        url: post.url,
-        path: post.image_path,
-        type: 'image'
-      });
-    }
-    
-    if (post.media_files && post.media_files.length > 0) {
-      allMedia.push(...post.media_files);
-    }
-
+    const allMedia = post.media_files || [];
     if (allMedia.length === 0) return null;
 
     const isExpanded = expandedMedia.has(post.id);
@@ -886,7 +777,7 @@ export default function PhotosFeed({
                 <button
                   className="media-delete"
                   onClick={() => removeMedia(post.id, media.id, media.path)}
-                  aria-label="Remove media"
+                  aria-label="Remove"
                 >
                   ×
                 </button>
@@ -919,26 +810,32 @@ export default function PhotosFeed({
     listPosts(); 
   }, [userId, viewerUserId, relationshipType, profileType, businessId]);
 
-  // Get appropriate visibility options
   const visibilityOptions = profileType === 'business' ? BUSINESS_VISIBILITY_OPTIONS : VISIBILITY_OPTIONS;
+
+  const hasPendingInvite = (post: Post) => {
+    const tag = post.tags.find(t => t.id === viewerUserId);
+    return tag && tag.status === 'invited';
+  };
+
+  const isAcceptedCollaborator = (post: Post) => {
+    const tag = post.tags.find(t => t.id === viewerUserId);
+    return tag && tag.status === 'accepted' && tag.can_edit;
+  };
 
   return (
     <section className="photos-feed">
-      {/* Only show title and upload on own profile */}
       {!isPublicView && (
         <>
           <h2 className="feed-title">
             {profileType === 'business' ? 'Business Posts' : 'Photos & Memories'}
           </h2>
 
-          {/* Message Toast */}
           {message && (
             <div className={`message-toast ${message.type}`}>
               {message.text}
             </div>
           )}
 
-          {/* Upload Section - Only on own profile */}
           {canPost && (
             <div className="upload-card">
               <div className="upload-form">
@@ -948,7 +845,7 @@ export default function PhotosFeed({
                     className="form-input" 
                     value={caption} 
                     onChange={(e) => setCaption(e.target.value.slice(0, 100))} 
-                    placeholder={profileType === 'business' ? "What's new with your business..." : "Share this moment..."} 
+                    placeholder={profileType === 'business' ? "What's new..." : "Share this moment..."} 
                     maxLength={100}
                   />
                   <span className="char-count">{caption.length}/100</span>
@@ -960,7 +857,7 @@ export default function PhotosFeed({
                     className="form-textarea" 
                     value={description} 
                     onChange={(e) => setDescription(e.target.value.slice(0, 500))} 
-                    placeholder={profileType === 'business' ? "Tell your followers more..." : "Tell the story..."}
+                    placeholder={profileType === 'business' ? "Details..." : "Tell the story..."}
                     rows={2}
                     maxLength={500}
                   />
@@ -997,7 +894,7 @@ export default function PhotosFeed({
                 {selectedFiles && selectedFiles.length > 0 && (
                   <div className="selected-files">
                     <span className="files-count">
-                      {selectedFiles.length} file(s) selected - NO LIMIT! 🎉
+                      {selectedFiles.length} file(s) selected 🎉
                     </span>
                   </div>
                 )}
@@ -1014,7 +911,7 @@ export default function PhotosFeed({
                     }}
                     disabled={uploading}
                   />
-                  {uploading ? `Uploading... ${uploadProgress}%` : "📸 Upload Photos/Videos (Unlimited!)"}
+                  {uploading ? `Uploading... ${uploadProgress}%` : "📸 Upload Photos/Videos"}
                 </label>
 
                 {uploading && uploadProgress > 0 && (
@@ -1031,39 +928,57 @@ export default function PhotosFeed({
         </>
       )}
 
-      {/* Posts Grid */}
       <div className="posts-grid">
         {posts.map(post => {
-          const isCollabInvite = post.tags.some(t => t.id === viewerUserId) && 
-                                 !post.tags.find(t => t.id === viewerUserId)?.can_edit;
+          const isInvited = hasPendingInvite(post);
+          const isCollaborator = isAcceptedCollaborator(post);
 
           return (
             <div key={post.id} className="post-card">
-              {/* Collaboration Invite Banner */}
-              {isCollabInvite && (
+              {isInvited && (
                 <div className="collab-invite">
-                  <p>You've been tagged! Add your own photos to this post.</p>
+                  <p>You've been tagged! Add your photos to this post.</p>
                   <div className="invite-actions">
                     <button 
                       className="invite-accept"
                       onClick={() => respondToCollabInvite(post.id, true)}
                     >
-                      ✓ Accept & Add Photos
+                      ✓ Accept
                     </button>
                     <button 
                       className="invite-decline"
                       onClick={() => respondToCollabInvite(post.id, false)}
                     >
-                      × Untag Me
+                      × Decline
                     </button>
                   </div>
+                </div>
+              )}
+
+              {isCollaborator && !editingPostId && (
+                <div className="collab-add-section">
+                  <label className="collab-add-btn">
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      className="file-input"
+                      onChange={async (e) => {
+                        if (e.target.files) {
+                          await addPhotosToPost(post.id, e.target.files);
+                          e.target.value = "";
+                        }
+                      }}
+                      disabled={addingToPost === post.id}
+                    />
+                    {addingToPost === post.id ? `Uploading... ${uploadProgress}%` : "➕ Add Your Photos"}
+                  </label>
                 </div>
               )}
 
               <div className="post-image-container">
                 {renderPostMedia(post)}
                 
-                {/* Like button overlay */}
                 <button
                   className={`like-button ${likedPosts.has(post.id) ? 'liked' : ''}`}
                   onClick={() => toggleLike(post.id)}
@@ -1075,7 +990,6 @@ export default function PhotosFeed({
               
               <div className="post-content">
                 {editingPostId === post.id ? (
-                  /* Edit Mode */
                   <div className="edit-mode">
                     <input
                       className="edit-input"
@@ -1090,7 +1004,7 @@ export default function PhotosFeed({
                       placeholder="Description"
                       rows={2}
                     />
-                    {post.profile_type !== 'business' && (
+                    {post.profile_type !== 'business' && post.user_id === viewerUserId && (
                       <input
                         className="edit-input"
                         value={editTags}
@@ -1118,7 +1032,7 @@ export default function PhotosFeed({
                         className="file-input"
                         onChange={(e) => setEditFiles(e.target.files)}
                       />
-                      + Add More Photos/Videos (No Limit!)
+                      + Add More Photos/Videos
                     </label>
                     {editFiles && editFiles.length > 0 && (
                       <span className="edit-files-count">
@@ -1132,7 +1046,7 @@ export default function PhotosFeed({
                         className="btn-save"
                         disabled={uploading}
                       >
-                        {uploading ? "Saving..." : "Save"}
+                        Save
                       </button>
                       <button
                         onClick={() => {
@@ -1146,9 +1060,7 @@ export default function PhotosFeed({
                     </div>
                   </div>
                 ) : (
-                  /* View Mode */
                   <>
-                    {/* Creator info */}
                     <div className="post-creator">
                       {post.profile_type === 'business' ? (
                         <>
@@ -1179,10 +1091,10 @@ export default function PhotosFeed({
                         </>
                       )}
                       
-                      {post.tags.filter(t => t.can_edit).length > 0 && (
+                      {post.tags.filter(t => t.can_edit && t.status === 'accepted').length > 0 && (
                         <>
                           <span className="with-text">with</span>
-                          {post.tags.filter(t => t.can_edit).map((tag, idx, arr) => (
+                          {post.tags.filter(t => t.can_edit && t.status === 'accepted').map((tag, idx, arr) => (
                             <span key={tag.id}>
                               <Link href={`/profile/${tag.id}`} className="creator-link">
                                 {tag.name}
@@ -1210,25 +1122,7 @@ export default function PhotosFeed({
                         Read more...
                       </button>
                     )}
-                    
-                    {post.profile_type !== 'business' && post.tags.filter(t => !t.can_edit).length > 0 && (
-                      <div className="post-tags">
-                        <span className="tag-label">Also tagged:</span>
-                        {post.tags.filter(t => !t.can_edit).map((tag, idx) => (
-                          <span key={tag.id}>
-                            <Link 
-                              href={`/profile/${tag.id}`}
-                              className="tag-link"
-                            >
-                              {tag.name}
-                            </Link>
-                            {idx < post.tags.filter(t => !t.can_edit).length - 1 && ", "}
-                          </span>
-                        ))}
-                      </div>
-                    )}
 
-                    {/* Post Meta */}
                     <div className="post-meta">
                       <div className="meta-left">
                         <span className="visibility-badge">
@@ -1243,14 +1137,13 @@ export default function PhotosFeed({
                       </span>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="post-actions">
-                      {canEditPost(post) && (
+                      {canEditPost(post) && post.user_id === viewerUserId && (
                         <button
                           onClick={() => startEdit(post)}
                           className="btn-edit"
                         >
-                          {post.user_id === viewerUserId ? "Edit" : "Add Photos"}
+                          Edit
                         </button>
                       )}
                       {canDeletePost(post) && (
@@ -1259,12 +1152,11 @@ export default function PhotosFeed({
                           className="btn-delete"
                           disabled={deletingPostId === post.id}
                         >
-                          {deletingPostId === post.id ? "Deleting..." : "Delete"}
+                          {deletingPostId === post.id ? "..." : "Delete"}
                         </button>
                       )}
                     </div>
 
-                    {/* Comments Section */}
                     <div className="comments-section">
                       <h4 className="comments-title">Comments</h4>
                       
@@ -1321,14 +1213,13 @@ export default function PhotosFeed({
         })}
       </div>
 
-      {/* Empty State */}
       {!posts.length && (
         <div className="empty-state">
           {isPublicView && relationshipType === 'none' ? (
             <>
               <p className="empty-title">No public photos</p>
               <p className="empty-subtitle">
-                {profileType === 'business' ? 'Follow this business to see updates' : 'Connect as friends to see more content'}
+                {profileType === 'business' ? 'Follow this business' : 'Connect as friends to see more'}
               </p>
             </>
           ) : (
@@ -1337,7 +1228,7 @@ export default function PhotosFeed({
               <p className="empty-subtitle">
                 {canPost ? 
                   (profileType === 'business' ? "Share your business updates!" : "Share your first memory!") 
-                  : "Check back later for updates"}
+                  : "Check back later"}
               </p>
             </>
           )}
@@ -1345,13 +1236,12 @@ export default function PhotosFeed({
       )}
 
       <style jsx>{`
-        /* Complete styles section - FIXED */
         .photos-feed {
           position: relative;
         }
 
         .feed-title {
-          font-size: 2rem;
+          font-size: clamp(1.5rem, 4vw, 2rem);
           font-weight: 700;
           margin-bottom: 1rem;
           background: linear-gradient(135deg, #8b5cf6, #ec4899);
@@ -1359,16 +1249,11 @@ export default function PhotosFeed({
           -webkit-text-fill-color: transparent;
         }
 
-        @media (max-width: 640px) {
-          .feed-title {
-            font-size: 1.5rem;
-          }
-        }
-
         .message-toast {
           position: fixed;
           top: 5rem;
           right: 1rem;
+          left: 1rem;
           z-index: 50;
           padding: 1rem;
           border-radius: 0.5rem;
@@ -1376,7 +1261,14 @@ export default function PhotosFeed({
           animation: slideIn 0.3s ease;
           color: white;
           font-weight: 500;
-          max-width: 90vw;
+          max-width: 500px;
+          margin: 0 auto;
+        }
+
+        @media (min-width: 640px) {
+          .message-toast {
+            left: auto;
+          }
         }
 
         .message-toast.success {
@@ -1389,11 +1281,11 @@ export default function PhotosFeed({
 
         @keyframes slideIn {
           from {
-            transform: translateX(100%);
+            transform: translateY(-100%);
             opacity: 0;
           }
           to {
-            transform: translateX(0);
+            transform: translateY(0);
             opacity: 1;
           }
         }
@@ -1403,15 +1295,8 @@ export default function PhotosFeed({
           border-radius: 1rem;
           box-shadow: 0 2px 8px rgba(0,0,0,0.08);
           border: 1px solid #e5e7eb;
-          padding: 1.5rem;
+          padding: clamp(1rem, 2vw, 1.5rem);
           margin-bottom: 2rem;
-        }
-
-        @media (max-width: 640px) {
-          .upload-card {
-            padding: 1rem;
-            border-radius: 0.75rem;
-          }
         }
 
         .upload-form {
@@ -1451,6 +1336,7 @@ export default function PhotosFeed({
         .form-textarea {
           resize: vertical;
           min-height: 4rem;
+          font-family: inherit;
         }
 
         .char-count {
@@ -1484,16 +1370,22 @@ export default function PhotosFeed({
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
-          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+          min-height: 44px;
         }
 
-        .upload-button:hover {
+        .upload-button:hover:not(:disabled) {
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(139,92,246,0.3);
         }
 
         .upload-button:active {
           transform: translateY(0);
+        }
+
+        .upload-button:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
         }
 
         .file-input {
@@ -1515,15 +1407,8 @@ export default function PhotosFeed({
 
         .posts-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-          .posts-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-          }
+          grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+          gap: clamp(1rem, 2vw, 1.5rem);
         }
 
         .post-card {
@@ -1556,6 +1441,7 @@ export default function PhotosFeed({
           margin: 0 0 0.5rem 0;
           color: #92400e;
           font-weight: 500;
+          font-size: 0.875rem;
         }
 
         .invite-actions {
@@ -1564,13 +1450,14 @@ export default function PhotosFeed({
         }
 
         .invite-accept, .invite-decline {
-          padding: 0.375rem 0.75rem;
+          padding: 0.5rem 1rem;
           border: none;
           border-radius: 0.375rem;
           font-size: 0.875rem;
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          min-height: 36px;
         }
 
         .invite-accept {
@@ -1578,17 +1465,40 @@ export default function PhotosFeed({
           color: white;
         }
 
-        .invite-accept:hover {
-          background: #059669;
-        }
-
         .invite-decline {
           background: #ef4444;
           color: white;
         }
 
-        .invite-decline:hover {
-          background: #dc2626;
+        .collab-add-section {
+          background: #f0fdf4;
+          padding: 0.75rem;
+          border-bottom: 1px solid #86efac;
+        }
+
+        .collab-add-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          padding: 0.5rem;
+          background: #10b981;
+          color: white;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          min-height: 40px;
+        }
+
+        .collab-add-btn:hover:not(:disabled) {
+          background: #059669;
+        }
+
+        .collab-add-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
         }
 
         .post-image-container {
@@ -1678,8 +1588,8 @@ export default function PhotosFeed({
           position: absolute;
           bottom: 0.75rem;
           right: 0.75rem;
-          width: 2.5rem;
-          height: 2.5rem;
+          width: clamp(2.5rem, 5vw, 3rem);
+          height: clamp(2.5rem, 5vw, 3rem);
           background: rgba(255,255,255,0.9);
           border: none;
           border-radius: 50%;
@@ -1687,34 +1597,22 @@ export default function PhotosFeed({
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          font-size: 1.25rem;
+          font-size: clamp(1.25rem, 3vw, 1.5rem);
           transition: all 0.2s;
           backdrop-filter: blur(10px);
           -webkit-tap-highlight-color: transparent;
         }
 
-        .like-button:hover {
-          transform: scale(1.1);
-        }
-
         .like-button:active {
-          transform: scale(0.95);
+          transform: scale(0.9);
         }
 
         .like-button.liked {
           background: rgba(239,68,68,0.1);
         }
 
-        @media (max-width: 640px) {
-          .like-button {
-            width: 3rem;
-            height: 3rem;
-            font-size: 1.5rem;
-          }
-        }
-
         .post-content {
-          padding: 1rem;
+          padding: clamp(0.75rem, 2vw, 1rem);
         }
 
         .post-creator {
@@ -1732,10 +1630,7 @@ export default function PhotosFeed({
           color: #8b5cf6;
           text-decoration: none;
           font-weight: 600;
-        }
-
-        .creator-link:hover {
-          text-decoration: underline;
+          font-size: 0.875rem;
         }
 
         .creator-avatar {
@@ -1745,16 +1640,8 @@ export default function PhotosFeed({
           object-fit: cover;
         }
 
-        .business-link {
-          color: #7c3aed;
-          font-weight: 600;
-        }
-
         .business-logo {
-          width: 2rem;
-          height: 2rem;
           border-radius: 0.25rem;
-          object-fit: cover;
         }
 
         .business-badge {
@@ -1765,10 +1652,6 @@ export default function PhotosFeed({
           border-radius: 0.25rem;
           font-weight: 600;
           text-transform: uppercase;
-        }
-
-        .creator-name {
-          font-size: 0.875rem;
         }
 
         .with-text {
@@ -1797,34 +1680,9 @@ export default function PhotosFeed({
           background: none;
           border: none;
           font-size: 0.875rem;
-cursor: pointer;
+          cursor: pointer;
           padding: 0;
           margin-bottom: 0.75rem;
-        }
-
-        .read-more:hover {
-          text-decoration: underline;
-        }
-
-        .post-tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.25rem;
-          margin-bottom: 0.75rem;
-          font-size: 0.875rem;
-        }
-
-        .tag-label {
-          color: #6b7280;
-        }
-
-        .tag-link {
-          color: #8b5cf6;
-          text-decoration: none;
-        }
-
-        .tag-link:hover {
-          text-decoration: underline;
         }
 
         .post-meta {
@@ -1862,7 +1720,7 @@ cursor: pointer;
         }
 
         .btn-edit, .btn-delete {
-          padding: 0.375rem 0.75rem;
+          padding: 0.5rem 1rem;
           border-radius: 0.375rem;
           border: none;
           font-size: 0.875rem;
@@ -1870,13 +1728,7 @@ cursor: pointer;
           cursor: pointer;
           transition: all 0.2s;
           -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (max-width: 640px) {
-          .btn-edit, .btn-delete {
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-          }
+          min-height: 36px;
         }
 
         .btn-edit {
@@ -1888,10 +1740,6 @@ cursor: pointer;
           background: #2563eb;
         }
 
-        .btn-edit:active {
-          transform: scale(0.95);
-        }
-
         .btn-delete {
           background: #ef4444;
           color: white;
@@ -1901,8 +1749,9 @@ cursor: pointer;
           background: #dc2626;
         }
 
-        .btn-delete:active {
-          transform: scale(0.95);
+        .btn-delete:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .edit-mode {
@@ -1916,20 +1765,14 @@ cursor: pointer;
           padding: 0.5rem;
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
-          font-size: 0.875rem;
+          font-size: 16px;
           -webkit-appearance: none;
-        }
-
-        @media (max-width: 640px) {
-          .edit-input, .edit-textarea, .edit-select {
-            font-size: 16px;
-            padding: 0.625rem;
-          }
         }
 
         .edit-textarea {
           resize: vertical;
           min-height: 3rem;
+          font-family: inherit;
         }
 
         .add-media-btn {
@@ -1944,6 +1787,7 @@ cursor: pointer;
           font-size: 0.875rem;
           cursor: pointer;
           transition: all 0.2s;
+          min-height: 40px;
         }
 
         .add-media-btn:hover {
@@ -1970,13 +1814,7 @@ cursor: pointer;
           cursor: pointer;
           transition: all 0.2s;
           -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (max-width: 640px) {
-          .btn-save, .btn-cancel {
-            padding: 0.625rem;
-            font-size: 1rem;
-          }
+          min-height: 36px;
         }
 
         .btn-save {
@@ -1984,12 +1822,13 @@ cursor: pointer;
           color: white;
         }
 
-        .btn-save:hover {
+        .btn-save:hover:not(:disabled) {
           background: #059669;
         }
 
-        .btn-save:active {
-          transform: scale(0.95);
+        .btn-save:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .btn-cancel {
@@ -1999,10 +1838,6 @@ cursor: pointer;
 
         .btn-cancel:hover {
           background: #4b5563;
-        }
-
-        .btn-cancel:active {
-          transform: scale(0.95);
         }
 
         .comments-section {
@@ -2043,10 +1878,6 @@ cursor: pointer;
           margin-right: 0.25rem;
         }
 
-        .comment-author:hover {
-          text-decoration: underline;
-        }
-
         .comment-avatar {
           width: 1.25rem;
           height: 1.25rem;
@@ -2065,18 +1896,11 @@ cursor: pointer;
 
         .comment-input {
           flex: 1;
-          padding: 0.375rem 0.5rem;
+          padding: 0.5rem;
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
-          font-size: 0.875rem;
+          font-size: 16px;
           -webkit-appearance: none;
-        }
-
-        @media (max-width: 640px) {
-          .comment-input {
-            font-size: 16px;
-            padding: 0.5rem;
-          }
         }
 
         .comment-input:focus {
@@ -2085,7 +1909,7 @@ cursor: pointer;
         }
 
         .comment-submit {
-          padding: 0.375rem 0.75rem;
+          padding: 0.5rem 1rem;
           background: #8b5cf6;
           color: white;
           border: none;
@@ -2095,21 +1919,11 @@ cursor: pointer;
           cursor: pointer;
           transition: all 0.2s;
           -webkit-tap-highlight-color: transparent;
-        }
-
-        @media (max-width: 640px) {
-          .comment-submit {
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-          }
+          min-height: 36px;
         }
 
         .comment-submit:hover:not(:disabled) {
           background: #7c3aed;
-        }
-
-        .comment-submit:active {
-          transform: scale(0.95);
         }
 
         .comment-submit:disabled {
@@ -2134,23 +1948,14 @@ cursor: pointer;
           color: #9ca3af;
         }
 
+        /* Mobile optimizations */
         @media (max-width: 640px) {
-          .message-toast {
-            right: 0.5rem;
-            left: 0.5rem;
-            font-size: 0.875rem;
-          }
-
           .posts-grid {
             padding: 0;
           }
 
           .post-card {
             border-radius: 0.75rem;
-          }
-
-          .post-content {
-            padding: 0.75rem;
           }
 
           .comment-form {
@@ -2163,32 +1968,39 @@ cursor: pointer;
             z-index: 10;
           }
 
-          button, .upload-button, .tag-link {
+          .post-actions {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 0.5rem;
+            margin: 0 -0.75rem;
+            border-top: 1px solid #e5e7eb;
+          }
+
+          /* Ensure all interactive elements are touch-friendly */
+          button, .upload-button, input, textarea, select {
             min-height: 44px;
-            min-width: 44px;
+            font-size: 16px;
+          }
+
+          .btn-edit, .btn-delete, .btn-save, .btn-cancel {
+            min-height: 40px;
+            padding: 0.625rem 1rem;
           }
         }
 
-        @media (hover: none) {
-          .post-image:hover {
-            transform: none;
-          }
-          
-          .like-button:hover {
-            transform: none;
-          }
-        }
-
+        /* Accessibility improvements */
         button:focus-visible,
         .upload-button:focus-visible,
-        .tag-link:focus-visible,
         input:focus-visible,
         textarea:focus-visible,
-        select:focus-visible {
+        select:focus-visible,
+        a:focus-visible {
           outline: 2px solid #8b5cf6;
           outline-offset: 2px;
         }
 
+        /* Scrollbar styling */
         .comments-list::-webkit-scrollbar {
           width: 4px;
         }
@@ -2205,8 +2017,17 @@ cursor: pointer;
         .comments-list::-webkit-scrollbar-thumb:hover {
           background: #9ca3af;
         }
-      `}</style>
-    </section>
-  );
-}
-          
+
+        /* Performance optimizations */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+
+        /* Dark mode support ready (if you add it later) */
+        @media (prefers-color-scheme: dark) {
+          /* Add dark mode styles here when needed */
+        }
