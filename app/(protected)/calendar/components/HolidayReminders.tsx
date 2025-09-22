@@ -15,7 +15,8 @@ interface HolidayRemindersProps {
 
 export default function HolidayReminders({ onClose, onAddToCalendar }: HolidayRemindersProps) {
   const currentYear = new Date().getFullYear();
-  
+  const [selectedHolidays, setSelectedHolidays] = useState<Set<string>>(new Set());
+
   const holidays: Holiday[] = [
     { name: "New Year's Day", date: `${currentYear}-01-01`, emoji: "🎊", description: "Start the year with intention" },
     { name: "Martin Luther King Jr. Day", date: `${currentYear}-01-20`, emoji: "✊", description: "Day of service and reflection" },
@@ -35,8 +36,6 @@ export default function HolidayReminders({ onClose, onAddToCalendar }: HolidayRe
     { name: "Christmas Day", date: `${currentYear}-12-25`, emoji: "🎄", description: "Joy and celebration" },
     { name: "New Year's Eve", date: `${currentYear}-12-31`, emoji: "🎉", description: "End the year with reflection" }
   ];
-
-  const [selectedHolidays, setSelectedHolidays] = useState<Set<string>>(new Set());
 
   const toggleHoliday = (holidayName: string) => {
     setSelectedHolidays(prev => {
@@ -100,4 +99,59 @@ export default function HolidayReminders({ onClose, onAddToCalendar }: HolidayRe
                     relative group rounded-lg p-4 border transition-all cursor-pointer
                     ${selectedHolidays.has(holiday.name) 
                       ? 'bg-gradient-to-r from-red-50 to-green-50 dark:from-red-900/20 dark:to-green-900/20 border-green-500' 
-                      : 'bg-white dark:bg-gray-700 border-gray-200
+                      : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                    }
+                    ${isPast ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}
+                  `}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{holiday.emoji}</span>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        {holiday.name}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} • {holiday.description}
+                      </div>
+                    </div>
+                    {selectedHolidays.has(holiday.name) && !isPast && (
+                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm">✓</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t dark:border-gray-700 flex items-center justify-between">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {selectedHolidays.size} holiday{selectedHolidays.size !== 1 ? 's' : ''} selected
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={addSelectedHolidays}
+              disabled={selectedHolidays.size === 0}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                selectedHolidays.size > 0
+                  ? 'bg-gradient-to-r from-red-500 to-green-500 text-white hover:from-red-600 hover:to-green-600'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              Add to Calendar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
