@@ -226,7 +226,7 @@ export default function PhotosFeed({
 
         const { data: mediaFiles } = await supabase
           .from("post_media")
-          .select("id, storage_path, media_type, sort_order")
+          .select("id, storage_path, type, sort_order")  // Changed from media_type to type
           .eq("post_id", r.id)
           .order("sort_order", { ascending: true });
 
@@ -240,7 +240,7 @@ export default function PhotosFeed({
               id: media.id,
               url: mediaUrl.publicUrl,
               path: media.storage_path,
-              type: media.media_type as 'image' | 'video'
+              type: media.type as 'image' | 'video'  // Changed from media.media_type
             });
           }
         }
@@ -409,8 +409,9 @@ export default function PhotosFeed({
         const { error: mediaError } = await supabase.from("post_media").insert({
           post_id: postId,
           storage_path: path,
-          media_type: file.type.startsWith('video') ? 'video' : 'image',
+          type: file.type.startsWith('video') ? 'video' : 'image',  // Changed from media_type to type
           sort_order: i,
+          created_by: userId,  // Added created_by since it's required
           uploaded_by: userId
         });
 
@@ -504,8 +505,9 @@ export default function PhotosFeed({
         const { error: mediaError } = await supabase.from("post_media").insert({
           post_id: postId,
           storage_path: path,
-          media_type: file.type.startsWith('video') ? 'video' : 'image',
+          type: file.type.startsWith('video') ? 'video' : 'image',  // Changed from media_type
           sort_order: startIndex + i,
+          created_by: viewerUserId,  // Added created_by
           uploaded_by: viewerUserId
         });
 
@@ -529,9 +531,16 @@ export default function PhotosFeed({
     if (!editingPostId) return;
 
     setUploading(true);
+    setUploadProgress(0);
+    
     try {
       const post = posts.find(p => p.id === editingPostId);
-      if (!post) return;
+      if (!post) {
+        throw new Error("Post not found");
+      }
+
+      console.log("Saving edit for post:", editingPostId);
+      console.log("Current user:", viewerUserId);
 
       // Update post metadata
       if (post.profile_type === 'business') {
@@ -544,7 +553,10 @@ export default function PhotosFeed({
             updated_at: new Date().toISOString()
           })
           .eq("id", editingPostId);
-        if (error) throw error;
+        if (error) {
+          console.error("Error updating business post:", error);
+          throw error;
+        }
       } else {
         const { error } = await supabase
           .from("photo_posts")
@@ -555,27 +567,44 @@ export default function PhotosFeed({
             updated_at: new Date().toISOString()
           })
           .eq("id", editingPostId);
-        if (error) throw error;
+        if (error) {
+          console.error("Error updating photo post:", error);
+          throw error;
+        }
       }
 
       // Upload new files if any
       if (editFiles && editFiles.length > 0 && viewerUserId) {
-        const { data: existingMedia } = await supabase
+        console.log(`Uploading ${editFiles.length} new files`);
+        
+        // Get existing media count for sort order
+        const { data: existingMedia, error: mediaCountError } = await supabase
           .from("post_media")
           .select("id")
           .eq("post_id", editingPostId);
 
+        if (mediaCountError) {
+          console.error("Error getting existing media count:", mediaCountError);
+        }
+
         const startIndex = existingMedia?.length || 0;
+        console.log(`Starting at index ${startIndex}`);
 
         for (let i = 0; i < editFiles.length; i++) {
-          setUploadProgress(Math.round(((i + 1) / editFiles.length) * 100));
+          const progress = Math.round(((i + 1) / editFiles.length) * 100);
+          setUploadProgress(progress);
           
           const file = editFiles[i];
           const timestamp = Date.now();
-          const filename = `${timestamp}-${startIndex + i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const randomStr = Math.random().toString(36).substring(7);
+          const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const filename = `${timestamp}-${randomStr}-${cleanName}`;
           const path = `${viewerUserId}/${filename}`;
 
-          const { error: uploadError } = await supabase.storage
+          console.log(`Uploading file ${i + 1}: ${path}`);
+
+          // Upload to storage
+          const { data: uploadData, error: uploadError } = await supabase.storage
             .from("event-photos")
             .upload(path, file, {
               cacheControl: "3600",
@@ -583,35 +612,59 @@ export default function PhotosFeed({
             });
 
           if (uploadError) {
-            console.error(`Failed to upload file ${i}:`, uploadError);
-            throw uploadError;
+            console.error(`Failed to upload file ${i + 1}:`, uploadError);
+            throw new Error(`Upload failed: ${uploadError.message}`);
           }
 
-          const { error: mediaError } = await supabase.from("post_media").insert({
-            post_id: editingPostId,
-            storage_path: path,
-            media_type: file.type.startsWith('video') ? 'video' : 'image',
-            sort_order: startIndex + i,
-            uploaded_by: viewerUserId
-          });
+          console.log(`File ${i + 1} uploaded successfully`);
+
+          // Add to post_media table
+          const { data: mediaData, error: mediaError } = await supabase
+            .from("post_media")
+            .insert({
+              post_id: editingPostId,
+              storage_path: path,
+              type: file.type.startsWith('video') ? 'video' : 'image',  // Changed from media_type to type
+              sort_order: startIndex + i,
+              created_by: viewerUserId,  // Added created_by since it's required
+              uploaded_by: viewerUserId
+            })
+            .select();
 
           if (mediaError) {
-            console.error(`Failed to save media record ${i}:`, mediaError);
-            throw mediaError;
+            console.error(`Failed to save media record ${i + 1}:`, mediaError);
+            // Try to clean up the uploaded file
+            await supabase.storage.from("event-photos").remove([path]);
+            throw new Error(`Database error: ${mediaError.message}`);
           }
+
+          console.log(`Media record ${i + 1} saved successfully:`, mediaData);
         }
       }
 
       // Update tags for personal posts (only if post owner)
       if (post.profile_type !== 'business' && post.user_id === viewerUserId) {
-        await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
+        console.log("Updating tags...");
+        
+        const { error: deleteTagsError } = await supabase
+          .from("photo_tags")
+          .delete()
+          .eq("post_id", editingPostId);
+        
+        if (deleteTagsError) {
+          console.error("Error deleting existing tags:", deleteTagsError);
+        }
         
         const tagNames = editTags.split(",").map(s => s.trim()).filter(Boolean);
         if (tagNames.length) {
-          const { data: profiles } = await supabase
+          const { data: profiles, error: profilesError } = await supabase
             .from("profiles")
             .select("id")
             .in("full_name", tagNames);
+          
+          if (profilesError) {
+            console.error("Error finding profiles:", profilesError);
+          }
           
           if (profiles?.length) {
             const tagRows = profiles.map(p => ({ 
@@ -620,19 +673,27 @@ export default function PhotosFeed({
               can_edit: true,
               status: 'invited'
             }));
-            await supabase.from("photo_tags").insert(tagRows);
+            
+            const { error: insertTagsError } = await supabase
+              .from("photo_tags")
+              .insert(tagRows);
+            
+            if (insertTagsError) {
+              console.error("Error inserting tags:", insertTagsError);
+            }
           }
         }
       }
 
+      console.log("Edit saved successfully!");
       setEditingPostId(null);
       setEditFiles(null);
       setUploadProgress(0);
       showMessage("success", "Post updated! ✨");
       await listPosts();
     } catch (err: any) {
-      console.error("Edit error:", err);
-      showMessage("error", err.message || "Failed to update post");
+      console.error("Edit error details:", err);
+      showMessage("error", `Failed to update: ${err.message || "Unknown error"}`);
     } finally {
       setUploading(false);
       setUploadProgress(0);
