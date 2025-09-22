@@ -2031,3 +2031,7 @@ export default function PhotosFeed({
         @media (prefers-color-scheme: dark) {
           /* Add dark mode styles here when needed */
         }
+      `}</style>
+    </section>
+  );
+}
