@@ -2,24 +2,23 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createPost, Post, uploadMedia } from "@/lib/posts";
 import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
 
 type MediaUpload = {
   url: string;
   type: 'image' | 'video';
   preview: string;
-  path: string;
 };
 
 interface PostComposerProps {
-  onPostCreated?: () => void;
+  onPostCreated?: () => void; // Callback when a post is successfully created
   className?: string;
 }
 
 export default function PostComposer({ onPostCreated, className = "" }: PostComposerProps) {
   const [body, setBody] = useState("");
-  const [privacy, setPrivacy] = useState<"friends" | "private" | "public">("friends");
+  const [privacy, setPrivacy] = useState<Post["privacy"]>("friends");
   const [allowShare, setAllowShare] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -31,54 +30,46 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
+  // Meditation-themed emojis
   const zenEmojis = ['🧘', '🙏', '✨', '💜', '🌸', '☮️', '🕉️', '💫', '🌟', '🤲', '🧘‍♀️', '🧘‍♂️', '🌺', '🍃', '🌿'];
 
-  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, mediaType: 'image' | 'video') {
+  async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setUploadingMedia(true);
     const newMedia: MediaUpload[] = [];
 
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user) {
-      alert("Please sign in to upload media");
-      setUploadingMedia(false);
-      return;
-    }
-
+    // Process all selected files
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const timestamp = Date.now();
-      const filename = `${timestamp}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const path = `${userData.user.id}/${filename}`;
       
-      // Upload to storage
-      const { error } = await supabase.storage
-        .from("event-photos")
-        .upload(path, file);
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      
+      // Upload to Supabase
+      const { url: uploadedUrl, error } = await uploadMedia(file, type);
       
       if (error) {
         console.error(`Failed to upload ${file.name}:`, error);
+        alert(`Failed to upload ${file.name}. ${error}`);
         continue;
       }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("event-photos")
-        .getPublicUrl(path);
-
-      newMedia.push({
-        url: urlData.publicUrl,
-        type: mediaType,
-        preview: URL.createObjectURL(file),
-        path: path
-      });
+      if (uploadedUrl) {
+        newMedia.push({
+          url: uploadedUrl,
+          type,
+          preview: previewUrl
+        });
+      }
     }
 
+    // Add all successfully uploaded media to state
     setUploadedMedia([...uploadedMedia, ...newMedia]);
     setUploadingMedia(false);
     
+    // Clear the file input
     if (e.target) {
       e.target.value = '';
     }
@@ -93,65 +84,24 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     setSaving(true);
     
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        alert("Please sign in to post");
+      // Prepare media arrays
+      const mediaItems = uploadedMedia.map(m => ({
+        url: m.url,
+        type: m.type
+      }));
+
+      const result = await createPost(body.trim() || "Shared a moment", privacy, {
+        allow_share: allowShare,
+        co_creators: coCreators.length > 0 ? coCreators : null,
+        media: mediaItems  // Pass all media as an array
+      });
+      
+      if (!result.ok) {
+        console.error("Post error:", result.error);
+        alert(`Unable to post: ${result.error || 'Unknown error'}`);
         setSaving(false);
         return;
       }
-
-      // Create post in photo_posts table
-      const { data: newPost, error: postError } = await supabase
-        .from("photo_posts")
-        .insert({
-          user_id: userData.user.id,
-          caption: body.trim() || "Shared a moment",
-          visibility: privacy,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (postError) throw postError;
-
-      // Add media to post_media table with CORRECT column names
-      if (uploadedMedia.length > 0) {
-        const mediaRecords = uploadedMedia.map((media, index) => ({
-          post_id: newPost.id,
-          storage_path: media.path,  // Changed from media_url
-          type: media.type,           // Changed from media_type
-          sort_order: index,
-          created_by: userData.user.id,
-          uploaded_by: userData.user.id
-        }));
-
-        const { error: mediaError } = await supabase
-          .from("post_media")
-          .insert(mediaRecords);
-
-        if (mediaError) {
-          console.error("Media insert error:", mediaError);
-        }
-      }
-
-      // Handle co-creators if any
-      if (coCreators.length > 0) {
-        const tagRows = coCreators.map(userId => ({
-          post_id: newPost.id,
-          tagged_user_id: userId,
-          can_edit: true,
-          status: 'invited'
-        }));
-        
-        await supabase.from("photo_tags").insert(tagRows);
-      }
-      
-      // Clean up preview URLs
-      uploadedMedia.forEach(m => {
-        if (m.preview.startsWith('blob:')) {
-          URL.revokeObjectURL(m.preview);
-        }
-      });
       
       // Reset form
       setBody("");
@@ -160,6 +110,14 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       setShowCoCreators(false);
       setSaving(false);
       
+      // Clean up preview URLs
+      uploadedMedia.forEach(m => {
+        if (m.preview.startsWith('blob:')) {
+          URL.revokeObjectURL(m.preview);
+        }
+      });
+      
+      // Call the callback if provided
       if (onPostCreated) {
         onPostCreated();
       }
