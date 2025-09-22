@@ -23,6 +23,7 @@ import CalendarModals from "./components/CalendarModals";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import HolidayReminders from "./components/HolidayReminders";
+import PersonalDates from "./components/PersonalDates";
 import { Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -223,6 +224,7 @@ export default function CalendarPage() {
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
   const [showTimeBlocking, setShowTimeBlocking] = useState(false);
   const [showHolidayReminders, setShowHolidayReminders] = useState(false);
+  const [showPersonalDates, setShowPersonalDates] = useState(false);
 
   // ===== DRAG STATES FOR SIDEBAR =====
   const [draggedItem, setDraggedItem] = useState<TodoReminder | null>(null);
@@ -456,6 +458,9 @@ export default function CalendarPage() {
       } else if (lower.includes('holidays')) {
         setShowHolidayReminders(true);
         vibrate();
+      } else if (lower.includes('birthdays') || lower.includes('anniversaries')) {
+        setShowPersonalDates(true);
+        vibrate();
       }
     }
   });
@@ -632,13 +637,19 @@ export default function CalendarPage() {
           setShowTimeBlocking={setShowTimeBlocking}
         />
 
-        {/* Holiday Reminders Button - FIXED: Added for issue #8 */}
-        <div className="mb-2 flex justify-end">
+        {/* Holiday Reminders & Personal Dates Buttons */}
+        <div className="mb-2 flex justify-end gap-2">
           <button
             onClick={() => setShowHolidayReminders(true)}
             className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-green-500 text-white rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
           >
             🎄 Holiday Reminders
+          </button>
+          <button
+            onClick={() => setShowPersonalDates(true)}
+            className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
+          >
+            🎂 Birthdays & Anniversaries
           </button>
         </div>
 
@@ -780,6 +791,14 @@ export default function CalendarPage() {
               setOpenCreate(true);
               setShowHolidayReminders(false);
             }}
+          />
+        )}
+
+        {/* Personal Dates Modal */}
+        {showPersonalDates && (
+          <PersonalDates
+            onClose={() => setShowPersonalDates(false)}
+            userId={me}
           />
         )}
 
