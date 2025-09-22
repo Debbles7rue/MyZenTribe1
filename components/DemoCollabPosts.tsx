@@ -143,7 +143,7 @@ export default function DemoCollabPosts() {
               onChange={(e) => setVisibility(e.target.value as any)}
               className="w-full border rounded-lg p-2 mb-4"
             >
-              <option value="friends">Friends (goes to friends' Home feed)</option>
+              <option value="friends">Friends (goes to friends’ Home feed)</option>
               <option value="private">Private (only on profiles)</option>
             </select>
 
@@ -212,7 +212,7 @@ export default function DemoCollabPosts() {
         {/* Collaborators */}
         <div className="bg-white rounded-2xl p-4 shadow mb-8">
           <h2 className="text-xl font-semibold mb-3">Invite collaborators</h2>
-          <label className="block text-sm mb-1">Friend's user_id (UUID)</label>
+          <label className="block text-sm mb-1">Friend’s user_id (UUID)</label>
           <input
             value={collabUserId}
             onChange={(e) => setCollabUserId(e.target.value)}
