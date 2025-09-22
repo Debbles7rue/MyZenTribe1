@@ -14,19 +14,38 @@ interface User {
   email: string | null;
 }
 
+interface Business {
+  id: string;
+  display_name: string | null;
+  handle: string | null;
+  tagline: string | null;
+  logo_url: string | null;
+  location_city: string | null;
+  location_state: string | null;
+  categories?: string[];
+}
+
 interface FriendStatus {
   [userId: string]: 'none' | 'pending' | 'friend' | 'sent';
 }
 
+interface FollowStatus {
+  [businessId: string]: boolean;
+}
+
+type SearchResult = (User & { type: 'person' }) | (Business & { type: 'business' });
+
 export default function FindFriendsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [friendStatuses, setFriendStatuses] = useState<FriendStatus>({});
+  const [followStatuses, setFollowStatuses] = useState<FollowStatus>({});
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchType, setSearchType] = useState<'all' | 'people' | 'businesses'>('all');
 
   useEffect(() => {
     checkAuth();
@@ -47,101 +66,110 @@ export default function FindFriendsPage() {
     setSearching(true);
     setLoading(true);
     setSearchError(null);
+    setSearchResults([]);
 
     try {
-      // First, get the user's own email to exclude from results
-      const { data: currentUserProfile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', currentUserId)
-        .single();
+      let results: SearchResult[] = [];
 
-      // Search for users by name OR email (case-insensitive)
-      // Using OR to search both full_name and email fields
-      const { data: users, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, location_text, bio, email')
-        .or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
-        .neq('id', currentUserId)
-        .limit(20);
-
-      if (error) {
-        console.error('Search error:', error);
-        setSearchError('Search failed. Please try again.');
-        setSearchResults([]);
-        return;
-      }
-
-      // If no results, try to check if any users exist at all (for debugging)
-      if (!users || users.length === 0) {
-        console.log('No users found for query:', searchQuery);
-        
-        // Let's also try a simpler query to debug
-        const { data: allProfiles, error: allError } = await supabase
+      // Search for people if type is 'all' or 'people'
+      if (searchType === 'all' || searchType === 'people') {
+        const { data: users, error } = await supabase
           .from('profiles')
-          .select('id, full_name, email')
+          .select('id, full_name, avatar_url, location_text, bio, email')
+          .or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
           .neq('id', currentUserId)
-          .limit(5);
-        
-        console.log('Sample profiles in database:', allProfiles);
-      }
+          .limit(10);
 
-      setSearchResults(users || []);
+        if (!error && users) {
+          const userResults = users.map(u => ({ ...u, type: 'person' as const }));
+          results = [...results, ...userResults];
 
-      // Check friendship status for each result
-      if (users && users.length > 0) {
-        const userIds = users.map(u => u.id);
-        
-        // Check existing friendships
-        const { data: friendships } = await supabase
-          .from('friendships')
-          .select('user_id, friend_id')
-          .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
-          .in('user_id', [...userIds, currentUserId])
-          .in('friend_id', [...userIds, currentUserId]);
+          // Check friendship status
+          const userIds = users.map(u => u.id);
+          
+          const { data: friendships } = await supabase
+            .from('friendships')
+            .select('user_id, friend_id')
+            .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
+            .in('user_id', [...userIds, currentUserId])
+            .in('friend_id', [...userIds, currentUserId]);
 
-        // Check pending friend requests
-        const { data: pendingRequests } = await supabase
-          .from('friend_requests')
-          .select('from_user, to_user, status')
-          .or(`from_user.eq.${currentUserId},to_user.eq.${currentUserId}`)
-          .in('from_user', [...userIds, currentUserId])
-          .in('to_user', [...userIds, currentUserId])
-          .eq('status', 'pending');
+          const { data: pendingRequests } = await supabase
+            .from('friend_requests')
+            .select('from_user, to_user, status')
+            .or(`from_user.eq.${currentUserId},to_user.eq.${currentUserId}`)
+            .in('from_user', [...userIds, currentUserId])
+            .in('to_user', [...userIds, currentUserId])
+            .eq('status', 'pending');
 
-        // Build status map
-        const statuses: FriendStatus = {};
-        
-        users.forEach(user => {
-          // Check if already friends
-          const isFriend = friendships?.some(f => 
-            (f.user_id === currentUserId && f.friend_id === user.id) ||
-            (f.friend_id === currentUserId && f.user_id === user.id)
-          );
-
-          if (isFriend) {
-            statuses[user.id] = 'friend';
-          } else {
-            // Check for pending requests
-            const sentRequest = pendingRequests?.find(r => 
-              r.from_user === currentUserId && r.to_user === user.id
-            );
-            const receivedRequest = pendingRequests?.find(r => 
-              r.to_user === currentUserId && r.from_user === user.id
+          const statuses: FriendStatus = {};
+          
+          users.forEach(user => {
+            const isFriend = friendships?.some(f => 
+              (f.user_id === currentUserId && f.friend_id === user.id) ||
+              (f.friend_id === currentUserId && f.user_id === user.id)
             );
 
-            if (sentRequest) {
-              statuses[user.id] = 'sent';
-            } else if (receivedRequest) {
-              statuses[user.id] = 'pending';
+            if (isFriend) {
+              statuses[user.id] = 'friend';
             } else {
-              statuses[user.id] = 'none';
-            }
-          }
-        });
+              const sentRequest = pendingRequests?.find(r => 
+                r.from_user === currentUserId && r.to_user === user.id
+              );
+              const receivedRequest = pendingRequests?.find(r => 
+                r.to_user === currentUserId && r.from_user === user.id
+              );
 
-        setFriendStatuses(statuses);
+              if (sentRequest) {
+                statuses[user.id] = 'sent';
+              } else if (receivedRequest) {
+                statuses[user.id] = 'pending';
+              } else {
+                statuses[user.id] = 'none';
+              }
+            }
+          });
+
+          setFriendStatuses(statuses);
+        }
       }
+
+      // Search for businesses if type is 'all' or 'businesses'
+      if (searchType === 'all' || searchType === 'businesses') {
+        const { data: businesses, error } = await supabase
+          .from('business_profiles')
+          .select('id, display_name, handle, tagline, logo_url, location_city, location_state, categories')
+          .or(`display_name.ilike.%${searchQuery}%,handle.ilike.%${searchQuery}%,tagline.ilike.%${searchQuery}%`)
+          .eq('discoverable', true)
+          .limit(10);
+
+        if (!error && businesses) {
+          const businessResults = businesses.map(b => ({ ...b, type: 'business' as const }));
+          results = [...results, ...businessResults];
+
+          // Check follow status
+          const businessIds = businesses.map(b => b.id);
+          
+          const { data: following } = await supabase
+            .from('business_followers')
+            .select('business_id')
+            .eq('user_id', currentUserId)
+            .in('business_id', businessIds);
+
+          const followStatus: FollowStatus = {};
+          following?.forEach(f => {
+            followStatus[f.business_id] = true;
+          });
+          setFollowStatuses(followStatus);
+        }
+      }
+
+      setSearchResults(results);
+      
+      if (results.length === 0) {
+        console.log('No results found for query:', searchQuery);
+      }
+
     } catch (error) {
       console.error('Search error:', error);
       setSearchError('Something went wrong. Please try again.');
@@ -168,7 +196,6 @@ export default function FindFriendsPage() {
           [userId]: 'sent'
         }));
       } else if (error.code === '23505') {
-        // Duplicate key - request already exists
         alert('Friend request already sent!');
       }
     } catch (error) {
@@ -181,7 +208,6 @@ export default function FindFriendsPage() {
     if (!currentUserId) return;
 
     try {
-      // Update friend request status
       const { error: updateError } = await supabase
         .from('friend_requests')
         .update({ status: 'accepted' })
@@ -190,7 +216,6 @@ export default function FindFriendsPage() {
 
       if (updateError) throw updateError;
 
-      // Create friendship
       const { error: friendshipError } = await supabase
         .from('friendships')
         .insert({
@@ -210,6 +235,224 @@ export default function FindFriendsPage() {
     }
   }
 
+  async function toggleFollowBusiness(businessId: string) {
+    if (!currentUserId) return;
+
+    const isFollowing = followStatuses[businessId];
+
+    try {
+      if (isFollowing) {
+        const { error } = await supabase
+          .from('business_followers')
+          .delete()
+          .eq('business_id', businessId)
+          .eq('user_id', currentUserId);
+
+        if (!error) {
+          setFollowStatuses(prev => ({ ...prev, [businessId]: false }));
+        }
+      } else {
+        const { error } = await supabase
+          .from('business_followers')
+          .insert({
+            business_id: businessId,
+            user_id: currentUserId
+          });
+
+        if (!error) {
+          setFollowStatuses(prev => ({ ...prev, [businessId]: true }));
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+    }
+  }
+
+  function renderResult(result: SearchResult) {
+    if (result.type === 'person') {
+      const user = result as User & { type: 'person' };
+      const displayName = user.full_name || user.email?.split('@')[0] || 'Anonymous User';
+      const showEmail = user.email && (!user.full_name || user.full_name !== displayName);
+
+      return (
+        <div
+          key={user.id}
+          className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+            {/* Avatar */}
+            <div className="flex items-center sm:block">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
+                {user.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={displayName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{displayName.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+            </div>
+
+            {/* User Info */}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900">
+                {displayName}
+              </h3>
+              
+              {showEmail && (
+                <div className="text-sm text-gray-600 mt-0.5">
+                  {user.email}
+                </div>
+              )}
+              
+              {user.location_text && (
+                <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
+                  <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="truncate">{user.location_text}</span>
+                </div>
+              )}
+
+              {user.bio && (
+                <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                  {user.bio}
+                </p>
+              )}
+            </div>
+
+            {/* Action Button */}
+            <div className="w-full sm:w-auto">
+              {friendStatuses[user.id] === 'friend' ? (
+                <button
+                  onClick={() => router.push(`/profile/${user.id}`)}
+                  className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  View Profile
+                </button>
+              ) : friendStatuses[user.id] === 'sent' ? (
+                <button
+                  disabled
+                  className="w-full px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
+                >
+                  Request Sent
+                </button>
+              ) : friendStatuses[user.id] === 'pending' ? (
+                <button
+                  onClick={() => acceptFriendRequest(user.id)}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Accept Request
+                </button>
+              ) : (
+                <button
+                  onClick={() => sendFriendRequest(user.id)}
+                  className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Add Friend
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    } else {
+      const business = result as Business & { type: 'business' };
+      const location = [business.location_city, business.location_state].filter(Boolean).join(', ');
+
+      return (
+        <div
+          key={business.id}
+          className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow border-l-4 border-blue-500"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+            {/* Logo */}
+            <div className="flex items-center sm:block">
+              <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0">
+                {business.logo_url ? (
+                  <img
+                    src={business.logo_url}
+                    alt={business.display_name || 'Business'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>🏢</span>
+                )}
+              </div>
+            </div>
+
+            {/* Business Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2">
+                <h3 className="font-semibold text-gray-900">
+                  {business.display_name || 'Unnamed Business'}
+                </h3>
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full flex-shrink-0">
+                  Business
+                </span>
+              </div>
+              
+              {business.handle && (
+                <div className="text-sm text-gray-600 mt-0.5">
+                  @{business.handle}
+                </div>
+              )}
+              
+              {business.tagline && (
+                <p className="text-sm text-gray-700 mt-1 font-medium">
+                  {business.tagline}
+                </p>
+              )}
+              
+              {location && (
+                <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
+                  <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="truncate">{location}</span>
+                </div>
+              )}
+
+              {business.categories && business.categories.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {business.categories.slice(0, 3).map((cat, idx) => (
+                    <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Button */}
+            <div className="w-full sm:w-auto flex gap-2">
+              <button
+                onClick={() => toggleFollowBusiness(business.id)}
+                className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg transition-colors ${
+                  followStatuses[business.id]
+                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {followStatuses[business.id] ? 'Following' : 'Follow'}
+              </button>
+              <button
+                onClick={() => router.push(`/business/${business.handle || business.id}`)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                View
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
       <div className="max-w-4xl mx-auto px-4 py-6">
@@ -226,11 +469,45 @@ export default function FindFriendsPage() {
           </button>
           
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Find Friends
+            Find Friends & Businesses
           </h1>
           <p className="text-gray-600">
-            Search for people by name or email to connect with them
+            Search for people and businesses to connect with
           </p>
+        </div>
+
+        {/* Search Type Tabs */}
+        <div className="bg-white rounded-xl shadow-sm p-2 mb-4 flex gap-2">
+          <button
+            onClick={() => setSearchType('all')}
+            className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${
+              searchType === 'all'
+                ? 'bg-purple-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setSearchType('people')}
+            className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${
+              searchType === 'people'
+                ? 'bg-purple-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            People
+          </button>
+          <button
+            onClick={() => setSearchType('businesses')}
+            className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${
+              searchType === 'businesses'
+                ? 'bg-purple-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Businesses
+          </button>
         </div>
 
         {/* Search Bar */}
@@ -238,7 +515,13 @@ export default function FindFriendsPage() {
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
-              placeholder="Search by name or email..."
+              placeholder={
+                searchType === 'people' 
+                  ? "Search by name or email..."
+                  : searchType === 'businesses'
+                  ? "Search by business name..."
+                  : "Search for people or businesses..."
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -267,107 +550,17 @@ export default function FindFriendsPage() {
               No results found
             </h3>
             <p className="text-gray-500 mb-2">
-              No users found matching "{searchQuery}"
+              No {searchType === 'all' ? 'results' : searchType} found matching "{searchQuery}"
             </p>
             <p className="text-gray-400 text-sm">
-              Try searching with a different name or email address
+              Try searching with different keywords
             </p>
           </div>
         )}
 
         {searchResults.length > 0 && (
           <div className="space-y-4">
-            {searchResults.map(user => {
-              // Display name with fallback to email
-              const displayName = user.full_name || user.email?.split('@')[0] || 'Anonymous User';
-              const showEmail = user.email && (!user.full_name || user.full_name !== displayName);
-
-              return (
-                <div
-                  key={user.id}
-                  className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    {/* Avatar */}
-                    <div className="flex items-center sm:block">
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
-                        {user.avatar_url ? (
-                          <img
-                            src={user.avatar_url}
-                            alt={displayName}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span>{displayName.charAt(0).toUpperCase()}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* User Info */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900">
-                        {displayName}
-                      </h3>
-                      
-                      {showEmail && (
-                        <div className="text-sm text-gray-600 mt-0.5">
-                          {user.email}
-                        </div>
-                      )}
-                      
-                      {user.location_text && (
-                        <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
-                          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          <span className="truncate">{user.location_text}</span>
-                        </div>
-                      )}
-
-                      {user.bio && (
-                        <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                          {user.bio}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Action Button - Mobile Responsive */}
-                    <div className="w-full sm:w-auto">
-                      {friendStatuses[user.id] === 'friend' ? (
-                        <button
-                          onClick={() => router.push(`/profile/${user.id}`)}
-                          className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                        >
-                          View Profile
-                        </button>
-                      ) : friendStatuses[user.id] === 'sent' ? (
-                        <button
-                          disabled
-                          className="w-full px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
-                        >
-                          Request Sent
-                        </button>
-                      ) : friendStatuses[user.id] === 'pending' ? (
-                        <button
-                          onClick={() => acceptFriendRequest(user.id)}
-                          className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          Accept Request
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => sendFriendRequest(user.id)}
-                          className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                        >
-                          Add Friend
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {searchResults.map(renderResult)}
           </div>
         )}
 
@@ -378,10 +571,10 @@ export default function FindFriendsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             <h3 className="text-lg font-semibold text-gray-700 mb-2">
-              Find People You Know
+              Find People & Businesses
             </h3>
             <p className="text-gray-500">
-              Enter a name or email above to search for friends
+              Enter a name above to search
             </p>
           </div>
         )}
