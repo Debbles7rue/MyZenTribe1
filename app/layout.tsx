@@ -1,4 +1,7 @@
-// app/layout.tsx
+// FILE NAME: layout.tsx
+// LOCATION: app/layout.tsx
+// INSTRUCTIONS: This preserves ALL your existing code and adds PWA support
+
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./globals.css";
 import type { Metadata } from "next";
@@ -7,12 +10,32 @@ import FirstRunGate from "@/components/FirstRunGate";
 import { ToastProvider } from "@/components/ToastProvider";
 import ElevenElevenFireworks from "@/components/ElevenElevenFireworks";
 import Script from 'next/script';
+// Optional: Uncomment if you add the InstallPrompt component
+// import InstallPrompt from "@/components/InstallPrompt";
 
 export const metadata: Metadata = {
   title: "MyZenTribe",
   description: "Meditation • Community • Presence",
   viewport: "width=device-width, initial-scale=1, maximum-scale=5",
   themeColor: "#7c3aed",
+  // PWA Configuration
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'ZenTribe',
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icons/icon-152x152.png' },
+      { url: '/icons/icon-180x180.png', sizes: '180x180' },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -25,6 +48,28 @@ export default function RootLayout({
       <head>
         {/* Ensure title is always present for error pages */}
         <title>MyZenTribe</title>
+        
+        {/* PWA Meta Tags */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="MyZenTribe" />
+        <meta name="apple-mobile-web-app-title" content="ZenTribe" />
+        <meta name="theme-color" content="#7c3aed" />
+        <meta name="msapplication-navbutton-color" content="#7c3aed" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="msapplication-starturl" content="/" />
+        
+        {/* iOS Splash Screen Images */}
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167x167.png" />
+        
+        {/* Favicon */}
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
         
         {/* CRITICAL: Fix media_files error before anything loads */}
         <script
@@ -141,6 +186,8 @@ export default function RootLayout({
           <main className="page-wrap">{children}</main>
           {/* 11:11 Fireworks */}
           <ElevenElevenFireworks />
+          {/* Optional: Uncomment this line if you want to add the install prompt */}
+          {/* <InstallPrompt /> */}
         </ToastProvider>
       </body>
     </html>
