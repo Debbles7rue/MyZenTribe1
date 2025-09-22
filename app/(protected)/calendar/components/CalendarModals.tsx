@@ -8,8 +8,6 @@ import SmartTemplates from '@/components/SmartTemplates';
 import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
 import type { DBEvent } from '@/lib/types';
 import type { Friend, CalendarForm, QuickModalForm, FeedEvent } from '../types';
-// Import the EventCarpoolModal component if it exists
-// import EventCarpoolModal from './EventCarpoolModal';
 
 interface CalendarModalsProps {
   // Modal visibility states
@@ -128,6 +126,12 @@ export default function CalendarModals({
     { id: 4, title: 'Meeting', color: '#F59E0B', duration: 60 },
   ]);
   const [selectedBlock, setSelectedBlock] = useState<any>(null);
+  const [blockDate, setBlockDate] = useState(new Date().toISOString().split('T')[0]);
+  const [blockTime, setBlockTime] = useState('09:00');
+  
+  // Refs to prevent focus loss
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   
   // Modal wrapper component with better focus management and mobile optimization
   const Modal = ({ isOpen, onClose, title, children, size = 'lg' }: { 
@@ -199,38 +203,33 @@ export default function CalendarModals({
     );
   };
 
-  // Input component that prevents focus loss
-  const StableInput = ({ value, onChange, ...props }: any) => {
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-      onChange(newValue);
-    };
+  // Function to handle time block creation
+  const handleCreateTimeBlock = () => {
+    if (!selectedBlock || !blockDate || !blockTime) {
+      showToast?.({ type: 'error', message: 'Please select a time block and set date/time' });
+      return;
+    }
     
-    return (
-      <input
-        {...props}
-        value={value || ''}
-        onChange={handleChange}
-        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
-      />
-    );
-  };
-
-  // Textarea component that prevents focus loss
-  const StableTextarea = ({ value, onChange, ...props }: any) => {
-    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newValue = e.target.value;
-      onChange(newValue);
-    };
+    // Calculate end time based on duration
+    const startDateTime = new Date(`${blockDate}T${blockTime}`);
+    const endDateTime = new Date(startDateTime.getTime() + selectedBlock.duration * 60000);
     
-    return (
-      <textarea
-        {...props}
-        value={value || ''}
-        onChange={handleChange}
-        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
-      />
-    );
+    // Set the form with time block data
+    setForm(prev => ({
+      ...prev,
+      title: selectedBlock.title,
+      date: blockDate,
+      time: blockTime,
+      endTime: `${endDateTime.getHours().toString().padStart(2, '0')}:${endDateTime.getMinutes().toString().padStart(2, '0')}`,
+      description: `Time blocked for ${selectedBlock.title}`,
+      event_type: 'time_block',
+      background_color: selectedBlock.color
+    }));
+    
+    // Close time blocking modal and open create event modal
+    setShowTimeBlocking(false);
+    setOpenCreate(true);
+    setSelectedBlock(null);
   };
 
   return (
@@ -260,6 +259,15 @@ export default function CalendarModals({
           resetForm();
         }}
         defaultVisibility="private"
+        initialData={form.title ? {
+          title: form.title,
+          description: form.description,
+          location: form.location,
+          startTime: form.date && form.time ? `${form.date}T${form.time}` : undefined,
+          endTime: form.date && form.endTime ? `${form.date}T${form.endTime}` : undefined,
+          eventType: form.event_type,
+          backgroundColor: form.background_color
+        } : undefined}
       />
 
       {/* Edit Event Modal - Using UnifiedEventCreator */}
@@ -313,10 +321,13 @@ export default function CalendarModals({
         />
       )}
 
-      {/* Time Blocking Modal - Inline Implementation */}
+      {/* Time Blocking Modal - Fixed Implementation */}
       <Modal 
         isOpen={showTimeBlocking} 
-        onClose={() => setShowTimeBlocking(false)} 
+        onClose={() => {
+          setShowTimeBlocking(false);
+          setSelectedBlock(null);
+        }} 
         title="Time Block Scheduler"
         size="2xl"
       >
@@ -330,7 +341,9 @@ export default function CalendarModals({
                 <button
                   key={block.id}
                   onClick={() => setSelectedBlock(block)}
-                  className="p-3 rounded-lg text-white font-medium text-sm hover:scale-105 transition-transform"
+                  className={`p-3 rounded-lg text-white font-medium text-sm hover:scale-105 transition-transform ${
+                    selectedBlock?.id === block.id ? 'ring-2 ring-white ring-offset-2' : ''
+                  }`}
                   style={{ backgroundColor: block.color }}
                 >
                   <div>{block.title}</div>
@@ -352,8 +365,9 @@ export default function CalendarModals({
                   </label>
                   <input
                     type="date"
+                    value={blockDate}
+                    onChange={(e) => setBlockDate(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
-                    defaultValue={new Date().toISOString().split('T')[0]}
                   />
                 </div>
                 <div>
@@ -362,12 +376,17 @@ export default function CalendarModals({
                   </label>
                   <input
                     type="time"
+                    value={blockTime}
+                    onChange={(e) => setBlockTime(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                   />
                 </div>
               </div>
               <div className={`${isMobile ? 'space-y-2' : 'flex gap-2'}`}>
-                <button className={`${isMobile ? 'w-full' : 'flex-1'} px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm hover:bg-indigo-600`}>
+                <button 
+                  onClick={handleCreateTimeBlock}
+                  className={`${isMobile ? 'w-full' : 'flex-1'} px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm hover:bg-indigo-600`}
+                >
                   Add to Calendar
                 </button>
                 <button 
@@ -387,6 +406,7 @@ export default function CalendarModals({
             <div className="space-y-3">
               <div>
                 <input
+                  id="custom-block-name"
                   type="text"
                   placeholder="Block name (e.g., Deep Focus)"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
@@ -394,16 +414,38 @@ export default function CalendarModals({
               </div>
               <div className={`${isMobile ? 'space-y-3' : 'grid grid-cols-3 gap-3'}`}>
                 <input
+                  id="custom-block-duration"
                   type="number"
                   placeholder="Duration (min)"
                   className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                 />
                 <input
+                  id="custom-block-color"
                   type="color"
                   className="w-full h-10 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer"
                   defaultValue="#8B5CF6"
                 />
-                <button className={`${isMobile ? 'w-full' : ''} px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600`}>
+                <button 
+                  onClick={() => {
+                    const nameInput = document.getElementById('custom-block-name') as HTMLInputElement;
+                    const durationInput = document.getElementById('custom-block-duration') as HTMLInputElement;
+                    const colorInput = document.getElementById('custom-block-color') as HTMLInputElement;
+                    
+                    if (nameInput?.value && durationInput?.value) {
+                      const newBlock = {
+                        id: Date.now(),
+                        title: nameInput.value,
+                        duration: parseInt(durationInput.value),
+                        color: colorInput.value
+                      };
+                      setTimeBlocks([...timeBlocks, newBlock]);
+                      nameInput.value = '';
+                      durationInput.value = '';
+                      showToast?.({ type: 'success', message: 'Custom time block added!' });
+                    }
+                  }}
+                  className={`${isMobile ? 'w-full' : ''} px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600`}
+                >
                   Add Block
                 </button>
               </div>
@@ -423,7 +465,7 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Quick Add Modal (Reminder/Todo) */}
+      {/* Quick Add Modal (Reminder/Todo) - Fixed with proper focus management */}
       <Modal 
         isOpen={quickModalOpen} 
         onClose={() => setQuickModalOpen(false)} 
@@ -434,11 +476,16 @@ export default function CalendarModals({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Title *
             </label>
-            <StableInput
+            <input
+              ref={titleInputRef}
               type="text"
-              value={quickModalForm.title}
-              onChange={(value: string) => setQuickModalForm(prev => ({ ...prev, title: value }))}
+              value={quickModalForm.title || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setQuickModalForm(prev => ({ ...prev, title: value }));
+              }}
               placeholder={`${quickModalType === 'reminder' ? 'Reminder' : 'To-do'} title`}
+              className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
               autoFocus
             />
           </div>
@@ -447,11 +494,16 @@ export default function CalendarModals({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Description
             </label>
-            <StableTextarea
-              value={quickModalForm.description}
-              onChange={(value: string) => setQuickModalForm(prev => ({ ...prev, description: value }))}
+            <textarea
+              ref={descriptionInputRef}
+              value={quickModalForm.description || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setQuickModalForm(prev => ({ ...prev, description: value }));
+              }}
               rows={2}
               placeholder="Optional description"
+              className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
             />
           </div>
           
@@ -460,10 +512,11 @@ export default function CalendarModals({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Date
               </label>
-              <StableInput
+              <input
                 type="date"
-                value={quickModalForm.date}
-                onChange={(value: string) => setQuickModalForm(prev => ({ ...prev, date: value }))}
+                value={quickModalForm.date || ''}
+                onChange={(e) => setQuickModalForm(prev => ({ ...prev, date: e.target.value }))}
+                className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
               />
             </div>
             
@@ -471,10 +524,11 @@ export default function CalendarModals({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Time
               </label>
-              <StableInput
+              <input
                 type="time"
-                value={quickModalForm.time}
-                onChange={(value: string) => setQuickModalForm(prev => ({ ...prev, time: value }))}
+                value={quickModalForm.time || ''}
+                onChange={(e) => setQuickModalForm(prev => ({ ...prev, time: e.target.value }))}
+                className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors ${isMobile ? 'text-base' : 'text-sm'}`}
               />
             </div>
           </div>
@@ -511,6 +565,231 @@ export default function CalendarModals({
         </div>
       </Modal>
 
+      {/* Templates Modal - Fixed to properly pre-populate and open create modal */}
+      <Modal 
+        isOpen={showTemplates} 
+        onClose={() => setShowTemplates(false)} 
+        title="Event Templates"
+        size="2xl"
+      >
+        <div className="space-y-4">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-4`}>
+            {/* Wellness Templates */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Meditation Session</h3>
+                <span className="text-xs bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 px-2 py-1 rounded">Wellness</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Mindfulness and relaxation practice</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>🧘 Mindful</span>
+                <span>⏰ 20 min</span>
+                <span>🎯 Focus</span>
+              </div>
+              <button 
+                onClick={() => {
+                  const now = new Date();
+                  const endTime = new Date(now.getTime() + 20 * 60000);
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Meditation Session',
+                    description: 'Mindfulness practice - breathing exercises, body scan, and relaxation',
+                    date: now.toISOString().split('T')[0],
+                    time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                    endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+                  }));
+                  setShowTemplates(false);
+                  setTimeout(() => setOpenCreate(true), 100);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-cyan-500 text-white rounded text-sm hover:bg-cyan-600"
+              >
+                Use Template
+              </button>
+            </div>
+
+            {/* Gratitude Journal */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Gratitude Journal</h3>
+                <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">Reflection</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Daily gratitude practice & reflection</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>📝 Journal</span>
+                <span>⏰ 15 min</span>
+                <span>🌟 Daily</span>
+              </div>
+              <button 
+                onClick={() => {
+                  const now = new Date();
+                  const endTime = new Date(now.getTime() + 15 * 60000);
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Gratitude Journal',
+                    description: 'Write 3 things I\'m grateful for today + reflection',
+                    date: now.toISOString().split('T')[0],
+                    time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                    endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+                  }));
+                  setShowTemplates(false);
+                  setTimeout(() => setOpenCreate(true), 100);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
+              >
+                Use Template
+              </button>
+            </div>
+
+            {/* Work Templates */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Daily Standup</h3>
+                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">Work</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">15-minute team sync meeting</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>📅 Daily</span>
+                <span>⏰ 15 min</span>
+                <span>👥 Team</span>
+              </div>
+              <button 
+                onClick={() => {
+                  const now = new Date();
+                  const endTime = new Date(now.getTime() + 15 * 60000);
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Daily Standup',
+                    description: 'Team sync to discuss progress and blockers',
+                    date: now.toISOString().split('T')[0],
+                    time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                    endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+                  }));
+                  setShowTemplates(false);
+                  setTimeout(() => setOpenCreate(true), 100);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+              >
+                Use Template
+              </button>
+            </div>
+
+            {/* Personal Templates */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Workout Session</h3>
+                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">Personal</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Gym or home workout routine</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>💪 Fitness</span>
+                <span>⏰ 60 min</span>
+                <span>📍 Gym</span>
+              </div>
+              <button 
+                onClick={() => {
+                  const now = new Date();
+                  const endTime = new Date(now.getTime() + 60 * 60000);
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Workout Session',
+                    description: 'Cardio + Strength training',
+                    location: 'Local Gym',
+                    date: now.toISOString().split('T')[0],
+                    time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                    endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+                  }));
+                  setShowTemplates(false);
+                  setTimeout(() => setOpenCreate(true), 100);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+              >
+                Use Template
+              </button>
+            </div>
+
+            {/* Social Templates */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Coffee Chat</h3>
+                <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">Social</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Casual meet-up with friends</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>☕ Casual</span>
+                <span>⏰ 45 min</span>
+                <span>📍 Cafe</span>
+              </div>
+              <button 
+                onClick={() => {
+                  const now = new Date();
+                  const endTime = new Date(now.getTime() + 45 * 60000);
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Coffee Chat',
+                    description: 'Catch up over coffee',
+                    location: 'Local Coffee Shop',
+                    date: now.toISOString().split('T')[0],
+                    time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                    endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+                  }));
+                  setShowTemplates(false);
+                  setTimeout(() => setOpenCreate(true), 100);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600"
+              >
+                Use Template
+              </button>
+            </div>
+
+            {/* Learning Templates */}
+            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Study Block</h3>
+                <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">Learning</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Focused learning session</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
+                <span>📚 Study</span>
+                <span>⏰ 90 min</span>
+                <span>🎯 Focus</span>
+              </div>
+              <button 
+                onClick={() => {
+                  const now = new Date();
+                  const endTime = new Date(now.getTime() + 90 * 60000);
+                  setForm(prev => ({
+                    ...prev,
+                    title: 'Study Session',
+                    description: 'Deep focus learning time',
+                    date: now.toISOString().split('T')[0],
+                    time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                    endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+                  }));
+                  setShowTemplates(false);
+                  setTimeout(() => setOpenCreate(true), 100);
+                }}
+                className="mt-3 w-full px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
+              >
+                Use Template
+              </button>
+            </div>
+          </div>
+
+          {/* Create Custom Template */}
+          <div className="border-t dark:border-gray-700 pt-4">
+            <button 
+              onClick={() => {
+                showToast?.({ type: 'info', message: 'Custom templates coming soon!' });
+              }}
+              className="w-full px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-purple-500 hover:text-purple-500 transition-all"
+            >
+              + Create Custom Template
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Rest of your modals remain the same... */}
       {/* Carpool Chat Modal - Placeholder */}
       {showCarpoolChat && (
         <Modal
@@ -611,370 +890,6 @@ export default function CalendarModals({
           </div>
         </Modal>
       )}
-
-      {/* Templates Modal - Complete inline implementation from original */}
-      <Modal 
-        isOpen={showTemplates} 
-        onClose={() => setShowTemplates(false)} 
-        title="Event Templates"
-        size="2xl"
-      >
-        <div className="space-y-4">
-          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-4`}>
-            {/* Wellness Templates */}
-            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Meditation Session</h3>
-                <span className="text-xs bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300 px-2 py-1 rounded">Wellness</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Mindfulness and relaxation practice</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                <span>🧘 Mindful</span>
-                <span>⏰ 20 min</span>
-                <span>🎯 Focus</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setForm(prev => ({
-                    ...prev,
-                    title: 'Meditation Session',
-                    description: 'Mindfulness practice - breathing exercises, body scan, and relaxation',
-                    duration: 20
-                  }));
-                  setShowTemplates(false);
-                  setOpenCreate(true);
-                }}
-                className="mt-3 w-full px-3 py-1 bg-cyan-500 text-white rounded text-sm hover:bg-cyan-600"
-              >
-                Use Template
-              </button>
-            </div>
-
-            {/* Gratitude Journal */}
-            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Gratitude Journal</h3>
-                <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">Reflection</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Daily gratitude practice & reflection</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                <span>📝 Journal</span>
-                <span>⏰ 15 min</span>
-                <span>🌟 Daily</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setForm(prev => ({
-                    ...prev,
-                    title: 'Gratitude Journal',
-                    description: 'Write 3 things I\'m grateful for today + reflection',
-                    duration: 15
-                  }));
-                  setShowTemplates(false);
-                  setOpenCreate(true);
-                }}
-                className="mt-3 w-full px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
-              >
-                Use Template
-              </button>
-            </div>
-
-            {/* Work Templates */}
-            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Daily Standup</h3>
-                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">Work</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">15-minute team sync meeting</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                <span>📅 Daily</span>
-                <span>⏰ 15 min</span>
-                <span>👥 Team</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setForm(prev => ({
-                    ...prev,
-                    title: 'Daily Standup',
-                    description: 'Team sync to discuss progress and blockers',
-                    duration: 15
-                  }));
-                  setShowTemplates(false);
-                  setOpenCreate(true);
-                }}
-                className="mt-3 w-full px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-              >
-                Use Template
-              </button>
-            </div>
-
-            {/* Personal Templates */}
-            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Workout Session</h3>
-                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">Personal</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Gym or home workout routine</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                <span>💪 Fitness</span>
-                <span>⏰ 60 min</span>
-                <span>📍 Gym</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setForm(prev => ({
-                    ...prev,
-                    title: 'Workout Session',
-                    description: 'Cardio + Strength training',
-                    location: 'Local Gym',
-                    duration: 60
-                  }));
-                  setShowTemplates(false);
-                  setOpenCreate(true);
-                }}
-                className="mt-3 w-full px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-              >
-                Use Template
-              </button>
-            </div>
-
-            {/* Social Templates */}
-            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Coffee Chat</h3>
-                <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">Social</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Casual meet-up with friends</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                <span>☕ Casual</span>
-                <span>⏰ 45 min</span>
-                <span>📍 Cafe</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setForm(prev => ({
-                    ...prev,
-                    title: 'Coffee Chat',
-                    description: 'Catch up over coffee',
-                    location: 'Local Coffee Shop',
-                    duration: 45
-                  }));
-                  setShowTemplates(false);
-                  setOpenCreate(true);
-                }}
-                className="mt-3 w-full px-3 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600"
-              >
-                Use Template
-              </button>
-            </div>
-
-            {/* Learning Templates */}
-            <div className="border dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Study Block</h3>
-                <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">Learning</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Focused learning session</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500">
-                <span>📚 Study</span>
-                <span>⏰ 90 min</span>
-                <span>🎯 Focus</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setForm(prev => ({
-                    ...prev,
-                    title: 'Study Session',
-                    description: 'Deep focus learning time',
-                    duration: 90
-                  }));
-                  setShowTemplates(false);
-                  setOpenCreate(true);
-                }}
-                className="mt-3 w-full px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
-              >
-                Use Template
-              </button>
-            </div>
-          </div>
-
-          {/* Create Custom Template */}
-          <div className="border-t dark:border-gray-700 pt-4">
-            <button className="w-full px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-purple-500 hover:text-purple-500 transition-all">
-              + Create Custom Template
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Analytics Modal - Complete inline implementation */}
-      <Modal 
-        isOpen={showAnalytics} 
-        onClose={() => setShowAnalytics(false)} 
-        title="Calendar Analytics"
-        size="2xl"
-      >
-        <div className="space-y-6">
-          {/* Quick Stats */}
-          <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-4`}>
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{events.length}</div>
-              <div className="text-xs text-blue-700 dark:text-blue-300">Total Events</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {events.filter(e => new Date(e.start_time) >= new Date()).length}
-              </div>
-              <div className="text-xs text-green-700 dark:text-green-300">Upcoming</div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {Math.round(events.length / 4)}
-              </div>
-              <div className="text-xs text-purple-700 dark:text-purple-300">Per Week</div>
-            </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4">
-              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{friends.length}</div>
-              <div className="text-xs text-orange-700 dark:text-orange-300">Friends</div>
-            </div>
-          </div>
-
-          {/* Busiest Days */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Busiest Days</h3>
-            <div className="space-y-2">
-              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, idx) => {
-                const percentage = Math.random() * 100;
-                return (
-                  <div key={day} className="flex items-center gap-3">
-                    <div className={`${isMobile ? 'w-16' : 'w-20'} text-sm text-gray-600 dark:text-gray-400`}>{day}</div>
-                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-1000"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-500">{Math.round(percentage)}%</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Event Types */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Event Categories</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="text-xl mb-1">💼</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Work</div>
-                <div className="text-lg font-semibold">32%</div>
-              </div>
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="text-xl mb-1">🎉</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Social</div>
-                <div className="text-lg font-semibold">45%</div>
-              </div>
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="text-xl mb-1">🏃</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Personal</div>
-                <div className="text-lg font-semibold">23%</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Export Button */}
-          <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all">
-            Export Analytics Report
-          </button>
-        </div>
-      </Modal>
-
-      {/* Meeting Coordinator Modal - Complete inline implementation */}
-      <Modal 
-        isOpen={showMeetingCoordinator} 
-        onClose={() => setShowMeetingCoordinator(false)} 
-        title="Smart Meeting Coordinator"
-        size="xl"
-      >
-        <div className="space-y-4">
-          {/* Meeting Setup */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Meeting Duration
-            </label>
-            <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white">
-              <option value="30">30 minutes</option>
-              <option value="45">45 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="90">1.5 hours</option>
-              <option value="120">2 hours</option>
-            </select>
-          </div>
-
-          {/* Attendees */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Select Attendees
-            </label>
-            <div className="space-y-2 max-h-32 overflow-y-auto border dark:border-gray-700 rounded-lg p-2">
-              {friends.map((friend) => (
-                <label key={friend.friend_id} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded text-purple-500" />
-                  <span className="text-sm">{friend.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Date Range */}
-          <div className={`${isMobile ? 'space-y-3' : 'grid grid-cols-2 gap-3'}`}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                From Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                defaultValue={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                To Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                defaultValue={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-              />
-            </div>
-          </div>
-
-          {/* Suggested Times */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-            <h4 className="font-medium text-green-800 dark:text-green-300 mb-3">Suggested Times</h4>
-            <div className="space-y-2">
-              <button className="w-full text-left p-2 bg-white dark:bg-gray-700 rounded hover:shadow-md transition-all">
-                <div className="font-medium text-sm">Tomorrow, 2:00 PM - 3:00 PM</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">All attendees available</div>
-              </button>
-              <button className="w-full text-left p-2 bg-white dark:bg-gray-700 rounded hover:shadow-md transition-all">
-                <div className="font-medium text-sm">Friday, 10:00 AM - 11:00 AM</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Best time for everyone</div>
-              </button>
-              <button className="w-full text-left p-2 bg-white dark:bg-gray-700 rounded hover:shadow-md transition-all">
-                <div className="font-medium text-sm">Next Monday, 3:00 PM - 4:00 PM</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Good availability</div>
-              </button>
-            </div>
-          </div>
-
-          <button className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:shadow-lg transition-all">
-            Find More Times
-          </button>
-        </div>
-      </Modal>
     </>
   );
 }
