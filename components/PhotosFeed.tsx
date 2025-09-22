@@ -530,6 +530,7 @@ export default function PhotosFeed({
   async function saveEdit() {
     if (!editingPostId) return;
 
+    alert("Starting save process..."); // Temporary debug alert
     setUploading(true);
     setUploadProgress(0);
     
@@ -541,6 +542,7 @@ export default function PhotosFeed({
 
       console.log("Saving edit for post:", editingPostId);
       console.log("Current user:", viewerUserId);
+      console.log("Files to upload:", editFiles?.length || 0);
 
       // Update post metadata
       if (post.profile_type === 'business') {
@@ -603,7 +605,7 @@ export default function PhotosFeed({
 
           console.log(`Uploading file ${i + 1}: ${path}`);
 
-          // Upload to storage
+          // First, let's check if the file uploads to storage
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from("event-photos")
             .upload(path, file, {
@@ -612,30 +614,41 @@ export default function PhotosFeed({
             });
 
           if (uploadError) {
-            console.error(`Failed to upload file ${i + 1}:`, uploadError);
+            console.error(`Storage upload failed for file ${i + 1}:`, uploadError);
             throw new Error(`Upload failed: ${uploadError.message}`);
           }
 
-          console.log(`File ${i + 1} uploaded successfully`);
+          console.log(`File ${i + 1} uploaded to storage successfully`);
 
-          // Add to post_media table
+          // Now try to insert into post_media
+          console.log(`Inserting media record for file ${i + 1}...`);
+          console.log('Insert data:', {
+            post_id: editingPostId,
+            storage_path: path,
+            type: file.type.startsWith('video') ? 'video' : 'image',
+            sort_order: startIndex + i,
+            created_by: viewerUserId,
+            uploaded_by: viewerUserId
+          });
+
           const { data: mediaData, error: mediaError } = await supabase
             .from("post_media")
             .insert({
               post_id: editingPostId,
               storage_path: path,
-              type: file.type.startsWith('video') ? 'video' : 'image',  // Changed from media_type to type
+              type: file.type.startsWith('video') ? 'video' : 'image',
               sort_order: startIndex + i,
-              created_by: viewerUserId,  // Added created_by since it's required
+              created_by: viewerUserId,
               uploaded_by: viewerUserId
             })
             .select();
 
           if (mediaError) {
-            console.error(`Failed to save media record ${i + 1}:`, mediaError);
+            console.error(`Database insert failed for file ${i + 1}:`, mediaError);
+            console.error('Full error details:', JSON.stringify(mediaError, null, 2));
             // Try to clean up the uploaded file
             await supabase.storage.from("event-photos").remove([path]);
-            throw new Error(`Database error: ${mediaError.message}`);
+            throw new Error(`Database error: ${mediaError.message || JSON.stringify(mediaError)}`);
           }
 
           console.log(`Media record ${i + 1} saved successfully:`, mediaData);
