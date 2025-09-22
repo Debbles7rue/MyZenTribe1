@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import BusinessInviteQR from '@/components/business/BusinessInviteQR';
 
 interface Service {
   id: string;
@@ -68,45 +69,68 @@ function CoverPhotoUploader({
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [position, setPosition] = useState({ x: 50, y: 50 });
-  const [isDragging, setIsDragging] = useState(false);
+  const [clientUser, setClientUser] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Check client-side auth
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setClientUser(session.user);
+        console.log('User authenticated:', session.user.email);
+        // Try to refresh session to fix database auth
+        await supabase.auth.refreshSession();
+      }
+    }
+    checkAuth();
+  }, []);
 
   async function uploadCover(file: File) {
     setUploading(true);
     try {
-      // Create a safe file name
+      // Use businessId in filename to avoid auth issues
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `covers/${businessId}-${Date.now()}.${fileExt}`;
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(7);
+      const fileName = `business-${businessId}-cover-${timestamp}-${randomString}.${fileExt}`;
       
-      // Upload to a public bucket (create 'cover-photos' bucket if it doesn't exist)
+      console.log('Uploading:', fileName);
+      
+      // Try avatars bucket first (usually most permissive)
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('cover-photos')
+        .from('avatars')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true
         });
 
       if (uploadError) {
-        // If bucket doesn't exist, try using avatars bucket as fallback
-        const { data: fallbackData, error: fallbackError } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: true
-          });
+        console.error('Storage error:', uploadError);
         
-        if (fallbackError) throw fallbackError;
+        // If storage fails, convert to base64 as fallback
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
         
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(fileName);
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          if (base64.length < 1400000) { // Under ~1MB encoded
+            onChange(base64);
+            alert('Image stored locally. Click Save to persist.');
+          } else {
+            alert('Image too large. Please use a smaller image (under 1MB).');
+          }
+        };
         
-        onChange(publicUrl);
+        reader.onerror = () => {
+          alert('Failed to read image file');
+        };
       } else {
         const { data: { publicUrl } } = supabase.storage
-          .from('cover-photos')
+          .from('avatars')
           .getPublicUrl(fileName);
         
+        console.log('Upload successful:', publicUrl);
         onChange(publicUrl);
       }
     } catch (error: any) {
@@ -235,13 +259,31 @@ function LogoUploader({
   onChange: (url: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [clientUser, setClientUser] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Check client-side auth
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setClientUser(session.user);
+        // Try to refresh session to fix database auth
+        await supabase.auth.refreshSession();
+      }
+    }
+    checkAuth();
+  }, []);
 
   async function uploadLogo(file: File) {
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `logos/${businessId}-${Date.now()}.${fileExt}`;
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(7);
+      const fileName = `business-${businessId}-logo-${timestamp}-${randomString}.${fileExt}`;
+      
+      console.log('Uploading logo:', fileName);
       
       const { data, error } = await supabase.storage
         .from('avatars')
@@ -250,13 +292,34 @@ function LogoUploader({
           upsert: true
         });
 
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-      
-      onChange(publicUrl);
+      if (error) {
+        console.error('Storage error:', error);
+        
+        // Fallback to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          if (base64.length < 1400000) {
+            onChange(base64);
+            alert('Image stored locally. Click Save to persist.');
+          } else {
+            alert('Image too large. Please use a smaller image.');
+          }
+        };
+        
+        reader.onerror = () => {
+          alert('Failed to read image file');
+        };
+      } else {
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+        
+        console.log('Logo upload successful:', publicUrl);
+        onChange(publicUrl);
+      }
     } catch (error: any) {
       console.error('Upload error:', error);
       alert(`Upload failed: ${error.message}`);
@@ -863,6 +926,15 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           ))}
         </div>
       </div>
+
+      {/* Business QR Code - PRESERVED */}
+      <BusinessInviteQR 
+        businessId={businessId}
+        businessHandle={data.handle}
+        businessName={data.display_name}
+        mode="full"
+        size={200}
+      />
 
       {/* Save Button - PRESERVED WITH MOBILE OPTIMIZATION */}
       <div className="flex justify-end">
