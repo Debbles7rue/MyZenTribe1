@@ -528,10 +528,12 @@ export default function PhotosFeed({
   async function saveEdit() {
     if (!editingPostId) return;
 
+    setUploading(true);
     try {
       const post = posts.find(p => p.id === editingPostId);
       if (!post) return;
 
+      // Update post metadata
       if (post.profile_type === 'business') {
         const { error } = await supabase
           .from("posts")
@@ -556,10 +558,51 @@ export default function PhotosFeed({
         if (error) throw error;
       }
 
+      // Upload new files if any
       if (editFiles && editFiles.length > 0 && viewerUserId) {
-        await addPhotosToPost(editingPostId, editFiles);
+        const { data: existingMedia } = await supabase
+          .from("post_media")
+          .select("id")
+          .eq("post_id", editingPostId);
+
+        const startIndex = existingMedia?.length || 0;
+
+        for (let i = 0; i < editFiles.length; i++) {
+          setUploadProgress(Math.round(((i + 1) / editFiles.length) * 100));
+          
+          const file = editFiles[i];
+          const timestamp = Date.now();
+          const filename = `${timestamp}-${startIndex + i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const path = `${viewerUserId}/${filename}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("event-photos")
+            .upload(path, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (uploadError) {
+            console.error(`Failed to upload file ${i}:`, uploadError);
+            throw uploadError;
+          }
+
+          const { error: mediaError } = await supabase.from("post_media").insert({
+            post_id: editingPostId,
+            storage_path: path,
+            media_type: file.type.startsWith('video') ? 'video' : 'image',
+            sort_order: startIndex + i,
+            uploaded_by: viewerUserId
+          });
+
+          if (mediaError) {
+            console.error(`Failed to save media record ${i}:`, mediaError);
+            throw mediaError;
+          }
+        }
       }
 
+      // Update tags for personal posts (only if post owner)
       if (post.profile_type !== 'business' && post.user_id === viewerUserId) {
         await supabase.from("photo_tags").delete().eq("post_id", editingPostId);
         
@@ -584,11 +627,15 @@ export default function PhotosFeed({
 
       setEditingPostId(null);
       setEditFiles(null);
+      setUploadProgress(0);
       showMessage("success", "Post updated! ✨");
       await listPosts();
     } catch (err: any) {
       console.error("Edit error:", err);
-      showMessage("error", "Failed to update");
+      showMessage("error", err.message || "Failed to update post");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
   }
 
@@ -1031,10 +1078,14 @@ export default function PhotosFeed({
                         multiple
                         className="file-input"
                         onChange={(e) => setEditFiles(e.target.files)}
+                        disabled={uploading}
                       />
-                      + Add More Photos/Videos
+                      {uploading && editFiles ? 
+                        `Uploading... ${uploadProgress}%` : 
+                        "+ Add More Photos/Videos"
+                      }
                     </label>
-                    {editFiles && editFiles.length > 0 && (
+                    {editFiles && editFiles.length > 0 && !uploading && (
                       <span className="edit-files-count">
                         {editFiles.length} new file(s) selected
                       </span>
@@ -1046,14 +1097,16 @@ export default function PhotosFeed({
                         className="btn-save"
                         disabled={uploading}
                       >
-                        Save
+                        {uploading ? `Saving... ${uploadProgress}%` : "Save"}
                       </button>
                       <button
                         onClick={() => {
                           setEditingPostId(null);
                           setEditFiles(null);
+                          setUploadProgress(0);
                         }}
                         className="btn-cancel"
+                        disabled={uploading}
                       >
                         Cancel
                       </button>
