@@ -1,10 +1,17 @@
 // components/business/tabs/BusinessBasicTab.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import AvatarUploader from '@/components/AvatarUploader';
-import BusinessInviteQR from '@/components/business/BusinessInviteQR';
+
+interface Service {
+  id: string;
+  name: string;
+  description?: string;
+  duration?: string;
+  price?: string;
+  available: boolean;
+}
 
 interface BusinessBasic {
   display_name: string;
@@ -14,7 +21,8 @@ interface BusinessBasic {
   logo_url?: string;
   cover_url?: string;
   amenities?: string[];
-  categories?: string[];  // Added back if it was missing
+  categories?: string[];
+  services?: Service[];
   
   // Contact fields
   phone?: string;
@@ -47,15 +55,269 @@ const socialPlatforms = [
   { id: 'tiktok', label: 'TikTok', icon: '🎵', placeholder: 'tiktok.com/@yourbusiness' },
 ];
 
+// Custom cover photo uploader component
+function CoverPhotoUploader({ 
+  businessId, 
+  value, 
+  onChange 
+}: { 
+  businessId: string; 
+  value?: string; 
+  onChange: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [position, setPosition] = useState({ x: 50, y: 50 });
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function uploadCover(file: File) {
+    setUploading(true);
+    try {
+      // Create a safe file name
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `covers/${businessId}-${Date.now()}.${fileExt}`;
+      
+      // Upload to a public bucket (create 'cover-photos' bucket if it doesn't exist)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('cover-photos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) {
+        // If bucket doesn't exist, try using avatars bucket as fallback
+        const { data: fallbackData, error: fallbackError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: true
+          });
+        
+        if (fallbackError) throw fallbackError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+        
+        onChange(publicUrl);
+      } else {
+        const { data: { publicUrl } } = supabase.storage
+          .from('cover-photos')
+          .getPublicUrl(fileName);
+        
+        onChange(publicUrl);
+      }
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      alert(`Upload failed: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragActive(false);
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      uploadCover(file);
+    }
+  }
+
+  function handlePositionChange(axis: 'x' | 'y', value: number) {
+    setPosition(prev => ({ ...prev, [axis]: value }));
+  }
+
+  return (
+    <div className="space-y-3">
+      <div 
+        className={`relative w-full h-48 md:h-64 rounded-xl overflow-hidden border-2 ${
+          dragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300 bg-gray-50'
+        } transition-all cursor-pointer`}
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+        onClick={() => !uploading && fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadCover(file);
+          }}
+        />
+        
+        {value ? (
+          <div 
+            className="relative w-full h-full"
+            style={{
+              backgroundImage: `url(${value})`,
+              backgroundPosition: `${position.x}% ${position.y}%`,
+              backgroundSize: 'cover',
+            }}
+          >
+            <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="text-white text-center">
+                <p className="text-lg font-medium">Click to change</p>
+                <p className="text-sm">or drag & drop new image</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              {uploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-3"></div>
+                  <p className="text-gray-600">Uploading...</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-4xl mb-3">🖼️</div>
+                  <p className="text-gray-700 font-medium">Click to upload cover photo</p>
+                  <p className="text-sm text-gray-500 mt-1">or drag & drop</p>
+                  <p className="text-xs text-gray-400 mt-2">Recommended: 1600x400px</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Image Position Adjustment */}
+      {value && (
+        <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-medium text-gray-700 mb-2">Adjust Image Position:</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-600">Horizontal</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={position.x}
+                onChange={(e) => handlePositionChange('x', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600">Vertical</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={position.y}
+                onChange={(e) => handlePositionChange('y', Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Logo uploader component (simplified)
+function LogoUploader({ 
+  businessId, 
+  value, 
+  onChange 
+}: { 
+  businessId: string; 
+  value?: string; 
+  onChange: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function uploadLogo(file: File) {
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `logos/${businessId}-${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+      
+      onChange(publicUrl);
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      alert(`Upload failed: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div 
+      className="w-24 h-24 rounded-full border-2 border-gray-300 overflow-hidden cursor-pointer hover:border-purple-500 transition-colors"
+      onClick={() => !uploading && fileInputRef.current?.click()}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) uploadLogo(file);
+        }}
+      />
+      
+      {value ? (
+        <img src={value} alt="Logo" className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full bg-gray-50 flex items-center justify-center">
+          {uploading ? (
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          ) : (
+            <div className="text-center">
+              <div className="text-2xl">📷</div>
+              <p className="text-xs text-gray-500">Logo</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BusinessBasicTab({ businessId }: { businessId: string }) {
   const [data, setData] = useState<BusinessBasic>({
     display_name: '',
     handle: '',
-    social_links: {}
+    social_links: {},
+    services: []
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [newService, setNewService] = useState<Service>({
+    id: '',
+    name: '',
+    description: '',
+    duration: '',
+    price: '',
+    available: true
+  });
+  const [showServiceForm, setShowServiceForm] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -66,6 +328,20 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
         .single();
       
       if (biz) {
+        // Parse services from JSON if stored as JSONB
+        let services: Service[] = [];
+        if (biz.services) {
+          if (typeof biz.services === 'string') {
+            try {
+              services = JSON.parse(biz.services);
+            } catch {
+              services = [];
+            }
+          } else if (Array.isArray(biz.services)) {
+            services = biz.services;
+          }
+        }
+
         setData({
           display_name: biz.display_name || '',
           handle: biz.handle || '',
@@ -75,6 +351,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           cover_url: biz.cover_url || '',
           amenities: biz.amenities || [],
           categories: biz.categories || [],
+          services: services,
           phone: biz.phone || '',
           phone_public: biz.phone_public || false,
           email: biz.email || '',
@@ -106,6 +383,7 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
       .from('business_profiles')
       .update({
         ...data,
+        services: data.services, // Save services as JSONB
         updated_at: new Date().toISOString()
       })
       .eq('id', businessId);
@@ -119,12 +397,47 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
     setSaving(false);
   }
 
-  function toggleCategory(cat: string) {
-    if (data.categories?.includes(cat)) {
-      setData({ ...data, categories: data.categories.filter(c => c !== cat) });
-    } else {
-      setData({ ...data, categories: [...(data.categories || []), cat] });
+  function addService() {
+    if (!newService.name.trim()) {
+      alert('Please enter a service name');
+      return;
     }
+
+    const service: Service = {
+      ...newService,
+      id: crypto.randomUUID()
+    };
+
+    setData({
+      ...data,
+      services: [...(data.services || []), service]
+    });
+
+    setNewService({
+      id: '',
+      name: '',
+      description: '',
+      duration: '',
+      price: '',
+      available: true
+    });
+    setShowServiceForm(false);
+  }
+
+  function removeService(serviceId: string) {
+    setData({
+      ...data,
+      services: (data.services || []).filter(s => s.id !== serviceId)
+    });
+  }
+
+  function updateService(serviceId: string, updates: Partial<Service>) {
+    setData({
+      ...data,
+      services: (data.services || []).map(s =>
+        s.id === serviceId ? { ...s, ...updates } : s
+      )
+    });
   }
 
   function updateSocialLink(platform: string, value: string) {
@@ -155,29 +468,24 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
       <div>
         <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
         
-        {/* FIXED: Logo Upload with AvatarUploader that works with userId */}
+        {/* Logo Upload */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Business Logo</label>
-          <AvatarUploader
-            userId={businessId}
-            value={data.logo_url || ''}
+          <LogoUploader
+            businessId={businessId}
+            value={data.logo_url}
             onChange={(url) => setData({ ...data, logo_url: url })}
-            label="Upload Logo"
-            size={100}
           />
         </div>
 
-        {/* FIXED: Cover Image Upload with AvatarUploader */}
+        {/* Cover Image Upload with Position Control */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Cover Image</label>
-          <AvatarUploader
-            userId={businessId}
-            value={data.cover_url || ''}
+          <CoverPhotoUploader
+            businessId={businessId}
+            value={data.cover_url}
             onChange={(url) => setData({ ...data, cover_url: url })}
-            label="Upload Cover"
-            size={150}
           />
-          <p className="text-xs text-gray-500 mt-1">Recommended: 1600x400px for best display</p>
         </div>
 
         {/* Name and Handle - PRESERVED AS IS */}
@@ -240,6 +548,140 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
             style={{ fontSize: '16px' }}
           />
         </div>
+      </div>
+
+      {/* NEW Services Section */}
+      <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200 shadow-md">
+        <h3 className="text-xl font-bold text-amber-900 mb-6 flex items-center gap-2">
+          <span className="text-2xl">🛠️</span> Services Offered
+        </h3>
+        
+        {/* Display existing services */}
+        <div className="space-y-3 mb-4">
+          {(data.services || []).map((service) => (
+            <div key={service.id} className="bg-white rounded-xl p-4 border border-amber-200">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-amber-900">{service.name}</h4>
+                  {service.description && (
+                    <p className="text-sm text-gray-600 mt-1">{service.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                    {service.duration && (
+                      <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded">
+                        ⏱️ {service.duration}
+                      </span>
+                    )}
+                    {service.price && (
+                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded">
+                        💰 {service.price}
+                      </span>
+                    )}
+                    <span className={`px-2 py-1 rounded ${
+                      service.available 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {service.available ? '✅ Available' : '❌ Unavailable'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeService(service.id)}
+                  className="text-red-500 hover:text-red-700 p-2"
+                  title="Remove service"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new service form */}
+        {showServiceForm ? (
+          <div className="bg-white rounded-xl p-4 border-2 border-amber-300">
+            <h4 className="font-semibold text-amber-900 mb-3">Add New Service</h4>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Service name (e.g., Singing Bowls Session)"
+                value={newService.name}
+                onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                style={{ fontSize: '16px', minHeight: '44px' }}
+              />
+              <textarea
+                placeholder="Description (optional)"
+                value={newService.description}
+                onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                rows={2}
+                style={{ fontSize: '16px' }}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Duration (e.g., 1 hour)"
+                  value={newService.duration}
+                  onChange={(e) => setNewService({ ...newService, duration: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg"
+                  style={{ fontSize: '16px', minHeight: '44px' }}
+                />
+                <input
+                  type="text"
+                  placeholder="Price (e.g., $50)"
+                  value={newService.price}
+                  onChange={(e) => setNewService({ ...newService, price: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg"
+                  style={{ fontSize: '16px', minHeight: '44px' }}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={addService}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                  style={{ minHeight: '44px' }}
+                >
+                  Add Service
+                </button>
+                <button
+                  onClick={() => {
+                    setShowServiceForm(false);
+                    setNewService({
+                      id: '',
+                      name: '',
+                      description: '',
+                      duration: '',
+                      price: '',
+                      available: true
+                    });
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                  style={{ minHeight: '44px' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowServiceForm(true)}
+            className="w-full sm:w-auto px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium flex items-center justify-center gap-2"
+            style={{ minHeight: '48px' }}
+          >
+            <span className="text-xl">+</span> Add Service
+          </button>
+        )}
+        
+        {(data.services || []).length === 0 && !showServiceForm && (
+          <p className="text-sm text-amber-700 mt-2">
+            Add your services to help customers understand what you offer
+          </p>
+        )}
       </div>
 
       {/* Amenities & Accessibility Box - PRESERVED EXACTLY */}
@@ -421,15 +863,6 @@ export default function BusinessBasicTab({ businessId }: { businessId: string })
           ))}
         </div>
       </div>
-
-      {/* Business QR Code - PRESERVED EXACTLY */}
-      <BusinessInviteQR 
-        businessId={businessId}
-        businessHandle={data.handle}
-        businessName={data.display_name}
-        mode="full"
-        size={200}
-      />
 
       {/* Save Button - PRESERVED WITH MOBILE OPTIMIZATION */}
       <div className="flex justify-end">
