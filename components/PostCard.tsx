@@ -516,10 +516,16 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       if (result.ok) {
         setCommentText("");
         setShowCommentInput(false);
-        if (onChanged) onChanged();
+        // Force immediate refresh with delay for database update
+        if (onChanged) {
+          setTimeout(() => onChanged(), 100);
+        }
+      } else {
+        alert("Failed to add comment: " + (result.error || "Unknown error"));
       }
     } catch (error) {
       console.error("Error adding comment:", error);
+      alert("Failed to add comment");
     } finally {
       setIsCommenting(false);
     }
@@ -532,12 +538,20 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   };
 
   const handleDelete = async () => {
+    if (!confirm("Delete this post? This cannot be undone.")) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+    
     setIsDeleting(true);
     try {
       const result = await deletePost(post.id);
       if (result.ok) {
         setShowDeleteConfirm(false);
-        if (onChanged) onChanged();
+        // Add a small delay to let the database update complete
+        setTimeout(() => {
+          if (onChanged) onChanged();
+        }, 100);
       } else {
         alert(result.error || "Failed to delete post");
       }
