@@ -315,8 +315,13 @@ export default function CreateAlbumPage() {
     setCurrentPageIndex(pages.length);
   }
 
-  // Save album
+  // FIXED Save album function
   async function saveAlbum() {
+    if (!userId) {
+      alert('You must be logged in to save an album');
+      return;
+    }
+
     if (!title.trim()) {
       alert('Please add a title');
       return;
@@ -328,24 +333,53 @@ export default function CreateAlbumPage() {
     }
 
     setSaving(true);
+    console.log('Starting save process...');
+    console.log('User ID:', userId);
+
     try {
-      // Create album
+      // Find first photo for cover image
+      let coverImage = null;
+      for (const page of pages) {
+        const photo = page.elements.find(el => el.type === 'photo');
+        if (photo) {
+          coverImage = photo.content;
+          break;
+        }
+      }
+
+      // Create album with explicit creator_id
+      const albumData = {
+        title: title.trim(),
+        description: description?.trim() || null,
+        privacy,
+        creator_id: userId,
+        cover_image: coverImage,
+        page_count: pages.length,
+        status: 'published',
+        published_at: new Date().toISOString(),
+        is_collaborative: collaborators.length > 0,
+        allow_comments: true,
+        allow_download: false
+      };
+
+      console.log('Creating album...');
+
       const { data: album, error: albumError } = await supabase
         .from('albums')
-        .insert({
-          title,
-          description,
-          privacy,
-          creator_id: userId,
-          cover_image: pages[0].elements.find(el => el.type === 'photo')?.content,
-          page_count: pages.length,
-          status: 'published',
-          published_at: new Date().toISOString()
-        })
+        .insert(albumData)
         .select()
         .single();
 
-      if (albumError) throw albumError;
+      if (albumError) {
+        console.error('Album creation error:', albumError);
+        throw new Error(`Failed to create album: ${albumError.message}`);
+      }
+
+      if (!album) {
+        throw new Error('No album data returned');
+      }
+
+      console.log('Album created:', album.id);
 
       // Save pages and elements
       for (let i = 0; i < pages.length; i++) {
@@ -356,29 +390,29 @@ export default function CreateAlbumPage() {
           .insert({
             album_id: album.id,
             page_number: i + 1,
-            background_color: page.backgroundColor,
-            template: page.template
+            background_color: page.backgroundColor || '#ffffff',
+            template: page.template || 'freeform'
           })
           .select()
           .single();
 
         if (pageError) throw pageError;
 
-        // Save elements
-        if (page.elements.length > 0) {
+        // Save elements for this page
+        if (page.elements.length > 0 && savedPage) {
           const elements = page.elements.map((el, index) => ({
             page_id: savedPage.id,
             type: el.type,
             content: el.content,
-            position_x: el.x,
-            position_y: el.y,
-            width: el.width,
-            height: el.height,
-            rotation: el.rotation,
+            position_x: el.x || 0,
+            position_y: el.y || 0,
+            width: el.width || 25,
+            height: el.height || 25,
+            rotation: el.rotation || 0,
             z_index: index,
-            font_size: el.fontSize,
-            font_color: el.fontColor,
-            font_family: el.fontFamily
+            font_size: el.fontSize || null,
+            font_color: el.fontColor || null,
+            font_family: el.fontFamily || null
           }));
 
           const { error: elementsError } = await supabase
@@ -389,7 +423,7 @@ export default function CreateAlbumPage() {
         }
       }
 
-      // Add collaborators
+      // Add collaborators if any
       if (collaborators.length > 0) {
         const collabData = collaborators.map(friendId => ({
           album_id: album.id,
@@ -398,16 +432,15 @@ export default function CreateAlbumPage() {
           status: 'pending'
         }));
 
-        await supabase
-          .from('album_collaborators')
-          .insert(collabData);
+        await supabase.from('album_collaborators').insert(collabData);
       }
 
-      alert('Album created successfully!');
+      alert(`Album "${title}" created successfully!`);
       router.push('/profile');
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('Save failed:', error);
-      alert('Failed to save album. Please try again.');
+      alert(error.message || 'Failed to save album. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -637,12 +670,12 @@ export default function CreateAlbumPage() {
               ← Previous
             </button>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 overflow-x-auto">
               {pages.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentPageIndex(index)}
-                  className={`w-10 h-10 rounded-lg ${
+                  className={`w-10 h-10 rounded-lg flex-shrink-0 ${
                     index === currentPageIndex 
                       ? 'bg-purple-500 text-white' 
                       : 'bg-gray-200 hover:bg-gray-300'
@@ -655,7 +688,7 @@ export default function CreateAlbumPage() {
               {pages.length < 100 && (
                 <button
                   onClick={addNewPage}
-                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200"
+                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 flex-shrink-0"
                 >
                   + Add Page
                 </button>
@@ -716,7 +749,7 @@ export default function CreateAlbumPage() {
             
             <button
               onClick={() => setShowStickerPicker(false)}
-              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg"
+              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg w-full md:w-auto"
             >
               Close
             </button>
