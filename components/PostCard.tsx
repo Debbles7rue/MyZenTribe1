@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Post, toggleLike, addComment } from "@/lib/posts";
+import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
 import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
 import { supabase } from "@/lib/supabaseClient";
@@ -264,11 +264,132 @@ function PhotoLightbox({
   );
 }
 
+// Edit Modal Component for adding/removing photos
+function EditPostModal({ 
+  post, 
+  currentMedia,
+  onClose, 
+  onSave 
+}: { 
+  post: Post;
+  currentMedia: Array<{url: string; type: 'image' | 'video'}>;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const [editBody, setEditBody] = useState(post.body || '');
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    setNewFiles(Array.from(files));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    
+    try {
+      // Update post text
+      if (editBody !== post.body) {
+        await updatePost(post.id, { body: editBody });
+      }
+
+      // Upload and add new files
+      if (newFiles.length > 0) {
+        setUploadingFiles(true);
+        for (const file of newFiles) {
+          const type = file.type.startsWith('video') ? 'video' : 'image';
+          const { url, error } = await uploadMedia(file, type);
+          if (!error && url) {
+            await addMediaToPost(post.id, url, type);
+          }
+        }
+      }
+
+      onSave();
+    } catch (error) {
+      console.error('Error updating post:', error);
+      alert('Failed to update post');
+    } finally {
+      setIsSaving(false);
+      setUploadingFiles(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="modal-title">Edit Post</h2>
+        
+        <textarea
+          className="edit-textarea"
+          value={editBody}
+          onChange={(e) => setEditBody(e.target.value)}
+          placeholder="What's on your mind?"
+          rows={4}
+        />
+
+        <div className="current-media">
+          <h3>Current Media ({currentMedia.length})</h3>
+          <div className="media-preview-grid">
+            {currentMedia.map((media, idx) => (
+              <div key={idx} className="media-preview">
+                {media.type === 'image' ? (
+                  <img src={media.url} alt="" />
+                ) : (
+                  <video src={media.url} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="add-media-section">
+          <label className="file-input-label">
+            <input
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            📁 Add More Photos/Videos
+          </label>
+          {newFiles.length > 0 && (
+            <p className="file-count">{newFiles.length} new file(s) selected</p>
+          )}
+        </div>
+
+        <div className="modal-buttons">
+          <button 
+            className="modal-cancel"
+            onClick={onClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+          <button 
+            className="modal-save"
+            onClick={handleSave}
+            disabled={isSaving || uploadingFiles}
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
   const [showEditMenu, setShowEditMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
   const [processedMedia, setProcessedMedia] = useState<Array<{url: string; type: 'image' | 'video'}>>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
@@ -409,6 +530,24 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     navigator.clipboard.writeText(postUrl);
     alert("Post link copied to clipboard!");
   };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const result = await deletePost(post.id);
+      if (result.ok) {
+        setShowDeleteConfirm(false);
+        if (onChanged) onChanged();
+      } else {
+        alert(result.error || "Failed to delete post");
+      }
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      alert("Failed to delete post");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   
   const mediaToDisplay = processedMedia;
   
@@ -471,15 +610,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
                   {isCoCreator && !canDelete && (
                     <>
                       <button className="menu-item" onClick={() => setShowEditModal(true)}>Add Photos</button>
-                      <button className="menu-item" onClick={() => setShowEditModal(true)}>Edit My Content</button>
                       <button className="menu-item">Remove Tag</button>
                     </>
                   )}
                   {canDelete && (
                     <>
                       <button className="menu-item" onClick={() => setShowEditModal(true)}>Edit Post</button>
-                      <button className="menu-item">Change Privacy</button>
-                      <button className="menu-item danger">Delete Post</button>
+                      <button className="menu-item danger" onClick={() => setShowDeleteConfirm(true)}>Delete Post</button>
                     </>
                   )}
                 </div>
@@ -563,24 +700,50 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         </div>
       </div>
       
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete Post?</h2>
+            <p>This action cannot be undone. All photos, comments, and likes will be permanently removed.</p>
+            <div className="modal-buttons">
+              <button 
+                className="modal-cancel"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button 
+                className="modal-delete"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Post'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Post Modal */}
+      {showEditModal && (
+        <EditPostModal
+          post={post}
+          currentMedia={mediaToDisplay}
+          onClose={() => setShowEditModal(false)}
+          onSave={() => {
+            setShowEditModal(false);
+            if (onChanged) onChanged();
+          }}
+        />
+      )}
+      
       {showLightbox && mediaToDisplay && mediaToDisplay.length > 0 && (
         <PhotoLightbox
           media={mediaToDisplay}
           startIndex={lightboxStartIndex}
           onClose={() => setShowLightbox(false)}
-        />
-      )}
-      
-      {showEditModal && (
-        <CoCreatorEditModal
-          postId={post.id}
-          currentUserId={currentUserId || ''}
-          isCreator={currentUserId === post.user_id}
-          onClose={() => setShowEditModal(false)}
-          onUpdate={() => {
-            setShowEditModal(false);
-            if (onChanged) onChanged();
-          }}
         />
       )}
       
@@ -913,6 +1076,157 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         
         .menu-item.danger {
           color: #e53e3e;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 9998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .modal-content {
+          background: white;
+          border-radius: 0.75rem;
+          padding: 1.5rem;
+          max-width: 500px;
+          width: 90%;
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+
+        .confirm-modal {
+          max-width: 400px;
+        }
+
+        .modal-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          margin-bottom: 1rem;
+        }
+
+        .modal-content h2 {
+          font-size: 1.25rem;
+          font-weight: 600;
+          margin-bottom: 0.75rem;
+        }
+
+        .modal-content p {
+          color: #4a5568;
+          margin-bottom: 1.5rem;
+        }
+
+        .modal-buttons {
+          display: flex;
+          gap: 0.75rem;
+          justify-content: flex-end;
+        }
+
+        .modal-cancel, .modal-save, .modal-delete {
+          padding: 0.5rem 1.25rem;
+          border-radius: 0.375rem;
+          border: none;
+          font-weight: 500;
+          cursor: pointer;
+        }
+
+        .modal-cancel {
+          background: #e2e8f0;
+          color: #4a5568;
+        }
+
+        .modal-save {
+          background: #4299e1;
+          color: white;
+        }
+
+        .modal-delete {
+          background: #e53e3e;
+          color: white;
+        }
+
+        .modal-cancel:hover {
+          background: #cbd5e0;
+        }
+
+        .modal-save:hover {
+          background: #3182ce;
+        }
+
+        .modal-delete:hover {
+          background: #c53030;
+        }
+
+        .modal-cancel:disabled,
+        .modal-save:disabled,
+        .modal-delete:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .edit-textarea {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.375rem;
+          resize: vertical;
+          margin-bottom: 1rem;
+        }
+
+        .current-media {
+          margin-bottom: 1rem;
+        }
+
+        .current-media h3 {
+          font-size: 0.875rem;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+        }
+
+        .media-preview-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+          gap: 0.5rem;
+        }
+
+        .media-preview {
+          aspect-ratio: 1;
+          overflow: hidden;
+          border-radius: 0.25rem;
+          background: #f7fafc;
+        }
+
+        .media-preview img,
+        .media-preview video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .add-media-section {
+          margin-bottom: 1rem;
+        }
+
+        .file-input-label {
+          display: inline-block;
+          padding: 0.5rem 1rem;
+          background: #f7fafc;
+          border: 1px dashed #cbd5e0;
+          border-radius: 0.375rem;
+          cursor: pointer;
+        }
+
+        .file-input-label:hover {
+          background: #edf2f7;
+        }
+
+        .file-count {
+          font-size: 0.875rem;
+          color: #4a5568;
+          margin-top: 0.5rem;
         }
       `}</style>
     </>
