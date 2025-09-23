@@ -334,7 +334,6 @@ export default function CreateAlbumPage() {
 
     setSaving(true);
     console.log('Starting save process...');
-    console.log('User ID:', userId);
 
     try {
       // Find first photo for cover image
@@ -347,7 +346,7 @@ export default function CreateAlbumPage() {
         }
       }
 
-      // Create album with explicit creator_id
+      // Create album with ONLY the columns that exist in your table
       const albumData = {
         title: title.trim(),
         description: description?.trim() || null,
@@ -356,10 +355,8 @@ export default function CreateAlbumPage() {
         cover_image: coverImage,
         page_count: pages.length,
         status: 'published',
-        published_at: new Date().toISOString(),
-        is_collaborative: collaborators.length > 0,
-        allow_comments: true,
-        allow_download: false
+        published_at: new Date().toISOString()
+        // REMOVED: is_collaborative, allow_comments, allow_download
       };
 
       console.log('Creating album...');
