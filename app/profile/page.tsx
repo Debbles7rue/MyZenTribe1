@@ -536,6 +536,27 @@ export default function ProfilePage() {
             />
           </div>
 
+          {/* Album Creator Button - ONLY ADDITION TO FILE */}
+          <div className="card">
+            <Link 
+              href="/albums/create" 
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'center',
+                padding: '1rem 1.5rem',
+                background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                color: 'white',
+                borderRadius: '0.5rem',
+                fontWeight: '600',
+                textDecoration: 'none',
+                transition: 'opacity 0.2s'
+              }}
+            >
+              📸 Create Photo Album
+            </Link>
+          </div>
+
           <div className="card">
             <h3 className="section-title">Your Posts</h3>
             {postsLoading ? (
