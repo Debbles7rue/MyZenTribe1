@@ -557,6 +557,36 @@ export default function ProfilePage() {
             </Link>
           </div>
 
+          {/* View Albums Button */}
+          <div className="card">
+            <Link 
+              href="/albums" 
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'center',
+                padding: '1rem 1.5rem',
+                background: 'white',
+                color: '#8b5cf6',
+                border: '2px solid #8b5cf6',
+                borderRadius: '0.5rem',
+                fontWeight: '600',
+                textDecoration: 'none',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#8b5cf6';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'white';
+                e.currentTarget.style.color = '#8b5cf6';
+              }}
+            >
+              📚 View My Albums
+            </Link>
+          </div>
+
           <div className="card">
             <h3 className="section-title">Your Posts</h3>
             {postsLoading ? (
