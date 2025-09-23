@@ -1,15 +1,12 @@
 // app/albums/create/page.tsx
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { DndContext, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
-import { restrictToParentElement } from '@dnd-kit/modifiers';
 import FriendSelector from '@/components/FriendSelector';
-import { debounce } from 'lodash';
 
-// Types matching your original file
+// Types
 type AlbumElement = {
   id: string;
   type: 'photo' | 'video' | 'text' | 'sticker';
@@ -28,29 +25,52 @@ type AlbumElement = {
 type AlbumPage = {
   id: string;
   elements: AlbumElement[];
-  background: string;
-  template?: string;
+  backgroundColor: string;
+  backgroundImage?: string;
+  template: string;
+};
+
+// Expanded sticker library
+const STICKER_LIBRARY = {
+  emotions: ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😜', '🤪', '😝', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'],
+  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️'],
+  celebration: ['🎉', '🎊', '🎈', '🎁', '🎂', '🎄', '🎃', '🎆', '🎇', '🧨', '✨', '🎐', '🎀', '🎗️', '🎟️', '🎫', '🎖️', '🏆', '🏅', '🥇', '🥈', '🥉'],
+  nature: ['🌸', '💮', '🏵️', '🌺', '🌻', '🌷', '🌹', '🥀', '🌼', '🌵', '🌲', '🌳', '🌴', '🌱', '🌿', '☘️', '🍀', '🍁', '🍂', '🍃', '🌾', '🌙', '☀️', '⭐', '🌟', '✨', '⚡', '🔥', '💫', '🌈'],
+  animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄', '🐴', '🐝', '🦋', '🐌', '🐞', '🐢', '🐙', '🦀', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈'],
+  food: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑', '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🍿', '🍩', '🍪', '🎂', '🍰', '🧁', '🍫', '🍬', '🍭', '🍮'],
+  activities: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🎮', '🎯', '🎲', '🎰', '🎳', '🎸', '🎵', '🎶', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎻', '🎬', '🎨', '🎭', '🎪', '🎟️', '🎫'],
+  travel: ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🚚', '🚛', '🚜', '🛵', '🏍️', '🚲', '🛴', '✈️', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛳️', '⛴️', '🚢', '🗺️', '🗿', '🗽', '🗼', '🏰', '🏯', '🎡', '🎢', '🎠'],
+  objects: ['💌', '📌', '📍', '📎', '🔗', '📏', '📐', '✂️', '🗃️', '🗄️', '🗑️', '🔒', '🔓', '🔏', '🔐', '🔑', '🗝️', '🔨', '🪓', '⛏️', '⚒️', '🛠️', '🗡️', '⚔️', '💣', '🪃', '🏹', '🛡️', '🪚', '🔧', '🪛', '🔩', '⚙️', '🗜️', '⚖️', '🔗', '⛓️', '🪝', '🧰', '🧲', '🪜', '⚗️', '🧪', '🧫', '🧬', '🔬', '🔭', '📡'],
+  symbols: ['💋', '💯', '💢', '💥', '💫', '💦', '💨', '🕳️', '💤', '👋', '✋', '🖐️', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤝', '🙏']
 };
 
 export default function CreateAlbumPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   
-  // Album state from your original file
-  const [pages, setPages] = useState<AlbumPage[]>([{
-    id: '1',
-    elements: [],
-    background: '#ffffff',
-    template: 'freeform'
-  }]);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  // Album data
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [privacy, setPrivacy] = useState<'private' | 'public'>('private');
-  const [saving, setSaving] = useState(false);
   const [collaborators, setCollaborators] = useState<string[]>([]);
+  
+  // Pages
+  const [pages, setPages] = useState<AlbumPage[]>([{
+    id: 'page-1',
+    elements: [],
+    backgroundColor: '#ffffff',
+    template: 'freeform'
+  }]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  
+  // UI states
+  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [draggedElement, setDraggedElement] = useState<string | null>(null);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showTextEditor, setShowTextEditor] = useState(false);
+  const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
   const [editingText, setEditingText] = useState('');
   const [textStyle, setTextStyle] = useState({
     fontSize: 24,
@@ -58,32 +78,8 @@ export default function CreateAlbumPage() {
     fontFamily: 'Arial'
   });
 
-  // Template layouts from your original
-  const templates = [
-    { name: 'Classic Grid', slots: 4, layout: '2x2' },
-    { name: 'Feature', slots: 3, layout: '1-big-2-small' },
-    { name: 'Mosaic', slots: 6, layout: 'mosaic' },
-    { name: 'Freeform', slots: 0, layout: 'free' }
-  ];
-
-  // Stickers
-  const stickers = [
-    { id: 'heart', emoji: '❤️' },
-    { id: 'star', emoji: '⭐' },
-    { id: 'sun', emoji: '☀️' },
-    { id: 'rainbow', emoji: '🌈' },
-    { id: 'fire', emoji: '🔥' }
-  ];
-
-  // Touch sensors for mobile
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 }
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 8 }
-    })
-  );
+  // Refs
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   // Get user on mount
   useEffect(() => {
@@ -92,32 +88,21 @@ export default function CreateAlbumPage() {
     });
   }, []);
 
-  // Auto-save with debounce
-  const autoSave = useCallback(
-    debounce(async () => {
-      if (!title || pages[0].elements.length === 0) return;
-      // Auto-save logic here if needed
-      console.log('Auto-saving...');
-    }, 2000),
-    [title, pages]
-  );
-
-  useEffect(() => {
-    autoSave();
-  }, [pages, autoSave]);
-
   // Handle photo/video upload
   async function handleMediaUpload(files: FileList) {
-    const currentPageData = pages[currentPage];
+    if (!userId || files.length === 0) return;
+    
+    setUploading(true);
+    const currentPage = pages[currentPageIndex];
     const newElements: AlbumElement[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `albums/${userId}/${Date.now()}-${i}.${fileExt}`;
-
-      try {
-        // Upload to your existing bucket
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${userId}/album-${Date.now()}-${i}.${fileExt}`;
+        
+        // Upload to storage
         const { data, error } = await supabase.storage
           .from('post-media')
           .upload(fileName, file);
@@ -131,25 +116,33 @@ export default function CreateAlbumPage() {
             id: `element-${Date.now()}-${i}`,
             type: file.type.startsWith('video') ? 'video' : 'photo',
             content: publicUrl,
-            x: 10 + (i * 10) % 60,
-            y: 10 + Math.floor(i / 4) * 20,
-            width: 30,
-            height: 30,
+            x: 10 + (i * 15) % 60,
+            y: 10 + Math.floor(i / 4) * 25,
+            width: 25,
+            height: 25,
             rotation: 0,
-            zIndex: currentPageData.elements.length + i
+            zIndex: currentPage.elements.length + i
           };
           
           newElements.push(element);
         }
-      } catch (error) {
-        console.error('Upload failed:', error);
       }
-    }
 
-    // Add elements to current page
-    const updatedPages = [...pages];
-    updatedPages[currentPage].elements.push(...newElements);
-    setPages(updatedPages);
+      // Add elements to current page
+      if (newElements.length > 0) {
+        const updatedPages = [...pages];
+        updatedPages[currentPageIndex] = {
+          ...currentPage,
+          elements: [...currentPage.elements, ...newElements]
+        };
+        setPages(updatedPages);
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload media. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   }
 
   // Add text element
@@ -162,15 +155,15 @@ export default function CreateAlbumPage() {
       content: editingText,
       x: 30,
       y: 40,
-      width: 40,
+      width: 30,
       height: 10,
       rotation: 0,
-      zIndex: pages[currentPage].elements.length,
+      zIndex: pages[currentPageIndex].elements.length,
       ...textStyle
     };
 
     const updatedPages = [...pages];
-    updatedPages[currentPage].elements.push(element);
+    updatedPages[currentPageIndex].elements.push(element);
     setPages(updatedPages);
     setShowTextEditor(false);
     setEditingText('');
@@ -182,64 +175,169 @@ export default function CreateAlbumPage() {
       id: `sticker-${Date.now()}`,
       type: 'sticker',
       content: emoji,
-      x: Math.random() * 60 + 20,
-      y: Math.random() * 60 + 20,
-      width: 15,
-      height: 15,
+      x: 40 + Math.random() * 20,
+      y: 40 + Math.random() * 20,
+      width: 10,
+      height: 10,
       rotation: 0,
-      zIndex: pages[currentPage].elements.length,
+      zIndex: pages[currentPageIndex].elements.length,
       fontSize: 48
     };
 
     const updatedPages = [...pages];
-    updatedPages[currentPage].elements.push(element);
+    updatedPages[currentPageIndex].elements.push(element);
     setPages(updatedPages);
+    setShowStickerPicker(false);
   }
 
-  // Handle drag end
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, delta } = event;
-    const elementId = active.id as string;
-
+  // Delete element
+  function deleteElement(elementId: string) {
     const updatedPages = [...pages];
-    const element = updatedPages[currentPage].elements.find(el => el.id === elementId);
-
-    if (element) {
-      element.x = Math.max(0, Math.min(70, element.x + (delta.x / 10)));
-      element.y = Math.max(0, Math.min(70, element.y + (delta.y / 10)));
-      setPages(updatedPages);
-    }
-  }
-
-  // Delete selected element
-  function deleteSelectedElement() {
-    if (!selectedElement) return;
-
-    const updatedPages = [...pages];
-    updatedPages[currentPage].elements = updatedPages[currentPage].elements
-      .filter(el => el.id !== selectedElement);
+    updatedPages[currentPageIndex].elements = updatedPages[currentPageIndex].elements
+      .filter(el => el.id !== elementId);
     setPages(updatedPages);
     setSelectedElement(null);
   }
 
-  // Save album to database
+  // Handle element drag
+  function handleElementMouseDown(elementId: string, e: React.MouseEvent) {
+    e.preventDefault();
+    setSelectedElement(elementId);
+    setDraggedElement(elementId);
+
+    const element = pages[currentPageIndex].elements.find(el => el.id === elementId);
+    if (!element || !canvasRef.current) return;
+
+    const canvas = canvasRef.current.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialX = element.x;
+    const initialY = element.y;
+
+    function handleMouseMove(e: MouseEvent) {
+      const deltaX = ((e.clientX - startX) / canvas.width) * 100;
+      const deltaY = ((e.clientY - startY) / canvas.height) * 100;
+
+      const updatedPages = [...pages];
+      const element = updatedPages[currentPageIndex].elements.find(el => el.id === elementId);
+      if (element) {
+        element.x = Math.max(0, Math.min(90, initialX + deltaX));
+        element.y = Math.max(0, Math.min(90, initialY + deltaY));
+        setPages([...updatedPages]);
+      }
+    }
+
+    function handleMouseUp() {
+      setDraggedElement(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    }
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }
+
+  // Apply template
+  function applyTemplate(template: string) {
+    const updatedPages = [...pages];
+    const currentPage = updatedPages[currentPageIndex];
+    currentPage.template = template;
+
+    // Rearrange existing photos based on template
+    if (template === 'grid' && currentPage.elements.length > 0) {
+      const photos = currentPage.elements.filter(el => el.type === 'photo');
+      photos.forEach((photo, i) => {
+        if (i < 4) {
+          photo.x = (i % 2) * 48 + 2;
+          photo.y = Math.floor(i / 2) * 48 + 2;
+          photo.width = 46;
+          photo.height = 46;
+        }
+      });
+    } else if (template === 'feature' && currentPage.elements.length > 0) {
+      const photos = currentPage.elements.filter(el => el.type === 'photo');
+      if (photos[0]) {
+        photos[0].x = 10;
+        photos[0].y = 10;
+        photos[0].width = 80;
+        photos[0].height = 50;
+      }
+      photos.slice(1, 3).forEach((photo, i) => {
+        photo.x = 10 + i * 40;
+        photo.y = 65;
+        photo.width = 35;
+        photo.height = 25;
+      });
+    } else if (template === 'mosaic' && currentPage.elements.length > 0) {
+      const photos = currentPage.elements.filter(el => el.type === 'photo');
+      const positions = [
+        { x: 2, y: 2, w: 30, h: 45 },
+        { x: 34, y: 2, w: 30, h: 30 },
+        { x: 66, y: 2, w: 32, h: 60 },
+        { x: 2, y: 49, w: 30, h: 45 },
+        { x: 34, y: 34, w: 30, h: 30 },
+        { x: 34, y: 66, w: 30, h: 30 }
+      ];
+      photos.forEach((photo, i) => {
+        if (i < positions.length) {
+          photo.x = positions[i].x;
+          photo.y = positions[i].y;
+          photo.width = positions[i].w;
+          photo.height = positions[i].h;
+        }
+      });
+    }
+
+    setPages(updatedPages);
+  }
+
+  // Change background
+  function changeBackground(color: string) {
+    const updatedPages = [...pages];
+    updatedPages[currentPageIndex].backgroundColor = color;
+    setPages(updatedPages);
+    setShowBackgroundPicker(false);
+  }
+
+  // Add new page
+  function addNewPage() {
+    if (pages.length >= 100) {
+      alert('Maximum 100 pages allowed');
+      return;
+    }
+    
+    setPages([...pages, {
+      id: `page-${Date.now()}`,
+      elements: [],
+      backgroundColor: '#ffffff',
+      template: 'freeform'
+    }]);
+    setCurrentPageIndex(pages.length);
+  }
+
+  // Save album
   async function saveAlbum() {
-    if (!title || pages[0].elements.length === 0) {
-      alert('Please add a title and at least one photo');
+    if (!title.trim()) {
+      alert('Please add a title');
+      return;
+    }
+
+    if (pages[0].elements.length === 0) {
+      alert('Please add at least one photo');
       return;
     }
 
     setSaving(true);
     try {
       // Create album
-      const { data: album, error } = await supabase
+      const { data: album, error: albumError } = await supabase
         .from('albums')
         .insert({
           title,
           description,
           privacy,
           creator_id: userId,
-          cover_image: pages[0].elements[0]?.content,
+          cover_image: pages[0].elements.find(el => el.type === 'photo')?.content,
           page_count: pages.length,
           status: 'published',
           published_at: new Date().toISOString()
@@ -247,55 +345,66 @@ export default function CreateAlbumPage() {
         .select()
         .single();
 
-      if (!error && album) {
-        // Save pages
-        for (let i = 0; i < pages.length; i++) {
-          const { data: page } = await supabase
-            .from('album_pages')
-            .insert({
-              album_id: album.id,
-              page_number: i + 1,
-              background_color: pages[i].background
-            })
-            .select()
-            .single();
+      if (albumError) throw albumError;
 
-          if (page && pages[i].elements.length > 0) {
-            // Save elements
-            const elements = pages[i].elements.map(el => ({
-              page_id: page.id,
-              type: el.type,
-              content: el.content,
-              position_x: el.x,
-              position_y: el.y,
-              width: el.width,
-              height: el.height,
-              rotation: el.rotation,
-              z_index: el.zIndex,
-              font_size: el.fontSize,
-              font_color: el.fontColor,
-              font_family: el.fontFamily
-            }));
-
-            await supabase.from('album_elements').insert(elements);
-          }
-        }
-
-        // Add collaborators
-        if (collaborators.length > 0) {
-          const collabData = collaborators.map(userId => ({
+      // Save pages and elements
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        const { data: savedPage, error: pageError } = await supabase
+          .from('album_pages')
+          .insert({
             album_id: album.id,
-            user_id: userId,
-            can_edit: true,
-            status: 'pending'
-          }));
-          
-          await supabase.from('album_collaborators').insert(collabData);
-        }
+            page_number: i + 1,
+            background_color: page.backgroundColor,
+            template: page.template
+          })
+          .select()
+          .single();
 
-        alert('Album created successfully!');
-        router.push('/profile');
+        if (pageError) throw pageError;
+
+        // Save elements
+        if (page.elements.length > 0) {
+          const elements = page.elements.map((el, index) => ({
+            page_id: savedPage.id,
+            type: el.type,
+            content: el.content,
+            position_x: el.x,
+            position_y: el.y,
+            width: el.width,
+            height: el.height,
+            rotation: el.rotation,
+            z_index: index,
+            font_size: el.fontSize,
+            font_color: el.fontColor,
+            font_family: el.fontFamily
+          }));
+
+          const { error: elementsError } = await supabase
+            .from('album_elements')
+            .insert(elements);
+
+          if (elementsError) throw elementsError;
+        }
       }
+
+      // Add collaborators
+      if (collaborators.length > 0) {
+        const collabData = collaborators.map(friendId => ({
+          album_id: album.id,
+          user_id: friendId,
+          can_edit: true,
+          status: 'pending'
+        }));
+
+        await supabase
+          .from('album_collaborators')
+          .insert(collabData);
+      }
+
+      alert('Album created successfully!');
+      router.push('/profile');
     } catch (error) {
       console.error('Save failed:', error);
       alert('Failed to save album. Please try again.');
@@ -304,508 +413,422 @@ export default function CreateAlbumPage() {
     }
   }
 
+  const currentPage = pages[currentPageIndex];
+
   return (
-    <div className="album-creator">
-      {/* Toolbar */}
-      <div className="toolbar">
-        <input
-          type="text"
-          placeholder="Album Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="title-input"
-        />
-        
-        <textarea
-          placeholder="Description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="description-input"
-          rows={1}
-        />
-        
-        <div className="tool-buttons">
-          <label className="tool-btn">
-            📷 Add Photos
-            <input
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={(e) => e.target.files && handleMediaUpload(e.target.files)}
-              style={{ display: 'none' }}
-            />
-          </label>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+            Create Album
+          </h1>
           
-          <button className="tool-btn" onClick={() => setShowTextEditor(true)}>
-            📝 Add Text
-          </button>
-          
-          <div className="sticker-dropdown">
-            <button className="tool-btn">✨ Stickers</button>
-            <div className="sticker-options">
-              {stickers.map(sticker => (
-                <button
-                  key={sticker.id}
-                  onClick={() => addSticker(sticker.emoji)}
-                  className="sticker-btn"
-                >
-                  {sticker.emoji}
-                </button>
-              ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Album Title *
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                placeholder="Summer Memories 2024"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Privacy
+              </label>
+              <select
+                value={privacy}
+                onChange={(e) => setPrivacy(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="private">Private (Only me & collaborators)</option>
+                <option value="public">Public (Friends can see)</option>
+              </select>
             </div>
           </div>
-          
-          <button className="tool-btn" onClick={() => {
-            const colors = ['#ffffff', '#f3f4f6', '#fef3c7', '#dbeafe', '#fce7f3'];
-            const randomColor = colors[Math.floor(Math.random() * colors.length)];
-            const updatedPages = [...pages];
-            updatedPages[currentPage].background = randomColor;
-            setPages(updatedPages);
-          }}>
-            🎨 Background
-          </button>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              rows={2}
+              placeholder="Our amazing trip to the mountains..."
+            />
+          </div>
+
+          <div className="mt-4">
+            <FriendSelector
+              value={collaborators}
+              onChange={setCollaborators}
+              multiple={true}
+              label="Invite Friends to Collaborate"
+              placeholder="Search friends to add as co-creators..."
+            />
+          </div>
         </div>
 
-        <select 
-          className="template-select"
-          value={pages[currentPage].template}
-          onChange={(e) => {
-            const updatedPages = [...pages];
-            updatedPages[currentPage].template = e.target.value;
-            setPages(updatedPages);
-          }}
-        >
-          {templates.map(t => (
-            <option key={t.name} value={t.layout}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={privacy}
-          onChange={(e) => setPrivacy(e.target.value as any)}
-          className="privacy-select"
-        >
-          <option value="private">🔒 Private</option>
-          <option value="public">🌍 Public</option>
-        </select>
-      </div>
-
-      {/* Canvas Area */}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd} modifiers={[restrictToParentElement]}>
-        <div className="album-canvas" style={{ background: pages[currentPage].background }}>
-          <div className="page-container">
-            {pages[currentPage].elements.map(element => (
-              <div
-                key={element.id}
-                className={`element ${selectedElement === element.id ? 'selected' : ''}`}
-                style={{
-                  position: 'absolute',
-                  left: `${element.x}%`,
-                  top: `${element.y}%`,
-                  width: `${element.width}%`,
-                  height: `${element.height}%`,
-                  transform: `rotate(${element.rotation}deg)`,
-                  zIndex: element.zIndex,
-                  cursor: 'move'
-                }}
-                onClick={() => setSelectedElement(element.id)}
-              >
-                {element.type === 'photo' && (
-                  <img src={element.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
-                )}
-                {element.type === 'video' && (
-                  <video src={element.content} controls style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
-                )}
-                {element.type === 'text' && (
-                  <div style={{ 
-                    fontSize: `${element.fontSize}px`, 
-                    color: element.fontColor,
-                    fontFamily: element.fontFamily 
-                  }}>
-                    {element.content}
-                  </div>
-                )}
-                {element.type === 'sticker' && (
-                  <div style={{ fontSize: `${element.fontSize}px` }}>{element.content}</div>
-                )}
-              </div>
-            ))}
+        {/* Toolbar */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
+          <div className="flex flex-wrap gap-2">
+            <label className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg cursor-pointer hover:opacity-90">
+              {uploading ? 'Uploading...' : '📷 Add Photos/Videos'}
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={(e) => e.target.files && handleMediaUpload(e.target.files)}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
             
+            <button
+              onClick={() => setShowTextEditor(true)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              📝 Add Text
+            </button>
+            
+            <button
+              onClick={() => setShowStickerPicker(true)}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+            >
+              ✨ Stickers
+            </button>
+            
+            <button
+              onClick={() => setShowBackgroundPicker(true)}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+            >
+              🎨 Background
+            </button>
+
+            <select
+              value={currentPage.template}
+              onChange={(e) => applyTemplate(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="freeform">🎨 Freeform</option>
+              <option value="grid">⊞ Grid (2x2)</option>
+              <option value="feature">⭐ Feature</option>
+              <option value="mosaic">🎭 Mosaic</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Page {currentPageIndex + 1} of {pages.length}</h2>
             {selectedElement && (
               <button
-                onClick={deleteSelectedElement}
-                className="delete-btn"
-                style={{
-                  position: 'absolute',
-                  top: '10px',
-                  right: '10px',
-                  background: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  zIndex: 1000
-                }}
+                onClick={() => deleteElement(selectedElement)}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
               >
-                ×
+                🗑️ Delete Selected
               </button>
             )}
           </div>
+
+          <div
+            ref={canvasRef}
+            className="relative border-2 border-dashed border-gray-300 rounded-lg"
+            style={{
+              minHeight: '500px',
+              backgroundColor: currentPage.backgroundColor,
+              cursor: draggedElement ? 'grabbing' : 'default'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setSelectedElement(null);
+              }
+            }}
+          >
+            {currentPage.elements.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                  <p className="text-3xl mb-2">📸</p>
+                  <p className="text-lg">Add photos or videos to this page</p>
+                  <p className="text-sm mt-2">Click the buttons above to get started</p>
+                </div>
+              </div>
+            ) : (
+              currentPage.elements.map((element) => (
+                <div
+                  key={element.id}
+                  className={`absolute transition-all ${
+                    selectedElement === element.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                  }`}
+                  style={{
+                    left: `${element.x}%`,
+                    top: `${element.y}%`,
+                    width: `${element.width}%`,
+                    height: `${element.height}%`,
+                    transform: `rotate(${element.rotation}deg)`,
+                    zIndex: element.zIndex,
+                    cursor: draggedElement === element.id ? 'grabbing' : 'move'
+                  }}
+                  onMouseDown={(e) => handleElementMouseDown(element.id, e)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedElement(element.id);
+                  }}
+                >
+                  {element.type === 'photo' && (
+                    <img 
+                      src={element.content} 
+                      alt="" 
+                      className="w-full h-full object-cover rounded-lg shadow-lg"
+                      draggable={false}
+                    />
+                  )}
+                  {element.type === 'video' && (
+                    <video 
+                      src={element.content}
+                      controls
+                      className="w-full h-full object-cover rounded-lg shadow-lg"
+                    />
+                  )}
+                  {element.type === 'text' && (
+                    <div 
+                      className="p-2"
+                      style={{
+                        fontSize: `${element.fontSize}px`,
+                        color: element.fontColor,
+                        fontFamily: element.fontFamily,
+                        textShadow: '2px 2px 4px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      {element.content}
+                    </div>
+                  )}
+                  {element.type === 'sticker' && (
+                    <div 
+                      className="flex items-center justify-center w-full h-full"
+                      style={{ fontSize: `${element.fontSize}px` }}
+                    >
+                      {element.content}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </DndContext>
 
-      {/* Collaborators */}
-      <div className="collaborators-section">
-        <FriendSelector
-          value={collaborators}
-          onChange={setCollaborators}
-          multiple={true}
-          label="Invite Friends to Collaborate"
-          placeholder="Search friends to add as co-creators..."
-        />
+        {/* Page Navigation */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
+              disabled={currentPageIndex === 0}
+              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+            >
+              ← Previous
+            </button>
+
+            <div className="flex gap-2">
+              {pages.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentPageIndex(index)}
+                  className={`w-10 h-10 rounded-lg ${
+                    index === currentPageIndex 
+                      ? 'bg-purple-500 text-white' 
+                      : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+              
+              {pages.length < 100 && (
+                <button
+                  onClick={addNewPage}
+                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200"
+                >
+                  + Add Page
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
+              disabled={currentPageIndex === pages.length - 1}
+              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-between">
+          <button
+            onClick={() => router.push('/profile')}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+          
+          <button
+            onClick={saveAlbum}
+            disabled={saving || !title.trim() || pages[0].elements.length === 0}
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? 'Creating...' : 'Create Album'}
+          </button>
+        </div>
       </div>
 
-      {/* Page Navigation */}
-      <div className="page-nav">
-        <button onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}>
-          ← Previous
-        </button>
-        <span>Page {currentPage + 1} of {pages.length}</span>
-        <button onClick={() => setCurrentPage(Math.min(pages.length - 1, currentPage + 1))}>
-          Next →
-        </button>
-        <button onClick={() => {
-          if (pages.length < 100) {
-            setPages([...pages, {
-              id: String(pages.length + 1),
-              elements: [],
-              background: '#ffffff'
-            }]);
-          }
-        }}>
-          + Add Page
-        </button>
-      </div>
-
-      {/* Save Button */}
-      <button 
-        className="save-btn"
-        onClick={saveAlbum}
-        disabled={saving || !title || pages[0].elements.length === 0}
-      >
-        {saving ? 'Saving...' : 'Create Album'}
-      </button>
+      {/* Sticker Picker Modal */}
+      {showStickerPicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6">
+            <h3 className="text-xl font-bold mb-4">Choose a Sticker</h3>
+            
+            {Object.entries(STICKER_LIBRARY).map(([category, stickers]) => (
+              <div key={category} className="mb-6">
+                <h4 className="text-lg font-semibold mb-2 capitalize">{category}</h4>
+                <div className="grid grid-cols-8 md:grid-cols-12 gap-2">
+                  {stickers.map((sticker, i) => (
+                    <button
+                      key={`${category}-${i}`}
+                      onClick={() => addSticker(sticker)}
+                      className="text-2xl hover:scale-125 transition-transform p-2"
+                    >
+                      {sticker}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            
+            <button
+              onClick={() => setShowStickerPicker(false)}
+              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Text Editor Modal */}
       {showTextEditor && (
-        <div className="modal">
-          <div className="modal-content">
-            <h3>Add Text</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Add Text</h3>
+            
             <textarea
               value={editingText}
               onChange={(e) => setEditingText(e.target.value)}
               placeholder="Enter your text..."
-              className="text-input"
+              className="w-full p-3 border border-gray-300 rounded-lg mb-4"
+              rows={3}
             />
-            <div className="text-controls">
-              <input
-                type="number"
-                value={textStyle.fontSize}
-                onChange={(e) => setTextStyle({...textStyle, fontSize: parseInt(e.target.value)})}
-                min="12"
-                max="96"
-              />
-              <input
-                type="color"
-                value={textStyle.fontColor}
-                onChange={(e) => setTextStyle({...textStyle, fontColor: e.target.value})}
-              />
-              <select
-                value={textStyle.fontFamily}
-                onChange={(e) => setTextStyle({...textStyle, fontFamily: e.target.value})}
-              >
-                <option value="Arial">Arial</option>
-                <option value="Georgia">Georgia</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="Comic Sans MS">Comic Sans MS</option>
-              </select>
+            
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div>
+                <label className="block text-sm mb-1">Size</label>
+                <input
+                  type="number"
+                  value={textStyle.fontSize}
+                  onChange={(e) => setTextStyle({...textStyle, fontSize: parseInt(e.target.value)})}
+                  min="12"
+                  max="96"
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm mb-1">Color</label>
+                <input
+                  type="color"
+                  value={textStyle.fontColor}
+                  onChange={(e) => setTextStyle({...textStyle, fontColor: e.target.value})}
+                  className="w-full h-10"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm mb-1">Font</label>
+                <select
+                  value={textStyle.fontFamily}
+                  onChange={(e) => setTextStyle({...textStyle, fontFamily: e.target.value})}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="Arial">Arial</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times</option>
+                  <option value="Comic Sans MS">Comic Sans</option>
+                  <option value="Courier New">Courier</option>
+                </select>
+              </div>
             </div>
-            <div className="modal-actions">
-              <button onClick={() => setShowTextEditor(false)}>Cancel</button>
-              <button onClick={addTextElement}>Add Text</button>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTextEditor(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addTextElement}
+                disabled={!editingText.trim()}
+                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50"
+              >
+                Add Text
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      <style jsx>{`
-        .album-creator {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 1rem;
-        }
-
-        .toolbar {
-          background: white;
-          border-radius: 0.75rem;
-          padding: 1rem;
-          margin-bottom: 1rem;
-          display: flex;
-          gap: 1rem;
-          align-items: center;
-          flex-wrap: wrap;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .title-input, .description-input {
-          flex: 1;
-          min-width: 200px;
-          padding: 0.5rem;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.375rem;
-        }
-
-        .tool-buttons {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .tool-btn {
-          padding: 0.5rem 1rem;
-          background: linear-gradient(135deg, #8b5cf6, #ec4899);
-          color: white;
-          border: none;
-          border-radius: 0.375rem;
-          cursor: pointer;
-          transition: transform 0.2s;
-        }
-
-        .tool-btn:hover {
-          transform: scale(1.05);
-        }
-
-        .sticker-dropdown {
-          position: relative;
-        }
-
-        .sticker-options {
-          display: none;
-          position: absolute;
-          top: 100%;
-          left: 0;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.375rem;
-          padding: 0.5rem;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          z-index: 100;
-        }
-
-        .sticker-dropdown:hover .sticker-options {
-          display: flex;
-          gap: 0.25rem;
-        }
-
-        .sticker-btn {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          transition: transform 0.2s;
-        }
-
-        .sticker-btn:hover {
-          transform: scale(1.2);
-        }
-
-        .template-select, .privacy-select {
-          padding: 0.5rem;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.375rem;
-          background: white;
-        }
-
-        .album-canvas {
-          background: white;
-          border-radius: 0.75rem;
-          padding: 2rem;
-          min-height: 600px;
-          position: relative;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .page-container {
-          width: 100%;
-          height: 600px;
-          border: 2px dashed #e5e7eb;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .element {
-          cursor: move;
-          border: 2px solid transparent;
-          transition: border-color 0.2s;
-        }
-
-        .element.selected {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
-        }
-
-        .collaborators-section {
-          background: white;
-          border-radius: 0.75rem;
-          padding: 1rem;
-          margin: 1rem 0;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .page-nav {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 1rem;
-          margin: 1rem 0;
-          padding: 1rem;
-          background: white;
-          border-radius: 0.75rem;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .page-nav button {
-          padding: 0.5rem 1rem;
-          background: #f3f4f6;
-          border: none;
-          border-radius: 0.375rem;
-          cursor: pointer;
-        }
-
-        .page-nav button:hover {
-          background: #e5e7eb;
-        }
-
-        .save-btn {
-          display: block;
-          margin: 2rem auto;
-          padding: 0.75rem 2rem;
-          background: linear-gradient(135deg, #10b981, #059669);
-          color: white;
-          border: none;
-          border-radius: 0.5rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 0.2s;
-        }
-
-        .save-btn:hover:not(:disabled) {
-          transform: scale(1.05);
-        }
-
-        .save-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .modal {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-
-        .modal-content {
-          background: white;
-          padding: 2rem;
-          border-radius: 0.75rem;
-          max-width: 500px;
-          width: 90%;
-        }
-
-        .modal-content h3 {
-          margin-top: 0;
-        }
-
-        .text-input {
-          width: 100%;
-          min-height: 100px;
-          padding: 0.5rem;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.375rem;
-          margin: 1rem 0;
-        }
-
-        .text-controls {
-          display: flex;
-          gap: 0.5rem;
-          margin: 1rem 0;
-        }
-
-        .text-controls input, .text-controls select {
-          padding: 0.5rem;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.375rem;
-        }
-
-        .modal-actions {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-        }
-
-        .modal-actions button {
-          padding: 0.5rem 1rem;
-          border: none;
-          border-radius: 0.375rem;
-          cursor: pointer;
-        }
-
-        .modal-actions button:first-child {
-          background: #f3f4f6;
-        }
-
-        .modal-actions button:last-child {
-          background: linear-gradient(135deg, #8b5cf6, #ec4899);
-          color: white;
-        }
-
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-          .toolbar {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .tool-buttons {
-            justify-content: center;
-          }
-
-          .tool-btn {
-            flex: 1;
-            min-width: 100px;
-            font-size: 0.875rem;
-          }
-
-          .album-canvas {
-            padding: 1rem;
-          }
-
-          .page-container {
-            height: 400px;
-          }
-        }
-      `}</style>
+      {/* Background Picker Modal */}
+      {showBackgroundPicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Choose Background</h3>
+            
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {['#ffffff', '#f3f4f6', '#fef3c7', '#dbeafe', '#fce7f3', '#d1fae5', '#fee2e2', '#e0e7ff'].map(color => (
+                <button
+                  key={color}
+                  onClick={() => changeBackground(color)}
+                  className="h-16 rounded-lg border-2 border-gray-300 hover:scale-105 transition-transform"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            
+            <input
+              type="color"
+              value={currentPage.backgroundColor}
+              onChange={(e) => changeBackground(e.target.value)}
+              className="w-full h-10 mb-4"
+            />
+            
+            <button
+              onClick={() => setShowBackgroundPicker(false)}
+              className="w-full px-4 py-2 bg-gray-200 rounded-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
