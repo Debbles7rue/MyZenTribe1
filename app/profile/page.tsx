@@ -136,12 +136,11 @@ export default function ProfilePage() {
     loadProfile();
   }, [userId]);
 
-  // Load friends count - FIXED to use correct column names
+  // Load friends count
   useEffect(() => {
     if (!userId) return;
     (async () => {
       try {
-        // Using the correct column names: user_id and friend_id
         const { count } = await supabase
           .from("friendships")
           .select("*", { count: "exact", head: true })
@@ -149,7 +148,6 @@ export default function ProfilePage() {
         
         if (typeof count === "number") {
           setFriendsCount(count);
-          console.log("Friends count loaded:", count); // Debug log
         }
       } catch (err) {
         console.error("Error loading friends count:", err);
@@ -157,23 +155,138 @@ export default function ProfilePage() {
     })();
   }, [userId]);
 
-  // Load user posts
+  // Load user posts - including co-creator posts
   async function loadUserPosts() {
     if (!userId) return;
     
     setPostsLoading(true);
     try {
-      const { data, error } = await supabase
+      // Get posts where user is creator OR co-creator
+      const { data: posts, error } = await supabase
         .from('posts')
         .select('*')
-        .eq('author_id', userId)
+        .or(`user_id.eq.${userId},co_creators.cs.{${userId}}`)
         .order('created_at', { ascending: false });
       
-      if (!error && data) {
-        setUserPosts(data);
+      if (error) {
+        console.error('Posts query error:', error);
+        return;
       }
+
+      if (!posts || posts.length === 0) {
+        setUserPosts([]);
+        return;
+      }
+
+      // Get all unique author IDs
+      const authorIds = [...new Set(posts.map(p => p.user_id))];
+      
+      // Get author profiles
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", authorIds);
+
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+
+      // Get co-creator profiles
+      const allCoCreatorIds = posts
+        .filter(p => p.co_creators && p.co_creators.length > 0)
+        .flatMap(p => p.co_creators);
+      
+      let coCreatorProfiles: any[] = [];
+      if (allCoCreatorIds.length > 0) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .in("id", allCoCreatorIds);
+        coCreatorProfiles = data || [];
+      }
+      
+      const coCreatorMap = Object.fromEntries(
+        coCreatorProfiles.map(p => [p.id, p])
+      );
+
+      // Get likes and comments
+      const postIds = posts.map(p => p.id);
+      let likeCountBy: Record<string, number> = {};
+      let myLikeSet = new Set<string>();
+      let commentCountBy: Record<string, number> = {};
+
+      try {
+        const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
+          supabase.from("post_likes").select("post_id").in("post_id", postIds),
+          supabase.from("post_likes").select("post_id").eq("user_id", userId).in("post_id", postIds),
+          supabase.from("post_comments").select("post_id").in("post_id", postIds),
+        ]);
+
+        // Count likes
+        const likesPerPost: Record<string, number> = {};
+        (likeCounts || []).forEach(like => {
+          likesPerPost[like.post_id] = (likesPerPost[like.post_id] || 0) + 1;
+        });
+        likeCountBy = likesPerPost;
+        
+        myLikeSet = new Set((myLikes ?? []).map(r => r.post_id));
+        
+        // Count comments
+        const commentsPerPost: Record<string, number> = {};
+        (commentCounts || []).forEach(comment => {
+          commentsPerPost[comment.post_id] = (commentsPerPost[comment.post_id] || 0) + 1;
+        });
+        commentCountBy = commentsPerPost;
+      } catch (e) {
+        console.log("Error loading engagement data");
+      }
+
+      // Get additional media
+      let mediaByPost: Record<string, any[]> = {};
+      try {
+        const { data: media } = await supabase
+          .from("post_media")
+          .select("post_id, storage_path, type")
+          .in("post_id", postIds);
+        
+        if (media) {
+          media.forEach(m => {
+            if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
+            
+            // Get public URL
+            const bucketName = m.type === 'video' ? 'post-videos' : 'post-images';
+            const { data: { publicUrl } } = supabase.storage
+              .from(bucketName)
+              .getPublicUrl(m.storage_path);
+            
+            mediaByPost[m.post_id].push({ url: publicUrl, type: m.type });
+          });
+        }
+      } catch (e) {
+        console.log("Error loading media");
+      }
+
+      // Format posts
+      const formattedPosts: Post[] = posts.map(p => ({
+        id: p.id,
+        user_id: p.user_id,
+        body: p.body,
+        image_url: p.image_url || null,
+        video_url: p.video_url || null,
+        privacy: p.visibility || p.privacy || 'public',
+        created_at: p.created_at,
+        allow_share: p.allow_share ?? true,
+        co_creators: p.co_creators || null,
+        author: profileMap[p.user_id] || null,
+        additional_media: mediaByPost[p.id] || [],
+        co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
+        like_count: likeCountBy[p.id] ?? 0,
+        liked_by_me: myLikeSet.has(p.id),
+        comment_count: commentCountBy[p.id] ?? 0,
+      }));
+
+      setUserPosts(formattedPosts);
     } catch (err) {
       console.error('Error loading posts:', err);
+      setUserPosts([]);
     } finally {
       setPostsLoading(false);
     }
@@ -405,7 +518,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Sacred Candles Widget - ONLY ONE, COLLAPSIBLE */}
+      {/* Sacred Candles Widget */}
       {componentsReady && userId && (
         <Suspense fallback={null}>
           <LazyProfileCandleWidget userId={userId} isOwner={true} />
@@ -452,7 +565,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Photos Feed - Wrapped in Suspense */}
+      {/* Photos Feed */}
       {componentsReady && userId && (
         <Suspense fallback={null}>
           <LazyPhotosFeed userId={userId} />
