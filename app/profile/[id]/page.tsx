@@ -1,11 +1,11 @@
-// app/profile/[id]/page.tsx - PUBLIC PROFILE VIEW (COMBINED VERSION)
+// app/profile/[id]/page.tsx - PUBLIC PROFILE VIEW
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import ProfileViewer from "../components/ProfileViewer";
-import PhotosFeed from "@/components/PhotosFeed";
+import PostComposer from "@/components/PostComposer";
 import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
 
 type PublicProfile = {
@@ -15,18 +15,8 @@ type PublicProfile = {
   bio: string | null;
   location_text: string | null;
   location_is_public: boolean | null;
-  username: string | null;
-  cover_url: string | null;
-  tagline: string | null;
-  interests: string[] | null;
-  website_url: string | null;
-  social_links: any | null;
-  languages: string[] | null;
-  visibility: 'public' | 'friends_only' | 'private' | null;
-  allow_messages: 'everyone' | 'friends' | 'no_one' | null;
-  show_online_status: boolean | null;
-  show_mutuals: boolean | null;
-  verified: boolean | null;
+  business_name: string | null;
+  has_creator_profile: boolean;
   memories_visibility: 'public' | 'friends' | 'private' | null;
 };
 
@@ -45,22 +35,21 @@ type Memory = {
 
 export default function PublicProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const profileId = params?.id as string;
-  
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('none');
   const [friendStatus, setFriendStatus] = useState<"none" | "pending" | "friends">("none");
   const [friendsCount, setFriendsCount] = useState(0);
   const [followersCount, setFollowersCount] = useState(0);
-  const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
   const [showMemories, setShowMemories] = useState(false);
   const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState('posts');
 
   // Detect mobile device
   useEffect(() => {
@@ -72,408 +61,471 @@ export default function PublicProfilePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Get current user and check if viewing own profile
   useEffect(() => {
+    // Get current user
     supabase.auth.getUser().then(({ data }) => {
       const userId = data.user?.id ?? null;
       setCurrentUserId(userId);
-      
-      // If viewing own profile, redirect to /profile
-      if (userId && userId === profileId) {
-        router.push("/profile");
-      }
+      setIsOwnProfile(userId === profileId);
     });
-  }, [profileId, router]);
 
-  // Load all data when profileId or currentUserId changes
-  useEffect(() => {
-    if (profileId) {
-      loadProfile();
-      loadStats();
+    // Load profile
+    async function loadProfile() {
+      try {
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', profileId)
+          .single();
+
+        if (error) throw error;
+        setProfile(profileData);
+
+        // Get friend counts
+        const { count: friendCount } = await supabase
+          .from('friendships')
+          .select('*', { count: 'exact', head: true })
+          .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
+          .eq('status', 'accepted');
+
+        setFriendsCount(friendCount || 0);
+
+        // Check relationship with current user
+        if (currentUserId && currentUserId !== profileId) {
+          const { data: friendship } = await supabase
+            .from('friendships')
+            .select('status')
+            .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
+            .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
+            .single();
+
+          if (friendship) {
+            setFriendStatus(friendship.status === 'accepted' ? 'friends' : 'pending');
+            setRelationshipType(friendship.status === 'accepted' ? 'friend' : 'none');
+          }
+        }
+
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      } finally {
+        setLoading(false);
+      }
     }
-    
-    if (currentUserId && profileId) {
-      checkRelationshipStatus();
-      loadMutualFriends();
-      loadTodayMemories();
-    }
+
+    loadProfile();
   }, [profileId, currentUserId]);
 
-  async function loadProfile() {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", profileId)
-        .single();
-
-      if (error) throw error;
-
-      setProfile({
-        ...data,
-        memories_visibility: data.memories_visibility || 'private'
-      });
-    } catch (err) {
-      console.error("Error loading profile:", err);
-    } finally {
-      setLoading(false);
+  // Load memories for today
+  const loadTodayMemories = useCallback(async () => {
+    if (!profileId || (!isOwnProfile && relationshipType === 'none' && profile?.memories_visibility !== 'public')) {
+      return;
     }
-  }
 
-  async function loadStats() {
-    // Get friends count
-    const { count: friends } = await supabase
-      .from("friendships")
-      .select("*", { count: "exact", head: true })
-      .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
-    
-    setFriendsCount(friends || 0);
-
-    // Get followers count
-    const { count: followers } = await supabase
-      .from("followers")
-      .select("*", { count: "exact", head: true })
-      .eq("following_id", profileId);
-    
-    setFollowersCount(followers || 0);
-  }
-
-  async function checkRelationshipStatus() {
-    if (!currentUserId || !profileId) return;
-
-    // Check if friends
-    const { data: friendship } = await supabase
-      .from("friendships")
-      .select("relationship")
-      .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
-      .single();
-
-    if (friendship) {
-      setFriendStatus("friends");
-      setRelationshipType(friendship.relationship || 'friend');
-    } else {
-      // Check for pending request
-      const { data: pending } = await supabase
-        .from("friend_requests")
-        .select("*")
-        .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`)
-        .single();
-
-      if (pending) {
-        setFriendStatus("pending");
-      }
-      setRelationshipType('none');
-    }
-  }
-
-  async function loadMutualFriends() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      // Get current user's friends
-      const { data: myFriends } = await supabase
-        .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`);
-
-      // Get profile user's friends
-      const { data: theirFriends } = await supabase
-        .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
-
-      if (myFriends && theirFriends) {
-        // Extract friend IDs
-        const myFriendIds = myFriends.map(f => 
-          f.user_id === currentUserId ? f.friend_id : f.user_id
-        );
-        const theirFriendIds = theirFriends.map(f => 
-          f.user_id === profileId ? f.friend_id : f.user_id
-        );
-
-        // Find mutual friends
-        const mutuals = myFriendIds.filter(id => theirFriendIds.includes(id));
-        setMutualFriendsCount(mutuals.length);
-      }
-    } catch (err) {
-      console.error("Error loading mutual friends:", err);
-    }
-  }
-
-  async function loadTodayMemories() {
-    if (!profileId) return;
-    
     setMemoriesLoading(true);
     try {
       const today = new Date();
-      const dayMonth = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await supabase
-        .from("memories")
-        .select("*")
-        .eq("user_id", profileId)
-        .like("date", `%${dayMonth}`)
-        .order("date", { ascending: false });
+      const todayStr = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
+      let query = supabase
+        .from('calendar_memories')
+        .select('*')
+        .eq('user_id', profileId)
+        .like('date', `%${todayStr}`);
+
+      // Apply visibility filters
+      if (!isOwnProfile) {
+        if (relationshipType === 'friend') {
+          query = query.in('visibility', ['public', 'friends']);
+        } else {
+          query = query.eq('visibility', 'public');
+        }
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
-      // Filter based on visibility and relationship
-      const visibleMemories = data?.filter(memory => {
-        if (memory.visibility === 'public') return true;
-        if (memory.visibility === 'friends' && relationshipType === 'friend') return true;
-        if (currentUserId === profileId) return true;
-        return false;
-      }) || [];
-
-      setTodayMemories(visibleMemories);
-      if (visibleMemories.length > 0) {
+      setTodayMemories(data || []);
+      if (data && data.length > 0) {
         setShowMemories(true);
       }
-    } catch (err) {
-      console.error("Error loading memories:", err);
+    } catch (error) {
+      console.error('Error loading memories:', error);
     } finally {
       setMemoriesLoading(false);
     }
-  }
+  }, [profileId, isOwnProfile, relationshipType, profile?.memories_visibility]);
 
-  async function sendFriendRequest() {
-    if (!currentUserId || !profileId) return;
+  useEffect(() => {
+    loadTodayMemories();
+  }, [loadTodayMemories]);
+
+  const sendFriendRequest = async () => {
+    if (!currentUserId) {
+      alert("Please sign in to send a friend request");
+      return;
+    }
 
     try {
       const { error } = await supabase
-        .from("friend_requests")
+        .from('friendships')
         .insert({
-          from_user: currentUserId,
-          to_user: profileId,
+          user_id: currentUserId,
+          friend_id: profileId,
+          status: 'pending'
         });
 
-      if (!error) {
-        setFriendStatus("pending");
-      }
-    } catch (err) {
-      console.error("Error sending friend request:", err);
+      if (error) throw error;
+      setFriendStatus("pending");
+    } catch (error) {
+      console.error('Error sending friend request:', error);
     }
-  }
+  };
 
-  async function sendMessage() {
-    if (!currentUserId || !profileId) return;
-    // Navigate to messages with this user
-    router.push(`/messages?user=${profileId}`);
-  }
-
-  async function followUser() {
-    if (!currentUserId || !profileId) return;
+  const unfriend = async () => {
+    if (!currentUserId || !confirm("Are you sure you want to unfriend this person?")) return;
 
     try {
       const { error } = await supabase
-        .from("followers")
-        .insert({
-          follower_id: currentUserId,
-          following_id: profileId,
-        });
+        .from('friendships')
+        .delete()
+        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
+        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
 
-      if (!error) {
-        setFollowersCount(prev => prev + 1);
-      }
-    } catch (err) {
-      console.error("Error following user:", err);
+      if (error) throw error;
+      setFriendStatus("none");
+      setRelationshipType('none');
+    } catch (error) {
+      console.error('Error unfriending:', error);
     }
-  }
+  };
 
-  // Loading state
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <span>Loading profile...</span>
-        <style jsx>{`
-          .loading-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            gap: 1rem;
-          }
-          .loading-spinner {
-            width: 3rem;
-            height: 3rem;
-            border: 3px solid #e5e7eb;
-            border-top: 3px solid #8b5cf6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
+        <div className="text-purple-600">Loading profile...</div>
       </div>
     );
   }
 
-  // Error state - profile not found
   if (!profile) {
     return (
-      <div className="error-container">
-        <h2>Profile Not Found</h2>
-        <p>This profile doesn't exist or has been removed.</p>
-        <button onClick={() => router.push("/")} className="btn btn-primary">
-          Go Home
-        </button>
-        <style jsx>{`
-          .error-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            gap: 1rem;
-            text-align: center;
-            padding: 2rem;
-          }
-          .btn {
-            padding: 0.75rem 1.5rem;
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            color: white;
-            border: none;
-            border-radius: 0.5rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-          }
-        `}</style>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Profile not found</h2>
+          <Link href="/dashboard" className="text-purple-600 hover:underline">
+            Return to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
 
-  // Determine what content viewer can see
-  const canViewFriendContent = relationshipType === 'friend';
-  const canViewMemories = 
-    profile?.memories_visibility === 'public' ||
-    (profile?.memories_visibility === 'friends' && canViewFriendContent) ||
-    currentUserId === profileId;
-
   return (
-    <div className="profile-page">
-      {/* Use the ProfileViewer component for the main display */}
-      <ProfileViewer
-        profile={profile}
-        currentUserId={currentUserId}
-        relationshipType={relationshipType}
-        mutualFriendsCount={mutualFriendsCount}
-        onAddFriend={sendFriendRequest}
-        onMessage={sendMessage}
-        onFollow={followUser}
-        isPending={friendStatus === "pending"}
-      />
-
-      {/* Memories Section - if applicable */}
-      {canViewMemories && todayMemories.length > 0 && (
-        <div className="memories-section">
-          <h3>Today in Past Years</h3>
-          <div className="memories-grid">
-            {todayMemories.map(memory => (
-              <div 
-                key={memory.id} 
-                className="memory-item"
-                onClick={() => setSelectedMemory(memory)}
-              >
-                <img src={memory.photo_url} alt={memory.caption} />
-                <p>{memory.caption}</p>
-                <span className="memory-date">
-                  {new Date(memory.date).toLocaleDateString()}
-                </span>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
+      {/* Mobile-optimized Header */}
+      <div className="bg-white shadow-sm border-b border-gray-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <Link href="/dashboard" className="flex items-center space-x-2 sm:space-x-3">
+              <span className="text-xl sm:text-2xl">🏠</span>
+              <span className="font-semibold text-gray-700 text-sm sm:text-base">
+                {isMobile ? 'Back' : 'Back to Dashboard'}
+              </span>
+            </Link>
+            
+            {isOwnProfile && (
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <Link 
+                  href="/settings" 
+                  className="text-gray-600 hover:text-purple-600 transition-colors text-sm sm:text-base"
+                >
+                  Settings
+                </Link>
               </div>
-            ))}
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Profile Header - Mobile Optimized */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+            {/* Avatar */}
+            <div className="relative">
+              {profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.full_name || 'Profile'}
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-purple-200"
+                />
+              ) : (
+                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold">
+                  {profile.full_name?.charAt(0) || '?'}
+                </div>
+              )}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 text-center sm:text-left">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+                {profile.full_name || 'Anonymous User'}
+              </h1>
+              
+              {profile.business_name && (
+                <p className="text-gray-600 text-sm sm:text-base">
+                  🏢 {profile.business_name}
+                </p>
+              )}
+              
+              {profile.bio && (
+                <p className="mt-2 sm:mt-3 text-gray-600 max-w-2xl text-sm sm:text-base">
+                  {profile.bio}
+                </p>
+              )}
+
+              {profile.location_text && profile.location_is_public && (
+                <p className="text-gray-500 mt-2 text-sm sm:text-base">
+                  📍 {profile.location_text}
+                </p>
+              )}
+
+              {/* Stats - Mobile Optimized */}
+              <div className="mt-4 sm:mt-6 flex justify-center sm:justify-start gap-4 sm:gap-6">
+                <div className="text-center">
+                  <div className="font-bold text-lg sm:text-xl">{friendsCount}</div>
+                  <div className="text-xs sm:text-sm text-gray-500">Friends</div>
+                </div>
+                {followersCount > 0 && (
+                  <div className="text-center">
+                    <div className="font-bold text-lg sm:text-xl">{followersCount}</div>
+                    <div className="text-xs sm:text-sm text-gray-500">Followers</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons - Mobile Optimized */}
+              <div className="mt-4 sm:mt-6 flex flex-wrap gap-2 sm:gap-3 justify-center sm:justify-start">
+                {isOwnProfile ? (
+                  <Link
+                    href="/settings"
+                    className="px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base"
+                  >
+                    Edit Profile
+                  </Link>
+                ) : (
+                  <>
+                    {friendStatus === "none" && (
+                      <button
+                        onClick={sendFriendRequest}
+                        className="px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base"
+                      >
+                        Add Friend
+                      </button>
+                    )}
+                    {friendStatus === "pending" && (
+                      <button
+                        disabled
+                        className="px-4 sm:px-6 py-2 bg-gray-300 text-white rounded-lg cursor-not-allowed text-sm sm:text-base"
+                      >
+                        Request Sent
+                      </button>
+                    )}
+                    {friendStatus === "friends" && (
+                      <>
+                        <button
+                          className="px-4 sm:px-6 py-2 bg-green-600 text-white rounded-lg cursor-default text-sm sm:text-base"
+                        >
+                          ✓ Friends
+                        </button>
+                        <button
+                          onClick={unfriend}
+                          className="px-4 sm:px-6 py-2 bg-white text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm sm:text-base"
+                        >
+                          Unfriend
+                        </button>
+                      </>
+                    )}
+                    <Link
+                      href={`/messages/${profileId}`}
+                      className="px-4 sm:px-6 py-2 bg-white text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors text-sm sm:text-base"
+                    >
+                      Message
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Today's Memories Banner - Mobile Optimized */}
+      {showMemories && todayMemories.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-3 sm:p-4">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base sm:text-lg">🎉 Memories from Today!</h3>
+                <p className="text-xs sm:text-sm opacity-90">
+                  {todayMemories.length} {todayMemories.length === 1 ? 'memory' : 'memories'} from previous years
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedMemory(todayMemories[0])}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-colors text-sm"
+              >
+                View
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Photos Feed - if friend or public */}
-      {(canViewFriendContent || profile.visibility === 'public') && (
-        <div className="photos-section">
-          <PhotosFeed userId={profile.id} />
+      {/* Tabs - Mobile Optimized with Horizontal Scroll */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-6 sm:space-x-8 overflow-x-auto">
+            {['posts', 'photos', 'events', 'about'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`py-3 sm:py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors whitespace-nowrap ${
+                  activeTab === tab
+                    ? 'border-purple-600 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab === 'posts' && '📝'} 
+                {tab === 'photos' && '📸'} 
+                {tab === 'events' && '📅'} 
+                {tab === 'about' && 'ℹ️'} 
+                {!isMobile && ` ${tab}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content - Mobile Optimized */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {activeTab === 'posts' && (
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Posts</h2>
+            <PostComposer 
+              mode="profile"
+              userId={profileId}
+              viewerUserId={currentUserId}
+              showComposer={isOwnProfile}
+            />
+          </div>
+        )}
+
+        {activeTab === 'photos' && (
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Photos & Media</h2>
+            <PostComposer 
+              mode="profile"
+              userId={profileId}
+              viewerUserId={currentUserId}
+              showComposer={isOwnProfile}
+            />
+          </div>
+        )}
+
+        {activeTab === 'events' && (
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Events</h2>
+            <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+              <p className="text-gray-500 text-sm sm:text-base">
+                {isOwnProfile ? 'Your events will appear here' : `${profile.full_name}'s events`}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'about' && (
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">About</h2>
+            <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+              <div className="space-y-4">
+                {profile.bio && (
+                  <div>
+                    <h3 className="font-semibold text-gray-700 text-sm sm:text-base">Bio</h3>
+                    <p className="text-gray-600 text-sm sm:text-base">{profile.bio}</p>
+                  </div>
+                )}
+                {profile.location_text && profile.location_is_public && (
+                  <div>
+                    <h3 className="font-semibold text-gray-700 text-sm sm:text-base">Location</h3>
+                    <p className="text-gray-600 text-sm sm:text-base">{profile.location_text}</p>
+                  </div>
+                )}
+                {profile.business_name && (
+                  <div>
+                    <h3 className="font-semibold text-gray-700 text-sm sm:text-base">Business</h3>
+                    <p className="text-gray-600 text-sm sm:text-base">{profile.business_name}</p>
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-semibold text-gray-700 text-sm sm:text-base">Member Since</h3>
+                  <p className="text-gray-600 text-sm sm:text-base">
+                    {new Date(profile.created_at || '').toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Memory Lightbox - Mobile Optimized */}
+      {selectedMemory && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedMemory(null)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 sm:p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold">
+                    {new Date(selectedMemory.date).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </h3>
+                  {selectedMemory.event_title && (
+                    <p className="text-gray-600 text-sm sm:text-base">{selectedMemory.event_title}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedMemory(null)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {selectedMemory.photo_url && (
+                <img
+                  src={selectedMemory.photo_url}
+                  alt={selectedMemory.caption}
+                  className="w-full rounded-lg mb-4"
+                />
+              )}
+              
+              {selectedMemory.caption && (
+                <p className="text-gray-700 text-sm sm:text-base">{selectedMemory.caption}</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Memory Modal */}
-      {selectedMemory && (
-        <PhotoMemories
-          memories={[selectedMemory]}
-          onClose={() => setSelectedMemory(null)}
-          isMobile={isMobile}
-        />
-      )}
-
-      <style jsx>{`
-        .profile-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
-          padding: 2rem 1rem;
-        }
-
-        @media (max-width: 640px) {
-          .profile-page {
-            padding: 1rem 0.5rem;
-          }
-        }
-
-        .memories-section {
-          max-width: 800px;
-          margin: 2rem auto;
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .memories-section h3 {
-          margin: 0 0 1rem 0;
-          color: #1f2937;
-        }
-
-        .memories-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-          gap: 1rem;
-        }
-
-        .memory-item {
-          cursor: pointer;
-          transition: transform 0.2s;
-        }
-
-        .memory-item:hover {
-          transform: scale(1.05);
-        }
-
-        .memory-item img {
-          width: 100%;
-          height: 150px;
-          object-fit: cover;
-          border-radius: 0.5rem;
-        }
-
-        .memory-item p {
-          margin: 0.5rem 0 0.25rem 0;
-          font-size: 0.875rem;
-          color: #374151;
-        }
-
-        .memory-date {
-          color: #6b7280;
-          font-size: 0.75rem;
-        }
-
-        .photos-section {
-          max-width: 800px;
-          margin: 2rem auto;
-        }
-      `}</style>
     </div>
   );
 }
