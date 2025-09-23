@@ -126,13 +126,20 @@ export async function listHomeFeed(limit = 20, before?: string) {
   try {
     const { data: media } = await supabase
       .from("post_media")
-      .select("post_id, storage_path, type")  // Your actual column names
+      .select("post_id, storage_path, type")
       .in("post_id", ids);
     
     if (media) {
       media.forEach((m: any) => {
         if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
-        mediaByPost[m.post_id].push({ url: m.storage_path, type: m.type });  // Map to expected format
+        
+        // Get public URL from storage path
+        const bucketName = m.type === 'video' ? 'post-videos' : 'post-images';
+        const { data: { publicUrl } } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(m.storage_path);
+        
+        mediaByPost[m.post_id].push({ url: publicUrl, type: m.type });
       });
     }
   } catch (e) {
@@ -213,21 +220,23 @@ export async function createPost(
     return { ok: false, error: error.message };
   }
 
-  // Add additional media to post_media table if we have more than one
-  if (options?.media && options.media.length > 1) {
-    const additionalMedia = options.media.slice(1).map(m => ({
+  // Add ALL media to post_media table (including the first one)
+  if (options?.media && options.media.length > 0) {
+    const allMedia = options.media.map((m, index) => ({
       post_id: data.id,
-      url: m.url,
-      media_type: m.type,
+      storage_path: m.url,  // Changed from 'url' to 'storage_path'
+      type: m.type,         // Changed from 'media_type' to 'type'
+      sort_order: index,
+      created_by: uid,
       uploaded_by: uid
     }));
 
     const { error: mediaError } = await supabase
       .from("post_media")
-      .insert(additionalMedia);
+      .insert(allMedia);
 
     if (mediaError) {
-      console.error("Error adding additional media:", mediaError);
+      console.error("Error adding media:", mediaError);
       // Don't fail the whole post, just log the error
     }
   }
@@ -327,8 +336,8 @@ export async function addMediaToPost(
     .from("post_media")
     .insert({
       post_id: postId,
-      url,
-      media_type: mediaType,
+      storage_path: url,  // Changed from 'url' to 'storage_path'
+      type: mediaType,    // Changed from 'media_type' to 'type'
       uploaded_by: uid
     });
 
@@ -349,7 +358,7 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
   }
 
   const fileExt = file.name.split('.').pop();
-  const fileName = `${uid}/${Date.now()}.${fileExt}`;
+  const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
   const bucketName = type === 'image' ? 'post-images' : 'post-videos';
 
   const { data, error } = await supabase.storage
@@ -364,12 +373,9 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
     return { url: null, error: error.message };
   }
 
-  // Get public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(fileName);
-
-  return { url: publicUrl, error: null };
+  // Return the storage path, not the public URL
+  // This will be stored in the database
+  return { url: fileName, error: null };
 }
 
 export async function toggleLike(post_id: string) {
