@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Post } from "@/lib/posts";
+import { Post, toggleLike, addComment } from "@/lib/posts";
 import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
 import { supabase } from "@/lib/supabaseClient";
@@ -21,12 +21,10 @@ function PhotoGrid({
   media: Array<{url: string; type: 'image' | 'video'}>;
   onPhotoClick: (index: number) => void;
 }) {
-  // More robust filtering to prevent undefined errors
   if (!media || !Array.isArray(media)) {
     return null;
   }
   
-  // Filter out any invalid media items with better null checking
   const validMedia = media.filter(m => {
     return m && typeof m === 'object' && m.url && typeof m.url === 'string' && m.type;
   });
@@ -36,9 +34,7 @@ function PhotoGrid({
   
   if (validMedia.length === 0) return null;
   
-  // Different layouts based on photo count
   if (images.length === 1 && videos.length === 0) {
-    // Single image - full width
     const img = images[0];
     if (!img || !img.url) return null;
     
@@ -55,7 +51,6 @@ function PhotoGrid({
   }
   
   if (images.length === 2) {
-    // Two images - side by side
     return (
       <div className="photo-grid two">
         {images.map((img, idx) => (
@@ -74,7 +69,6 @@ function PhotoGrid({
   }
   
   if (images.length === 3) {
-    // Three images - one big, two small
     const mainImg = images[0];
     if (!mainImg || !mainImg.url) return null;
     
@@ -104,7 +98,6 @@ function PhotoGrid({
   }
   
   if (images.length === 4) {
-    // Four images - 2x2 grid
     return (
       <div className="photo-grid four">
         {images.map((img, idx) => (
@@ -122,7 +115,6 @@ function PhotoGrid({
     );
   }
   
-  // 5 or more images
   const firstImg = images[0];
   const secondImg = images[1];
   if (!firstImg || !firstImg.url || !secondImg || !secondImg.url) return null;
@@ -162,7 +154,6 @@ function PhotoGrid({
         ))}
       </div>
       
-      {/* Videos section if any */}
       {videos.length > 0 && (
         <div className="videos-row">
           {videos.map((vid, idx) => (
@@ -188,7 +179,6 @@ function PhotoLightbox({
   startIndex: number;
   onClose: () => void;
 }) {
-  // Ensure media is valid
   if (!media || !Array.isArray(media) || media.length === 0) {
     onClose();
     return null;
@@ -197,7 +187,6 @@ function PhotoLightbox({
   const [currentIndex, setCurrentIndex] = useState(startIndex);
   const images = media.filter(m => m && m.type === 'image');
   
-  // Ensure we have images to display
   if (!images || images.length === 0) {
     onClose();
     return null;
@@ -227,7 +216,6 @@ function PhotoLightbox({
     };
   }, []);
   
-  // Ensure currentIndex is valid
   const safeIndex = Math.min(currentIndex, images.length - 1);
   const currentImage = images[safeIndex];
   
@@ -256,7 +244,6 @@ function PhotoLightbox({
           </div>
         )}
         
-        {/* Thumbnail strip */}
         {images.length > 1 && (
           <div className="lightbox-thumbnails">
             {images.map((img, idx) => (
@@ -283,27 +270,29 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [showEditMenu, setShowEditMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
-  
-  // Add state for processed media URLs
   const [processedMedia, setProcessedMedia] = useState<Array<{url: string; type: 'image' | 'video'}>>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
   
-  // Check if current user is a co-creator
+  // Like, Comment, Share states
+  const [isLiking, setIsLiking] = useState(false);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [isCommenting, setIsCommenting] = useState(false);
+  const [localLikeCount, setLocalLikeCount] = useState(post.like_count || 0);
+  const [localLikedByMe, setLocalLikedByMe] = useState(post.liked_by_me || false);
+  
   useEffect(() => {
     if (currentUserId && post.co_creators) {
       setIsCoCreator(post.co_creators.includes(currentUserId));
     }
   }, [currentUserId, post.co_creators]);
   
-  // Process media URLs to handle storage paths
   useEffect(() => {
     async function processMediaUrls() {
-      console.log('Processing media for post:', post.id);
       setLoadingMedia(true);
       const processed = [];
       
       try {
-        // Process existing single image/video URLs
         if (post.image_url && typeof post.image_url === 'string') {
           processed.push({ url: post.image_url, type: 'image' as const });
         }
@@ -311,20 +300,14 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           processed.push({ url: post.video_url, type: 'video' as const });
         }
         
-        // Process additional_media array
         if (post.additional_media && Array.isArray(post.additional_media)) {
-          console.log('Processing additional_media:', post.additional_media);
-          
           for (const item of post.additional_media) {
             if (!item) continue;
             
-            // Check if it's already a URL or needs conversion from storage_path
             if (typeof item === 'string') {
-              // It's a string - could be URL or storage path
               if (item.startsWith('http')) {
                 processed.push({ url: item, type: 'image' as const });
               } else {
-                // It's a storage path - need to get signed URL
                 try {
                   const path = item.replace(/^post-media\//, '');
                   const { data, error } = await supabase.storage
@@ -336,18 +319,16 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
                     processed.push({ url: data.signedUrl, type: fileType as 'image' | 'video' });
                   }
                 } catch (err) {
-                  console.error('Error creating signed URL for string path:', err);
+                  console.error('Error creating signed URL:', err);
                 }
               }
             } else if (item && typeof item === 'object') {
-              // It's an object - check for url or storage_path
               if (item.url && typeof item.url === 'string') {
                 processed.push({ 
                   url: item.url, 
                   type: (item.type || 'image') as 'image' | 'video'
                 });
               } else if (item.storage_path && typeof item.storage_path === 'string') {
-                // Need to convert storage_path to signed URL
                 try {
                   const path = item.storage_path.replace(/^post-media\//, '');
                   const { data, error } = await supabase.storage
@@ -361,27 +342,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
                     });
                   }
                 } catch (err) {
-                  console.error('Error creating signed URL for object path:', err);
+                  console.error('Error creating signed URL:', err);
                 }
               }
             }
           }
         }
         
-        // Fallback to post.media if nothing else
-        if (processed.length === 0 && post.media && Array.isArray(post.media)) {
-          console.log('Falling back to post.media:', post.media);
-          for (const item of post.media) {
-            if (item && item.url && typeof item.url === 'string') {
-              processed.push({
-                url: item.url,
-                type: (item.type || 'image') as 'image' | 'video'
-              });
-            }
-          }
-        }
-        
-        // Final validation - ensure all items have required properties
         const validProcessed = processed.filter(item => 
           item && 
           typeof item === 'object' && 
@@ -390,10 +357,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           item.type
         );
         
-        console.log('Processed media result:', validProcessed);
         setProcessedMedia(validProcessed);
       } catch (error) {
-        console.error('Error in processMediaUrls:', error);
+        console.error('Error processing media:', error);
         setProcessedMedia([]);
       } finally {
         setLoadingMedia(false);
@@ -401,13 +367,52 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
     
     processMediaUrls();
-  }, [post.id, post.image_url, post.video_url, post.additional_media, post.media]);
+  }, [post.id, post.image_url, post.video_url, post.additional_media]);
   
-  // Use processed media for display
+  const handleLike = async () => {
+    if (isLiking || !currentUserId) return;
+    setIsLiking(true);
+    
+    try {
+      const result = await toggleLike(post.id);
+      if (result.ok) {
+        setLocalLikedByMe(!localLikedByMe);
+        setLocalLikeCount(localLikedByMe ? localLikeCount - 1 : localLikeCount + 1);
+      }
+    } catch (error) {
+      console.error("Error liking post:", error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handleComment = async () => {
+    if (!commentText.trim() || isCommenting || !currentUserId) return;
+    setIsCommenting(true);
+    
+    try {
+      const result = await addComment(post.id, commentText.trim());
+      if (result.ok) {
+        setCommentText("");
+        setShowCommentInput(false);
+        if (onChanged) onChanged();
+      }
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    } finally {
+      setIsCommenting(false);
+    }
+  };
+
+  const handleShare = () => {
+    const postUrl = `${window.location.origin}/post/${post.id}`;
+    navigator.clipboard.writeText(postUrl);
+    alert("Post link copied to clipboard!");
+  };
+  
   const mediaToDisplay = processedMedia;
   
   const handlePhotoClick = (index: number) => {
-    // Only show lightbox if we have media
     if (mediaToDisplay && mediaToDisplay.length > 0) {
       setLightboxStartIndex(index);
       setShowLightbox(true);
@@ -415,11 +420,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   };
   
   const canEdit = currentUserId === post.user_id || isCoCreator;
-  const canDelete = currentUserId === post.user_id; // Only original author can delete
+  const canDelete = currentUserId === post.user_id;
   
-  // Format the display name with co-creators
   const getDisplayName = () => {
-    // Get name from the author object
     let name = post.author?.full_name || 'User';
     if (post.co_creators && post.co_creators.length > 0) {
       const coCreatorNames = post.co_creators_info?.map(c => c.full_name).filter(Boolean) || [];
@@ -433,7 +436,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   return (
     <>
       <div className="post-card">
-        {/* Header */}
         <div className="post-header">
           <div className="author-info">
             <img 
@@ -486,11 +488,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           )}
         </div>
         
-        {/* Content */}
         <div className="post-content">
           {post.body && <p className="post-text">{post.body}</p>}
           
-          {/* Photo Grid with Loading State */}
           {loadingMedia ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: '#718096' }}>
               Loading media...
@@ -505,34 +505,64 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           )}
         </div>
         
-        {/* Footer */}
         <div className="post-footer">
           <div className="engagement-stats">
-            {post.likes_count > 0 && (
-              <span>{post.likes_count} likes</span>
+            {localLikeCount > 0 && (
+              <span>{localLikeCount} likes</span>
             )}
-            {post.comments_count > 0 && (
-              <span>{post.comments_count} comments</span>
+            {post.comment_count > 0 && (
+              <span>{post.comment_count} comments</span>
             )}
           </div>
           
           <div className="action-buttons">
-            <button className="action-btn">
-              👍 Like
+            <button 
+              className={`action-btn ${localLikedByMe ? 'liked' : ''}`}
+              onClick={handleLike}
+              disabled={isLiking || !currentUserId}
+            >
+              {localLikedByMe ? '❤️' : '🤍'} {localLikeCount > 0 ? localLikeCount : 'Like'}
             </button>
-            <button className="action-btn">
+            <button 
+              className="action-btn"
+              onClick={() => setShowCommentInput(!showCommentInput)}
+              disabled={!currentUserId}
+            >
               💬 Comment
             </button>
             {post.allow_share && (
-              <button className="action-btn">
+              <button 
+                className="action-btn"
+                onClick={handleShare}
+              >
                 🔄 Share
               </button>
             )}
           </div>
+          
+          {showCommentInput && (
+            <div className="comment-input-section">
+              <input
+                type="text"
+                className="comment-input"
+                placeholder="Write a comment..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleComment()}
+                disabled={isCommenting}
+              />
+              <button 
+                className="comment-submit"
+                onClick={handleComment}
+                disabled={!commentText.trim() || isCommenting}
+              >
+                {isCommenting ? 'Posting...' : 'Post'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Lightbox */}
       {showLightbox && mediaToDisplay && mediaToDisplay.length > 0 && (
         <PhotoLightbox
           media={mediaToDisplay}
@@ -541,7 +571,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         />
       )}
       
-      {/* Co-Creator Edit Modal */}
       {showEditModal && (
         <CoCreatorEditModal
           postId={post.id}
@@ -603,7 +632,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           line-height: 1.5;
         }
         
-        /* Photo Grid Styles */
         .photo-grid {
           margin: 0.5rem 0;
           border-radius: 0.5rem;
@@ -683,7 +711,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           font-weight: 600;
         }
         
-        /* Lightbox Styles */
         .lightbox-overlay {
           position: fixed;
           inset: 0;
@@ -774,7 +801,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           object-fit: cover;
         }
         
-        /* Post Footer */
         .post-footer {
           padding: 0.75rem 1rem;
           border-top: 1px solid #e2e8f0;
@@ -808,7 +834,45 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           background: #f7fafc;
         }
         
-        /* Menu */
+        .action-btn.liked {
+          color: #e53e3e;
+        }
+        
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        .comment-input-section {
+          display: flex;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          border-top: 1px solid #e2e8f0;
+        }
+        
+        .comment-input {
+          flex: 1;
+          padding: 0.5rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+        }
+        
+        .comment-submit {
+          padding: 0.5rem 1rem;
+          background: #4299e1;
+          color: white;
+          border: none;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          cursor: pointer;
+        }
+        
+        .comment-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
         .post-actions {
           position: relative;
         }
