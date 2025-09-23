@@ -1,4 +1,10 @@
-import React, { useState, useRef } from 'react';
+// components/PostComposer.tsx
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { createPost, Post, uploadMedia } from "@/lib/posts";
+import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
+import { supabase } from "@/lib/supabaseClient";
 
 type MediaUpload = {
   url: string;
@@ -12,63 +18,9 @@ interface PostComposerProps {
   className?: string;
 }
 
-// Simple friend selector component (replacing SimpleFriendDropdown)
-function FriendSelector({ value, onChange }: { value: string[], onChange: (value: string[]) => void }) {
-  const [inputValue, setInputValue] = useState('');
-  
-  const handleAddFriend = () => {
-    if (inputValue.trim() && !value.includes(inputValue.trim())) {
-      onChange([...value, inputValue.trim()]);
-      setInputValue('');
-    }
-  };
-
-  const removeFriend = (friend: string) => {
-    onChange(value.filter(f => f !== friend));
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleAddFriend()}
-          placeholder="Enter friend's name"
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-        />
-        <button
-          type="button"
-          onClick={handleAddFriend}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-        >
-          Add
-        </button>
-      </div>
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {value.map(friend => (
-            <span key={friend} className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
-              {friend}
-              <button
-                type="button"
-                onClick={() => removeFriend(friend)}
-                className="ml-1 hover:text-purple-900"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function PostComposer({ onPostCreated, className = "" }: PostComposerProps) {
   const [body, setBody] = useState("");
-  const [privacy, setPrivacy] = useState<"public" | "friends" | "private">("friends");
+  const [privacy, setPrivacy] = useState<Post["privacy"]>("friends");
   const [allowShare, setAllowShare] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -79,6 +31,17 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  // Debug current user - TEMPORARY DEBUG CODE
+  useEffect(() => {
+    async function checkUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log("Current logged in user ID:", user?.id);
+      console.log("Should see friends for Debi:", "a54e3232-f79f-47fb-a0ae-320539e3e45d");
+      console.log("Should see friends for Lisa:", "5529644d-751e-4c0c-9d58-9df3ed7e880f");
+    }
+    checkUser();
+  }, []);
 
   // Meditation-themed emojis
   const zenEmojis = ['🧘', '🙏', '✨', '💜', '🌸', '☮️', '🕉️', '💫', '🌟', '🤲', '🧘‍♀️', '🧘‍♂️', '🌺', '🍃', '🌿'];
@@ -94,19 +57,27 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      // Create preview URL for display
+      // Create preview URL
       const previewUrl = URL.createObjectURL(file);
       
-      // For demo purposes, we'll simulate upload success
-      // In your actual implementation, this would call your uploadMedia function
-      const simulatedStoragePath = `simulated-path-${Date.now()}-${i}`;
+      // Upload to Supabase
+      const { url: storagePath, error } = await uploadMedia(file, type);
       
-      newMedia.push({
-        url: simulatedStoragePath,
-        type,
-        preview: previewUrl,
-        storagePath: simulatedStoragePath
-      });
+      if (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        alert(`Failed to upload ${file.name}. ${error}`);
+        URL.revokeObjectURL(previewUrl);
+        continue;
+      }
+
+      if (storagePath) {
+        newMedia.push({
+          url: storagePath, // This is the storage path, not the full URL
+          type,
+          preview: previewUrl,
+          storagePath: storagePath
+        });
+      }
     }
 
     // Add all successfully uploaded media to state
@@ -128,20 +99,24 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     setSaving(true);
     
     try {
-      // Simulate post creation
-      console.log("Creating post with:", {
-        body: body.trim() || "Shared a moment",
-        privacy,
-        allowShare,
-        coCreators: coCreators.length > 0 ? coCreators : null,
-        media: uploadedMedia.map(m => ({
-          url: m.storagePath,
-          type: m.type
-        }))
+      // Prepare media array with storage paths
+      const mediaItems = uploadedMedia.map(m => ({
+        url: m.storagePath, // Use the storage path
+        type: m.type
+      }));
+
+      const result = await createPost(body.trim() || "Shared a moment", privacy, {
+        allow_share: allowShare,
+        co_creators: coCreators.length > 0 ? coCreators : null,
+        media: mediaItems
       });
       
-      // Simulate a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!result.ok) {
+        console.error("Post error:", result.error);
+        alert(`Unable to post: ${result.error || 'Unknown error'}`);
+        setSaving(false);
+        return;
+      }
       
       // Reset form
       setBody("");
@@ -161,8 +136,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       if (onPostCreated) {
         onPostCreated();
       }
-      
-      alert("Post created successfully!");
     } catch (error) {
       console.error("Error posting:", error);
       alert("Failed to create post. Please try again.");
@@ -328,7 +301,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           <p className="text-sm text-gray-600 mb-2">
             <strong>👥 Add Co-creators:</strong> They'll be notified and can add their own photos & videos!
           </p>
-          <FriendSelector
+          <SimpleFriendDropdown
             value={coCreators}
             onChange={setCoCreators}
           />
