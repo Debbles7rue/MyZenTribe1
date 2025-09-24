@@ -90,84 +90,122 @@ export async function listHomeFeed(limit = 20, before?: string) {
     coCreatorProfiles.map((p: any) => [p.id, p])
   );
 
-  // Try to get likes and comments (but don't fail if tables don't exist)
+  // Try to get likes and comments
   let likeCountBy: Record<string, number> = {};
   let myLikeSet = new Set<string>();
   let commentCountBy: Record<string, number> = {};
 
   try {
-    const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
-      supabase.from("post_likes").select("post_id").in("post_id", ids),
-      supabase.from("post_likes").select("post_id").eq("user_id", uid).in("post_id", ids),
-      supabase.from("post_comments").select("post_id").in("post_id", ids),
-    ]);
+    // Get all likes for these posts
+    const { data: likeCounts } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .in("post_id", ids);
+
+    // Get my likes
+    const { data: myLikes } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", uid)
+      .in("post_id", ids);
+
+    // Get all comments for these posts
+    const { data: commentCounts } = await supabase
+      .from("post_comments")
+      .select("post_id")
+      .in("post_id", ids);
 
     // Count likes per post
-    const likesPerPost: Record<string, number> = {};
-    (likeCounts || []).forEach((like: any) => {
-      likesPerPost[like.post_id] = (likesPerPost[like.post_id] || 0) + 1;
-    });
-    likeCountBy = likesPerPost;
+    if (likeCounts) {
+      likeCounts.forEach((like: any) => {
+        likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
+      });
+    }
     
-    myLikeSet = new Set((myLikes ?? []).map((r: any) => r.post_id));
+    if (myLikes) {
+      myLikeSet = new Set(myLikes.map((r: any) => r.post_id));
+    }
     
     // Count comments per post
-    const commentsPerPost: Record<string, number> = {};
-    (commentCounts || []).forEach((comment: any) => {
-      commentsPerPost[comment.post_id] = (commentsPerPost[comment.post_id] || 0) + 1;
-    });
-    commentCountBy = commentsPerPost;
+    if (commentCounts) {
+      commentCounts.forEach((comment: any) => {
+        commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
+      });
+    }
   } catch (e) {
-    console.log("Likes/comments tables might not exist yet");
+    console.log("Error fetching likes/comments:", e);
   }
 
-  // Get additional media from post_media table - FIX: Query individually to avoid 404
-  let mediaByPost: Record<string, any[]> = {};
+  // FIXED: Query post_media for each post individually to avoid 404
+  let mediaByPost: Record<string, MediaItem[]> = {};
   
-  for (const postId of ids) {
+  // Use Promise.all to query all posts' media in parallel
+  const mediaPromises = ids.map(async (postId: string) => {
     try {
-      const { data: mediaRows } = await supabase
+      const { data: mediaRows, error: mediaError } = await supabase
         .from("post_media")
         .select("storage_path, type")
-        .eq("post_id", postId);
+        .eq("post_id", postId)
+        .order("sort_order", { ascending: true });
       
-      if (mediaRows && mediaRows.length > 0) {
-        mediaByPost[postId] = mediaRows.map((m: any) => {
-          // Get public URL from storage path
-          const { data: { publicUrl } } = supabase.storage
+      if (!mediaError && mediaRows && mediaRows.length > 0) {
+        const processedMedia = mediaRows.map((m: any) => {
+          // storage_path is like "user_id/timestamp-random.ext"
+          // We need to get the public URL from the post-media bucket
+          const { data } = supabase.storage
             .from('post-media')
             .getPublicUrl(m.storage_path);
           
           return { 
-            url: publicUrl, 
-            type: m.type 
+            url: data.publicUrl, 
+            type: m.type as 'image' | 'video'
           };
         });
+        
+        mediaByPost[postId] = processedMedia;
+        console.log(`Found ${processedMedia.length} media items for post ${postId}`);
       }
     } catch (e) {
-      // Silently skip if there's an error fetching media for this post
-      console.log(`Could not fetch media for post ${postId}`);
+      console.error(`Error fetching media for post ${postId}:`, e);
     }
-  }
+  });
+
+  // Wait for all media queries to complete
+  await Promise.all(mediaPromises);
 
   // Build the rows with all the data we have
-  const rows: Post[] = posts.map((p: any) => ({
-    id: p.id,
-    user_id: p.user_id,
-    body: p.body,
-    image_url: p.image_url || null,
-    video_url: p.video_url || null,
-    privacy: p.visibility || p.privacy || 'public', // Handle both column names
-    created_at: p.created_at,
-    allow_share: p.allow_share ?? true,
-    co_creators: p.co_creators || null,
-    author: profileMap[p.user_id] || null,
-    additional_media: mediaByPost[p.id] || [],
-    co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
-    like_count: likeCountBy[p.id] ?? 0,
-    liked_by_me: myLikeSet.has(p.id),
-    comment_count: commentCountBy[p.id] ?? 0,
-  }));
+  const rows: Post[] = posts.map((p: any) => {
+    const postMedia = mediaByPost[p.id] || [];
+    
+    // Log what we're adding to each post
+    if (postMedia.length > 0) {
+      console.log(`Post ${p.id} has ${postMedia.length} additional media items`);
+    }
+    
+    return {
+      id: p.id,
+      user_id: p.user_id,
+      body: p.body,
+      image_url: p.image_url || null,
+      video_url: p.video_url || null,
+      privacy: p.visibility || p.privacy || 'public',
+      created_at: p.created_at,
+      allow_share: p.allow_share ?? true,
+      co_creators: p.co_creators || null,
+      author: profileMap[p.user_id] || null,
+      additional_media: postMedia, // This should now have the media
+      co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
+      like_count: likeCountBy[p.id] ?? 0,
+      liked_by_me: myLikeSet.has(p.id),
+      comment_count: commentCountBy[p.id] ?? 0,
+    };
+  });
+
+  console.log('Final posts with media:', rows.map(r => ({
+    id: r.id,
+    media_count: r.additional_media?.length || 0,
+    comment_count: r.comment_count
+  })));
 
   return { rows, error: null };
 }
@@ -228,8 +266,8 @@ export async function createPost(
   if (options?.media && options.media.length > 0) {
     const allMedia = options.media.map((m, index) => ({
       post_id: data.id,
-      storage_path: m.url,  // Changed from 'url' to 'storage_path'
-      type: m.type,         // Changed from 'media_type' to 'type'
+      storage_path: m.url,  // This should be the path, not full URL
+      type: m.type,
       sort_order: index,
       created_by: uid,
       uploaded_by: uid
@@ -335,15 +373,28 @@ export async function addMediaToPost(
 
   if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
 
-  // Add to post_media table - FIXED: Added created_by field
+  // Get current max sort_order
+  const { data: existingMedia } = await supabase
+    .from("post_media")
+    .select("sort_order")
+    .eq("post_id", postId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const nextSortOrder = existingMedia && existingMedia.length > 0 
+    ? (existingMedia[0].sort_order || 0) + 1 
+    : 0;
+
+  // Add to post_media table
   const { error } = await supabase
     .from("post_media")
     .insert({
       post_id: postId,
-      storage_path: url,  // Changed from 'url' to 'storage_path'
-      type: mediaType,    // Changed from 'media_type' to 'type'
-      created_by: uid,    // ADDED: Required field
-      uploaded_by: uid
+      storage_path: url,  
+      type: mediaType,    
+      created_by: uid,
+      uploaded_by: uid,
+      sort_order: nextSortOrder
     });
 
   return { ok: !error, error: error?.message || null };
@@ -364,7 +415,7 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
 
   const fileExt = file.name.split('.').pop();
   const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-  const bucketName = type === 'image' ? 'post-images' : 'post-videos';
+  const bucketName = 'post-media'; // Using unified bucket
 
   const { data, error } = await supabase.storage
     .from(bucketName)
