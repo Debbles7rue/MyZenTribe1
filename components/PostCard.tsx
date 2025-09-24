@@ -1,6 +1,14 @@
 // components/PostCard.tsx
 "use client";
 
+export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
+  console.log('PostCard input:', {
+    id: post.id,
+    additional_media: post.additional_media,
+    comment_count: post.comment_count
+  });
+  // rest of component...
+
 import { useState, useEffect } from "react";
 import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
 import Link from "next/link";
