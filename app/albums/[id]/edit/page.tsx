@@ -86,15 +86,32 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
   // Get user on mount
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
+    let mounted = true;
+    
+    async function getUser() {
+      const { data } = await supabase.auth.getUser();
+      if (mounted && data.user) {
+        console.log('User loaded:', data.user.id);
+        setUserId(data.user.id);
+      } else if (mounted && !data.user) {
+        console.log('No user found, redirecting to login');
+        router.push('/login');
+      }
+    }
+    
+    getUser();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // Load album data
+  // Load album data - only when we have userId
   useEffect(() => {
-    if (!userId) return;
-    loadAlbum();
+    if (userId && params.id) {
+      console.log('Loading album with userId:', userId);
+      loadAlbum();
+    }
   }, [userId, params.id]);
 
   async function loadAlbum() {
@@ -652,6 +669,20 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
           }));
 
           await supabase.from('album_collaborators').insert(collabData);
+
+          // Create notifications for new collaborators
+          const notifications = newCollabs.map(friendId => ({
+            user_id: friendId,
+            type: 'album.invited',
+            title: 'Album invitation',
+            body: `You've been invited to collaborate on "${title}"`,
+            target_url: `/albums/${albumId}`,
+            entity_id: albumId,
+            actor_id: userId
+          }));
+
+          await supabase.from('notifications').insert(notifications);
+          console.log('Notifications sent to new collaborators');
         }
       }
 
