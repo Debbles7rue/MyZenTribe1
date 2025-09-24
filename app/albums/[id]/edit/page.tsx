@@ -101,6 +101,12 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
     try {
       setLoading(true);
 
+      // Make sure we have a userId before continuing
+      if (!userId) {
+        console.log('No userId yet, waiting...');
+        return;
+      }
+
       // Load album details
       const { data: albumData, error: albumError } = await supabase
         .from('albums')
@@ -122,38 +128,65 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
       // Check if user can edit
       const userIsCreator = albumData.creator_id === userId;
+      console.log('Permission check:', { userId, creatorId: albumData.creator_id, userIsCreator });
       setIsCreator(userIsCreator);
       setCanEdit(userIsCreator);
 
       // Check collaborator permissions
       if (!userIsCreator) {
-        const { data: collabData } = await supabase
+        console.log('Not creator, checking collaborator permissions for user:', userId);
+        
+        const { data: collabData, error: collabError } = await supabase
           .from('album_collaborators')
           .select('*')
           .eq('album_id', params.id)
           .eq('user_id', userId)
           .single();
 
-        if (collabData && collabData.status === 'accepted' && collabData.can_edit) {
-          setCanEdit(true);
-        } else {
+        console.log('Collaborator query result:', { collabData, collabError });
+
+        if (collabError || !collabData) {
+          console.log('No collaborator record found');
           alert('You do not have permission to edit this album');
           router.push(`/albums/${params.id}`);
           return;
         }
+
+        if (collabData.status !== 'accepted' || !collabData.can_edit) {
+          console.log('Collaborator exists but cannot edit:', collabData);
+          alert('You do not have permission to edit this album');
+          router.push(`/albums/${params.id}`);
+          return;
+        }
+
+        console.log('Collaborator can edit!');
+        setCanEdit(true);
       }
 
-      // Load existing collaborators
+      // Load existing collaborators - split query to avoid foreign key issue
       const { data: collabs } = await supabase
         .from('album_collaborators')
-        .select(`
-          *,
-          user:profiles!user_id(full_name, avatar_url)
-        `)
+        .select('*')
         .eq('album_id', params.id);
 
       if (collabs) {
-        setExistingCollaborators(collabs);
+        // Fetch user profiles separately
+        const collabsWithProfiles = await Promise.all(
+          collabs.map(async (collab) => {
+            const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('full_name, avatar_url')
+              .eq('id', collab.user_id)
+              .single();
+            
+            return {
+              ...collab,
+              user: userProfile
+            };
+          })
+        );
+        
+        setExistingCollaborators(collabsWithProfiles);
         setCollaborators(collabs.map(c => c.user_id));
       }
 
