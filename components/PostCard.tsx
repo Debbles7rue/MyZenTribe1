@@ -319,50 +319,61 @@ function EditPostModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title">Edit Post</h2>
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="edit-modal-header">
+          <h2 className="edit-modal-title">Edit Post</h2>
+          <button className="edit-modal-close" onClick={onClose}>×</button>
+        </div>
         
-        <textarea
-          className="edit-textarea"
-          value={editBody}
-          onChange={(e) => setEditBody(e.target.value)}
-          placeholder="What's on your mind?"
-          rows={4}
-        />
+        <div className="edit-modal-body">
+          <textarea
+            className="edit-textarea"
+            value={editBody}
+            onChange={(e) => setEditBody(e.target.value)}
+            placeholder="What's on your mind?"
+            rows={6}
+          />
 
-        <div className="current-media">
-          <h3>Current Media ({currentMedia.length})</h3>
-          <div className="media-preview-grid">
-            {currentMedia.map((media, idx) => (
-              <div key={idx} className="media-preview">
-                {media.type === 'image' ? (
-                  <img src={media.url} alt="" />
-                ) : (
-                  <video src={media.url} />
-                )}
+          {currentMedia.length > 0 && (
+            <div className="current-media">
+              <h3 className="media-section-title">Current Media ({currentMedia.length})</h3>
+              <div className="media-preview-grid">
+                {currentMedia.map((media, idx) => (
+                  <div key={idx} className="media-preview">
+                    {media.type === 'image' ? (
+                      <img src={media.url} alt="" />
+                    ) : (
+                      <video src={media.url} />
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+
+          <div className="add-media-section">
+            <label className="file-input-label">
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+              <span className="file-input-icon">📸</span>
+              <span>Add More Photos/Videos</span>
+            </label>
+            {newFiles.length > 0 && (
+              <p className="file-count">
+                <span className="file-count-badge">{newFiles.length}</span>
+                new file{newFiles.length > 1 ? 's' : ''} selected
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="add-media-section">
-          <label className="file-input-label">
-            <input
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-            📁 Add More Photos/Videos
-          </label>
-          {newFiles.length > 0 && (
-            <p className="file-count">{newFiles.length} new file(s) selected</p>
-          )}
-        </div>
-
-        <div className="modal-buttons">
+        <div className="edit-modal-footer">
           <button 
             className="modal-cancel"
             onClick={onClose}
@@ -375,7 +386,14 @@ function EditPostModal({
             onClick={handleSave}
             disabled={isSaving || uploadingFiles}
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? (
+              <>
+                <span className="saving-spinner">⏳</span>
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
       </div>
@@ -1181,17 +1199,102 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: not-allowed;
         }
 
+        /* Edit Modal Specific Styles */
+        .edit-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(4px);
+          z-index: 9998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1rem;
+        }
+
+        .edit-modal-content {
+          background: white;
+          border-radius: 1rem;
+          width: 100%;
+          max-width: 600px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        }
+
+        .edit-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem 1.5rem 1rem 1.5rem;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .edit-modal-title {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #1a202c;
+          margin: 0;
+        }
+
+        .edit-modal-close {
+          background: none;
+          border: none;
+          font-size: 2rem;
+          color: #718096;
+          cursor: pointer;
+          width: 2rem;
+          height: 2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.375rem;
+          transition: all 0.2s;
+        }
+
+        .edit-modal-close:hover {
+          background: #f7fafc;
+          color: #2d3748;
+        }
+
+        .edit-modal-body {
+          padding: 1.5rem;
+          overflow-y: auto;
+          flex: 1;
+        }
+
         .edit-textarea {
           width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.375rem;
+          padding: 1rem;
+          border: 2px solid #e2e8f0;
+          border-radius: 0.5rem;
           resize: vertical;
-          margin-bottom: 1rem;
+          margin-bottom: 1.5rem;
+          font-size: 1rem;
+          line-height: 1.5;
+          transition: border-color 0.2s;
+          min-height: 120px;
+        }
+
+        .edit-textarea:focus {
+          outline: none;
+          border-color: #4299e1;
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
         }
 
         .current-media {
-          margin-bottom: 1rem;
+          margin-bottom: 1.5rem;
+          padding: 1rem;
+          background: #f8fafc;
+          border-radius: 0.5rem;
+        }
+
+        .media-section-title {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #4a5568;
+          margin-bottom: 0.75rem;
         }
 
         .current-media h3 {
@@ -1202,15 +1305,22 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
 
         .media-preview-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-          gap: 0.5rem;
+          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+          gap: 0.75rem;
         }
 
         .media-preview {
           aspect-ratio: 1;
           overflow: hidden;
-          border-radius: 0.25rem;
-          background: #f7fafc;
+          border-radius: 0.5rem;
+          background: white;
+          border: 2px solid white;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .media-preview:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
         .media-preview img,
@@ -1225,22 +1335,94 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         }
 
         .file-input-label {
-          display: inline-block;
-          padding: 0.5rem 1rem;
-          background: #f7fafc;
-          border: 1px dashed #cbd5e0;
-          border-radius: 0.375rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.25rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-radius: 0.5rem;
           cursor: pointer;
+          font-weight: 500;
+          transition: transform 0.2s, box-shadow 0.2s;
         }
 
         .file-input-label:hover {
-          background: #edf2f7;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-input-icon {
+          font-size: 1.25rem;
         }
 
         .file-count {
-          font-size: 0.875rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.9rem;
           color: #4a5568;
-          margin-top: 0.5rem;
+          margin-top: 0.75rem;
+        }
+
+        .file-count-badge {
+          background: #667eea;
+          color: white;
+          padding: 0.125rem 0.5rem;
+          border-radius: 9999px;
+          font-weight: 600;
+          font-size: 0.85rem;
+        }
+
+        .edit-modal-footer {
+          display: flex;
+          gap: 1rem;
+          justify-content: flex-end;
+          padding: 1rem 1.5rem 1.5rem 1.5rem;
+          border-top: 1px solid #e2e8f0;
+          background: #f8fafc;
+          border-bottom-left-radius: 1rem;
+          border-bottom-right-radius: 1rem;
+        }
+
+        .modal-cancel {
+          padding: 0.75rem 1.5rem;
+          background: white;
+          color: #4a5568;
+          border: 2px solid #e2e8f0;
+          font-size: 1rem;
+          transition: all 0.2s;
+        }
+
+        .modal-cancel:hover:not(:disabled) {
+          background: #f7fafc;
+          border-color: #cbd5e0;
+        }
+
+        .modal-save {
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 1rem;
+          transition: all 0.2s;
+        }
+
+        .modal-save:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .saving-spinner {
+          display: inline-block;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </>
