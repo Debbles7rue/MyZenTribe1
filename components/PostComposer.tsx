@@ -37,8 +37,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     async function checkUser() {
       const { data: { user } } = await supabase.auth.getUser();
       console.log("Current logged in user ID:", user?.id);
-      console.log("Should see friends for Debi:", "a54e3232-f79f-47fb-a0ae-320539e3e45d");
-      console.log("Should see friends for Lisa:", "5529644d-751e-4c0c-9d58-9df3ed7e880f");
     }
     checkUser();
   }, []);
@@ -50,43 +48,53 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    console.log(`Selected ${files.length} ${type} files`);
     setUploadingMedia(true);
     const newMedia: MediaUpload[] = [];
 
-    // Process all selected files
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(file);
-      
-      // Upload to Supabase
-      const { url: storagePath, error } = await uploadMedia(file, type);
-      
-      if (error) {
-        console.error(`Failed to upload ${file.name}:`, error);
-        alert(`Failed to upload ${file.name}. ${error}`);
-        URL.revokeObjectURL(previewUrl);
-        continue;
+    try {
+      // Process all selected files
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        console.log(`Uploading file ${i + 1}/${files.length}: ${file.name}`);
+        
+        // Create preview URL
+        const previewUrl = URL.createObjectURL(file);
+        
+        // Upload to Supabase
+        const { url: storagePath, error } = await uploadMedia(file, type);
+        
+        if (error) {
+          console.error(`Failed to upload ${file.name}:`, error);
+          alert(`Failed to upload ${file.name}: ${error}`);
+          URL.revokeObjectURL(previewUrl);
+          continue;
+        }
+
+        if (storagePath) {
+          console.log(`Successfully uploaded ${file.name}, path: ${storagePath}`);
+          newMedia.push({
+            url: storagePath,
+            type,
+            preview: previewUrl,
+            storagePath: storagePath
+          });
+        }
       }
 
-      if (storagePath) {
-        newMedia.push({
-          url: storagePath, // This is the storage path, not the full URL
-          type,
-          preview: previewUrl,
-          storagePath: storagePath
-        });
+      console.log(`Successfully uploaded ${newMedia.length} files`);
+      // Add all successfully uploaded media to state
+      setUploadedMedia(prev => [...prev, ...newMedia]);
+    } catch (error) {
+      console.error("Error in handleMediaSelect:", error);
+      alert("Failed to upload some files. Please try again.");
+    } finally {
+      setUploadingMedia(false);
+      
+      // Clear the file input
+      if (e.target) {
+        e.target.value = '';
       }
-    }
-
-    // Add all successfully uploaded media to state
-    setUploadedMedia([...uploadedMedia, ...newMedia]);
-    setUploadingMedia(false);
-    
-    // Clear the file input
-    if (e.target) {
-      e.target.value = '';
     }
   }
 
@@ -101,14 +109,16 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     try {
       // Prepare media array with storage paths
       const mediaItems = uploadedMedia.map(m => ({
-        url: m.storagePath, // Use the storage path
+        url: m.storagePath,
         type: m.type
       }));
+
+      console.log(`Creating post with ${mediaItems.length} media items`);
 
       const result = await createPost(body.trim() || "Shared a moment", privacy, {
         allow_share: allowShare,
         co_creators: coCreators.length > 0 ? coCreators : null,
-        media: mediaItems
+        media: mediaItems.length > 0 ? mediaItems : undefined
       });
       
       if (!result.ok) {
@@ -118,12 +128,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         return;
       }
       
-      // Reset form
-      setBody("");
-      setUploadedMedia([]);
-      setCoCreators([]);
-      setShowCoCreators(false);
-      setSaving(false);
+      console.log("Post created successfully");
       
       // Clean up preview URLs
       uploadedMedia.forEach(m => {
@@ -132,8 +137,16 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         }
       });
       
-      // Call the callback if provided
+      // Reset form
+      setBody("");
+      setUploadedMedia([]);
+      setCoCreators([]);
+      setShowCoCreators(false);
+      setSaving(false);
+      
+      // Call the callback if provided - this should trigger a refresh
       if (onPostCreated) {
+        console.log("Calling onPostCreated callback");
         onPostCreated();
       }
     } catch (error) {
