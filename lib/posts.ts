@@ -136,22 +136,20 @@ export async function listHomeFeed(limit = 20, before?: string) {
     console.log("Error fetching likes/comments:", e);
   }
 
-  // FIXED: Query post_media for each post individually to avoid 404
+// Get additional media from post_media table - SIMPLIFIED FIX
   let mediaByPost: Record<string, MediaItem[]> = {};
   
-  // Use Promise.all to query all posts' media in parallel
-  const mediaPromises = ids.map(async (postId: string) => {
+  // Skip the .in() query entirely and just query each post individually
+  for (const postId of ids) {
     try {
-      const { data: mediaRows, error: mediaError } = await supabase
+      const { data: mediaRows, error } = await supabase
         .from("post_media")
         .select("storage_path, type")
         .eq("post_id", postId)
         .order("sort_order", { ascending: true });
       
-      if (!mediaError && mediaRows && mediaRows.length > 0) {
-        const processedMedia = mediaRows.map((m: any) => {
-          // storage_path is like "user_id/timestamp-random.ext"
-          // We need to get the public URL from the post-media bucket
+      if (!error && mediaRows && mediaRows.length > 0) {
+        mediaByPost[postId] = mediaRows.map((m: any) => {
           const { data } = supabase.storage
             .from('post-media')
             .getPublicUrl(m.storage_path);
@@ -161,14 +159,12 @@ export async function listHomeFeed(limit = 20, before?: string) {
             type: m.type as 'image' | 'video'
           };
         });
-        
-        mediaByPost[postId] = processedMedia;
-        console.log(`Found ${processedMedia.length} media items for post ${postId}`);
+        console.log(`Found ${mediaRows.length} media items for post ${postId}`);
       }
     } catch (e) {
-      console.error(`Error fetching media for post ${postId}:`, e);
+      console.log(`Error fetching media for post ${postId}:`, e);
     }
-  });
+  }
 
   // Wait for all media queries to complete
   await Promise.all(mediaPromises);
