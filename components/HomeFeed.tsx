@@ -13,6 +13,7 @@ export default function HomeFeed() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   async function load() {
+    console.log("🔄 Refreshing posts...");
     setLoading(true);
     
     // Get current user ID
@@ -23,11 +24,23 @@ export default function HomeFeed() {
     if (error) {
       console.error("Error loading posts:", error);
     }
+    
+    console.log(`✅ Loaded ${rows.length} posts`);
+    // Log comment counts for debugging
+    rows.forEach(post => {
+      if (post.comment_count > 0) {
+        console.log(`Post ${post.id.substring(0, 8)}: ${post.comment_count} comments`);
+      }
+    });
+    
     setRows(rows);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    console.log("🚀 HomeFeed mounted, loading initial posts");
+    load(); 
+  }, []);
 
   return (
     <>
@@ -49,7 +62,13 @@ export default function HomeFeed() {
         </div>
 
         {/* Post Composer Component */}
-        <PostComposer onPostCreated={load} className="mb-5" />
+        <PostComposer 
+          onPostCreated={() => {
+            console.log("📝 New post created, refreshing feed");
+            load();
+          }} 
+          className="mb-5" 
+        />
 
         {/* Daily Intention Card */}
         <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 mb-5">
@@ -72,7 +91,10 @@ export default function HomeFeed() {
               <PostCard 
                 key={p.id} 
                 post={p} 
-                onChanged={load}
+                onChanged={() => {
+                  console.log(`💬 Post ${p.id.substring(0, 8)} changed (comment/like/edit), refreshing feed`);
+                  load();
+                }}
                 currentUserId={currentUserId || undefined}
               />
             ))}
