@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { createPost, Post, addMediaToPost } from "@/lib/posts";
+import { createPost, Post } from "@/lib/posts";
 import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -61,7 +61,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         return;
       }
 
-      // Process all selected files
+      // Process all selected files - matching album uploader pattern
       const timestamp = Date.now();
       
       for (let i = 0; i < files.length; i++) {
@@ -71,17 +71,14 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         // Create preview URL
         const previewUrl = URL.createObjectURL(file);
         
-        // Create unique filename with index - matching album uploader pattern
+        // Create unique filename with index - EXACTLY like album uploader
         const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `${user.id}/${timestamp}-${i}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const fileName = `${user.id}/album-${timestamp}-${i}.${fileExt}`;
         
-        // Use post-media bucket like the album uploader does
+        // Upload to post-media bucket - EXACTLY like album uploader
         const { data, error } = await supabase.storage
           .from('post-media')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false,
-          });
+          .upload(fileName, file);
         
         if (error) {
           console.error(`Failed to upload ${file.name}:`, error);
@@ -93,7 +90,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         if (data) {
           console.log(`Successfully uploaded ${file.name}, path: ${data.path}`);
           
-          // Get public URL for the uploaded file
+          // Get public URL - EXACTLY like album uploader
           const { data: { publicUrl } } = supabase.storage
             .from('post-media')
             .getPublicUrl(fileName);
@@ -132,72 +129,29 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     setSaving(true);
     
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert("You must be logged in to post");
+      // Prepare media array with public URLs (not storage paths)
+      const mediaItems = uploadedMedia.map(m => ({
+        url: m.storagePath,  // Use the storage path for database
+        type: m.type
+      }));
+
+      console.log(`Creating post with ${mediaItems.length} media items`);
+
+      // Use createPost with the media option
+      const result = await createPost(body.trim() || "Shared a moment", privacy, {
+        allow_share: allowShare,
+        co_creators: coCreators.length > 0 ? coCreators : null,
+        media: mediaItems.length > 0 ? mediaItems : undefined
+      });
+      
+      if (!result.ok) {
+        console.error("Post error:", result.error);
+        alert(`Unable to post: ${result.error || 'Unknown error'}`);
         setSaving(false);
         return;
       }
-
-      console.log(`Creating post with ${uploadedMedia.length} media items`);
-
-      // Create the post first
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          body: body.trim() || "Shared a moment",
-          privacy,
-          allow_share: allowShare,
-          co_creators: coCreators.length > 0 ? coCreators : null,
-          // If there's one image, set it as the main image_url for backward compatibility
-          image_url: uploadedMedia.length > 0 && uploadedMedia[0].type === 'image' 
-            ? uploadedMedia[0].url 
-            : null,
-          // Store additional media paths for retrieval
-          additional_media: uploadedMedia.length > 1 
-            ? uploadedMedia.slice(1).map(m => ({
-                url: m.url,
-                type: m.type,
-                storage_path: m.storagePath
-              }))
-            : null
-        })
-        .select()
-        .single();
-
-      if (postError) {
-        console.error("Error creating post:", postError);
-        alert(`Failed to create post: ${postError.message}`);
-        setSaving(false);
-        return;
-      }
-
-      console.log("Post created successfully:", postData.id);
-
-      // Now add media entries to post_media table for each uploaded file
-      if (uploadedMedia.length > 0 && postData) {
-        const mediaInserts = uploadedMedia.map(media => ({
-          post_id: postData.id,
-          url: media.url,
-          storage_path: media.storagePath,
-          type: media.type,
-          created_by: user.id,
-          uploaded_by: user.id
-        }));
-
-        const { error: mediaError } = await supabase
-          .from('post_media')
-          .insert(mediaInserts);
-
-        if (mediaError) {
-          console.error("Error adding media to post:", mediaError);
-          // Don't fail the whole post, media URLs are already in the post
-        } else {
-          console.log(`Added ${mediaInserts.length} media entries to post_media table`);
-        }
-      }
+      
+      console.log("Post created successfully");
       
       // Clean up preview URLs
       uploadedMedia.forEach(m => {
