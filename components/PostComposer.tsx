@@ -53,7 +53,16 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     const newMedia: MediaUpload[] = [];
 
     try {
+      // Get current user for path
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("You must be logged in to upload media");
+        return;
+      }
+
       // Process all selected files
+      const timestamp = Date.now(); // Get timestamp once for this batch
+      
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         console.log(`Uploading file ${i + 1}/${files.length}: ${file.name}`);
@@ -61,23 +70,33 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         // Create preview URL
         const previewUrl = URL.createObjectURL(file);
         
-        // Upload to Supabase
-        const { url: storagePath, error } = await uploadMedia(file, type);
+        // Create unique filename with index to guarantee uniqueness
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `${user.id}/${timestamp}-${i}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const bucketName = type === 'image' ? 'post-images' : 'post-videos';
+        
+        // Upload directly here instead of using uploadMedia function
+        const { data, error } = await supabase.storage
+          .from(bucketName)
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
         
         if (error) {
           console.error(`Failed to upload ${file.name}:`, error);
-          alert(`Failed to upload ${file.name}: ${error}`);
+          alert(`Failed to upload ${file.name}: ${error.message}`);
           URL.revokeObjectURL(previewUrl);
           continue;
         }
 
-        if (storagePath) {
-          console.log(`Successfully uploaded ${file.name}, path: ${storagePath}`);
+        if (data) {
+          console.log(`Successfully uploaded ${file.name}, path: ${fileName}`);
           newMedia.push({
-            url: storagePath,
+            url: fileName,
             type,
             preview: previewUrl,
-            storagePath: storagePath
+            storagePath: fileName
           });
         }
       }
