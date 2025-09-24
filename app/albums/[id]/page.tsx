@@ -83,12 +83,26 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
       // Load album details
       const { data: albumData, error: albumError } = await supabase
         .from('albums')
-        .select(`
-          *,
-          creator:profiles!creator_id(full_name, avatar_url)
-        `)
+        .select('*')
         .eq('id', params.id)
         .single();
+
+      // Then separately fetch the creator profile if album exists
+      let creatorProfile = null;
+      if (albumData && !albumError) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url')
+          .eq('id', albumData.creator_id)
+          .single();
+        
+        creatorProfile = profile;
+      }
+
+      // Combine them
+      if (albumData) {
+        albumData.creator = creatorProfile;
+      }
 
       if (albumError) {
         console.error('Error loading album:', albumError);
@@ -104,14 +118,27 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
       // Load collaborators
       const { data: collabData } = await supabase
         .from('album_collaborators')
-        .select(`
-          *,
-          user:profiles!user_id(full_name, avatar_url)
-        `)
+        .select('*')
         .eq('album_id', params.id);
 
       if (collabData) {
-        setCollaborators(collabData);
+        // Fetch user profiles for collaborators
+        const collabsWithProfiles = await Promise.all(
+          collabData.map(async (collab) => {
+            const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('full_name, avatar_url')
+              .eq('id', collab.user_id)
+              .single();
+            
+            return {
+              ...collab,
+              user: userProfile
+            };
+          })
+        );
+        
+        setCollaborators(collabsWithProfiles);
         
         // Check if current user is a collaborator
         const userCollab = collabData.find(c => c.user_id === userId);
