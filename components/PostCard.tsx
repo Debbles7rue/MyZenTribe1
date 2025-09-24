@@ -591,7 +591,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCoCreator, setIsCoCreator] = useState(false);
   const [processedMedia, setProcessedMedia] = useState<Array<{url: string; type: 'image' | 'video'}>>([]);
-  const [loadingMedia, setLoadingMedia] = useState(false);
   
   // Like, Comment, Share states
   const [isLiking, setIsLiking] = useState(false);
@@ -607,87 +606,34 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
   }, [currentUserId, post.co_creators]);
   
+  // FIXED: Simplified media processing - data already comes in the right format
   useEffect(() => {
-    async function processMediaUrls() {
-      setLoadingMedia(true);
-      const processed = [];
-      
-      try {
-        if (post.image_url && typeof post.image_url === 'string') {
-          processed.push({ url: post.image_url, type: 'image' as const });
-        }
-        if (post.video_url && typeof post.video_url === 'string') {
-          processed.push({ url: post.video_url, type: 'video' as const });
-        }
-        
-        if (post.additional_media && Array.isArray(post.additional_media)) {
-          for (const item of post.additional_media) {
-            if (!item) continue;
-            
-            if (typeof item === 'string') {
-              if (item.startsWith('http')) {
-                processed.push({ url: item, type: 'image' as const });
-              } else {
-                try {
-                  const path = item.replace(/^post-media\//, '');
-                  const { data, error } = await supabase.storage
-                    .from('post-media')
-                    .createSignedUrl(path, 3600);
-                  
-                  if (!error && data && data.signedUrl) {
-                    const fileType = item.includes('.mp4') || item.includes('.mov') ? 'video' : 'image';
-                    processed.push({ url: data.signedUrl, type: fileType as 'image' | 'video' });
-                  }
-                } catch (err) {
-                  console.error('Error creating signed URL:', err);
-                }
-              }
-            } else if (item && typeof item === 'object') {
-              if (item.url && typeof item.url === 'string') {
-                processed.push({ 
-                  url: item.url, 
-                  type: (item.type || 'image') as 'image' | 'video'
-                });
-              } else if (item.storage_path && typeof item.storage_path === 'string') {
-                try {
-                  const path = item.storage_path.replace(/^post-media\//, '');
-                  const { data, error } = await supabase.storage
-                    .from('post-media')
-                    .createSignedUrl(path, 3600);
-                  
-                  if (!error && data && data.signedUrl) {
-                    processed.push({ 
-                      url: data.signedUrl, 
-                      type: (item.type || 'image') as 'image' | 'video'
-                    });
-                  }
-                } catch (err) {
-                  console.error('Error creating signed URL:', err);
-                }
-              }
-            }
-          }
-        }
-        
-        const validProcessed = processed.filter(item => 
-          item && 
-          typeof item === 'object' && 
-          item.url && 
-          typeof item.url === 'string' && 
-          item.type
-        );
-        
-        setProcessedMedia(validProcessed);
-      } catch (error) {
-        console.error('Error processing media:', error);
-        setProcessedMedia([]);
-      } finally {
-        setLoadingMedia(false);
-      }
+    const processed = [];
+    
+    // Add main image/video if exists
+    if (post.image_url) {
+      processed.push({ url: post.image_url, type: 'image' as const });
+    }
+    if (post.video_url) {
+      processed.push({ url: post.video_url, type: 'video' as const });
     }
     
-    processMediaUrls();
-  }, [post.id, post.image_url, post.video_url, post.additional_media]);
+    // Add additional media - it already comes with proper URLs from the backend
+    if (post.additional_media && Array.isArray(post.additional_media)) {
+      post.additional_media.forEach(item => {
+        if (item && item.url && item.type) {
+          // Don't add duplicates of the main image/video
+          const isDuplicate = (item.type === 'image' && item.url === post.image_url) ||
+                            (item.type === 'video' && item.url === post.video_url);
+          if (!isDuplicate) {
+            processed.push({ url: item.url, type: item.type });
+          }
+        }
+      });
+    }
+    
+    setProcessedMedia(processed);
+  }, [post.image_url, post.video_url, post.additional_media]);
   
   const handleLike = async () => {
     if (isLiking || !currentUserId) return;
@@ -841,17 +787,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         <div className="post-content">
           {post.body && <p className="post-text">{post.body}</p>}
           
-          {loadingMedia ? (
-            <div style={{ padding: '2rem', textAlign: 'center', color: '#718096' }}>
-              Loading media...
-            </div>
-          ) : (
-            mediaToDisplay && mediaToDisplay.length > 0 && (
-              <PhotoGrid 
-                media={mediaToDisplay} 
-                onPhotoClick={handlePhotoClick}
-              />
-            )
+          {mediaToDisplay && mediaToDisplay.length > 0 && (
+            <PhotoGrid 
+              media={mediaToDisplay} 
+              onPhotoClick={handlePhotoClick}
+            />
           )}
         </div>
         
