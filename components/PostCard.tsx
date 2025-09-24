@@ -7,14 +7,6 @@ import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
-  console.log('PostCard input:', {
-    id: post.id,
-    additional_media: post.additional_media,
-    comment_count: post.comment_count
-  });
-  // rest of component...
-  
 interface PostCardProps {
   post: Post;
   onChanged?: () => void;
@@ -591,6 +583,13 @@ function EditPostModal({
 }
 
 export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
+  // DEBUG LOG - This is the correct place for it
+  console.log('PostCard input:', {
+    id: post.id,
+    additional_media: post.additional_media,
+    comment_count: post.comment_count
+  });
+  
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
   const [showEditMenu, setShowEditMenu] = useState(false);
