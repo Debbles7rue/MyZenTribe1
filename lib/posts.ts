@@ -121,29 +121,33 @@ export async function listHomeFeed(limit = 20, before?: string) {
     console.log("Likes/comments tables might not exist yet");
   }
 
-  // Try to get additional media if table exists
+  // Get additional media from post_media table - FIX: Query individually to avoid 404
   let mediaByPost: Record<string, any[]> = {};
-  try {
-    const { data: media } = await supabase
-      .from("post_media")
-      .select("post_id, storage_path, type")
-      .in("post_id", ids);
-    
-    if (media) {
-      media.forEach((m: any) => {
-        if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
-        
-        // Get public URL from storage path
-        const bucketName = m.type === 'video' ? 'post-videos' : 'post-images';
-        const { data: { publicUrl } } = supabase.storage
-          .from(bucketName)
-          .getPublicUrl(m.storage_path);
-        
-        mediaByPost[m.post_id].push({ url: publicUrl, type: m.type });
-      });
+  
+  for (const postId of ids) {
+    try {
+      const { data: mediaRows } = await supabase
+        .from("post_media")
+        .select("storage_path, type")
+        .eq("post_id", postId);
+      
+      if (mediaRows && mediaRows.length > 0) {
+        mediaByPost[postId] = mediaRows.map((m: any) => {
+          // Get public URL from storage path
+          const { data: { publicUrl } } = supabase.storage
+            .from('post-media')
+            .getPublicUrl(m.storage_path);
+          
+          return { 
+            url: publicUrl, 
+            type: m.type 
+          };
+        });
+      }
+    } catch (e) {
+      // Silently skip if there's an error fetching media for this post
+      console.log(`Could not fetch media for post ${postId}`);
     }
-  } catch (e) {
-    console.log("post_media table might not exist yet");
   }
 
   // Build the rows with all the data we have
