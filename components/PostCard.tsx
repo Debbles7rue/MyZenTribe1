@@ -321,30 +321,125 @@ function EditPostModal({
   return (
     <div className="edit-modal-overlay" onClick={onClose}>
       <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="edit-modal-header">
-          <h2 className="edit-modal-title">Edit Post</h2>
-          <button className="edit-modal-close" onClick={onClose}>×</button>
+        <div className="edit-modal-header" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '24px 24px 20px 24px',
+          borderBottom: '1px solid #e2e8f0'
+        }}>
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: '700',
+            color: '#1a202c',
+            margin: 0
+          }}>Edit Post</h2>
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '32px',
+              color: '#718096',
+              cursor: 'pointer',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '8px',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = '#f7fafc';
+              e.currentTarget.style.color = '#2d3748';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'none';
+              e.currentTarget.style.color = '#718096';
+            }}
+          >×</button>
         </div>
         
-        <div className="edit-modal-body">
+        <div className="edit-modal-body" style={{
+          padding: '24px',
+          overflowY: 'auto',
+          flex: 1
+        }}>
           <textarea
-            className="edit-textarea"
             value={editBody}
             onChange={(e) => setEditBody(e.target.value)}
             placeholder="What's on your mind?"
             rows={6}
+            style={{
+              width: '100%',
+              padding: '16px',
+              border: '2px solid #e2e8f0',
+              borderRadius: '12px',
+              resize: 'vertical',
+              marginBottom: '24px',
+              fontSize: '16px',
+              lineHeight: '1.5',
+              fontFamily: 'inherit',
+              outline: 'none',
+              minHeight: '150px'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#4299e1';
+              e.target.style.boxShadow = '0 0 0 3px rgba(66, 153, 225, 0.1)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#e2e8f0';
+              e.target.style.boxShadow = 'none';
+            }}
           />
 
           {currentMedia.length > 0 && (
-            <div className="current-media">
-              <h3 className="media-section-title">Current Media ({currentMedia.length})</h3>
-              <div className="media-preview-grid">
+            <div style={{
+              marginBottom: '24px',
+              padding: '20px',
+              background: '#f8fafc',
+              borderRadius: '12px'
+            }}>
+              <h3 style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#4a5568',
+                marginBottom: '12px',
+                margin: '0 0 12px 0'
+              }}>Current Media ({currentMedia.length})</h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                gap: '12px'
+              }}>
                 {currentMedia.map((media, idx) => (
-                  <div key={idx} className="media-preview">
+                  <div key={idx} style={{
+                    aspectRatio: '1',
+                    overflow: 'hidden',
+                    borderRadius: '8px',
+                    background: 'white',
+                    border: '2px solid white'
+                  }}>
                     {media.type === 'image' ? (
-                      <img src={media.url} alt="" />
+                      <img 
+                        src={media.url} 
+                        alt="" 
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
                     ) : (
-                      <video src={media.url} />
+                      <video 
+                        src={media.url}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
                     )}
                   </div>
                 ))}
@@ -352,8 +447,28 @@ function EditPostModal({
             </div>
           )}
 
-          <div className="add-media-section">
-            <label className="file-input-label">
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '16px',
+              transition: 'transform 0.2s, box-shadow 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 8px 16px rgba(102, 126, 234, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
               <input
                 type="file"
                 multiple
@@ -361,34 +476,100 @@ function EditPostModal({
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
               />
-              <span className="file-input-icon">📸</span>
+              <span style={{ fontSize: '20px' }}>📸</span>
               <span>Add More Photos/Videos</span>
             </label>
             {newFiles.length > 0 && (
-              <p className="file-count">
-                <span className="file-count-badge">{newFiles.length}</span>
+              <p style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                color: '#4a5568',
+                marginTop: '12px',
+                marginBottom: 0
+              }}>
+                <span style={{
+                  background: '#667eea',
+                  color: 'white',
+                  padding: '2px 10px',
+                  borderRadius: '9999px',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}>{newFiles.length}</span>
                 new file{newFiles.length > 1 ? 's' : ''} selected
               </p>
             )}
           </div>
         </div>
 
-        <div className="edit-modal-footer">
+        <div className="edit-modal-footer" style={{
+          display: 'flex',
+          gap: '16px',
+          justifyContent: 'flex-end',
+          padding: '20px 24px',
+          borderTop: '1px solid #e2e8f0',
+          background: '#f8fafc'
+        }}>
           <button 
-            className="modal-cancel"
             onClick={onClose}
             disabled={isSaving}
+            style={{
+              padding: '12px 24px',
+              background: 'white',
+              color: '#4a5568',
+              border: '2px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              if (!isSaving) {
+                e.currentTarget.style.background = '#f7fafc';
+                e.currentTarget.style.borderColor = '#cbd5e0';
+              }
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'white';
+              e.currentTarget.style.borderColor = '#e2e8f0';
+            }}
           >
             Cancel
           </button>
           <button 
-            className="modal-save"
             onClick={handleSave}
             disabled={isSaving || uploadingFiles}
+            style={{
+              padding: '12px 24px',
+              background: isSaving ? '#cbd5e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: '500',
+              cursor: isSaving ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s',
+              opacity: (isSaving || uploadingFiles) ? 0.7 : 1
+            }}
+            onMouseOver={(e) => {
+              if (!isSaving && !uploadingFiles) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 8px 16px rgba(102, 126, 234, 0.4)';
+              }
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
           >
             {isSaving ? (
               <>
-                <span className="saving-spinner">⏳</span>
+                <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
                 Saving...
               </>
             ) : (
