@@ -24,6 +24,9 @@ const typeLabel: Record<string, string> = {
   "reminder.due": "Reminder",
   "community.invited": "Community invite",
   "community.announcement": "Community news",
+  "album.invited": "Album invite",
+  "album.accepted": "Album invite accepted",
+  "album.declined": "Album invite declined",
 };
 
 const typeEmoji: Record<string, string> = {
@@ -36,6 +39,9 @@ const typeEmoji: Record<string, string> = {
   "reminder.due": "🔔",
   "community.invited": "🏘️",
   "community.announcement": "📣",
+  "album.invited": "📸",
+  "album.accepted": "✅",
+  "album.declined": "❌",
 };
 
 const typeColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -48,6 +54,9 @@ const typeColors: Record<string, { bg: string; border: string; text: string }> =
   "reminder.due": { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700" },
   "community.invited": { bg: "bg-teal-50", border: "border-teal-200", text: "text-teal-700" },
   "community.announcement": { bg: "bg-cyan-50", border: "border-cyan-200", text: "text-cyan-700" },
+  "album.invited": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700" },
+  "album.accepted": { bg: "bg-green-50", border: "border-green-200", text: "text-green-700" },
+  "album.declined": { bg: "bg-red-50", border: "border-red-200", text: "text-red-700" },
 };
 
 function fallbackHref(n: NotificationRow) {
@@ -59,6 +68,9 @@ function fallbackHref(n: NotificationRow) {
     return id ? `/friends/${id}/edit` : "/profile";
   }
   if (n.type.startsWith("community.")) return "/communities";
+  if (n.type.startsWith("album.")) {
+    return n.entity_id ? `/albums/${n.entity_id}` : "/albums";
+  }
   return "/";
 }
 
