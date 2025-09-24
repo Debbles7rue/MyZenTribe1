@@ -331,13 +331,14 @@ export async function addMediaToPost(
 
   if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
 
-  // Add to post_media table
+  // Add to post_media table - FIXED: Added created_by field
   const { error } = await supabase
     .from("post_media")
     .insert({
       post_id: postId,
       storage_path: url,  // Changed from 'url' to 'storage_path'
       type: mediaType,    // Changed from 'media_type' to 'type'
+      created_by: uid,    // ADDED: Required field
       uploaded_by: uid
     });
 
