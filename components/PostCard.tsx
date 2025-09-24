@@ -1,6 +1,12 @@
 // components/PostCard.tsx
 "use client";
 
+import { useState, useEffect } from "react";
+import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
+import Link from "next/link";
+import CoCreatorEditModal from "@/components/CoCreatorEditModal";
+import { supabase } from "@/lib/supabaseClient";
+
 export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
   console.log('PostCard input:', {
     id: post.id,
@@ -8,13 +14,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     comment_count: post.comment_count
   });
   // rest of component...
-
-import { useState, useEffect } from "react";
-import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
-import Link from "next/link";
-import CoCreatorEditModal from "@/components/CoCreatorEditModal";
-import { supabase } from "@/lib/supabaseClient";
-
+  
 interface PostCardProps {
   post: Post;
   onChanged?: () => void;
