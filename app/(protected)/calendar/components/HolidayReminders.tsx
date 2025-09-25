@@ -1,5 +1,5 @@
 // app/(protected)/calendar/components/HolidayReminders.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 interface Holiday {
@@ -19,8 +19,9 @@ interface HolidayRemindersProps {
   showToast?: (toast: { type: string; message: string }) => void;
 }
 
-export default function HolidayReminders({ onClose, onAddToCalendar, existingEvents = [] }: HolidayRemindersProps) {
+export default function HolidayReminders({ onClose, onAddToCalendar, existingEvents = [], showToast }: HolidayRemindersProps) {
   const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [selectedHolidays, setSelectedHolidays] = useState<Set<string>>(new Set());
   const [personalEvents, setPersonalEvents] = useState<Holiday[]>([]);
@@ -35,11 +36,46 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
     new Set(['traditional', 'special', 'fun', 'personal'])
   );
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set());
+  const [isAddingAll, setIsAddingAll] = useState(false);
+  const [addProgress, setAddProgress] = useState(0);
 
   // Load personal events from Supabase
   useEffect(() => {
     loadPersonalEvents();
   }, []);
+
+  // Check which holidays are already added
+  const addedHolidays = useMemo(() => {
+    const added = new Set<string>();
+    
+    existingEvents?.forEach(event => {
+      if (!event.title) return;
+      
+      // Extract holiday name by removing emoji if present
+      const eventTitle = event.title.toLowerCase();
+      
+      // Check each holiday to see if it matches this event
+      [...traditionalHolidays, ...funHolidays, ...specialDays, ...internationalHolidays, ...personalEvents].forEach(holiday => {
+        const holidayName = holiday.name.toLowerCase();
+        const holidayEmoji = holiday.emoji;
+        
+        // Check if event title contains the holiday name (with or without emoji)
+        if (eventTitle.includes(holidayName) || 
+            eventTitle === `${holidayEmoji} ${holidayName}` ||
+            eventTitle === holidayName) {
+          // Check if it's for current or next year
+          const eventDate = new Date(event.start_time || event.start);
+          const eventYear = eventDate.getFullYear();
+          
+          if (eventYear === currentYear || eventYear === nextYear) {
+            added.add(`${holiday.name}-${eventYear}`);
+          }
+        }
+      });
+    });
+    
+    return added;
+  }, [existingEvents, currentYear, nextYear]);
 
   const loadPersonalEvents = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -156,34 +192,57 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
     });
   };
 
+  const handleAddHoliday = async (holiday: Holiday, forNextYear: boolean = false) => {
+    const date = new Date(holiday.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Determine the target year
+    const targetYear = forNextYear ? nextYear : 
+                       (date < today ? nextYear : currentYear);
+    
+    // Check if already added for this year
+    const alreadyAddedKey = `${holiday.name}-${targetYear}`;
+    if (addedHolidays.has(alreadyAddedKey) || recentlyAdded.has(alreadyAddedKey)) {
+      showToast?.({ 
+        type: 'info', 
+        message: `${holiday.name} is already on your calendar for ${targetYear}` 
+      });
+      return;
+    }
+    
+    // Create holiday with adjusted date
+    const adjustedHoliday = {
+      ...holiday,
+      date: holiday.date.replace(currentYear.toString(), targetYear.toString())
+    };
+    
+    // Add to recently added set for immediate UI feedback
+    setRecentlyAdded(prev => new Set(prev).add(alreadyAddedKey));
+    
+    // Call the parent's onAddToCalendar
+    await onAddToCalendar(adjustedHoliday);
+    
+    // Show success feedback with animation
+    const element = document.getElementById(`holiday-${holiday.name.replace(/[^a-zA-Z0-9]/g, '-')}`);
+    if (element) {
+      element.classList.add('animate-pulse', 'bg-green-100', 'dark:bg-green-900/30');
+      setTimeout(() => {
+        element.classList.remove('animate-pulse', 'bg-green-100', 'dark:bg-green-900/30');
+      }, 1000);
+    }
+  };
+
   const addAllInCategory = async () => {
-    const toAdd = filteredHolidays.map(h => {
+    const toAdd = filteredHolidays.filter(h => {
       const date = new Date(h.date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const isPastThisYear = date < today;
       
-      // Adjust date to next year if it's past
-      if (isPastThisYear) {
-        const nextYear = currentYear + 1;
-        return {
-          ...h,
-          date: h.date.replace(currentYear.toString(), nextYear.toString()),
-          name: h.name // Don't add year to name in bulk
-        };
-      }
-      return h;
-    }).filter(h => {
-      // Filter out already added holidays and recently added ones
-      return !recentlyAdded.has(h.name) && !existingEvents?.some(e => {
-        if (!e.title) return false;
-        const eventTitle = e.title.toLowerCase();
-        const holidayName = h.name.toLowerCase();
-        const holidayEmoji = h.emoji;
-        
-        return (eventTitle.includes(holidayName) || 
-                eventTitle.includes(`${holidayEmoji} ${holidayName}`));
-      });
+      const targetYear = date < today ? nextYear : currentYear;
+      const key = `${h.name}-${targetYear}`;
+      
+      return !addedHolidays.has(key) && !recentlyAdded.has(key);
     });
 
     if (toAdd.length === 0) {
@@ -191,14 +250,37 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
       return;
     }
 
-    // Add all holidays
-    for (const holiday of toAdd) {
-      setRecentlyAdded(prev => new Set(prev).add(holiday.name));
-      await onAddToCalendar(holiday);
+    setIsAddingAll(true);
+    setAddProgress(0);
+
+    // Add holidays with progress animation
+    for (let i = 0; i < toAdd.length; i++) {
+      const holiday = toAdd[i];
+      const date = new Date(holiday.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const targetYear = date < today ? nextYear : currentYear;
+      const adjustedHoliday = {
+        ...holiday,
+        date: holiday.date.replace(currentYear.toString(), targetYear.toString())
+      };
+      
+      setRecentlyAdded(prev => new Set(prev).add(`${holiday.name}-${targetYear}`));
+      await onAddToCalendar(adjustedHoliday);
+      
+      setAddProgress(Math.round(((i + 1) / toAdd.length) * 100));
+      
+      // Small delay for visual effect
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    showToast?.({ type: 'success', message: `Added ${toAdd.length} holidays to your calendar!` });
-    setTimeout(() => onClose(), 1500);
+    showToast?.({ type: 'success', message: `🎉 Added ${toAdd.length} holidays to your calendar!` });
+    
+    setTimeout(() => {
+      setIsAddingAll(false);
+      onClose();
+    }, 1500);
   };
 
   const savePersonalEvent = async () => {
@@ -227,17 +309,18 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
       await loadPersonalEvents();
       setShowAddPersonal(false);
       setNewPersonalEvent({ name: '', date: '', type: 'birthday', description: '' });
+      showToast?.({ type: 'success', message: `Added ${newPersonalEvent.name} to your personal holidays!` });
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300" 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 animate-fadeIn" 
         onClick={onClose} 
       />
       
-      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden">
+      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden animate-slideUp">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-6">
           <div className="flex items-center justify-between">
@@ -258,6 +341,19 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
               </svg>
             </button>
           </div>
+          
+          {/* Progress bar when adding all */}
+          {isAddingAll && (
+            <div className="mt-4">
+              <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-white h-full transition-all duration-300 ease-out"
+                  style={{ width: `${addProgress}%` }}
+                />
+              </div>
+              <p className="text-xs mt-1 text-white/80">Adding holidays... {addProgress}%</p>
+            </div>
+          )}
         </div>
 
         {/* Category Tabs */}
@@ -271,7 +367,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                     px-4 py-2 rounded-full font-medium transition-all transform hover:scale-105
                     ${activeCategory === cat.id 
                       ? `${cat.color} text-white shadow-lg` 
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                     }
                   `}
                 >
@@ -309,7 +405,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
             {!showAddPersonal ? (
               <button
                 onClick={() => setShowAddPersonal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-all transform hover:scale-105"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -317,27 +413,27 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                 Add Birthday/Anniversary
               </button>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-fadeIn">
                 <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
                     placeholder="Name (e.g., Mom's Birthday)"
                     value={newPersonalEvent.name}
                     onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, name: e.target.value })}
-                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800"
+                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   />
                   <input
                     type="date"
                     value={newPersonalEvent.date}
                     onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, date: e.target.value })}
-                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800"
+                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   />
                 </div>
                 <div className="flex gap-3">
                   <select
                     value={newPersonalEvent.type}
                     onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, type: e.target.value as any })}
-                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800"
+                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   >
                     <option value="birthday">🎂 Birthday</option>
                     <option value="anniversary">💑 Anniversary</option>
@@ -348,17 +444,21 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                     placeholder="Description (optional)"
                     value={newPersonalEvent.description}
                     onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, description: e.target.value })}
-                    className="flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800"
+                    className="flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   />
                   <button
                     onClick={savePersonalEvent}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+                    disabled={!newPersonalEvent.name || !newPersonalEvent.date}
+                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105"
                   >
                     Save
                   </button>
                   <button
-                    onClick={() => setShowAddPersonal(false)}
-                    className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg"
+                    onClick={() => {
+                      setShowAddPersonal(false);
+                      setNewPersonalEvent({ name: '', date: '', type: 'birthday', description: '' });
+                    }}
+                    className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600 transition-all"
                   >
                     Cancel
                   </button>
@@ -373,33 +473,29 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
           <div className="grid gap-2">
             {filteredHolidays.map(holiday => {
               const date = new Date(holiday.date);
-              const isPast = date < new Date();
-              const isAlreadyAdded = existingEvents?.some(e => 
-                e.title === holiday.name && 
-                new Date(e.start).toDateString() === date.toDateString()
-              );
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const isPast = date < today;
+              
+              // Check if added for current year or next year
+              const isAddedThisYear = addedHolidays.has(`${holiday.name}-${currentYear}`) || 
+                                      recentlyAdded.has(`${holiday.name}-${currentYear}`);
+              const isAddedNextYear = addedHolidays.has(`${holiday.name}-${nextYear}`) || 
+                                      recentlyAdded.has(`${holiday.name}-${nextYear}`);
+              
+              // Determine what year we'd add it for
+              const targetYear = isPast ? nextYear : currentYear;
+              const isAlreadyAdded = isPast ? isAddedNextYear : isAddedThisYear;
               
               return (
                 <div
                   key={`${holiday.name}-${holiday.date}`}
-                  onClick={() => {
-                    if (isPast) {
-                      showToast?.({ type: 'info', message: `${holiday.name} has already passed this year` });
-                      return;
-                    }
-                    if (isAlreadyAdded) {
-                      showToast?.({ type: 'info', message: `${holiday.name} is already on your calendar` });
-                      return;
-                    }
-                    onAddToCalendar(holiday);
-                  }}
+                  id={`holiday-${holiday.name.replace(/[^a-zA-Z0-9]/g, '-')}`}
                   className={`
-                    relative group rounded-lg p-3 border transition-all
+                    relative group rounded-lg p-3 border transition-all duration-300
                     ${isAlreadyAdded 
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-400 cursor-default' 
-                      : isPast
-                      ? 'opacity-40 cursor-not-allowed bg-gray-50 dark:bg-gray-900/50'
-                      : 'cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-400' 
+                      : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
                     }
                   `}
                   style={{
@@ -408,7 +504,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{holiday.emoji}</span>
+                    <span className="text-2xl animate-bounce-subtle">{holiday.emoji}</span>
                     <div className="flex-1">
                       <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         {holiday.name}
@@ -417,53 +513,124 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                             Yearly
                           </span>
                         )}
+                        {isPast && !isAddedNextYear && (
+                          <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 px-2 py-0.5 rounded-full animate-pulse">
+                            Past - Add for {nextYear}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
                         {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} 
                         {holiday.description && ` • ${holiday.description}`}
                       </div>
                     </div>
-                    {(isAlreadyAdded || recentlyAdded.has(holiday.name)) && (
-                      <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
-                        </svg>
-                        <span className="text-sm font-medium">Added</span>
-                      </div>
-                    )}
+                    
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2">
+                      {isAlreadyAdded ? (
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400 animate-fadeIn">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
+                          </svg>
+                          <span className="text-sm font-medium">
+                            {isPast ? `Added for ${nextYear}` : 'Added'}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleAddHoliday(holiday, isPast)}
+                            className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-md"
+                          >
+                            Add {isPast && `for ${targetYear}`}
+                          </button>
+                          {!isPast && !isAddedNextYear && (
+                            <button
+                              onClick={() => handleAddHoliday(holiday, true)}
+                              className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-all transform hover:scale-105"
+                              title={`Also add for ${nextYear}`}
+                            >
+                              +{nextYear}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
+          
+          {filteredHolidays.length === 0 && (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p>No holidays in this category</p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-              <span>{filteredHolidays.length} holidays in view</span>
+              <span className="font-medium">{filteredHolidays.length} holidays</span>
               <span className="text-xs">
-                Click any holiday to add it instantly
+                Click to add instantly • Past holidays add for next year
               </span>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all transform hover:scale-105"
               >
                 Close
               </button>
               <button
                 onClick={addAllInCategory}
-                className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg"
+                disabled={isAddingAll}
+                className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add All {activeCategory === 'all' ? 'Enabled' : categories.find(c => c.id === activeCategory)?.label} Holidays
+                {isAddingAll ? 'Adding...' : `Add All ${activeCategory === 'all' ? 'Enabled' : categories.find(c => c.id === activeCategory)?.label} Holidays`}
               </button>
             </div>
           </div>
         </div>
       </div>
+      
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+          from { 
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes bounce-subtle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        
+        .animate-slideUp {
+          animation: slideUp 0.4s ease-out;
+        }
+        
+        .animate-bounce-subtle {
+          animation: bounce-subtle 2s infinite;
+        }
+      `}</style>
     </div>
   );
 }
