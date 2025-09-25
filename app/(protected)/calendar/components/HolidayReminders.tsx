@@ -156,23 +156,41 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   };
 
   const addAllInCategory = () => {
-    const toAdd = filteredHolidays.filter(h => {
+    const toAdd = filteredHolidays.map(h => {
       const date = new Date(h.date);
-      return date >= new Date() && !existingEvents?.some(e => 
-        e.title?.includes(h.name) && 
-        new Date(e.start_time).toDateString() === date.toDateString()
-      );
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isPastThisYear = date < today;
+      
+      // Adjust date to next year if it's past
+      if (isPastThisYear) {
+        const nextYear = currentYear + 1;
+        return {
+          ...h,
+          date: h.date.replace(currentYear.toString(), nextYear.toString()),
+          name: `${h.name} (${nextYear})`
+        };
+      }
+      return h;
+    }).filter(h => {
+      // Filter out already added holidays
+      return !existingEvents?.some(e => {
+        const eventTitle = e.title?.toLowerCase();
+        const holidayName = h.name.toLowerCase();
+        return eventTitle?.includes(holidayName);
+      });
     });
+
+    if (toAdd.length === 0) {
+      alert('All holidays in this category are already added to your calendar');
+      return;
+    }
 
     toAdd.forEach(holiday => {
       onAddToCalendar(holiday);
     });
     
-    if (toAdd.length > 0) {
-      setTimeout(() => onClose(), 1000); // Close after a brief delay
-    } else {
-      alert('No new holidays to add (all are either past or already in calendar)');
-    }
+    setTimeout(() => onClose(), 1000); // Close after a brief delay
   };
 
   const savePersonalEvent = async () => {
