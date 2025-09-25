@@ -7,7 +7,6 @@ import type { View } from "react-big-calendar";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
 import { supabase } from "@/lib/supabaseClient";
-// At the top with other imports (around line 10-20):
 
 // Import our modular components
 import { useCalendarData } from "./hooks/useCalendarData";
@@ -29,6 +28,7 @@ import CalendarModals from "./components/CalendarModals";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import HolidayReminders from "./components/HolidayReminders";
+import CalendarDebugger from "./components/CalendarDebugger"; // ADD THIS IMPORT
 import { Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -619,6 +619,12 @@ export default function CalendarPage() {
                   selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
                 />
               )}
+              {/* ADD CALENDAR DEBUGGER HERE */}
+              <CalendarDebugger 
+                onSelectSlot={onSelectSlot}
+                onSelectEvent={onSelectEvent}
+                events={calendarEvents}
+              />
             </div>
           </div>
         </div>
