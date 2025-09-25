@@ -1,6 +1,7 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
+import CalendarDebugger from "./components/CalendarDebugger";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
