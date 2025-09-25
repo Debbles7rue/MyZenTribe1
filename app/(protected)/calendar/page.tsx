@@ -1,13 +1,26 @@
 // app/(protected)/calendar/page.tsx
 "use client";
 
-import CalendarDebugger from "./components/CalendarDebugger";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
 import { supabase } from "@/lib/supabaseClient";
+// At the top with other imports (around line 10-20):
+import CalendarDebugger from "./components/CalendarDebugger";
+
+// In the JSX, after CalendarGrid (around line 650-700):
+<CalendarGrid
+  dbEvents={calendarEvents}
+  moonEvents={moonEvents}
+  // ... all your props
+/>
+<CalendarDebugger 
+  onSelectSlot={onSelectSlot}
+  onSelectEvent={onSelectEvent}
+  events={calendarEvents}
+/>
 
 // Import our modular components
 import { useCalendarData } from "./hooks/useCalendarData";
