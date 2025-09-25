@@ -568,15 +568,15 @@ export default function CalendarPage() {
   );
 
   // FIXED: Filter visible reminders and todos based on showCompletedItems
-  const visibleReminders = useMemo(() => 
-    showCompletedItems ? reminders : reminders.filter(r => !r.completed),
-    [reminders, showCompletedItems]
-  );
+  const visibleReminders = useMemo(() => {
+    if (!reminders) return [];
+    return showCompletedItems ? reminders : reminders.filter(r => !r.completed);
+  }, [reminders, showCompletedItems]);
 
-  const visibleTodos = useMemo(() => 
-    showCompletedItems ? todos : todos.filter(t => !t.completed),
-    [todos, showCompletedItems]
-  );
+  const visibleTodos = useMemo(() => {
+    if (!todos) return [];
+    return showCompletedItems ? todos : todos.filter(t => !t.completed);
+  }, [todos, showCompletedItems]);
 
   return (
     <div 
