@@ -682,11 +682,25 @@ export default function CalendarPage() {
               }
 
               try {
-                // Create all-day event for the holiday
+                // Parse the holiday date - it might have been adjusted to next year
                 const holidayDate = new Date(holiday.date);
-                const startTime = new Date(holidayDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                // Check if the date string contains next year (from the component)
+                // If so, use it as is. Otherwise check if we need to adjust it
+                let finalDate = holidayDate;
+                
+                // If the holiday date has already passed this year and isn't already set to next year
+                if (holidayDate < today && holidayDate.getFullYear() === today.getFullYear()) {
+                  // Move it to next year
+                  finalDate = new Date(holidayDate);
+                  finalDate.setFullYear(finalDate.getFullYear() + 1);
+                }
+                
+                const startTime = new Date(finalDate);
                 startTime.setHours(0, 0, 0, 0);
-                const endTime = new Date(holidayDate);
+                const endTime = new Date(finalDate);
                 endTime.setHours(23, 59, 59, 999);
 
                 const { error } = await supabase.from('events').insert({
@@ -704,17 +718,22 @@ export default function CalendarPage() {
                 if (!error) {
                   showToast({ 
                     type: 'success', 
-                    message: `🎉 Added ${holiday.name} to your calendar!` 
+                    message: `🎉 Added ${holiday.name} to your calendar for ${finalDate.getFullYear()}!` 
                   });
                   await loadCalendar(); // Refresh to show new holiday
                 } else {
+                  console.error('Database error:', error);
                   showToast({ 
                     type: 'error', 
-                    message: `Failed to add ${holiday.name}` 
+                    message: `Failed to add ${holiday.name}: ${error.message}` 
                   });
                 }
               } catch (error) {
                 console.error('Error adding holiday:', error);
+                showToast({ 
+                  type: 'error', 
+                  message: 'Failed to add holiday to calendar' 
+                });
               }
             }}
             existingEvents={safeEvents}
