@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import type { View } from "react-big-calendar";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
+import { supabase } from "@/lib/supabaseClient";
 
 // Import our modular components
 import { useCalendarData } from "./hooks/useCalendarData";
@@ -670,21 +671,53 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Holiday Reminders Modal */}
+        {/* Holiday Reminders Modal - FIXED TO ADD DIRECTLY TO CALENDAR */}
         {showHolidayReminders && (
           <HolidayReminders
             onClose={() => setShowHolidayReminders(false)}
-            onAddToCalendar={(holiday: any) => {
-              setForm({
-                ...form,
-                title: holiday.name,
-                start: holiday.date,
-                end: holiday.date,
-                event_type: 'holiday'
-              });
-              setOpenCreate(true);
-              setShowHolidayReminders(false);
+            onAddToCalendar={async (holiday: any) => {
+              if (!me) {
+                showToast({ type: 'error', message: 'Please log in first' });
+                return;
+              }
+
+              try {
+                // Create all-day event for the holiday
+                const holidayDate = new Date(holiday.date);
+                const startTime = new Date(holidayDate);
+                startTime.setHours(0, 0, 0, 0);
+                const endTime = new Date(holidayDate);
+                endTime.setHours(23, 59, 59, 999);
+
+                const { error } = await supabase.from('events').insert({
+                  title: `${holiday.emoji} ${holiday.name}`,
+                  description: holiday.description || '',
+                  start_time: startTime.toISOString(),
+                  end_time: endTime.toISOString(),
+                  created_by: me,
+                  visibility: 'private',
+                  source: 'personal',
+                  event_type: 'holiday',
+                  completed: false
+                });
+
+                if (!error) {
+                  showToast({ 
+                    type: 'success', 
+                    message: `🎉 Added ${holiday.name} to your calendar!` 
+                  });
+                  await loadCalendar(); // Refresh to show new holiday
+                } else {
+                  showToast({ 
+                    type: 'error', 
+                    message: `Failed to add ${holiday.name}` 
+                  });
+                }
+              } catch (error) {
+                console.error('Error adding holiday:', error);
+              }
             }}
+            existingEvents={safeEvents}
           />
         )}
 
@@ -701,6 +734,7 @@ export default function CalendarPage() {
           quickModalOpen={quickModalOpen}
           showPomodoroTimer={showPomodoroTimer}
           showTimeBlocking={showTimeBlocking}
+          showHolidayReminders={showHolidayReminders}
           
           setOpenCreate={setOpenCreate}
           setOpenEdit={setOpenEdit}
@@ -713,6 +747,7 @@ export default function CalendarPage() {
           setQuickModalOpen={setQuickModalOpen}
           setShowPomodoroTimer={setShowPomodoroTimer}
           setShowTimeBlocking={setShowTimeBlocking}
+          setShowHolidayReminders={setShowHolidayReminders}
           
           me={me}
           selected={selected}
@@ -728,6 +763,7 @@ export default function CalendarPage() {
           setQuickModalForm={setQuickModalForm}
           quickModalType={quickModalType}
           isMobile={isMobile}
+          loadCalendar={loadCalendar}
           
           handleCreateEvent={async () => {
             await handleCreateEvent();
@@ -763,6 +799,7 @@ export default function CalendarPage() {
             }
           }}
           resetForm={resetForm}
+          showToast={showToast}
         />
       </div>
     </div>
