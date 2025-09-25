@@ -16,6 +16,7 @@ interface HolidayRemindersProps {
   onClose: () => void;
   onAddToCalendar: (holiday: Holiday) => void;
   existingEvents?: any[];
+  showToast?: (toast: { type: string; message: string }) => void;
 }
 
 export default function HolidayReminders({ onClose, onAddToCalendar, existingEvents = [] }: HolidayRemindersProps) {
@@ -204,13 +205,13 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div 
         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300" 
         onClick={onClose} 
       />
       
-      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-6">
           <div className="flex items-center justify-between">
@@ -342,7 +343,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
         )}
 
         {/* Holiday Grid */}
-        <div className="p-6 overflow-y-auto max-h-[50vh]">
+        <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 280px)' }}>
           <div className="grid gap-2">
             {filteredHolidays.map(holiday => {
               const date = new Date(holiday.date);
@@ -355,14 +356,24 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
               return (
                 <div
                   key={`${holiday.name}-${holiday.date}`}
-                  onClick={() => !isPast && !isAlreadyAdded && onAddToCalendar(holiday)}
+                  onClick={() => {
+                    if (isPast) {
+                      showToast?.({ type: 'info', message: `${holiday.name} has already passed this year` });
+                      return;
+                    }
+                    if (isAlreadyAdded) {
+                      showToast?.({ type: 'info', message: `${holiday.name} is already on your calendar` });
+                      return;
+                    }
+                    onAddToCalendar(holiday);
+                  }}
                   className={`
                     relative group rounded-lg p-3 border transition-all
                     ${isAlreadyAdded 
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-400 cursor-default' 
                       : isPast
                       ? 'opacity-40 cursor-not-allowed bg-gray-50 dark:bg-gray-900/50'
-                      : 'cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md hover:scale-[1.02]'
+                      : 'cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
                     }
                   `}
                   style={{
