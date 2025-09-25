@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import type { View } from "react-big-calendar";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
@@ -56,14 +57,25 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
 function MobileListsBottomSheet({ 
   open, 
   onClose, 
-  onNavigate 
+  reminders,
+  todos,
+  onToggleComplete,
+  onDeleteItem,
+  onCreateReminder,
+  onCreateTodo
 }: { 
   open: boolean; 
-  onClose: () => void; 
-  onNavigate: (path: string) => void;
+  onClose: () => void;
+  reminders: TodoReminder[];
+  todos: TodoReminder[];
+  onToggleComplete: (item: TodoReminder) => void;
+  onDeleteItem: (id: string) => void;
+  onCreateReminder: () => void;
+  onCreateTodo: () => void;
 }) {
   const [dragPosition, setDragPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [activeTab, setActiveTab] = useState<'todos' | 'reminders'>('todos');
   const startY = useRef(0);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -90,6 +102,9 @@ function MobileListsBottomSheet({
 
   if (!open) return null;
 
+  const visibleTodos = todos.filter(t => !t.completed);
+  const visibleReminders = reminders.filter(r => !r.completed);
+
   return (
     <>
       {/* Backdrop */}
@@ -103,7 +118,7 @@ function MobileListsBottomSheet({
         className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl z-50 md:hidden transition-transform`}
         style={{ 
           transform: `translateY(${dragPosition}px)`,
-          maxHeight: '70vh'
+          maxHeight: '80vh'
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -114,76 +129,133 @@ function MobileListsBottomSheet({
           <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
         </div>
         
-        {/* Title */}
+        {/* Title & Tabs */}
         <div className="px-6 pb-3">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">My Lists</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Tap to view or drag items to calendar</p>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">My Lists</h2>
+          
+          {/* Tab Buttons */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('todos')}
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                activeTab === 'todos'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+              }`}
+            >
+              To-dos ({visibleTodos.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('reminders')}
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                activeTab === 'reminders'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+              }`}
+            >
+              Reminders ({visibleReminders.length})
+            </button>
+          </div>
         </div>
         
-        {/* List Options */}
-        <div className="px-6 pb-6 space-y-3">
-          <button
-            onClick={() => {
-              onNavigate('/todos');
-              onClose();
-            }}
-            className="w-full p-4 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-between group hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">✅</span>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">To-dos</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Tasks & projects</p>
-              </div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+        {/* Content */}
+        <div className="px-6 pb-6 overflow-y-auto" style={{ maxHeight: '50vh' }}>
+          {activeTab === 'todos' && (
+            <>
+              {/* Add Todo Button */}
+              <button
+                onClick={() => {
+                  onCreateTodo();
+                  onClose();
+                }}
+                className="w-full mb-3 p-3 bg-green-50 dark:bg-green-900/20 border-2 border-dashed border-green-300 dark:border-green-700 rounded-lg flex items-center justify-center gap-2 hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
+              >
+                <span className="text-2xl">➕</span>
+                <span className="font-medium text-green-700 dark:text-green-300">Add Todo</span>
+              </button>
 
-          <button
-            onClick={() => {
-              onNavigate('/reminders');
-              onClose();
-            }}
-            className="w-full p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-between group hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🔔</span>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Reminders</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Time-based alerts</p>
-              </div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+              {/* Todo List */}
+              {visibleTodos.length === 0 ? (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No todos yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {visibleTodos.map((todo) => (
+                    <div key={todo.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <input
+                        type="checkbox"
+                        checked={todo.completed}
+                        onChange={() => onToggleComplete(todo)}
+                        className="w-5 h-5 text-green-500"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white">{todo.title}</p>
+                        {todo.description && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{todo.description}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => onDeleteItem(todo.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
-          <button
-            onClick={() => {
-              onNavigate('/shopping');
-              onClose();
-            }}
-            className="w-full p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-between group hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🛒</span>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Shopping List</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Things to buy</p>
-              </div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          {activeTab === 'reminders' && (
+            <>
+              {/* Add Reminder Button */}
+              <button
+                onClick={() => {
+                  onCreateReminder();
+                  onClose();
+                }}
+                className="w-full mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+              >
+                <span className="text-2xl">➕</span>
+                <span className="font-medium text-blue-700 dark:text-blue-300">Add Reminder</span>
+              </button>
+
+              {/* Reminder List */}
+              {visibleReminders.length === 0 ? (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No reminders yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {visibleReminders.map((reminder) => (
+                    <div key={reminder.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <input
+                        type="checkbox"
+                        checked={reminder.completed}
+                        onChange={() => onToggleComplete(reminder)}
+                        className="w-5 h-5 text-blue-500"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white">{reminder.title}</p>
+                        {reminder.description && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{reminder.description}</p>
+                        )}
+                        {reminder.date && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            {new Date(reminder.date).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => onDeleteItem(reminder.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </>
@@ -191,6 +263,9 @@ function MobileListsBottomSheet({
 }
 
 export default function CalendarPage() {
+  // ===== ROUTER FOR NAVIGATION =====
+  const router = useRouter();
+
   // ===== CORE STATE =====
   const [mode, setMode] = useState<Mode>("my");
   const [date, setDate] = useState<Date>(new Date());
@@ -264,7 +339,7 @@ export default function CalendarPage() {
     resetForm
   } = useCalendarData();
 
-  // FIXED: Use carpool matches hook
+  // Use carpool matches hook
   const carpoolMatches = useCarpoolMatches(events, friends);
 
   const {
@@ -376,11 +451,6 @@ export default function CalendarPage() {
     }
   }, [isMobile]);
 
-  // Navigation handler for lists
-  const handleListNavigation = useCallback((path: string) => {
-    window.location.href = path;
-  }, []);
-
   // ===== MOBILE SWIPE GESTURES =====
   const swipeHandlers = useSwipeGestures({
     onSwipeLeft: () => {
@@ -412,7 +482,7 @@ export default function CalendarPage() {
     }
   });
 
-  // ===== VOICE COMMANDS (FIXED: Now fully connected) =====
+  // ===== VOICE COMMANDS =====
   const { isListening, startListening } = useVoiceCommands({
     onCommand: (command: string) => {
       const lower = command.toLowerCase();
@@ -525,7 +595,6 @@ export default function CalendarPage() {
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
     if (r?.moonPhase) {
-      // FIXED: Moon icons now clickable - show moon info
       showToast({ 
         type: 'info', 
         message: `🌙 Moon Phase: ${r.moonPhase}`,
@@ -562,12 +631,23 @@ export default function CalendarPage() {
     setShowCarpoolChat(true);
   }, [setSelectedCarpoolEvent]);
 
+  // ===== QUICK ACTION HANDLERS FOR MOBILE LISTS =====
+  const handleCreateReminder = useCallback(() => {
+    setQuickModalType('reminder');
+    setQuickModalOpen(true);
+  }, []);
+
+  const handleCreateTodo = useCallback(() => {
+    setQuickModalType('todo');
+    setQuickModalOpen(true);
+  }, []);
+
   const calendarEvents = useMemo(() => 
     mode === 'my' ? (events || []) : [],
     [mode, events]
   );
 
-  // FIXED: Filter visible reminders and todos based on showCompletedItems
+  // Filter visible reminders and todos based on showCompletedItems
   const visibleReminders = useMemo(() => {
     const remindersList = reminders || [];
     if (!remindersList || remindersList.length === 0) return [];
@@ -601,7 +681,7 @@ export default function CalendarPage() {
           </div>
         )}
         
-        {/* FIXED HEADER - No more weather/theme selectors */}
+        {/* Header */}
         <CalendarHeader
           mode={mode}
           setMode={setMode}
@@ -625,7 +705,10 @@ export default function CalendarPage() {
           setActiveHeaderTab={() => {}}
           gamificationEnabled={gamificationEnabled}
           setGamificationEnabled={setGamificationEnabled}
-          setShowCarpoolChat={setShowCarpoolChat}
+          setShowCarpoolChat={() => {
+            setSelectedCarpoolEvent(null);
+            setShowCarpoolChat(true);
+          }}
           setSelectedCarpoolEvent={setSelectedCarpoolEvent}
           showListsSidebar={showListsSidebar}
           setShowListsSidebar={setShowListsSidebar}
@@ -659,7 +742,7 @@ export default function CalendarPage() {
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Desktop Sidebar - FIXED: Now properly handles drag & drop and todo/reminder checkoff */}
+            {/* Desktop Sidebar */}
             {mode === 'my' && !isMobile && (
               <div className={`transition-all duration-300 ${showListsSidebar ? 'w-80' : 'w-0'}`}>
                 {showListsSidebar && (
@@ -747,11 +830,16 @@ export default function CalendarPage() {
           <MobileListsBottomSheet
             open={showMobileListsSheet}
             onClose={() => setShowMobileListsSheet(false)}
-            onNavigate={handleListNavigation}
+            reminders={reminders || []}
+            todos={todos || []}
+            onToggleComplete={handleToggleComplete}
+            onDeleteItem={handleDeleteItem}
+            onCreateReminder={handleCreateReminder}
+            onCreateTodo={handleCreateTodo}
           />
         )}
 
-        {/* Mobile Sidebar (for other features, not lists) */}
+        {/* Mobile Sidebar (for other features) */}
         {isMobile && (
           <MobileSidebar
             open={mobileMenuOpen}
@@ -782,7 +870,6 @@ export default function CalendarPage() {
           <HolidayReminders
             onClose={() => setShowHolidayReminders(false)}
             onAddToCalendar={(holiday: any) => {
-              // Add holiday to calendar
               setForm({
                 ...form,
                 title: holiday.name,
