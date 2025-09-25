@@ -9,7 +9,7 @@ export function useCalendarData() {
   // User state
   const [me, setMe] = useState<string | null>(null);
   
-  // Events data
+  // Events data - Initialize as empty arrays to prevent undefined errors
   const [events, setEvents] = useState<DBEvent[]>([]);
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,7 @@ export function useCalendarData() {
   const [selectedCarpoolEvent, setSelectedCarpoolEvent] = useState<any>(null);
   const [selectedCarpoolFriends, setSelectedCarpoolFriends] = useState<Set<string>>(new Set());
   
-  // Lists
+  // Lists - Initialize as empty arrays, never undefined
   const [reminders, setReminders] = useState<TodoReminder[]>([]);
   const [todos, setTodos] = useState<TodoReminder[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -72,17 +72,17 @@ export function useCalendarData() {
         .eq('created_by', me)
         .order('start_time', { ascending: true });
       
-      if (eventsData) {
+      if (eventsData && Array.isArray(eventsData)) {
         setEvents(eventsData);
         
-        // Separate reminders and todos
-        const remindersList = eventsData.filter(e => e.event_type === 'reminder');
-        const todosList = eventsData.filter(e => e.event_type === 'todo');
+        // Separate reminders and todos - with safety checks
+        const remindersList = eventsData.filter(e => e && e.event_type === 'reminder') || [];
+        const todosList = eventsData.filter(e => e && e.event_type === 'todo') || [];
         
         setReminders(remindersList.map(r => ({
           id: r.id,
-          title: r.title,
-          description: r.description,
+          title: r.title || '',
+          description: r.description || '',
           date: r.start_time,
           completed: r.completed || false,
           type: 'reminder' as const
@@ -90,12 +90,17 @@ export function useCalendarData() {
         
         setTodos(todosList.map(t => ({
           id: t.id,
-          title: t.title,
-          description: t.description,
+          title: t.title || '',
+          description: t.description || '',
           date: t.start_time,
           completed: t.completed || false,
           type: 'todo' as const
         })));
+      } else {
+        // If no data, ensure arrays remain empty, not undefined
+        setEvents([]);
+        setReminders([]);
+        setTodos([]);
       }
       
       // Load friends
@@ -104,17 +109,24 @@ export function useCalendarData() {
         .select('*')
         .eq('user_id', me);
       
-      if (friendsData) {
+      if (friendsData && Array.isArray(friendsData)) {
         setFriends(friendsData.map(f => ({
           friend_id: f.friend_id,
           name: f.friend_name || 'Friend',
           avatar: f.friend_avatar || null,
           lastCarpoolDate: null
         })));
+      } else {
+        setFriends([]);
       }
       
     } catch (error) {
       console.error('Error loading calendar:', error);
+      // On error, ensure arrays are still arrays, not undefined
+      setEvents([]);
+      setReminders([]);
+      setTodos([]);
+      setFriends([]);
     } finally {
       setLoading(false);
     }
@@ -134,14 +146,17 @@ export function useCalendarData() {
         .order('start_time', { ascending: true })
         .limit(20);
       
-      if (feedData) {
+      if (feedData && Array.isArray(feedData)) {
         setFeed(feedData.map(e => ({
           ...e,
           _dismissed: false
         })));
+      } else {
+        setFeed([]);
       }
     } catch (error) {
       console.error('Error loading feed:', error);
+      setFeed([]);
     }
   }, [me]);
 
@@ -171,16 +186,16 @@ export function useCalendarData() {
 
   return {
     me,
-    events,
+    events: events || [],  // Always return array
     loading,
-    feed,
+    feed: feed || [],  // Always return array
     selected,
     setSelected,
     selectedFeedEvent,
     setSelectedFeedEvent,
-    reminders,
-    todos,
-    friends,
+    reminders: reminders || [],  // Always return array
+    todos: todos || [],  // Always return array
+    friends: friends || [],  // Always return array
     selectedCarpoolEvent,
     setSelectedCarpoolEvent,
     selectedCarpoolFriends,
