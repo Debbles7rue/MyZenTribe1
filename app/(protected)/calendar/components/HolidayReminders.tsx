@@ -14,7 +14,7 @@ interface Holiday {
 
 interface HolidayRemindersProps {
   onClose: () => void;
-  onAddToCalendar: (holiday: Holiday) => void;
+  onAddToCalendar: (holiday: Holiday) => Promise<boolean> | void;
   existingEvents?: any[];
   showToast?: (toast: { type: string; message: string }) => void;
 }
@@ -156,7 +156,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
     });
   };
 
-  const addAllInCategory = () => {
+  const addAllInCategory = async () => {
     const toAdd = filteredHolidays.map(h => {
       const date = new Date(h.date);
       const today = new Date();
@@ -169,29 +169,36 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
         return {
           ...h,
           date: h.date.replace(currentYear.toString(), nextYear.toString()),
-          name: `${h.name} (${nextYear})`
+          name: h.name // Don't add year to name in bulk
         };
       }
       return h;
     }).filter(h => {
-      // Filter out already added holidays
-      return !existingEvents?.some(e => {
-        const eventTitle = e.title?.toLowerCase();
+      // Filter out already added holidays and recently added ones
+      return !recentlyAdded.has(h.name) && !existingEvents?.some(e => {
+        if (!e.title) return false;
+        const eventTitle = e.title.toLowerCase();
         const holidayName = h.name.toLowerCase();
-        return eventTitle?.includes(holidayName);
+        const holidayEmoji = h.emoji;
+        
+        return (eventTitle.includes(holidayName) || 
+                eventTitle.includes(`${holidayEmoji} ${holidayName}`));
       });
     });
 
     if (toAdd.length === 0) {
-      alert('All holidays in this category are already added to your calendar');
+      showToast?.({ type: 'info', message: 'All holidays in this category are already added' });
       return;
     }
 
-    toAdd.forEach(holiday => {
-      onAddToCalendar(holiday);
-    });
+    // Add all holidays
+    for (const holiday of toAdd) {
+      setRecentlyAdded(prev => new Set(prev).add(holiday.name));
+      await onAddToCalendar(holiday);
+    }
     
-    setTimeout(() => onClose(), 1000); // Close after a brief delay
+    showToast?.({ type: 'success', message: `Added ${toAdd.length} holidays to your calendar!` });
+    setTimeout(() => onClose(), 1500);
   };
 
   const savePersonalEvent = async () => {
