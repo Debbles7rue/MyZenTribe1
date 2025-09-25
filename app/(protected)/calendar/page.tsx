@@ -208,6 +208,8 @@ export default function CalendarPage() {
   const [showListsSidebar, setShowListsSidebar] = useState(false);
   const [showMobileListsSheet, setShowMobileListsSheet] = useState(false);
   const [showCompletedItems, setShowCompletedItems] = useState(false);
+  const [showRemindersList, setShowRemindersList] = useState(true);
+  const [showTodosList, setShowTodosList] = useState(true);
   
   // ===== MODAL STATES =====
   const [openCreate, setOpenCreate] = useState(false);
@@ -219,7 +221,7 @@ export default function CalendarPage() {
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
   const [quickModalOpen, setQuickModalOpen] = useState(false);
-  const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo'>('reminder');
+  const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo' | 'shopping'>('reminder');
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
   const [showTimeBlocking, setShowTimeBlocking] = useState(false);
   const [showHolidayReminders, setShowHolidayReminders] = useState(false);
@@ -262,8 +264,15 @@ export default function CalendarPage() {
     resetForm
   } = useCalendarData();
 
-  // FIXED: Use carpool matches hook
-  const carpoolMatches = useCarpoolMatches(events, friends);
+  // FIX: Ensure arrays are always arrays, never undefined
+  const safeReminders: TodoReminder[] = Array.isArray(reminders) ? reminders : [];
+  const safeTodos: TodoReminder[] = Array.isArray(todos) ? todos : [];
+  const safeFriends: Friend[] = Array.isArray(friends) ? friends : [];
+  const safeEvents = Array.isArray(events) ? events : [];
+  const safeFeed = Array.isArray(feed) ? feed : [];
+
+  // Use carpool matches hook with safe arrays
+  const carpoolMatches = useCarpoolMatches(safeEvents, safeFriends);
 
   const {
     handleCreateEvent,
@@ -288,7 +297,7 @@ export default function CalendarPage() {
     quickModalType,
     draggedItem,
     selectedCarpoolFriends,
-    friends,
+    friends: safeFriends,
     showToast,
     loadCalendar,
     resetForm,
@@ -312,7 +321,7 @@ export default function CalendarPage() {
   } = useGameification(gamificationEnabled ? me : null);
 
   // ===== NOTIFICATION HOOKS =====
-  useNotifications(reminders, todos, events, showToast);
+  useNotifications(safeReminders, safeTodos, safeEvents, showToast);
 
   // ===== MOBILE DETECTION & DARK MODE =====
   useEffect(() => {
@@ -410,7 +419,7 @@ export default function CalendarPage() {
     }
   });
 
-  // ===== VOICE COMMANDS (FIXED: Now fully connected) =====
+  // ===== VOICE COMMANDS =====
   const { isListening, startListening } = useVoiceCommands({
     onCommand: (command: string) => {
       const lower = command.toLowerCase();
@@ -520,7 +529,6 @@ export default function CalendarPage() {
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
     if (r?.moonPhase) {
-      // FIXED: Moon icons now clickable - show moon info
       showToast({ 
         type: 'info', 
         message: `🌙 Moon Phase: ${r.moonPhase}`,
@@ -558,20 +566,24 @@ export default function CalendarPage() {
   }, [setSelectedCarpoolEvent]);
 
   const calendarEvents = useMemo(() => 
-    mode === 'my' ? (events || []) : [],
-    [mode, events]
+    mode === 'my' ? safeEvents : [],
+    [mode, safeEvents]
   );
 
-  // FIXED: Filter visible reminders and todos based on showCompletedItems
-  const visibleReminders = useMemo(() => 
-    showCompletedItems ? reminders : reminders.filter(r => !r.completed),
-    [reminders, showCompletedItems]
-  );
+  // FIX: Filter visible reminders and todos with guaranteed arrays
+  const visibleReminders = useMemo(() => {
+    const filtered = showCompletedItems 
+      ? safeReminders 
+      : safeReminders.filter(r => !r.completed);
+    return filtered || [];
+  }, [safeReminders, showCompletedItems]);
 
-  const visibleTodos = useMemo(() => 
-    showCompletedItems ? todos : todos.filter(t => !t.completed),
-    [todos, showCompletedItems]
-  );
+  const visibleTodos = useMemo(() => {
+    const filtered = showCompletedItems 
+      ? safeTodos 
+      : safeTodos.filter(t => !t.completed);
+    return filtered || [];
+  }, [safeTodos, showCompletedItems]);
 
   return (
     <div 
@@ -594,7 +606,7 @@ export default function CalendarPage() {
           </div>
         )}
         
-        {/* FIXED HEADER - No more weather/theme selectors */}
+        {/* Header */}
         <CalendarHeader
           mode={mode}
           setMode={setMode}
@@ -632,7 +644,7 @@ export default function CalendarPage() {
           setShowTimeBlocking={setShowTimeBlocking}
         />
 
-        {/* Holiday Reminders Button - FIXED: Added for issue #8 */}
+        {/* Holiday Reminders Button */}
         <div className="mb-2 flex justify-end">
           <button
             onClick={() => setShowHolidayReminders(true)}
@@ -646,15 +658,19 @@ export default function CalendarPage() {
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden">
           <div className="flex gap-4 p-2 sm:p-4">
             
-            {/* Desktop Sidebar - FIXED: Now properly handles drag & drop and todo/reminder checkoff */}
+            {/* Desktop Sidebar */}
             {mode === 'my' && !isMobile && (
               <div className={`transition-all duration-300 ${showListsSidebar ? 'w-80' : 'w-0'}`}>
                 {showListsSidebar && (
                   <CalendarSidebar
                     carpoolMatches={carpoolMatches}
-                    friends={friends}
+                    friends={safeFriends}
                     visibleReminders={visibleReminders}
                     visibleTodos={visibleTodos}
+                    showRemindersList={showRemindersList}
+                    setShowRemindersList={setShowRemindersList}
+                    showTodosList={showTodosList}
+                    setShowTodosList={setShowTodosList}
                     showCompletedItems={showCompletedItems}
                     setShowCompletedItems={setShowCompletedItems}
                     openCarpoolChat={openCarpoolChat}
@@ -678,9 +694,9 @@ export default function CalendarPage() {
 
             {/* Calendar or Feed View */}
             <div className="flex-1" ref={calendarRef}>
-              {mode === 'whats' && feed && feed.length > 0 ? (
+              {mode === 'whats' && safeFeed.length > 0 ? (
                 <FeedView
-                  feed={feed.filter((e: any) => !e._dismissed)}
+                  feed={safeFeed.filter((e: any) => !e._dismissed)}
                   onDismiss={dismissFeedEvent}
                   onInterested={handleShowInterest}
                   onRSVP={handleRSVP}
@@ -738,13 +754,13 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Mobile Sidebar (for other features, not lists) */}
+        {/* Mobile Sidebar */}
         {isMobile && (
           <MobileSidebar
             open={mobileMenuOpen}
             onClose={() => setMobileMenuOpen(false)}
             carpoolMatches={carpoolMatches}
-            friends={friends}
+            friends={safeFriends}
             visibleReminders={visibleReminders}
             visibleTodos={visibleTodos}
             showCompletedItems={showCompletedItems}
@@ -761,6 +777,8 @@ export default function CalendarPage() {
             onToggleComplete={handleToggleComplete}
             onDeleteItem={handleDeleteItem}
             userStats={gamificationEnabled ? userStats : null}
+            gamificationEnabled={gamificationEnabled}
+            setGamificationEnabled={setGamificationEnabled}
           />
         )}
 
@@ -769,7 +787,6 @@ export default function CalendarPage() {
           <HolidayReminders
             onClose={() => setShowHolidayReminders(false)}
             onAddToCalendar={(holiday: any) => {
-              // Add holiday to calendar
               setForm({
                 ...form,
                 title: holiday.name,
@@ -815,8 +832,8 @@ export default function CalendarPage() {
           selectedCarpoolEvent={selectedCarpoolEvent}
           selectedCarpoolFriends={selectedCarpoolFriends}
           setSelectedCarpoolFriends={setSelectedCarpoolFriends}
-          events={events}
-          friends={friends}
+          events={safeEvents}
+          friends={safeFriends}
           form={form}
           setForm={setForm}
           quickModalForm={quickModalForm}
