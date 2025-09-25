@@ -16,6 +16,10 @@ import { useNotifications } from "./hooks/useNotifications";
 import { useGameification } from "./hooks/useGameification";
 // Removed useCarpoolMatches import - using inline calculation instead
 import CalendarHeader from "./components/CalendarHeader";
+import MobileListsBottomSheet from "./components/MobileListsBottomSheet";
+import AnimatedBackground from "./components/AnimatedBackground";
+import QuickAccessButtons from "./components/QuickAccessButtons";
+import PullToRefresh from "./components/PullToRefresh";
 import CalendarSidebar from "./components/CalendarSidebar";
 import MobileSidebar from "./components/MobileSidebar";
 import FeedView from "./components/FeedView";
@@ -50,144 +54,6 @@ const CalendarGrid = dynamic(() => import("@/components/CalendarGrid"), {
     </div>
   )
 });
-
-// Mobile Lists Bottom Sheet Component
-function MobileListsBottomSheet({ 
-  open, 
-  onClose, 
-  onNavigate 
-}: { 
-  open: boolean; 
-  onClose: () => void; 
-  onNavigate: (path: string) => void;
-}) {
-  const [dragPosition, setDragPosition] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const startY = useRef(0);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    startY.current = e.touches[0].clientY;
-    setIsDragging(true);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - startY.current;
-    if (diff > 0) {
-      setDragPosition(diff);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    if (dragPosition > 100) {
-      onClose();
-    }
-    setDragPosition(0);
-  };
-
-  if (!open) return null;
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/30 z-40 md:hidden"
-        onClick={onClose}
-      />
-      
-      {/* Bottom Sheet */}
-      <div 
-        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl z-50 md:hidden transition-transform`}
-        style={{ 
-          transform: `translateY(${dragPosition}px)`,
-          maxHeight: '70vh'
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {/* Handle */}
-        <div className="flex justify-center pt-3 pb-2">
-          <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
-        </div>
-        
-        {/* Title */}
-        <div className="px-6 pb-3">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">My Lists</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Tap to view or drag items to calendar</p>
-        </div>
-        
-        {/* List Options */}
-        <div className="px-6 pb-6 space-y-3">
-          <button
-            onClick={() => {
-              onNavigate('/todos');
-              onClose();
-            }}
-            className="w-full p-4 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-between group hover:bg-green-100 dark:hover:bg-green-900/30 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">✅</span>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">To-dos</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Tasks & projects</p>
-              </div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
-          <button
-            onClick={() => {
-              onNavigate('/reminders');
-              onClose();
-            }}
-            className="w-full p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-between group hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🔔</span>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Reminders</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Time-based alerts</p>
-              </div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
-          <button
-            onClick={() => {
-              onNavigate('/shopping');
-              onClose();
-            }}
-            className="w-full p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-between group hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🛒</span>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Shopping List</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Things to buy</p>
-              </div>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
 
 export default function CalendarPage() {
   // ===== CORE STATE =====
@@ -621,20 +487,12 @@ export default function CalendarPage() {
       {...(isMobile ? swipeHandlers : {})}
     >
       {/* Animated Background Blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob dark:opacity-30"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000 dark:opacity-30"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000 dark:opacity-30"></div>
-      </div>
+      <AnimatedBackground />
 
       <div className="relative z-10 max-w-[1600px] mx-auto">
         
         {/* Pull to Refresh Indicator */}
-        {isMobile && isRefreshing && (
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 mt-2 z-50">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-          </div>
-        )}
+        <PullToRefresh isRefreshing={isRefreshing} isMobile={isMobile} />
         
         {/* Header */}
         <CalendarHeader
@@ -674,14 +532,14 @@ export default function CalendarPage() {
           setShowTimeBlocking={setShowTimeBlocking}
         />
 
-        {/* Holiday Reminders Button */}
+        {/* Quick Access Buttons */}
         <div className="mb-2 flex justify-end">
-          <button
-            onClick={() => setShowHolidayReminders(true)}
-            className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-green-500 text-white rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
-          >
-            🎄 Holiday Reminders
-          </button>
+          <QuickAccessButtons 
+            onHolidayReminders={() => {
+              console.log('Setting showHolidayReminders to true');
+              setShowHolidayReminders(true);
+            }}
+          />
         </div>
 
         {/* Main Content Area */}
@@ -907,24 +765,6 @@ export default function CalendarPage() {
           resetForm={resetForm}
         />
       </div>
-
-      <style jsx>{`
-        @keyframes blob {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          25% { transform: translate(20px, -30px) scale(1.1); }
-          50% { transform: translate(-20px, 20px) scale(1); }
-          75% { transform: translate(30px, 10px) scale(0.9); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
     </div>
   );
 }
