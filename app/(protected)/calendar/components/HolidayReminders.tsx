@@ -19,6 +19,74 @@ interface HolidayRemindersProps {
   showToast?: (toast: { type: string; message: string }) => void;
 }
 
+// Move holiday data outside component to avoid initialization issues
+const getCurrentYearHolidays = (year: number) => {
+  const traditionalHolidays: Holiday[] = [
+    { name: "New Year's Day", date: `${year}-01-01`, emoji: "🎊", description: "Fresh starts and resolutions", category: 'traditional', color: '#FFD700' },
+    { name: "Martin Luther King Jr. Day", date: `${year}-01-20`, emoji: "✊", description: "Day of service", category: 'traditional', color: '#4B5563' },
+    { name: "Valentine's Day", date: `${year}-02-14`, emoji: "💝", description: "Love is in the air", category: 'traditional', color: '#EC4899' },
+    { name: "Presidents' Day", date: `${year}-02-17`, emoji: "🎩", description: "Honoring leadership", category: 'traditional', color: '#3B82F6' },
+    { name: "Easter", date: `${year}-04-20`, emoji: "🐰", description: "Spring celebration", category: 'traditional', color: '#FCD34D' },
+    { name: "Memorial Day", date: `${year}-05-26`, emoji: "🇺🇸", description: "Remember and honor", category: 'traditional', color: '#EF4444' },
+    { name: "Independence Day", date: `${year}-07-04`, emoji: "🎆", description: "Fireworks and freedom", category: 'traditional', color: '#3B82F6' },
+    { name: "Labor Day", date: `${year}-09-01`, emoji: "⚒️", description: "Celebrating workers", category: 'traditional', color: '#6B7280' },
+    { name: "Halloween", date: `${year}-10-31`, emoji: "🎃", description: "Tricks and treats", category: 'traditional', color: '#F97316' },
+    { name: "Thanksgiving", date: `${year}-11-27`, emoji: "🦃", description: "Gratitude and pie", category: 'traditional', color: '#92400E' },
+    { name: "Christmas", date: `${year}-12-25`, emoji: "🎄", description: "Joy to the world", category: 'traditional', color: '#059669' },
+  ];
+
+  const funHolidays: Holiday[] = [
+    { name: "National Pizza Day", date: `${year}-02-09`, emoji: "🍕", description: "Pizza party time!", category: 'fun', color: '#EF4444' },
+    { name: "National Donut Day", date: `${year}-06-07`, emoji: "🍩", description: "Sweet treats allowed", category: 'fun', color: '#EC4899' },
+    { name: "Pi Day", date: `${year}-03-14`, emoji: "🥧", description: "3.14159...", category: 'fun', color: '#8B5CF6' },
+    { name: "Star Wars Day", date: `${year}-05-04`, emoji: "⚔️", description: "May the 4th be with you", category: 'fun', color: '#1E40AF' },
+    { name: "National Taco Day", date: `${year}-10-04`, emoji: "🌮", description: "Taco Tuesday special!", category: 'fun', color: '#FCD34D' },
+    { name: "Talk Like a Pirate Day", date: `${year}-09-19`, emoji: "🏴‍☠️", description: "Ahoy matey!", category: 'fun', color: '#991B1B' },
+    { name: "National Coffee Day", date: `${year}-09-29`, emoji: "☕", description: "Caffeine celebration", category: 'fun', color: '#92400E' },
+    { name: "World Emoji Day", date: `${year}-07-17`, emoji: "😀", description: "Express yourself!", category: 'fun', color: '#FCD34D' },
+    { name: "National Ice Cream Day", date: `${year}-07-21`, emoji: "🍦", description: "Cool treats", category: 'fun', color: '#06B6D4' },
+    { name: "National Dog Day", date: `${year}-08-26`, emoji: "🐕", description: "Celebrate pups", category: 'fun', color: '#92400E' },
+    { name: "National Cat Day", date: `${year}-10-29`, emoji: "🐱", description: "Meow meow", category: 'fun', color: '#7C3AED' },
+    { name: "Palindrome Day", date: `${year}-02-22`, emoji: "🔄", description: "2/22!", category: 'fun', color: '#3B82F6' },
+    { name: "National Spaghetti Day", date: `${year}-01-04`, emoji: "🍝", description: "Pasta la vista!", category: 'fun', color: '#DC2626' },
+    { name: "World Chocolate Day", date: `${year}-07-07`, emoji: "🍫", description: "Sweet indulgence", category: 'fun', color: '#7C2D12' },
+    { name: "National Pancake Day", date: `${year}-02-28`, emoji: "🥞", description: "Stack 'em high", category: 'fun', color: '#FCD34D' },
+    { name: "International Bacon Day", date: `${year}-08-31`, emoji: "🥓", description: "Sizzle sizzle", category: 'fun', color: '#DC2626' },
+    { name: "National Cheese Day", date: `${year}-06-04`, emoji: "🧀", description: "Say cheese!", category: 'fun', color: '#FCD34D' },
+    { name: "World UFO Day", date: `${year}-07-02`, emoji: "🛸", description: "The truth is out there", category: 'fun', color: '#10B981' },
+  ];
+
+  const specialDays: Holiday[] = [
+    { name: "Mother's Day", date: `${year}-05-11`, emoji: "💐", description: "Celebrate Mom", category: 'special', color: '#EC4899' },
+    { name: "Father's Day", date: `${year}-06-15`, emoji: "👔", description: "Dad's special day", category: 'special', color: '#3B82F6' },
+    { name: "Grandparents Day", date: `${year}-09-07`, emoji: "👴👵", description: "Honor grandparents", category: 'special', color: '#8B5CF6' },
+    { name: "Earth Day", date: `${year}-04-22`, emoji: "🌍", description: "Planet awareness", category: 'special', color: '#10B981' },
+    { name: "April Fool's Day", date: `${year}-04-01`, emoji: "🃏", description: "Pranks allowed!", category: 'special', color: '#F59E0B' },
+    { name: "St. Patrick's Day", date: `${year}-03-17`, emoji: "☘️", description: "Luck of the Irish", category: 'special', color: '#10B981' },
+    { name: "Groundhog Day", date: `${year}-02-02`, emoji: "🦫", description: "6 more weeks?", category: 'special', color: '#92400E' },
+    { name: "Friday the 13th", date: `${year}-09-13`, emoji: "😱", description: "Spooky day", category: 'special', color: '#1F2937' },
+    { name: "Leap Day", date: `${year}-02-29`, emoji: "🐸", description: "Extra special (if leap year)", category: 'special', color: '#10B981' },
+  ];
+
+  const internationalHolidays: Holiday[] = [
+    { name: "Chinese New Year", date: `${year}-02-10`, emoji: "🐉", description: "Year of the Dragon", category: 'international', color: '#DC2626' },
+    { name: "Diwali", date: `${year}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
+    { name: "Cinco de Mayo", date: `${year}-05-05`, emoji: "🇲🇽", description: "Mexican heritage", category: 'international', color: '#059669' },
+    { name: "Day of the Dead", date: `${year}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
+    { name: "Hanukkah", date: `${year}-12-25`, emoji: "🕎", description: "Festival of dedication", category: 'international', color: '#3B82F6' },
+    { name: "Kwanzaa", date: `${year}-12-26`, emoji: "🕯️", description: "African heritage", category: 'international', color: '#DC2626' },
+    { name: "Oktoberfest", date: `${year}-09-21`, emoji: "🍺", description: "German celebration", category: 'international', color: '#F59E0B' },
+    { name: "Mardi Gras", date: `${year}-02-13`, emoji: "🎭", description: "Let the good times roll", category: 'international', color: '#7C3AED' },
+  ];
+
+  return {
+    traditionalHolidays,
+    funHolidays,
+    specialDays,
+    internationalHolidays
+  };
+};
+
 export default function HolidayReminders({ onClose, onAddToCalendar, existingEvents = [], showToast }: HolidayRemindersProps) {
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
@@ -39,43 +107,16 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   const [isAddingAll, setIsAddingAll] = useState(false);
   const [addProgress, setAddProgress] = useState(0);
 
+  // Get holiday data
+  const { traditionalHolidays, funHolidays, specialDays, internationalHolidays } = useMemo(
+    () => getCurrentYearHolidays(currentYear),
+    [currentYear]
+  );
+
   // Load personal events from Supabase
   useEffect(() => {
     loadPersonalEvents();
-  }, []);
-
-  // Check which holidays are already added
-  const addedHolidays = useMemo(() => {
-    const added = new Set<string>();
-    
-    existingEvents?.forEach(event => {
-      if (!event.title) return;
-      
-      // Extract holiday name by removing emoji if present
-      const eventTitle = event.title.toLowerCase();
-      
-      // Check each holiday to see if it matches this event
-      [...traditionalHolidays, ...funHolidays, ...specialDays, ...internationalHolidays, ...personalEvents].forEach(holiday => {
-        const holidayName = holiday.name.toLowerCase();
-        const holidayEmoji = holiday.emoji;
-        
-        // Check if event title contains the holiday name (with or without emoji)
-        if (eventTitle.includes(holidayName) || 
-            eventTitle === `${holidayEmoji} ${holidayName}` ||
-            eventTitle === holidayName) {
-          // Check if it's for current or next year
-          const eventDate = new Date(event.start_time || event.start);
-          const eventYear = eventDate.getFullYear();
-          
-          if (eventYear === currentYear || eventYear === nextYear) {
-            added.add(`${holiday.name}-${eventYear}`);
-          }
-        }
-      });
-    });
-    
-    return added;
-  }, [existingEvents, currentYear, nextYear]);
+  }, [currentYear]);
 
   const loadPersonalEvents = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -100,75 +141,55 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
     }
   };
 
-  const traditionalHolidays: Holiday[] = [
-    { name: "New Year's Day", date: `${currentYear}-01-01`, emoji: "🎊", description: "Fresh starts and resolutions", category: 'traditional', color: '#FFD700' },
-    { name: "Martin Luther King Jr. Day", date: `${currentYear}-01-20`, emoji: "✊", description: "Day of service", category: 'traditional', color: '#4B5563' },
-    { name: "Valentine's Day", date: `${currentYear}-02-14`, emoji: "💝", description: "Love is in the air", category: 'traditional', color: '#EC4899' },
-    { name: "Presidents' Day", date: `${currentYear}-02-17`, emoji: "🎩", description: "Honoring leadership", category: 'traditional', color: '#3B82F6' },
-    { name: "Easter", date: `${currentYear}-04-20`, emoji: "🐰", description: "Spring celebration", category: 'traditional', color: '#FCD34D' },
-    { name: "Memorial Day", date: `${currentYear}-05-26`, emoji: "🇺🇸", description: "Remember and honor", category: 'traditional', color: '#EF4444' },
-    { name: "Independence Day", date: `${currentYear}-07-04`, emoji: "🎆", description: "Fireworks and freedom", category: 'traditional', color: '#3B82F6' },
-    { name: "Labor Day", date: `${currentYear}-09-01`, emoji: "⚒️", description: "Celebrating workers", category: 'traditional', color: '#6B7280' },
-    { name: "Halloween", date: `${currentYear}-10-31`, emoji: "🎃", description: "Tricks and treats", category: 'traditional', color: '#F97316' },
-    { name: "Thanksgiving", date: `${currentYear}-11-27`, emoji: "🦃", description: "Gratitude and pie", category: 'traditional', color: '#92400E' },
-    { name: "Christmas", date: `${currentYear}-12-25`, emoji: "🎄", description: "Joy to the world", category: 'traditional', color: '#059669' },
-  ];
-
-  const funHolidays: Holiday[] = [
-    { name: "National Pizza Day", date: `${currentYear}-02-09`, emoji: "🍕", description: "Pizza party time!", category: 'fun', color: '#EF4444' },
-    { name: "National Donut Day", date: `${currentYear}-06-07`, emoji: "🍩", description: "Sweet treats allowed", category: 'fun', color: '#EC4899' },
-    { name: "Pi Day", date: `${currentYear}-03-14`, emoji: "🥧", description: "3.14159...", category: 'fun', color: '#8B5CF6' },
-    { name: "Star Wars Day", date: `${currentYear}-05-04`, emoji: "⚔️", description: "May the 4th be with you", category: 'fun', color: '#1E40AF' },
-    { name: "National Taco Day", date: `${currentYear}-10-04`, emoji: "🌮", description: "Taco Tuesday special!", category: 'fun', color: '#FCD34D' },
-    { name: "Talk Like a Pirate Day", date: `${currentYear}-09-19`, emoji: "🏴‍☠️", description: "Ahoy matey!", category: 'fun', color: '#991B1B' },
-    { name: "National Coffee Day", date: `${currentYear}-09-29`, emoji: "☕", description: "Caffeine celebration", category: 'fun', color: '#92400E' },
-    { name: "World Emoji Day", date: `${currentYear}-07-17`, emoji: "😀", description: "Express yourself!", category: 'fun', color: '#FCD34D' },
-    { name: "National Ice Cream Day", date: `${currentYear}-07-21`, emoji: "🍦", description: "Cool treats", category: 'fun', color: '#06B6D4' },
-    { name: "National Dog Day", date: `${currentYear}-08-26`, emoji: "🐕", description: "Celebrate pups", category: 'fun', color: '#92400E' },
-    { name: "National Cat Day", date: `${currentYear}-10-29`, emoji: "🐱", description: "Meow meow", category: 'fun', color: '#7C3AED' },
-    { name: "Palindrome Day", date: `${currentYear}-02-22`, emoji: "🔄", description: "2/22!", category: 'fun', color: '#3B82F6' },
-    { name: "National Spaghetti Day", date: `${currentYear}-01-04`, emoji: "🍝", description: "Pasta la vista!", category: 'fun', color: '#DC2626' },
-    { name: "World Chocolate Day", date: `${currentYear}-07-07`, emoji: "🍫", description: "Sweet indulgence", category: 'fun', color: '#7C2D12' },
-    { name: "National Pancake Day", date: `${currentYear}-02-28`, emoji: "🥞", description: "Stack 'em high", category: 'fun', color: '#FCD34D' },
-    { name: "International Bacon Day", date: `${currentYear}-08-31`, emoji: "🥓", description: "Sizzle sizzle", category: 'fun', color: '#DC2626' },
-    { name: "National Cheese Day", date: `${currentYear}-06-04`, emoji: "🧀", description: "Say cheese!", category: 'fun', color: '#FCD34D' },
-    { name: "World UFO Day", date: `${currentYear}-07-02`, emoji: "🛸", description: "The truth is out there", category: 'fun', color: '#10B981' },
-  ];
-
-  const specialDays: Holiday[] = [
-    { name: "Mother's Day", date: `${currentYear}-05-11`, emoji: "💐", description: "Celebrate Mom", category: 'special', color: '#EC4899' },
-    { name: "Father's Day", date: `${currentYear}-06-15`, emoji: "👔", description: "Dad's special day", category: 'special', color: '#3B82F6' },
-    { name: "Grandparents Day", date: `${currentYear}-09-07`, emoji: "👴👵", description: "Honor grandparents", category: 'special', color: '#8B5CF6' },
-    { name: "Earth Day", date: `${currentYear}-04-22`, emoji: "🌍", description: "Planet awareness", category: 'special', color: '#10B981' },
-    { name: "April Fool's Day", date: `${currentYear}-04-01`, emoji: "🃏", description: "Pranks allowed!", category: 'special', color: '#F59E0B' },
-    { name: "St. Patrick's Day", date: `${currentYear}-03-17`, emoji: "☘️", description: "Luck of the Irish", category: 'special', color: '#10B981' },
-    { name: "Groundhog Day", date: `${currentYear}-02-02`, emoji: "🦫", description: "6 more weeks?", category: 'special', color: '#92400E' },
-    { name: "Friday the 13th", date: `${currentYear}-09-13`, emoji: "😱", description: "Spooky day", category: 'special', color: '#1F2937' },
-    { name: "Leap Day", date: `${currentYear}-02-29`, emoji: "🐸", description: "Extra special (if leap year)", category: 'special', color: '#10B981' },
-  ];
-
-  const internationalHolidays: Holiday[] = [
-    { name: "Chinese New Year", date: `${currentYear}-02-10`, emoji: "🐉", description: "Year of the Dragon", category: 'international', color: '#DC2626' },
-    { name: "Diwali", date: `${currentYear}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
-    { name: "Cinco de Mayo", date: `${currentYear}-05-05`, emoji: "🇲🇽", description: "Mexican heritage", category: 'international', color: '#059669' },
-    { name: "Day of the Dead", date: `${currentYear}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
-    { name: "Hanukkah", date: `${currentYear}-12-25`, emoji: "🕎", description: "Festival of dedication", category: 'international', color: '#3B82F6' },
-    { name: "Kwanzaa", date: `${currentYear}-12-26`, emoji: "🕯️", description: "African heritage", category: 'international', color: '#DC2626' },
-    { name: "Oktoberfest", date: `${currentYear}-09-21`, emoji: "🍺", description: "German celebration", category: 'international', color: '#F59E0B' },
-    { name: "Mardi Gras", date: `${currentYear}-02-13`, emoji: "🎭", description: "Let the good times roll", category: 'international', color: '#7C3AED' },
-  ];
-
-  const allHolidays = [
+  // Combine all holidays
+  const allHolidays = useMemo(() => [
     ...traditionalHolidays,
     ...funHolidays,
     ...specialDays,
     ...internationalHolidays,
     ...personalEvents
-  ];
+  ], [traditionalHolidays, funHolidays, specialDays, internationalHolidays, personalEvents]);
 
-  const filteredHolidays = activeCategory === 'all' 
-    ? allHolidays.filter(h => enabledCategories.has(h.category))
-    : allHolidays.filter(h => h.category === activeCategory && enabledCategories.has(h.category));
+  // Check which holidays are already added
+  const addedHolidays = useMemo(() => {
+    const added = new Set<string>();
+    
+    if (!existingEvents || existingEvents.length === 0) return added;
+    
+    existingEvents.forEach(event => {
+      if (!event.title) return;
+      
+      // Extract holiday name by removing emoji if present
+      const eventTitle = event.title.toLowerCase();
+      
+      // Check each holiday to see if it matches this event
+      allHolidays.forEach(holiday => {
+        const holidayName = holiday.name.toLowerCase();
+        const holidayEmoji = holiday.emoji;
+        
+        // Check if event title contains the holiday name (with or without emoji)
+        if (eventTitle.includes(holidayName) || 
+            eventTitle === `${holidayEmoji} ${holidayName}` ||
+            eventTitle === holidayName) {
+          // Check if it's for current or next year
+          const eventDate = new Date(event.start_time || event.start);
+          const eventYear = eventDate.getFullYear();
+          
+          if (eventYear === currentYear || eventYear === nextYear) {
+            added.add(`${holiday.name}-${eventYear}`);
+          }
+        }
+      });
+    });
+    
+    return added;
+  }, [existingEvents, currentYear, nextYear, allHolidays]);
+
+  const filteredHolidays = useMemo(() => {
+    return activeCategory === 'all' 
+      ? allHolidays.filter(h => enabledCategories.has(h.category))
+      : allHolidays.filter(h => h.category === activeCategory && enabledCategories.has(h.category));
+  }, [activeCategory, allHolidays, enabledCategories]);
 
   const categories = [
     { id: 'all', label: 'All', emoji: '✨', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
@@ -316,11 +337,11 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 animate-fadeIn" 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300" 
         onClick={onClose} 
       />
       
-      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden animate-slideUp">
+      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-6">
           <div className="flex items-center justify-between">
@@ -413,7 +434,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                 Add Birthday/Anniversary
               </button>
             ) : (
-              <div className="space-y-3 animate-fadeIn">
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
@@ -504,7 +525,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl animate-bounce-subtle">{holiday.emoji}</span>
+                    <span className="text-2xl">{holiday.emoji}</span>
                     <div className="flex-1">
                       <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         {holiday.name}
@@ -514,7 +535,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                           </span>
                         )}
                         {isPast && !isAddedNextYear && (
-                          <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 px-2 py-0.5 rounded-full animate-pulse">
+                          <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 px-2 py-0.5 rounded-full">
                             Past - Add for {nextYear}
                           </span>
                         )}
@@ -528,7 +549,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                     {/* Action buttons */}
                     <div className="flex items-center gap-2">
                       {isAlreadyAdded ? (
-                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400 animate-fadeIn">
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
                           </svg>
@@ -596,41 +617,6 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
           </div>
         </div>
       </div>
-      
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-          from { 
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to { 
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes bounce-subtle {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-2px); }
-        }
-        
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        
-        .animate-slideUp {
-          animation: slideUp 0.4s ease-out;
-        }
-        
-        .animate-bounce-subtle {
-          animation: bounce-subtle 2s infinite;
-        }
-      `}</style>
     </div>
   );
 }
