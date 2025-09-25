@@ -8,7 +8,7 @@ import SmartTemplates from '@/components/SmartTemplates';
 import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
 import EventCarpoolModal from './EventCarpoolModal';
 import HolidayReminders from './HolidayReminders';
-import { createClient } from '@/utils/supabase/client';
+import { supabase } from '@/lib/supabaseClient';
 import type { DBEvent } from '@/lib/types';
 import type { Friend, CalendarForm, QuickModalForm, FeedEvent } from '../types';
 
@@ -141,9 +141,6 @@ export default function CalendarModals({
   // Refs to prevent focus loss
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
-  
-  // Supabase client for holiday adding
-  const supabase = createClient();
   
   // HOLIDAY HANDLER - This is what makes holidays actually work!
   const handleAddHolidayToCalendar = async (holiday: {
