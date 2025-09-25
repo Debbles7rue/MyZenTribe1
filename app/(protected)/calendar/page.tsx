@@ -718,6 +718,7 @@ export default function CalendarPage() {
               }
             }}
             existingEvents={safeEvents}
+            showToast={showToast}
           />
         )}
 
