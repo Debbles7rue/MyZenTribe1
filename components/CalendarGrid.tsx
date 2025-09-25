@@ -69,8 +69,8 @@ interface Props {
   setView: (v: View) => void;
   onSelectSlot: (slotInfo: SlotInfo) => void;
   onSelectEvent: (event: UiEvent) => void;
-  onDrop: (args: EventInteractionArgs<UiEvent>) => void;
-  onResize: (args: EventInteractionArgs<UiEvent>) => void;
+  onDrop?: (args: EventInteractionArgs<UiEvent>) => void;
+  onResize?: (args: EventInteractionArgs<UiEvent>) => void;
   externalDragType?: 'none' | 'reminder' | 'todo';
   externalDragTitle?: string;
   onExternalDrop?: (
@@ -79,6 +79,8 @@ interface Props {
   ) => void;
   context?: 'calendar' | 'business' | 'community';
   businessId?: string;
+  darkMode?: boolean;
+  selectedBatchEvents?: Set<string>;
 }
 
 // Check if device is touch-enabled
@@ -167,6 +169,8 @@ export default function CalendarGrid({
   onExternalDrop,
   context = 'calendar',
   businessId,
+  darkMode = false,
+  selectedBatchEvents,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -234,6 +238,9 @@ export default function CalendarGrid({
   // Event styling based on type with pre/post event indicators
   const eventStyleGetter = (event: UiEvent): any => {
     const resource = event.resource as any;
+    
+    // Check if this event is selected in batch mode
+    const isSelected = selectedBatchEvents?.has(resource?.id || event.id);
 
     // Moon phase events
     if (resource?.moonPhase) {
@@ -241,12 +248,12 @@ export default function CalendarGrid({
         style: {
           backgroundColor: 'transparent',
           border: 'none',
-          color: '#1f2937',
+          color: darkMode ? '#e5e7eb' : '#1f2937',
           padding: '2px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: 'default',
+          cursor: 'pointer',
           minHeight: '20px',
           fontSize: '16px',
         },
@@ -269,15 +276,30 @@ export default function CalendarGrid({
     const borderWidth = (resource?.hasPreEvent || resource?.hasPostEvent) ? "2px" : "1px";
     const borderStyle = (resource?.hasPreEvent || resource?.hasPostEvent) ? "solid" : "solid";
 
+    // Holiday events
+    if (resource?.event_type === "holiday") {
+      return {
+        style: {
+          ...baseStyle,
+          backgroundColor: isSelected ? "#c084fc" : "#e9d5ff",
+          border: `${borderWidth} ${borderStyle} ${isSelected ? "#9333ea" : "#c084fc"}`,
+          color: "#581c87",
+          boxShadow: isSelected ? "0 0 0 2px rgba(147, 51, 234, 0.3)" : 
+                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #c084fc" : "none",
+        },
+      };
+    }
+
     // Reminder events
     if (resource?.event_type === "reminder") {
       return {
         style: {
           ...baseStyle,
-          backgroundColor: "#fbbf24",
-          border: `${borderWidth} ${borderStyle} #f59e0b`,
+          backgroundColor: isSelected ? "#f59e0b" : "#fbbf24",
+          border: `${borderWidth} ${borderStyle} ${isSelected ? "#d97706" : "#f59e0b"}`,
           color: "#92400e",
-          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #f59e0b" : "none",
+          boxShadow: isSelected ? "0 0 0 2px rgba(245, 158, 11, 0.3)" :
+                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #f59e0b" : "none",
         },
       };
     }
@@ -287,11 +309,12 @@ export default function CalendarGrid({
       return {
         style: {
           ...baseStyle,
-          backgroundColor: resource?.completed ? "#86efac" : "#34d399",
+          backgroundColor: resource?.completed ? "#86efac" : (isSelected ? "#10b981" : "#34d399"),
           border: `${borderWidth} ${borderStyle} ${resource?.completed ? "#22c55e" : "#10b981"}`,
           color: "#064e3b",
           textDecoration: resource?.completed ? "line-through" : "none",
-          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #10b981" : "none",
+          boxShadow: isSelected ? "0 0 0 2px rgba(16, 185, 129, 0.3)" :
+                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #10b981" : "none",
         },
       };
     }
@@ -301,11 +324,12 @@ export default function CalendarGrid({
       return {
         style: {
           ...baseStyle,
-          background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
-          border: `2px solid #6b21a8`,
+          background: isSelected ? "linear-gradient(135deg, #6b21a8 0%, #7c3aed 100%)" : 
+                                   "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+          border: `2px solid ${isSelected ? "#581c87" : "#6b21a8"}`,
           color: "#ffffff",
           fontWeight: 700,
-          boxShadow: "0 2px 4px rgba(124, 58, 237, 0.3)",
+          boxShadow: isSelected ? "0 0 0 2px rgba(124, 58, 237, 0.3)" : "0 2px 4px rgba(124, 58, 237, 0.3)",
         },
       };
     }
@@ -315,11 +339,12 @@ export default function CalendarGrid({
       return {
         style: {
           ...baseStyle,
-          backgroundColor: "#c7d2fe",
-          border: `${borderWidth} ${borderStyle} #8b5cf6`,
+          backgroundColor: isSelected ? "#8b5cf6" : "#c7d2fe",
+          border: `${borderWidth} ${borderStyle} ${isSelected ? "#6b21a8" : "#8b5cf6"}`,
           color: "#5b21b6",
           fontWeight: resource?.rsvp_me ? 700 : 500,
-          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #8b5cf6" : "none",
+          boxShadow: isSelected ? "0 0 0 2px rgba(139, 92, 246, 0.3)" :
+                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #8b5cf6" : "none",
         },
       };
     }
@@ -329,10 +354,11 @@ export default function CalendarGrid({
       return {
         style: {
           ...baseStyle,
-          backgroundColor: "#fce7f3",
-          border: `${borderWidth} ${borderStyle} #ec4899`,
+          backgroundColor: isSelected ? "#ec4899" : "#fce7f3",
+          border: `${borderWidth} ${borderStyle} ${isSelected ? "#be185d" : "#ec4899"}`,
           color: "#be185d",
-          boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #ec4899" : "none",
+          boxShadow: isSelected ? "0 0 0 2px rgba(236, 72, 153, 0.3)" :
+                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #ec4899" : "none",
         },
       };
     }
@@ -341,11 +367,12 @@ export default function CalendarGrid({
     return {
       style: {
         ...baseStyle,
-        backgroundColor: "#93c5fd",
-        border: `${borderWidth} ${borderStyle} #3b82f6`,
+        backgroundColor: isSelected ? "#3b82f6" : "#93c5fd",
+        border: `${borderWidth} ${borderStyle} ${isSelected ? "#1e40af" : "#3b82f6"}`,
         color: "#1e40af",
         fontWeight: resource?.rsvp_me ? 700 : 500,
-        boxShadow: (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #3b82f6" : "none",
+        boxShadow: isSelected ? "0 0 0 2px rgba(59, 130, 246, 0.3)" :
+                   (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #3b82f6" : "none",
       },
     };
   };
@@ -376,6 +403,19 @@ export default function CalendarGrid({
     // Build event display with indicators
     const hasPreEvent = resource?.hasPreEvent;
     const hasPostEvent = resource?.hasPostEvent;
+
+    // Holiday events with emoji preserved
+    if (resource?.event_type === "holiday") {
+      return (
+        <div className="flex items-center gap-1 px-1 w-full">
+          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
+          <span className="truncate flex-1 text-[10px] md:text-xs">
+            {event.title}
+          </span>
+          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
+        </div>
+      );
+    }
 
     // Render todo with checkbox
     if (resource?.event_type === "todo") {
@@ -459,10 +499,10 @@ export default function CalendarGrid({
     return (
       <div className="flex items-center justify-center h-[650px]">
         <div className="animate-pulse">
-          <div className="h-8 w-32 bg-gray-200 rounded mb-4"></div>
+          <div className="h-8 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
           <div className="grid grid-cols-7 gap-2">
             {[...Array(35)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-100 rounded"></div>
+              <div key={i} className="h-20 bg-gray-100 dark:bg-gray-800 rounded"></div>
             ))}
           </div>
         </div>
@@ -573,7 +613,7 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* Comprehensive styles - keeping all existing styles */}
+      {/* Comprehensive styles - keeping all existing styles + fixes */}
       <style jsx global>{`
         /* Base calendar container */
         .calendar-wrapper {
@@ -585,13 +625,20 @@ export default function CalendarGrid({
           background: rgba(255, 255, 255, 0.98) !important;
         }
         
+        /* CRITICAL FIX: Ensure calendar cells are clickable */
+        .custom-calendar .rbc-day-bg,
+        .custom-calendar .rbc-time-slot {
+          cursor: pointer !important;
+          position: relative !important;
+        }
+        
         /* Header styling */
         .custom-calendar .rbc-header {
-          background: #f8fafc;
+          background: ${darkMode ? '#1f2937' : '#f8fafc'};
           border-bottom: 1px solid rgba(0,0,0,0.1);
           padding: 8px 4px;
           font-weight: 600;
-          color: #374151;
+          color: ${darkMode ? '#f3f4f6' : '#374151'};
         }
         
         /* Today highlighting */
@@ -607,14 +654,14 @@ export default function CalendarGrid({
         }
         
         .custom-calendar .rbc-toolbar-label {
-          color: #1f2937;
+          color: ${darkMode ? '#f3f4f6' : '#1f2937'};
           font-weight: 600;
         }
         
         .custom-calendar .rbc-toolbar button {
-          border: 1px solid rgba(0,0,0,0.1);
-          background: rgba(255,255,255,0.9);
-          color: #374151;
+          border: 1px solid ${darkMode ? '#4b5563' : 'rgba(0,0,0,0.1)'};
+          background: ${darkMode ? '#374151' : 'rgba(255,255,255,0.9)'};
+          color: ${darkMode ? '#f3f4f6' : '#374151'};
           border-radius: 6px;
           padding: 6px 10px;
           font-weight: 500;
@@ -642,18 +689,18 @@ export default function CalendarGrid({
         
         /* Month view cells */
         .custom-calendar .rbc-month-view {
-          background: white;
+          background: ${darkMode ? '#111827' : 'white'};
           border-radius: 8px;
           overflow: hidden;
         }
         
         .custom-calendar .rbc-day-bg {
-          background: white;
+          background: ${darkMode ? '#1f2937' : 'white'};
         }
         
         /* Day cell hover effect */
         .custom-calendar .rbc-day-bg:hover {
-          background: ${themeStyles.hover};
+          background: ${themeStyles.hover} !important;
           transition: background 0.2s ease;
         }
         
@@ -666,7 +713,12 @@ export default function CalendarGrid({
         
         /* Off-range days */
         .custom-calendar .rbc-off-range-bg {
-          background: rgba(156, 163, 175, 0.05);
+          background: ${darkMode ? '#0f172a' : 'rgba(156, 163, 175, 0.05)'};
+        }
+        
+        /* Date cells */
+        .custom-calendar .rbc-date-cell {
+          color: ${darkMode ? '#d1d5db' : '#374151'};
         }
         
         /* Event hover effects (desktop only) */
@@ -810,20 +862,44 @@ export default function CalendarGrid({
           text-decoration: underline;
         }
         
-        /* Dark mode support */
-        @media (prefers-color-scheme: dark) {
-          .custom-calendar {
-            color: #1f2937;
-          }
-          
-          .custom-calendar .rbc-toolbar button {
-            color: #374151;
-            background: rgba(255,255,255,0.9);
-          }
-          
-          .custom-calendar .rbc-off-range-bg {
-            background: rgba(156, 163, 175, 0.05);
-          }
+        /* Week and Day view styles */
+        .custom-calendar .rbc-time-view {
+          border: 1px solid ${darkMode ? '#374151' : '#e5e7eb'};
+          border-radius: 8px;
+        }
+        
+        .custom-calendar .rbc-time-header {
+          background: ${darkMode ? '#1f2937' : '#f9fafb'};
+        }
+        
+        .custom-calendar .rbc-time-content {
+          border-top: 1px solid ${darkMode ? '#374151' : '#e5e7eb'};
+          background: ${darkMode ? '#111827' : 'white'};
+        }
+        
+        .custom-calendar .rbc-time-slot {
+          border-top: 1px solid ${darkMode ? '#1f2937' : '#f3f4f6'};
+        }
+        
+        .custom-calendar .rbc-current-time-indicator {
+          background-color: #ef4444;
+          height: 2px;
+        }
+        
+        /* Agenda view styles */
+        .custom-calendar .rbc-agenda-view {
+          color: ${darkMode ? '#f3f4f6' : '#111827'};
+        }
+        
+        .custom-calendar .rbc-agenda-date-cell,
+        .custom-calendar .rbc-agenda-time-cell {
+          padding: 8px;
+          white-space: nowrap;
+          color: ${darkMode ? '#d1d5db' : '#374151'};
+        }
+        
+        .custom-calendar .rbc-agenda-event-cell {
+          padding: 8px;
         }
       `}</style>
     </div>
