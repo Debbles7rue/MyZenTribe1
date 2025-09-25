@@ -1,6 +1,6 @@
 // app/(protected)/calendar/components/HolidayReminders.tsx
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { supabase } from '@/lib/supabaseClient';
 
 interface Holiday {
   name: string;
@@ -33,8 +33,6 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   const [enabledCategories, setEnabledCategories] = useState<Set<string>>(
     new Set(['traditional', 'special', 'fun', 'personal'])
   );
-
-  const supabase = createClient();
 
   // Load personal events from Supabase
   useEffect(() => {
@@ -159,7 +157,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   const addAllInCategory = () => {
     const toAdd = filteredHolidays.filter(h => {
       const date = new Date(h.date);
-      return date >= new Date();
+      return date >= new Date() && !existingEvents?.some(e => 
+        e.title?.includes(h.name) && 
+        new Date(e.start_time).toDateString() === date.toDateString()
+      );
     });
 
     toAdd.forEach(holiday => {
@@ -167,9 +168,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
     });
     
     if (toAdd.length > 0) {
-      alert(`Added ${toAdd.length} holidays to your calendar!`);
+      setTimeout(() => onClose(), 1000); // Close after a brief delay
+    } else {
+      alert('No new holidays to add (all are either past or already in calendar)');
     }
-    onClose();
   };
 
   const savePersonalEvent = async () => {
