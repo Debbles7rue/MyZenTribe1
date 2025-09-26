@@ -1,10 +1,21 @@
-// components/PostsFeed.tsx - Profile Posts Display
+// components/PostsFeed.tsx - CORRECTED for your actual database structure
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/lib/supabaseClient";
-import PostCard from '@/components/PostCard';
-import { Post } from '@/lib/posts';
+
+interface Post {
+  id: string;
+  user_id: string;
+  content: string;
+  post_type: string;
+  created_at: string;
+  author?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}
 
 interface PostsFeedProps {
   userId: string;
@@ -20,64 +31,29 @@ export default function PostsFeed({
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [relationshipType, setRelationshipType] = useState<'friend' | 'none'>('none');
 
-  // Load posts on mount and when userId changes
   useEffect(() => {
     if (userId) {
-      checkRelationshipAndLoadPosts();
+      loadUserPosts();
     }
-  }, [userId, viewerUserId]);
+  }, [userId]);
 
-  async function checkRelationshipAndLoadPosts() {
+  async function loadUserPosts() {
     setLoading(true);
     setError(null);
     
     try {
-      // Check relationship if viewer is different from profile owner
-      if (viewerUserId && viewerUserId !== userId) {
-        await checkRelationship();
-      }
-      
-      await loadUserPosts();
-    } catch (err) {
-      console.error('Error loading posts:', err);
-      setError('Failed to load posts');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function checkRelationship() {
-    if (!viewerUserId) return;
-    
-    try {
-      const { data: friendship } = await supabase
-        .from("friendships")
-        .select("*")
-        .or(`and(user_id.eq.${viewerUserId},friend_id.eq.${userId}),and(user_id.eq.${userId},friend_id.eq.${viewerUserId})`)
-        .single();
-
-      setRelationshipType(friendship ? 'friend' : 'none');
-    } catch (err) {
-      console.log('No friendship found');
-      setRelationshipType('none');
-    }
-  }
-
-  async function loadUserPosts() {
-    try {
-      // Get posts where user is creator OR co-creator
+      // Query feed_posts table with correct column names
       const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select('*')
-        .or(`user_id.eq.${userId},co_creators.cs.{${userId}}`)
+        .from('feed_posts')
+        .select('id, user_id, content, post_type, created_at')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(maxPosts);
       
       if (postsError) {
         console.error('Posts query error:', postsError);
-        setPosts([]);
+        setError('Failed to load posts');
         return;
       }
 
@@ -86,149 +62,31 @@ export default function PostsFeed({
         return;
       }
 
-      // Filter posts based on privacy and relationship
-      const visiblePosts = postsData.filter(post => {
-        const privacy = post.privacy || post.visibility || 'friends';
-        
-        // Own posts are always visible
-        if (post.user_id === viewerUserId) return true;
-        
-        // Public posts are visible to everyone
-        if (privacy === 'public') return true;
-        
-        // Friends posts are visible to friends
-        if (privacy === 'friends' && relationshipType === 'friend') return true;
-        
-        // Private posts only visible to owner
-        if (privacy === 'private') return post.user_id === viewerUserId;
-        
-        // Default to not visible
-        return false;
-      });
-
-      // Get all unique author IDs
-      const authorIds = [...new Set(visiblePosts.map(p => p.user_id))];
-      
-      // Get author profiles
-      const { data: profiles } = await supabase
+      // Get author profile
+      const { data: profile } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
-        .in("id", authorIds);
+        .eq("id", userId)
+        .single();
 
-      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
-
-      // Get co-creator profiles
-      const allCoCreatorIds = visiblePosts
-        .filter(p => p.co_creators && p.co_creators.length > 0)
-        .flatMap(p => p.co_creators);
-      
-      let coCreatorProfiles: any[] = [];
-      if (allCoCreatorIds.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url")
-          .in("id", allCoCreatorIds);
-        coCreatorProfiles = data || [];
-      }
-      
-      const coCreatorMap = Object.fromEntries(
-        coCreatorProfiles.map(p => [p.id, p])
-      );
-
-      // Get likes and comments
-      const postIds = visiblePosts.map(p => p.id);
-      let likeCountBy: Record<string, number> = {};
-      let myLikeSet = new Set<string>();
-      let commentCountBy: Record<string, number> = {};
-
-      if (postIds.length > 0) {
-        try {
-          const [{ data: likeCounts }, { data: myLikes }, { data: commentCounts }] = await Promise.all([
-            supabase.from("post_likes").select("post_id").in("post_id", postIds),
-            viewerUserId ? supabase.from("post_likes").select("post_id").eq("user_id", viewerUserId).in("post_id", postIds) : Promise.resolve({ data: [] }),
-            supabase.from("post_comments").select("post_id").in("post_id", postIds),
-          ]);
-
-          // Count likes
-          const likesPerPost: Record<string, number> = {};
-          (likeCounts || []).forEach(like => {
-            likesPerPost[like.post_id] = (likesPerPost[like.post_id] || 0) + 1;
-          });
-          likeCountBy = likesPerPost;
-          
-          myLikeSet = new Set((myLikes ?? []).map(r => r.post_id));
-          
-          // Count comments
-          const commentsPerPost: Record<string, number> = {};
-          (commentCounts || []).forEach(comment => {
-            commentsPerPost[comment.post_id] = (commentsPerPost[comment.post_id] || 0) + 1;
-          });
-          commentCountBy = commentsPerPost;
-        } catch (e) {
-          console.log("Error loading engagement data:", e);
-        }
-      }
-
-      // Get additional media
-      let mediaByPost: Record<string, any[]> = {};
-      if (postIds.length > 0) {
-        try {
-          const { data: media } = await supabase
-            .from("post_media")
-            .select("post_id, storage_path, media_type")
-            .in("post_id", postIds);
-          
-          if (media) {
-            media.forEach(m => {
-              if (!mediaByPost[m.post_id]) mediaByPost[m.post_id] = [];
-              
-              // Get public URL
-              const bucketName = m.media_type === 'video' ? 'post-videos' : 'post-media';
-              const { data: { publicUrl } } = supabase.storage
-                .from(bucketName)
-                .getPublicUrl(m.storage_path);
-              
-              mediaByPost[m.post_id].push({ 
-                url: publicUrl, 
-                type: m.media_type === 'video' ? 'video' : 'image'
-              });
-            });
-          }
-        } catch (e) {
-          console.log("Error loading media:", e);
-        }
-      }
-
-      // Format posts for PostCard component
-      const formattedPosts: Post[] = visiblePosts.map(p => ({
+      // Format posts for display
+      const formattedPosts: Post[] = postsData.map(p => ({
         id: p.id,
         user_id: p.user_id,
-        body: p.body,
-        image_url: p.image_url || null,
-        video_url: p.video_url || null,
-        privacy: p.visibility || p.privacy || 'public',
+        content: p.content || '',
+        post_type: p.post_type || 'text',
         created_at: p.created_at,
-        allow_share: p.allow_share ?? true,
-        co_creators: p.co_creators || null,
-        author: profileMap[p.user_id] || null,
-        additional_media: mediaByPost[p.id] || [],
-        co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
-        like_count: likeCountBy[p.id] ?? 0,
-        liked_by_me: myLikeSet.has(p.id),
-        comment_count: commentCountBy[p.id] ?? 0,
+        author: profile || null,
       }));
 
       setPosts(formattedPosts);
     } catch (err) {
       console.error('Error loading posts:', err);
-      throw err;
+      setError('Failed to load posts');
+    } finally {
+      setLoading(false);
     }
   }
-
-  // Refresh posts function for PostCard callbacks
-  const handlePostChanged = () => {
-    loadUserPosts();
-  };
 
   if (loading) {
     return (
@@ -242,7 +100,6 @@ export default function PostsFeed({
             justify-content: center;
             gap: 0.75rem;
             padding: 3rem 1rem;
-            text-align: center;
           }
           .loading-spinner {
             width: 1.5rem;
@@ -265,10 +122,7 @@ export default function PostsFeed({
       <div className="posts-error">
         <div className="error-icon">⚠️</div>
         <p className="error-text">Unable to load posts</p>
-        <button 
-          onClick={() => checkRelationshipAndLoadPosts()} 
-          className="retry-btn"
-        >
+        <button onClick={() => loadUserPosts()} className="retry-btn">
           Try Again
         </button>
         <style jsx>{`
@@ -276,79 +130,35 @@ export default function PostsFeed({
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             padding: 3rem 1rem;
             text-align: center;
           }
-          .error-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-          }
-          .error-text {
-            font-size: 1.125rem;
-            font-weight: 600;
-            color: #4b5563;
-            margin: 0 0 1rem 0;
-          }
-          .retry-btn {
-            padding: 0.5rem 1rem;
-            background: #8b5cf6;
-            color: white;
-            border: none;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            transition: background 0.2s;
-          }
-          .retry-btn:hover {
-            background: #7c3aed;
-          }
+          .error-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+          .error-text { font-size: 1.125rem; font-weight: 600; color: #4b5563; margin: 0 0 1rem 0; }
+          .retry-btn { padding: 0.5rem 1rem; background: #8b5cf6; color: white; border: none; border-radius: 0.5rem; cursor: pointer; }
+          .retry-btn:hover { background: #7c3aed; }
         `}</style>
       </div>
     );
   }
 
   if (posts.length === 0) {
-    const isOwnProfile = userId === viewerUserId;
-    
     return (
       <div className="posts-empty">
         <div className="empty-icon">📝</div>
-        <p className="empty-text">
-          {isOwnProfile ? "No posts yet" : "No posts to show"}
-        </p>
-        <p className="empty-subtext">
-          {isOwnProfile 
-            ? "Share your first moment!" 
-            : relationshipType === 'friend' 
-              ? "Posts will appear here when shared"
-              : "Connect as friends to see posts"
-          }
-        </p>
+        <p className="empty-text">No posts yet</p>
+        <p className="empty-subtext">Posts will appear here when shared</p>
         <style jsx>{`
           .posts-empty {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             padding: 3rem 1rem;
             text-align: center;
           }
-          .empty-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-          }
-          .empty-text {
-            font-size: 1.125rem;
-            font-weight: 600;
-            color: #4b5563;
-            margin: 0 0 0.5rem 0;
-          }
-          .empty-subtext {
-            color: #9ca3af;
-            margin: 0;
-          }
+          .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+          .empty-text { font-size: 1.125rem; font-weight: 600; color: #4b5563; margin: 0 0 0.5rem 0; }
+          .empty-subtext { color: #9ca3af; margin: 0; }
         `}</style>
       </div>
     );
@@ -358,12 +168,34 @@ export default function PostsFeed({
     <div className="posts-feed">
       <div className="posts-list">
         {posts.map((post) => (
-          <PostCard 
-            key={post.id} 
-            post={post} 
-            onChanged={handlePostChanged}
-            currentUserId={viewerUserId}
-          />
+          <div key={post.id} className="post-card">
+            <div className="post-header">
+              <div className="author-info">
+                <img 
+                  src={post.author?.avatar_url || '/default-avatar.png'} 
+                  alt=""
+                  className="author-avatar"
+                />
+                <div>
+                  <div className="author-name">
+                    {post.author?.full_name || 'User'}
+                  </div>
+                  <div className="post-date">
+                    {new Date(post.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+              {post.post_type && (
+                <div className="post-type-badge">
+                  {post.post_type}
+                </div>
+              )}
+            </div>
+            
+            <div className="post-content">
+              <p className="post-text">{post.content}</p>
+            </div>
+          </div>
         ))}
       </div>
       
@@ -378,10 +210,77 @@ export default function PostsFeed({
           gap: 1.5rem;
         }
         
-        /* Ensure PostCard styles are properly contained */
-        .posts-list :global(.post-card) {
-          width: 100%;
-          box-sizing: border-box;
+        .post-card {
+          background: white;
+          border-radius: 0.75rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          overflow: hidden;
+        }
+        
+        .post-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 1rem;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .author-info {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
+        }
+        
+        .author-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        
+        .author-name {
+          font-weight: 600;
+          color: #1a202c;
+          font-size: 0.9rem;
+        }
+        
+        .post-date {
+          font-size: 0.8rem;
+          color: #718096;
+        }
+        
+        .post-type-badge {
+          padding: 0.25rem 0.5rem;
+          background: #ede9fe;
+          color: #7c3aed;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+        
+        .post-content {
+          padding: 1rem;
+        }
+        
+        .post-text {
+          margin: 0;
+          line-height: 1.6;
+          color: #374151;
+        }
+        
+        @media (max-width: 640px) {
+          .post-header {
+            padding: 0.75rem;
+          }
+          
+          .post-content {
+            padding: 0.75rem;
+          }
+          
+          .author-avatar {
+            width: 36px;
+            height: 36px;
+          }
         }
       `}</style>
     </div>
