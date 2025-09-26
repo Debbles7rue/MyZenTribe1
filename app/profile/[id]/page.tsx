@@ -89,6 +89,7 @@ export default function PublicProfilePage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState<string | null>(null);
+  const [posts, setPosts] = useState<any[]>([]); // Add posts state for counting
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'photos' | 'events' | 'memories'>('photos');
@@ -121,7 +122,7 @@ export default function PublicProfilePage() {
     if (profileId) {
       loadProfile();
       loadStats();
-      loadPhotos();
+      loadPostsCount();
       loadEvents();
     }
     
@@ -131,6 +132,20 @@ export default function PublicProfilePage() {
       loadTodayMemories();
     }
   }, [profileId, currentUserId]);
+
+  async function loadPostsCount() {
+    try {
+      const { count } = await supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .or(`user_id.eq.${profileId},co_creators.cs.{${profileId}}`);
+      
+      setPosts(Array(count || 0).fill({})); // Just for counting
+    } catch (err) {
+      console.error("Error loading posts count:", err);
+      setPosts([]);
+    }
+  }
 
   async function loadProfile() {
     try {
@@ -172,63 +187,6 @@ export default function PublicProfilePage() {
       setFollowersCount(followers || 0);
     } catch (err) {
       console.error("Error loading stats:", err);
-    }
-  }
-
-  async function loadPhotos() {
-    setPhotosLoading(true);
-    setPhotosError(null);
-    
-    try {
-      // Try posts table first for images
-      const { data: posts, error: postsError } = await supabase
-        .from("posts")
-        .select("id, user_id, image_url, body as caption, created_at, privacy as visibility")
-        .eq("user_id", profileId)
-        .not("image_url", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(12);
-
-      if (postsError) {
-        console.log("Posts query error:", postsError);
-        // Try a photos table as fallback
-        const { data: photosData, error: photosError } = await supabase
-          .from("photos")
-          .select("*")
-          .eq("user_id", profileId)
-          .order("created_at", { ascending: false })
-          .limit(12);
-
-        if (photosError) {
-          throw new Error("No photos found");
-        }
-        
-        setPhotos(photosData || []);
-      } else {
-        // Filter based on privacy and relationship
-        const visiblePhotos = (posts || []).filter(post => {
-          const visibility = post.visibility || 'public';
-          if (visibility === 'public') return true;
-          if (visibility === 'friends' && relationshipType === 'friend') return true;
-          if (currentUserId === profileId) return true;
-          return false;
-        });
-
-        setPhotos(visiblePhotos.map(post => ({
-          id: post.id,
-          user_id: post.user_id,
-          image_url: post.image_url!,
-          caption: post.caption,
-          created_at: post.created_at,
-          visibility: post.visibility || 'public'
-        })));
-      }
-    } catch (err) {
-      console.error("Error loading photos:", err);
-      setPhotosError("Unable to load photos");
-      setPhotos([]);
-    } finally {
-      setPhotosLoading(false);
     }
   }
 
@@ -523,7 +481,7 @@ export default function PublicProfilePage() {
                 className={`tab ${activeTab === 'photos' ? 'active' : ''}`}
                 onClick={() => setActiveTab('photos')}
               >
-                📸 Photos {photos.length > 0 && `(${photos.length})`}
+                📝 Posts {posts.length > 0 && `(${posts.length})`}
               </button>
               <button 
                 className={`tab ${activeTab === 'events' ? 'active' : ''}`}
