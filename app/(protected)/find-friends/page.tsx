@@ -225,7 +225,7 @@ export default function FindFriendsPage() {
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
-              placeholder="Enter name or email (e.g., Test, Donna, ndonna3)..."
+              placeholder="Search for friend or business..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -239,9 +239,7 @@ export default function FindFriendsPage() {
               {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
-          <div className="mt-2 text-sm text-gray-500">
-            Try searching for: "Test", "Donna", "Beautiful", or email addresses like "ndonna3"
-          </div>
+
         </form>
 
 
