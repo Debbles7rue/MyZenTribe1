@@ -1,4 +1,4 @@
-// app/profile/[id]/page.tsx - ENHANCED PUBLIC PROFILE VIEW WITH FIXES
+// app/profile/[id]/page.tsx - UNIFIED FEED VERSION (NO TABS)
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -45,15 +45,6 @@ type Memory = {
   created_at: string;
 };
 
-type Photo = {
-  id: string;
-  user_id: string;
-  image_url: string;
-  caption?: string;
-  created_at: string;
-  visibility: 'public' | 'friends' | 'private';
-};
-
 type Event = {
   id: string;
   host_id: string;
@@ -65,6 +56,8 @@ type Event = {
   attendees_count: number;
   max_attendees?: number;
   visibility: 'public' | 'friends' | 'private';
+  created_at: string;
+  type: 'event';
 };
 
 export default function PublicProfilePage() {
@@ -82,7 +75,7 @@ export default function PublicProfilePage() {
   const [followersCount, setFollowersCount] = useState(0);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
   
-  // New state for enhanced features
+  // Enhanced features
   const [showMemories, setShowMemories] = useState(false);
   const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
@@ -90,7 +83,6 @@ export default function PublicProfilePage() {
   const [posts, setPosts] = useState<any[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'memories'>('posts');
   const [isMobile, setIsMobile] = useState(false);
 
   // Mobile detection
@@ -120,7 +112,7 @@ export default function PublicProfilePage() {
     if (profileId) {
       loadProfile();
       loadStats();
-      loadPostsCount(); // RESTORED: Back to your original working function
+      loadPostsCount();
       loadEvents();
     }
     
@@ -132,7 +124,7 @@ export default function PublicProfilePage() {
     }
   }, [profileId, currentUserId]);
 
-  // RESTORED: Load posts count (your original working version)
+  // Load posts count (your original working version)
   async function loadPostsCount() {
     try {
       const { count } = await supabase
@@ -170,7 +162,7 @@ export default function PublicProfilePage() {
 
   async function loadStats() {
     try {
-      // Get friends count - FIXED query for friendships table
+      // Get friends count
       const { count: friends } = await supabase
         .from("friendships")
         .select("*", { count: "exact", head: true })
@@ -199,13 +191,13 @@ export default function PublicProfilePage() {
         .from("events")
         .select(`
           id, host_id, title, description, start_date, location, 
-          image_url, max_attendees, visibility,
+          image_url, max_attendees, visibility, created_at,
           event_attendees(count)
         `)
         .eq("host_id", profileId)
         .gte("start_date", new Date().toISOString())
-        .order("start_date", { ascending: true })
-        .limit(6);
+        .order("created_at", { ascending: false })
+        .limit(10);
 
       if (error) {
         console.log("Events query error:", error);
@@ -223,7 +215,8 @@ export default function PublicProfilePage() {
 
       setEvents(visibleEvents.map(event => ({
         ...event,
-        attendees_count: event.event_attendees?.[0]?.count || 0
+        attendees_count: event.event_attendees?.[0]?.count || 0,
+        type: 'event' as const
       })));
     } catch (err) {
       console.error("Error loading events:", err);
@@ -233,7 +226,7 @@ export default function PublicProfilePage() {
     }
   }
 
-  // FIXED: Check relationship status with correct database query
+  // Check relationship status with correct database query
   async function checkRelationshipStatus() {
     if (!currentUserId || !profileId) return;
 
@@ -267,7 +260,7 @@ export default function PublicProfilePage() {
     }
   }
 
-  // FIXED: Check follow status
+  // Check follow status
   async function checkFollowStatus() {
     if (!currentUserId || !profileId) return;
 
@@ -340,9 +333,10 @@ export default function PublicProfilePage() {
       }
 
       // Filter based on visibility and relationship
+      const canViewFriendContent = relationshipType === 'friend';
       const visibleMemories = (data || []).filter(memory => {
         if (memory.visibility === 'public') return true;
-        if (memory.visibility === 'friends' && relationshipType === 'friend') return true;
+        if (memory.visibility === 'friends' && canViewFriendContent) return true;
         if (currentUserId === profileId) return true;
         return false;
       });
@@ -383,7 +377,7 @@ export default function PublicProfilePage() {
     router.push(`/messages?user=${profileId}`);
   }
 
-  // FIXED: Follow/unfollow functionality
+  // Follow/unfollow functionality
   async function handleFollow() {
     if (!currentUserId || !profileId) return;
 
@@ -513,150 +507,93 @@ export default function PublicProfilePage() {
         isFollowing={isFollowing}
       />
 
-      {/* Enhanced Content Sections */}
+      {/* Today's Memories Section (if available) */}
+      {canViewMemories && todayMemories.length > 0 && (
+        <div className="memories-section">
+          <div className="section-header">
+            <h3 className="section-title">✨ Today in Past Years</h3>
+          </div>
+          <div className="memories-grid">
+            {todayMemories.slice(0, 4).map(memory => (
+              <div 
+                key={memory.id} 
+                className="memory-item"
+                onClick={() => setSelectedMemory(memory)}
+              >
+                <img src={memory.photo_url} alt={memory.caption} />
+                <div className="memory-overlay">
+                  <p className="memory-caption">{memory.caption}</p>
+                  <span className="memory-date">
+                    {new Date(memory.date).getFullYear()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Unified Posts and Events Feed */}
       {(canViewFriendContent || profile.visibility === 'public') && (
-        <div className="content-sections">
-          {/* Tab Navigation - FIXED FUNCTIONALITY */}
-          <div className="tabs-container">
-            <div className="tabs">
-              <button 
-                className={`tab ${activeTab === 'posts' ? 'active' : ''}`}
-                onClick={() => setActiveTab('posts')}
-              >
-                📝 Posts {posts.length > 0 && `(${posts.length})`}
-              </button>
-              <button 
-                className={`tab ${activeTab === 'events' ? 'active' : ''}`}
-                onClick={() => setActiveTab('events')}
-              >
-                🎉 Events {events.length > 0 && `(${events.length})`}
-              </button>
-              {canViewMemories && todayMemories.length > 0 && (
-                <button 
-                  className={`tab ${activeTab === 'memories' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('memories')}
-                >
-                  ✨ Memories ({todayMemories.length})
-                </button>
-              )}
+        <div className="unified-feed">
+          {/* Posts Feed - Displayed as continuous feed */}
+          {posts.length > 0 && (
+            <div className="posts-feed-section">
+              <PostsFeed 
+                userId={profileId}
+                currentUserId={currentUserId}
+                showUserInfo={false}
+              />
             </div>
-          </div>
+          )}
 
-          {/* Content based on active tab - FIXED TAB SWITCHING */}
-          <div className="content-area">
-            {activeTab === 'posts' && (
-              <div className="posts-section">
-                {posts.length > 0 ? (
-                  <div className="posts-display">
-                    <PostsFeed 
-                      userId={profileId}
-                      currentUserId={currentUserId}
-                      showUserInfo={false}
-                    />
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-icon">📝</div>
-                    <p className="empty-text">No posts yet</p>
-                    <p className="empty-subtext">Posts will appear here when shared</p>
-                  </div>
-                )}
+          {/* Events interspersed (if you want them mixed in later) */}
+          {events.length > 0 && (
+            <div className="events-feed-section">
+              <div className="section-header">
+                <h3 className="section-title">🎉 Upcoming Events</h3>
               </div>
-            )}
-
-            {activeTab === 'events' && (
-              <div className="events-section">
-                {eventsLoading ? (
-                  <div className="loading-state">
-                    <div className="loading-spinner"></div>
-                    <span>Loading events...</span>
-                  </div>
-                ) : events.length > 0 ? (
-                  <div className="events-grid">
-                    {events.map(event => (
-                      <div key={event.id} className="event-card">
-                        {event.image_url && (
-                          <img src={event.image_url} alt={event.title} className="event-image" />
-                        )}
-                        <div className="event-content">
-                          <h3 className="event-title">{event.title}</h3>
-                          {event.description && (
-                            <p className="event-description">{event.description}</p>
-                          )}
-                          <div className="event-details">
-                            <div className="event-date">
-                              📅 {new Date(event.start_date).toLocaleDateString()}
-                            </div>
-                            {event.location && (
-                              <div className="event-location">
-                                📍 {event.location}
-                              </div>
-                            )}
-                            <div className="event-attendees">
-                              👥 {event.attendees_count} attending
-                              {event.max_attendees && ` / ${event.max_attendees} max`}
-                            </div>
-                          </div>
-                          <div className="event-actions">
-                            <button className="btn btn-primary btn-sm">
-                              RSVP
-                            </button>
-                            <button className="btn btn-secondary btn-sm">
-                              Interested
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-icon">🎪</div>
-                    <p className="empty-text">No upcoming events</p>
-                    <p className="empty-subtext">Events hosted by this user will appear here</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'memories' && canViewMemories && (
-              <div className="memories-section">
-                {memoriesLoading ? (
-                  <div className="loading-state">
-                    <div className="loading-spinner"></div>
-                    <span>Loading memories...</span>
-                  </div>
-                ) : todayMemories.length > 0 ? (
-                  <>
-                    <h3 className="section-title">Today in Past Years</h3>
-                    <div className="memories-grid">
-                      {todayMemories.map(memory => (
-                        <div 
-                          key={memory.id} 
-                          className="memory-item"
-                          onClick={() => setSelectedMemory(memory)}
-                        >
-                          <img src={memory.photo_url} alt={memory.caption} />
-                          <div className="memory-overlay">
-                            <p className="memory-caption">{memory.caption}</p>
-                            <span className="memory-date">
-                              {new Date(memory.date).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+              {events.map(event => (
+                <div key={event.id} className="event-feed-item">
+                  {event.image_url && (
+                    <img src={event.image_url} alt={event.title} className="event-image" />
+                  )}
+                  <div className="event-content">
+                    <h4 className="event-title">{event.title}</h4>
+                    {event.description && (
+                      <p className="event-description">{event.description}</p>
+                    )}
+                    <div className="event-details">
+                      <span className="event-date">
+                        📅 {new Date(event.start_date).toLocaleDateString()}
+                      </span>
+                      {event.location && (
+                        <span className="event-location">
+                          📍 {event.location}
+                        </span>
+                      )}
+                      <span className="event-attendees">
+                        👥 {event.attendees_count} attending
+                      </span>
                     </div>
-                  </>
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-icon">✨</div>
-                    <p className="empty-text">No memories for today</p>
-                    <p className="empty-subtext">Past memories from this date will appear here</p>
+                    <div className="event-actions">
+                      <button className="btn btn-primary btn-sm">RSVP</button>
+                      <button className="btn btn-secondary btn-sm">Interested</button>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty state if no content */}
+          {posts.length === 0 && events.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-icon">📱</div>
+              <p className="empty-text">No posts or events yet</p>
+              <p className="empty-subtext">Check back later for updates!</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -702,202 +639,31 @@ export default function PublicProfilePage() {
           }
         }
 
-        .content-sections {
+        /* Memories Section */
+        .memories-section {
           max-width: 800px;
           margin: 2rem auto 0;
-        }
-
-        .tabs-container {
           background: white;
-          border-radius: 1rem 1rem 0 0;
-          padding: 0;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .tabs {
-          display: flex;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        @media (max-width: 640px) {
-          .tabs {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
-        }
-
-        .tab {
-          flex: 1;
-          min-width: fit-content;
-          padding: 1rem 1.5rem;
-          background: none;
-          border: none;
-          border-bottom: 3px solid transparent;
-          font-weight: 500;
-          color: #6b7280;
-          cursor: pointer;
-          transition: all 0.2s;
-          font-size: 0.875rem;
-          white-space: nowrap;
-        }
-
-        @media (max-width: 640px) {
-          .tab {
-            padding: 0.875rem 1rem;
-            font-size: 0.8rem;
-          }
-        }
-
-        .tab:hover {
-          color: #8b5cf6;
-          background: rgba(139,92,246,0.05);
-        }
-
-        .tab.active {
-          color: #8b5cf6;
-          border-bottom-color: #8b5cf6;
-          background: rgba(139,92,246,0.05);
-        }
-
-        .content-area {
-          background: white;
-          border-radius: 0 0 1rem 1rem;
+          border-radius: 1rem;
           padding: 1.5rem;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          min-height: 400px;
         }
 
-        @media (max-width: 640px) {
-          .content-area {
-            padding: 1rem;
-          }
+        .section-header {
+          margin-bottom: 1rem;
         }
 
-        /* Posts Section - IMPROVED */
-        .posts-feed {
-          /* PostsFeed component styles will be applied automatically */
-        }
-
-        /* Events Section */
-        .events-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-          .events-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-          }
-        }
-
-        .event-card {
-          border: 1px solid #e5e7eb;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          transition: transform 0.2s, box-shadow 0.2s;
-          background: white;
-        }
-
-        .event-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
-
-        .event-image {
-          width: 100%;
-          height: 150px;
-          object-fit: cover;
-        }
-
-        .event-content {
-          padding: 1rem;
-        }
-
-        .event-title {
+        .section-title {
           font-size: 1.125rem;
           font-weight: 600;
           color: #1f2937;
-          margin: 0 0 0.5rem 0;
-        }
-
-        .event-description {
-          color: #6b7280;
-          font-size: 0.875rem;
-          margin: 0 0 1rem 0;
-          line-height: 1.5;
-        }
-
-        .event-details {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          margin-bottom: 1rem;
-          font-size: 0.875rem;
-          color: #4b5563;
-        }
-
-        .event-actions {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .btn {
-          padding: 0.5rem 1rem;
-          border-radius: 0.5rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          border: none;
-          font-size: 0.875rem;
-        }
-
-        .btn-sm {
-          padding: 0.375rem 0.75rem;
-          font-size: 0.8rem;
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-          color: white;
-        }
-
-        .btn-primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-        }
-
-        .btn-secondary {
-          background: white;
-          color: #8b5cf6;
-          border: 1px solid #8b5cf6;
-        }
-
-        .btn-secondary:hover {
-          background: #8b5cf6;
-          color: white;
-        }
-
-        /* Memories Section */
-        .section-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 1rem 0;
+          margin: 0;
         }
 
         .memories-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 1rem;
-        }
-
-        @media (max-width: 640px) {
-          .memories-grid {
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 0.75rem;
-          }
         }
 
         .memory-item {
@@ -927,13 +693,14 @@ export default function PublicProfilePage() {
           right: 0;
           background: linear-gradient(transparent, rgba(0,0,0,0.8));
           color: white;
-          padding: 1.5rem 0.75rem 0.75rem;
+          padding: 1rem 0.75rem 0.75rem;
         }
 
         .memory-caption {
           font-size: 0.875rem;
           margin: 0 0 0.25rem 0;
           font-weight: 500;
+          line-height: 1.2;
         }
 
         .memory-date {
@@ -941,7 +708,133 @@ export default function PublicProfilePage() {
           opacity: 0.9;
         }
 
-        /* Empty States and Loading */
+        /* Unified Feed Section */
+        .unified-feed {
+          max-width: 800px;
+          margin: 2rem auto 0;
+        }
+
+        .posts-feed-section {
+          /* PostsFeed component will handle its own styling */
+        }
+
+        .events-feed-section {
+          margin-top: 2rem;
+          background: white;
+          border-radius: 1rem;
+          padding: 1.5rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .event-feed-item {
+          border: 1px solid #e5e7eb;
+          border-radius: 0.75rem;
+          overflow: hidden;
+          margin-bottom: 1.5rem;
+          transition: transform 0.2s, box-shadow 0.2s;
+          background: white;
+        }
+
+        .event-feed-item:last-child {
+          margin-bottom: 0;
+        }
+
+        .event-feed-item:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .event-image {
+          width: 100%;
+          height: 200px;
+          object-fit: cover;
+        }
+
+        .event-content {
+          padding: 1.25rem;
+        }
+
+        .event-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 0.75rem 0;
+          line-height: 1.3;
+        }
+
+        .event-description {
+          color: #6b7280;
+          font-size: 0.875rem;
+          margin: 0 0 1rem 0;
+          line-height: 1.5;
+        }
+
+        .event-details {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 1rem;
+          margin-bottom: 1.25rem;
+          font-size: 0.875rem;
+          color: #4b5563;
+        }
+
+        @media (max-width: 640px) {
+          .event-details {
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+        }
+
+        .event-actions {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        @media (max-width: 640px) {
+          .event-actions {
+            flex-direction: column;
+          }
+        }
+
+        .btn {
+          padding: 0.625rem 1.25rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+          font-size: 0.875rem;
+          min-height: 44px;
+          touch-action: manipulation;
+        }
+
+        .btn-sm {
+          padding: 0.5rem 1rem;
+          font-size: 0.8rem;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .btn-secondary {
+          background: white;
+          color: #8b5cf6;
+          border: 1px solid #8b5cf6;
+        }
+
+        .btn-secondary:hover {
+          background: #8b5cf6;
+          color: white;
+        }
+
+        /* Empty States */
         .empty-state {
           display: flex;
           flex-direction: column;
@@ -949,6 +842,9 @@ export default function PublicProfilePage() {
           justify-content: center;
           padding: 3rem 1rem;
           text-align: center;
+          background: white;
+          border-radius: 1rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         .empty-icon {
@@ -969,32 +865,18 @@ export default function PublicProfilePage() {
           margin: 0;
         }
 
-        .loading-state {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.75rem;
-          padding: 3rem;
-        }
-
-        .loading-spinner {
-          width: 1.5rem;
-          height: 1.5rem;
-          border: 2px solid #e5e7eb;
-          border-top: 2px solid #8b5cf6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
         /* Mobile optimizations */
         @media (max-width: 640px) {
+          .memories-section,
+          .events-feed-section {
+            padding: 1rem;
+          }
+
+          .event-content {
+            padding: 1rem;
+          }
+
           .btn {
-            min-height: 44px;
-            touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
           }
         }
