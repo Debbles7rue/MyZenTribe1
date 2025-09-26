@@ -244,14 +244,7 @@ export default function FindFriendsPage() {
           </div>
         </form>
 
-        {/* Debug Info - Remove this in production */}
-        {currentUserId && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mb-4 text-xs">
-            <p>Debug: Logged in as ID: {currentUserId}</p>
-            <p>Search query: "{searchQuery}"</p>
-            <p>Results found: {searchResults.length}</p>
-          </div>
-        )}
+
 
         {/* Search Results */}
         {hasSearched && !loading && searchResults.length === 0 && (
@@ -327,10 +320,7 @@ export default function FindFriendsPage() {
                         </p>
                       )}
 
-                      {/* Debug status */}
-                      <div className="text-xs text-gray-400 mt-1">
-                        Status: {status} | ID: {user.id.slice(0, 8)}...
-                      </div>
+
                     </div>
 
                     {/* Action Button */}
