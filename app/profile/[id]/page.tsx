@@ -1,4 +1,4 @@
-// app/profile/[id]/page.tsx - ENHANCED PUBLIC PROFILE VIEW
+// app/profile/[id]/page.tsx - ENHANCED PUBLIC PROFILE VIEW WITH FIXES
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -77,6 +77,7 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('none');
   const [friendStatus, setFriendStatus] = useState<"none" | "pending" | "friends">("none");
+  const [isFollowing, setIsFollowing] = useState(false);
   const [friendsCount, setFriendsCount] = useState(0);
   const [followersCount, setFollowersCount] = useState(0);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
@@ -86,13 +87,11 @@ export default function PublicProfilePage() {
   const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [photosLoading, setPhotosLoading] = useState(false);
-  const [photosError, setPhotosError] = useState<string | null>(null);
-  const [posts, setPosts] = useState<any[]>([]); // Add posts state for counting
+  const [posts, setPosts] = useState<any[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'photos' | 'events' | 'memories'>('photos');
+  const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'memories'>('posts');
   const [isMobile, setIsMobile] = useState(false);
 
   // Mobile detection
@@ -122,28 +121,46 @@ export default function PublicProfilePage() {
     if (profileId) {
       loadProfile();
       loadStats();
-      loadPostsCount();
+      loadPosts(); // Load actual posts from feed_posts
       loadEvents();
     }
     
     if (currentUserId && profileId) {
       checkRelationshipStatus();
+      checkFollowStatus();
       loadMutualFriends();
       loadTodayMemories();
     }
   }, [profileId, currentUserId]);
 
-  async function loadPostsCount() {
+  // FIXED: Load actual posts from feed_posts table
+  async function loadPosts() {
+    setPostsLoading(true);
     try {
-      const { count } = await supabase
-        .from("posts")
-        .select("*", { count: "exact", head: true })
-        .or(`user_id.eq.${profileId},co_creators.cs.{${profileId}}`);
-      
-      setPosts(Array(count || 0).fill({})); // Just for counting
+      const { data, error } = await supabase
+        .from("feed_posts")
+        .select(`
+          id, user_id, content, post_type, created_at,
+          profiles:user_id (
+            full_name, avatar_url, username
+          )
+        `)
+        .eq("user_id", profileId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error && error.code !== 'PGRST116') {
+        console.error("Error loading posts:", error);
+        setPosts([]);
+        return;
+      }
+
+      setPosts(data || []);
     } catch (err) {
-      console.error("Error loading posts count:", err);
+      console.error("Error loading posts:", err);
       setPosts([]);
+    } finally {
+      setPostsLoading(false);
     }
   }
 
@@ -170,11 +187,12 @@ export default function PublicProfilePage() {
 
   async function loadStats() {
     try {
-      // Get friends count
+      // Get friends count - FIXED query for friendships table
       const { count: friends } = await supabase
         .from("friendships")
         .select("*", { count: "exact", head: true })
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
+        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
+        .eq('status', 'accepted');
       
       setFriendsCount(friends || 0);
 
@@ -232,11 +250,12 @@ export default function PublicProfilePage() {
     }
   }
 
+  // FIXED: Check relationship status with correct database query
   async function checkRelationshipStatus() {
     if (!currentUserId || !profileId) return;
 
     try {
-      // Check if friends - simplified query for your database structure
+      // Check if friends - using friendships table with status = 'accepted'
       const { data: friendships } = await supabase
         .from("friendships")
         .select("status, relationship_type")
@@ -265,6 +284,25 @@ export default function PublicProfilePage() {
     }
   }
 
+  // FIXED: Check follow status
+  async function checkFollowStatus() {
+    if (!currentUserId || !profileId) return;
+
+    try {
+      const { data } = await supabase
+        .from("followers")
+        .select("id")
+        .eq("follower_id", currentUserId)
+        .eq("following_id", profileId)
+        .single();
+
+      setIsFollowing(!!data);
+    } catch (err) {
+      // Not following or error - default to false
+      setIsFollowing(false);
+    }
+  }
+
   async function loadMutualFriends() {
     if (!currentUserId || !profileId) return;
 
@@ -272,12 +310,14 @@ export default function PublicProfilePage() {
       const { data: myFriends } = await supabase
         .from("friendships")
         .select("user_id, friend_id")
-        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`);
+        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
+        .eq('status', 'accepted');
 
       const { data: theirFriends } = await supabase
         .from("friendships")
         .select("user_id, friend_id")
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
+        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
+        .eq('status', 'accepted');
 
       if (myFriends && theirFriends) {
         const myFriendIds = myFriends.map(f => 
@@ -360,22 +400,39 @@ export default function PublicProfilePage() {
     router.push(`/messages?user=${profileId}`);
   }
 
-  async function followUser() {
+  // FIXED: Follow/unfollow functionality
+  async function handleFollow() {
     if (!currentUserId || !profileId) return;
 
     try {
-      const { error } = await supabase
-        .from("followers")
-        .insert({
-          follower_id: currentUserId,
-          following_id: profileId,
-        });
+      if (isFollowing) {
+        // Unfollow
+        const { error } = await supabase
+          .from("followers")
+          .delete()
+          .eq("follower_id", currentUserId)
+          .eq("following_id", profileId);
 
-      if (!error) {
-        setFollowersCount(prev => prev + 1);
+        if (!error) {
+          setIsFollowing(false);
+          setFollowersCount(prev => Math.max(0, prev - 1));
+        }
+      } else {
+        // Follow
+        const { error } = await supabase
+          .from("followers")
+          .insert({
+            follower_id: currentUserId,
+            following_id: profileId,
+          });
+
+        if (!error) {
+          setIsFollowing(true);
+          setFollowersCount(prev => prev + 1);
+        }
       }
     } catch (err) {
-      console.error("Error following user:", err);
+      console.error("Error following/unfollowing user:", err);
     }
   }
 
@@ -468,19 +525,20 @@ export default function PublicProfilePage() {
         mutualFriendsCount={mutualFriendsCount}
         onAddFriend={sendFriendRequest}
         onMessage={sendMessage}
-        onFollow={followUser}
+        onFollow={handleFollow}
         isPending={friendStatus === "pending"}
+        isFollowing={isFollowing}
       />
 
       {/* Enhanced Content Sections */}
       {(canViewFriendContent || profile.visibility === 'public') && (
         <div className="content-sections">
-          {/* Tab Navigation */}
+          {/* Tab Navigation - FIXED FUNCTIONALITY */}
           <div className="tabs-container">
             <div className="tabs">
               <button 
-                className={`tab ${activeTab === 'photos' ? 'active' : ''}`}
-                onClick={() => setActiveTab('photos')}
+                className={`tab ${activeTab === 'posts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('posts')}
               >
                 📝 Posts {posts.length > 0 && `(${posts.length})`}
               </button>
@@ -501,41 +559,30 @@ export default function PublicProfilePage() {
             </div>
           </div>
 
-          {/* Content based on active tab */}
+          {/* Content based on active tab - FIXED TAB SWITCHING */}
           <div className="content-area">
-            {activeTab === 'photos' && (
-              <div className="photos-section">
-                {photosLoading ? (
+            {activeTab === 'posts' && (
+              <div className="posts-section">
+                {postsLoading ? (
                   <div className="loading-state">
                     <div className="loading-spinner"></div>
-                    <span>Loading photos...</span>
+                    <span>Loading posts...</span>
                   </div>
-                ) : photosError ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">📸</div>
-                    <p className="empty-text">No photos available</p>
-                    <p className="empty-subtext">Photos will appear here when shared</p>
-                  </div>
-                ) : photos.length > 0 ? (
-                  <div className="photos-grid">
-                    {photos.map(photo => (
-                      <div key={photo.id} className="photo-item">
-                        <img 
-                          src={photo.image_url} 
-                          alt={photo.caption || 'Photo'} 
-                          loading="lazy"
-                        />
-                        {photo.caption && (
-                          <div className="photo-caption">{photo.caption}</div>
-                        )}
-                      </div>
-                    ))}
+                ) : posts.length > 0 ? (
+                  <div className="posts-feed">
+                    <PostsFeed 
+                      posts={posts}
+                      currentUserId={currentUserId}
+                      onLike={() => {}}
+                      onComment={() => {}}
+                      onShare={() => {}}
+                    />
                   </div>
                 ) : (
                   <div className="empty-state">
-                    <div className="empty-icon">📷</div>
-                    <p className="empty-text">No photos yet</p>
-                    <p className="empty-subtext">Check back later for photos!</p>
+                    <div className="empty-icon">📝</div>
+                    <p className="empty-text">No posts yet</p>
+                    <p className="empty-subtext">Posts will appear here when shared</p>
                   </div>
                 )}
               </div>
@@ -750,49 +797,9 @@ export default function PublicProfilePage() {
           }
         }
 
-        /* Photos Section */
-        .photos-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap: 1rem;
-        }
-
-        @media (max-width: 640px) {
-          .photos-grid {
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 0.75rem;
-          }
-        }
-
-        .photo-item {
-          position: relative;
-          aspect-ratio: 1;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          cursor: pointer;
-          transition: transform 0.2s;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .photo-item:hover {
-          transform: scale(1.02);
-        }
-
-        .photo-item img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .photo-caption {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: linear-gradient(transparent, rgba(0,0,0,0.7));
-          color: white;
-          padding: 1rem 0.75rem 0.5rem;
-          font-size: 0.875rem;
+        /* Posts Section - IMPROVED */
+        .posts-feed {
+          /* PostsFeed component styles will be applied automatically */
         }
 
         /* Events Section */
