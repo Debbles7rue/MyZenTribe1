@@ -583,11 +583,14 @@ function EditPostModal({
 }
 
 export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
-  // DEBUG LOG - This is the correct place for it
-  console.log('PostCard input:', {
-    id: post.id,
-    additional_media: post.additional_media,
-    comment_count: post.comment_count
+  // DEBUG LOGGING - This will help us understand what's happening
+  console.log('PostCard DEBUG:', {
+    postId: post.id,
+    currentUserId,
+    postUserId: post.user_id,
+    canEdit: currentUserId === post.user_id,
+    isCoCreator: post.co_creators?.includes(currentUserId || ''),
+    coCreators: post.co_creators
   });
   
   const [showLightbox, setShowLightbox] = useState(false);
@@ -727,6 +730,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const canEdit = currentUserId === post.user_id || isCoCreator;
   const canDelete = currentUserId === post.user_id;
   
+  // DEBUG: Log what we're checking for edit permissions
+  console.log('Edit permissions:', { canEdit, canDelete, currentUserId, postUserId: post.user_id });
+  
   const getDisplayName = () => {
     let name = post.author?.full_name || 'User';
     if (post.co_creators && post.co_creators.length > 0) {
@@ -763,16 +769,42 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </div>
           </div>
           
+          {/* DEBUG: Show edit menu state */}
+          <div style={{ fontSize: '10px', color: 'red', position: 'absolute', top: '5px', right: '5px' }}>
+            {canEdit ? 'CAN_EDIT' : 'NO_EDIT'}
+          </div>
+          
           {canEdit && (
             <div className="post-actions">
               <button 
                 className="menu-btn"
-                onClick={() => setShowEditMenu(!showEditMenu)}
+                onClick={() => {
+                  console.log('Menu button clicked, current state:', showEditMenu);
+                  setShowEditMenu(!showEditMenu);
+                }}
+                style={{ 
+                  background: 'red',  // Make it super visible for debugging
+                  color: 'white',
+                  padding: '5px 10px',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
               >
-                ⋯
+                ⋯ EDIT
               </button>
               {showEditMenu && (
-                <div className="menu-dropdown">
+                <div className="menu-dropdown" style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '100%',
+                  background: 'white',
+                  border: '1px solid #ccc',
+                  borderRadius: '5px',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                  minWidth: '150px',
+                  zIndex: 1000
+                }}>
                   {isCoCreator && !canDelete && (
                     <>
                       <button className="menu-item" onClick={() => setShowEditModal(true)}>Add Photos</button>
@@ -913,6 +945,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           border-radius: 0.75rem;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           margin-bottom: 1rem;
+          position: relative;
         }
         
         .post-header {
@@ -920,6 +953,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           justify-content: space-between;
           align-items: flex-start;
           padding: 1rem;
+          position: relative;
         }
         
         .author-info {
@@ -1327,7 +1361,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: not-allowed;
         }
 
-        /* Edit Modal Specific Styles */
         .edit-modal-overlay {
           position: fixed;
           inset: 0;
@@ -1349,203 +1382,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           display: flex;
           flex-direction: column;
           box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-        }
-
-        .edit-modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.5rem 1.5rem 1rem 1.5rem;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .edit-modal-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a202c;
-          margin: 0;
-        }
-
-        .edit-modal-close {
-          background: none;
-          border: none;
-          font-size: 2rem;
-          color: #718096;
-          cursor: pointer;
-          width: 2rem;
-          height: 2rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 0.375rem;
-          transition: all 0.2s;
-        }
-
-        .edit-modal-close:hover {
-          background: #f7fafc;
-          color: #2d3748;
-        }
-
-        .edit-modal-body {
-          padding: 1.5rem;
-          overflow-y: auto;
-          flex: 1;
-        }
-
-        .edit-textarea {
-          width: 100%;
-          padding: 1rem;
-          border: 2px solid #e2e8f0;
-          border-radius: 0.5rem;
-          resize: vertical;
-          margin-bottom: 1.5rem;
-          font-size: 1rem;
-          line-height: 1.5;
-          transition: border-color 0.2s;
-          min-height: 120px;
-        }
-
-        .edit-textarea:focus {
-          outline: none;
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-
-        .current-media {
-          margin-bottom: 1.5rem;
-          padding: 1rem;
-          background: #f8fafc;
-          border-radius: 0.5rem;
-        }
-
-        .media-section-title {
-          font-size: 0.9rem;
-          font-weight: 600;
-          color: #4a5568;
-          margin-bottom: 0.75rem;
-        }
-
-        .current-media h3 {
-          font-size: 0.875rem;
-          font-weight: 600;
-          margin-bottom: 0.5rem;
-        }
-
-        .media-preview-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-          gap: 0.75rem;
-        }
-
-        .media-preview {
-          aspect-ratio: 1;
-          overflow: hidden;
-          border-radius: 0.5rem;
-          background: white;
-          border: 2px solid white;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .media-preview:hover {
-          transform: scale(1.05);
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .media-preview img,
-        .media-preview video {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .add-media-section {
-          margin-bottom: 1rem;
-        }
-
-        .file-input-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.25rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          font-weight: 500;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .file-input-label:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .file-input-icon {
-          font-size: 1.25rem;
-        }
-
-        .file-count {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.9rem;
-          color: #4a5568;
-          margin-top: 0.75rem;
-        }
-
-        .file-count-badge {
-          background: #667eea;
-          color: white;
-          padding: 0.125rem 0.5rem;
-          border-radius: 9999px;
-          font-weight: 600;
-          font-size: 0.85rem;
-        }
-
-        .edit-modal-footer {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          padding: 1rem 1.5rem 1.5rem 1.5rem;
-          border-top: 1px solid #e2e8f0;
-          background: #f8fafc;
-          border-bottom-left-radius: 1rem;
-          border-bottom-right-radius: 1rem;
-        }
-
-        .modal-cancel {
-          padding: 0.75rem 1.5rem;
-          background: white;
-          color: #4a5568;
-          border: 2px solid #e2e8f0;
-          font-size: 1rem;
-          transition: all 0.2s;
-        }
-
-        .modal-cancel:hover:not(:disabled) {
-          background: #f7fafc;
-          border-color: #cbd5e0;
-        }
-
-        .modal-save {
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 1rem;
-          transition: all 0.2s;
-        }
-
-        .modal-save:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .saving-spinner {
-          display: inline-block;
-          animation: spin 1s linear infinite;
         }
 
         @keyframes spin {
