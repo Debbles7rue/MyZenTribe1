@@ -13,7 +13,18 @@ interface PostCardProps {
   currentUserId?: string;
 }
 
-// Photo Grid Component
+interface Comment {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  author?: {
+    full_name: string;
+    avatar_url: string;
+  };
+}
+
+// Photo Grid Component - FIXED for proper Facebook-style collage layout
 function PhotoGrid({ 
   media, 
   onPhotoClick 
@@ -21,7 +32,7 @@ function PhotoGrid({
   media: Array<{url: string; type: 'image' | 'video'}>;
   onPhotoClick: (index: number) => void;
 }) {
-  if (!media || !Array.isArray(media)) {
+  if (!media || !Array.isArray(media) || media.length === 0) {
     return null;
   }
   
@@ -29,32 +40,31 @@ function PhotoGrid({
     return m && typeof m === 'object' && m.url && typeof m.url === 'string' && m.type;
   });
   
+  if (validMedia.length === 0) return null;
+  
   const images = validMedia.filter(m => m.type === 'image');
   const videos = validMedia.filter(m => m.type === 'video');
   
-  if (validMedia.length === 0) return null;
-  
+  // Single image layout
   if (images.length === 1 && videos.length === 0) {
-    const img = images[0];
-    if (!img || !img.url) return null;
-    
     return (
-      <div className="photo-grid single">
+      <div className="photo-grid-container">
         <div 
-          className="photo-item"
+          className="single-photo"
           onClick={() => onPhotoClick(0)}
         >
-          <img src={img.url} alt="" />
+          <img src={images[0].url} alt="" />
         </div>
       </div>
     );
   }
   
+  // Two images side by side
   if (images.length === 2) {
     return (
-      <div className="photo-grid two">
-        {images.map((img, idx) => (
-          img && img.url ? (
+      <div className="photo-grid-container">
+        <div className="two-photos">
+          {images.map((img, idx) => (
             <div 
               key={idx}
               className="photo-item"
@@ -62,27 +72,25 @@ function PhotoGrid({
             >
               <img src={img.url} alt="" />
             </div>
-          ) : null
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
   
+  // Three images - one large, two stacked
   if (images.length === 3) {
-    const mainImg = images[0];
-    if (!mainImg || !mainImg.url) return null;
-    
     return (
-      <div className="photo-grid three">
-        <div 
-          className="photo-item main"
-          onClick={() => onPhotoClick(0)}
-        >
-          <img src={mainImg.url} alt="" />
-        </div>
-        <div className="side-photos">
-          {images.slice(1, 3).map((img, idx) => (
-            img && img.url ? (
+      <div className="photo-grid-container">
+        <div className="three-photos">
+          <div 
+            className="main-photo"
+            onClick={() => onPhotoClick(0)}
+          >
+            <img src={images[0].url} alt="" />
+          </div>
+          <div className="side-stack">
+            {images.slice(1, 3).map((img, idx) => (
               <div 
                 key={idx}
                 className="photo-item"
@@ -90,18 +98,19 @@ function PhotoGrid({
               >
                 <img src={img.url} alt="" />
               </div>
-            ) : null
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     );
   }
   
+  // Four images in grid
   if (images.length === 4) {
     return (
-      <div className="photo-grid four">
-        {images.map((img, idx) => (
-          img && img.url ? (
+      <div className="photo-grid-container">
+        <div className="four-photos">
+          {images.map((img, idx) => (
             <div 
               key={idx}
               className="photo-item"
@@ -109,67 +118,56 @@ function PhotoGrid({
             >
               <img src={img.url} alt="" />
             </div>
-          ) : null
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
   
-  const firstImg = images[0];
-  const secondImg = images[1];
-  if (!firstImg || !firstImg.url || !secondImg || !secondImg.url) return null;
-  
-  return (
-    <div className="photo-grid many">
-      <div className="main-row">
-        <div 
-          className="photo-item large"
-          onClick={() => onPhotoClick(0)}
-        >
-          <img src={firstImg.url} alt="" />
-        </div>
-        <div 
-          className="photo-item large"
-          onClick={() => onPhotoClick(1)}
-        >
-          <img src={secondImg.url} alt="" />
-        </div>
-      </div>
-      <div className="bottom-row">
-        {images.slice(2, 5).map((img, idx) => (
-          img && img.url ? (
+  // Five or more images
+  if (images.length >= 5) {
+    return (
+      <div className="photo-grid-container">
+        <div className="many-photos">
+          <div className="top-row">
             <div 
-              key={idx}
-              className="photo-item"
-              onClick={() => onPhotoClick(idx + 2)}
+              className="photo-item large"
+              onClick={() => onPhotoClick(0)}
             >
-              <img src={img.url} alt="" />
-              {idx === 2 && images.length > 5 && (
-                <div className="more-overlay">
-                  <span>+{images.length - 5}</span>
-                </div>
-              )}
+              <img src={images[0].url} alt="" />
             </div>
-          ) : null
-        ))}
-      </div>
-      
-      {videos.length > 0 && (
-        <div className="videos-row">
-          {videos.map((vid, idx) => (
-            vid && vid.url ? (
-              <div key={idx} className="video-item">
-                <video src={vid.url} controls />
+            <div 
+              className="photo-item large"
+              onClick={() => onPhotoClick(1)}
+            >
+              <img src={images[1].url} alt="" />
+            </div>
+          </div>
+          <div className="bottom-row">
+            {images.slice(2, 5).map((img, idx) => (
+              <div 
+                key={idx}
+                className="photo-item small"
+                onClick={() => onPhotoClick(idx + 2)}
+              >
+                <img src={img.url} alt="" />
+                {idx === 2 && images.length > 5 && (
+                  <div className="more-overlay">
+                    <span>+{images.length - 5}</span>
+                  </div>
+                )}
               </div>
-            ) : null
-          ))}
+            ))}
+          </div>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+  
+  return null;
 }
 
-// Lightbox Component
+// Lightbox Component - FIXED to prevent freezing
 function PhotoLightbox({ 
   media, 
   startIndex, 
@@ -179,15 +177,21 @@ function PhotoLightbox({
   startIndex: number;
   onClose: () => void;
 }) {
-  if (!media || !Array.isArray(media) || media.length === 0) {
+  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  
+  // Filter to only images for lightbox
+  const images = media.filter(m => m && m.type === 'image' && m.url);
+  
+  if (!images || images.length === 0) {
     onClose();
     return null;
   }
   
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
-  const images = media.filter(m => m && m.type === 'image');
+  // Ensure index is valid
+  const safeIndex = Math.max(0, Math.min(currentIndex, images.length - 1));
+  const currentImage = images[safeIndex];
   
-  if (!images || images.length === 0) {
+  if (!currentImage || !currentImage.url) {
     onClose();
     return null;
   }
@@ -216,14 +220,6 @@ function PhotoLightbox({
     };
   }, []);
   
-  const safeIndex = Math.min(currentIndex, images.length - 1);
-  const currentImage = images[safeIndex];
-  
-  if (!currentImage || !currentImage.url) {
-    onClose();
-    return null;
-  }
-  
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
@@ -247,15 +243,13 @@ function PhotoLightbox({
         {images.length > 1 && (
           <div className="lightbox-thumbnails">
             {images.map((img, idx) => (
-              img && img.url ? (
-                <div
-                  key={idx}
-                  className={`thumbnail ${idx === safeIndex ? 'active' : ''}`}
-                  onClick={() => setCurrentIndex(idx)}
-                >
-                  <img src={img.url} alt="" />
-                </div>
-              ) : null
+              <div
+                key={idx}
+                className={`thumbnail ${idx === safeIndex ? 'active' : ''}`}
+                onClick={() => setCurrentIndex(idx)}
+              >
+                <img src={img.url} alt="" />
+              </div>
             ))}
           </div>
         )}
@@ -264,7 +258,7 @@ function PhotoLightbox({
   );
 }
 
-// Edit Modal Component for adding/removing photos
+// Edit Modal Component
 function EditPostModal({ 
   post, 
   currentMedia,
@@ -321,125 +315,30 @@ function EditPostModal({
   return (
     <div className="edit-modal-overlay" onClick={onClose}>
       <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="edit-modal-header" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '24px 24px 20px 24px',
-          borderBottom: '1px solid #e2e8f0'
-        }}>
-          <h2 style={{
-            fontSize: '24px',
-            fontWeight: '700',
-            color: '#1a202c',
-            margin: 0
-          }}>Edit Post</h2>
-          <button 
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '32px',
-              color: '#718096',
-              cursor: 'pointer',
-              width: '40px',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = '#f7fafc';
-              e.currentTarget.style.color = '#2d3748';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'none';
-              e.currentTarget.style.color = '#718096';
-            }}
-          >×</button>
+        <div className="edit-modal-header">
+          <h2>Edit Post</h2>
+          <button onClick={onClose} className="close-button">×</button>
         </div>
         
-        <div className="edit-modal-body" style={{
-          padding: '24px',
-          overflowY: 'auto',
-          flex: 1
-        }}>
+        <div className="edit-modal-body">
           <textarea
             value={editBody}
             onChange={(e) => setEditBody(e.target.value)}
             placeholder="What's on your mind?"
             rows={6}
-            style={{
-              width: '100%',
-              padding: '16px',
-              border: '2px solid #e2e8f0',
-              borderRadius: '12px',
-              resize: 'vertical',
-              marginBottom: '24px',
-              fontSize: '16px',
-              lineHeight: '1.5',
-              fontFamily: 'inherit',
-              outline: 'none',
-              minHeight: '150px'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#4299e1';
-              e.target.style.boxShadow = '0 0 0 3px rgba(66, 153, 225, 0.1)';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#e2e8f0';
-              e.target.style.boxShadow = 'none';
-            }}
+            className="edit-textarea"
           />
 
           {currentMedia.length > 0 && (
-            <div style={{
-              marginBottom: '24px',
-              padding: '20px',
-              background: '#f8fafc',
-              borderRadius: '12px'
-            }}>
-              <h3 style={{
-                fontSize: '14px',
-                fontWeight: '600',
-                color: '#4a5568',
-                marginBottom: '12px',
-                margin: '0 0 12px 0'
-              }}>Current Media ({currentMedia.length})</h3>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-                gap: '12px'
-              }}>
+            <div className="current-media">
+              <h3>Current Media ({currentMedia.length})</h3>
+              <div className="media-grid">
                 {currentMedia.map((media, idx) => (
-                  <div key={idx} style={{
-                    aspectRatio: '1',
-                    overflow: 'hidden',
-                    borderRadius: '8px',
-                    background: 'white',
-                    border: '2px solid white'
-                  }}>
+                  <div key={idx} className="media-item">
                     {media.type === 'image' ? (
-                      <img 
-                        src={media.url} 
-                        alt="" 
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
+                      <img src={media.url} alt="" />
                     ) : (
-                      <video 
-                        src={media.url}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
+                      <video src={media.url} />
                     )}
                   </div>
                 ))}
@@ -447,28 +346,8 @@ function EditPostModal({
             </div>
           )}
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 20px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              fontWeight: '500',
-              fontSize: '16px',
-              transition: 'transform 0.2s, box-shadow 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 8px 16px rgba(102, 126, 234, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}>
+          <div className="file-upload">
+            <label className="upload-button">
               <input
                 type="file"
                 multiple
@@ -476,100 +355,30 @@ function EditPostModal({
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
               />
-              <span style={{ fontSize: '20px' }}>📸</span>
+              <span>📸</span>
               <span>Add More Photos/Videos</span>
             </label>
             {newFiles.length > 0 && (
-              <p style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '14px',
-                color: '#4a5568',
-                marginTop: '12px',
-                marginBottom: 0
-              }}>
-                <span style={{
-                  background: '#667eea',
-                  color: 'white',
-                  padding: '2px 10px',
-                  borderRadius: '9999px',
-                  fontWeight: '600',
-                  fontSize: '14px'
-                }}>{newFiles.length}</span>
+              <p className="file-count">
+                <span>{newFiles.length}</span>
                 new file{newFiles.length > 1 ? 's' : ''} selected
               </p>
             )}
           </div>
         </div>
 
-        <div className="edit-modal-footer" style={{
-          display: 'flex',
-          gap: '16px',
-          justifyContent: 'flex-end',
-          padding: '20px 24px',
-          borderTop: '1px solid #e2e8f0',
-          background: '#f8fafc'
-        }}>
-          <button 
-            onClick={onClose}
-            disabled={isSaving}
-            style={{
-              padding: '12px 24px',
-              background: 'white',
-              color: '#4a5568',
-              border: '2px solid #e2e8f0',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              if (!isSaving) {
-                e.currentTarget.style.background = '#f7fafc';
-                e.currentTarget.style.borderColor = '#cbd5e0';
-              }
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'white';
-              e.currentTarget.style.borderColor = '#e2e8f0';
-            }}
-          >
+        <div className="edit-modal-footer">
+          <button onClick={onClose} disabled={isSaving} className="cancel-button">
             Cancel
           </button>
           <button 
             onClick={handleSave}
             disabled={isSaving || uploadingFiles}
-            style={{
-              padding: '12px 24px',
-              background: isSaving ? '#cbd5e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: '500',
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s',
-              opacity: (isSaving || uploadingFiles) ? 0.7 : 1
-            }}
-            onMouseOver={(e) => {
-              if (!isSaving && !uploadingFiles) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(102, 126, 234, 0.4)';
-              }
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
+            className="save-button"
           >
             {isSaving ? (
               <>
-                <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⏳</span>
+                <span className="spinner">⏳</span>
                 Saving...
               </>
             ) : (
@@ -600,40 +409,98 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [localLikeCount, setLocalLikeCount] = useState(post.like_count || 0);
   const [localLikedByMe, setLocalLikedByMe] = useState(post.liked_by_me || false);
   
+  // NEW: Comment loading and display
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [showAllComments, setShowAllComments] = useState(false);
+  
   useEffect(() => {
     if (currentUserId && post.co_creators) {
       setIsCoCreator(post.co_creators.includes(currentUserId));
     }
   }, [currentUserId, post.co_creators]);
   
-  // FIXED: Simplified media processing - data already comes in the right format
+  // FIXED: Media processing with better error handling
   useEffect(() => {
     const processed = [];
     
-    // Add main image/video if exists
-    if (post.image_url) {
-      processed.push({ url: post.image_url, type: 'image' as const });
-    }
-    if (post.video_url) {
-      processed.push({ url: post.video_url, type: 'video' as const });
-    }
-    
-    // Add additional media - it already comes with proper URLs from the backend
-    if (post.additional_media && Array.isArray(post.additional_media)) {
-      post.additional_media.forEach(item => {
-        if (item && item.url && item.type) {
-          // Don't add duplicates of the main image/video
-          const isDuplicate = (item.type === 'image' && item.url === post.image_url) ||
-                            (item.type === 'video' && item.url === post.video_url);
-          if (!isDuplicate) {
-            processed.push({ url: item.url, type: item.type });
+    try {
+      // Add main image/video if exists
+      if (post.image_url) {
+        processed.push({ url: post.image_url, type: 'image' as const });
+      }
+      if (post.video_url) {
+        processed.push({ url: post.video_url, type: 'video' as const });
+      }
+      
+      // Add additional media with validation
+      if (post.additional_media && Array.isArray(post.additional_media)) {
+        post.additional_media.forEach(item => {
+          if (item && item.url && item.type) {
+            // Don't add duplicates of the main image/video
+            const isDuplicate = (item.type === 'image' && item.url === post.image_url) ||
+                              (item.type === 'video' && item.url === post.video_url);
+            if (!isDuplicate) {
+              processed.push({ url: item.url, type: item.type });
+            }
           }
-        }
-      });
+        });
+      }
+      
+      setProcessedMedia(processed);
+    } catch (error) {
+      console.error('Error processing media:', error);
+      setProcessedMedia([]);
     }
-    
-    setProcessedMedia(processed);
   }, [post.image_url, post.video_url, post.additional_media]);
+  
+  // NEW: Load comments when needed
+  const loadComments = async () => {
+    if (loadingComments) return;
+    setLoadingComments(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from("post_comments")
+        .select(`
+          id,
+          body,
+          created_at,
+          user_id,
+          profiles!inner(
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: true });
+      
+      if (!error && data) {
+        const formattedComments = data.map((comment: any) => ({
+          id: comment.id,
+          body: comment.body,
+          created_at: comment.created_at,
+          user_id: comment.user_id,
+          author: {
+            full_name: comment.profiles.full_name || 'User',
+            avatar_url: comment.profiles.avatar_url || '/default-avatar.png'
+          }
+        }));
+        setComments(formattedComments);
+      }
+    } catch (error) {
+      console.error('Error loading comments:', error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+  
+  // Load comments when comment count > 0 and we haven't loaded them yet
+  useEffect(() => {
+    if (post.comment_count > 0 && comments.length === 0 && !loadingComments) {
+      loadComments();
+    }
+  }, [post.comment_count]);
   
   const handleLike = async () => {
     if (isLiking || !currentUserId) return;
@@ -660,8 +527,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       const result = await addComment(post.id, commentText.trim());
       if (result.ok) {
         setCommentText("");
-        setShowCommentInput(false);
-        // Force immediate refresh with delay for database update
+        // Reload comments to show the new one
+        await loadComments();
         if (onChanged) {
           setTimeout(() => onChanged(), 100);
         }
@@ -693,7 +560,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       const result = await deletePost(post.id);
       if (result.ok) {
         setShowDeleteConfirm(false);
-        // Add a small delay to let the database update complete
         setTimeout(() => {
           if (onChanged) onChanged();
         }, 100);
@@ -708,10 +574,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
   };
   
-  const mediaToDisplay = processedMedia;
-  
   const handlePhotoClick = (index: number) => {
-    if (mediaToDisplay && mediaToDisplay.length > 0) {
+    if (processedMedia && processedMedia.length > 0) {
       setLightboxStartIndex(index);
       setShowLightbox(true);
     }
@@ -730,6 +594,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
     return name;
   };
+  
+  // Show first 3 comments by default, with option to see more
+  const displayedComments = showAllComments ? comments : comments.slice(0, 3);
   
   return (
     <>
@@ -797,9 +664,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         <div className="post-content">
           {post.body && <p className="post-text">{post.body}</p>}
           
-          {mediaToDisplay && mediaToDisplay.length > 0 && (
+          {processedMedia && processedMedia.length > 0 && (
             <PhotoGrid 
-              media={mediaToDisplay} 
+              media={processedMedia} 
               onPhotoClick={handlePhotoClick}
             />
           )}
@@ -821,11 +688,16 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               onClick={handleLike}
               disabled={isLiking || !currentUserId}
             >
-              {localLikedByMe ? '❤️' : '🤍'} {localLikeCount > 0 ? localLikeCount : 'Like'}
+              {localLikedByMe ? '❤️' : '🤍'} Like
             </button>
             <button 
               className="action-btn"
-              onClick={() => setShowCommentInput(!showCommentInput)}
+              onClick={() => {
+                setShowCommentInput(!showCommentInput);
+                if (!showCommentInput && comments.length === 0 && post.comment_count > 0) {
+                  loadComments();
+                }
+              }}
               disabled={!currentUserId}
             >
               💬 Comment
@@ -839,6 +711,37 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               </button>
             )}
           </div>
+          
+          {/* NEW: Display comments */}
+          {comments.length > 0 && (
+            <div className="comments-section">
+              {displayedComments.map((comment) => (
+                <div key={comment.id} className="comment">
+                  <img 
+                    src={comment.author?.avatar_url || '/default-avatar.png'} 
+                    alt=""
+                    className="comment-avatar"
+                  />
+                  <div className="comment-content">
+                    <div className="comment-author">{comment.author?.full_name}</div>
+                    <div className="comment-text">{comment.body}</div>
+                    <div className="comment-time">
+                      {new Date(comment.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {comments.length > 3 && !showAllComments && (
+                <button 
+                  className="show-more-comments"
+                  onClick={() => setShowAllComments(true)}
+                >
+                  View all {comments.length} comments
+                </button>
+              )}
+            </div>
+          )}
           
           {showCommentInput && (
             <div className="comment-input-section">
@@ -893,7 +796,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       {showEditModal && (
         <EditPostModal
           post={post}
-          currentMedia={mediaToDisplay}
+          currentMedia={processedMedia}
           onClose={() => setShowEditModal(false)}
           onSave={() => {
             setShowEditModal(false);
@@ -902,9 +805,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         />
       )}
       
-      {showLightbox && mediaToDisplay && mediaToDisplay.length > 0 && (
+      {showLightbox && processedMedia && processedMedia.length > 0 && (
         <PhotoLightbox
-          media={mediaToDisplay}
+          media={processedMedia}
           startIndex={lightboxStartIndex}
           onClose={() => setShowLightbox(false)}
         />
@@ -970,72 +873,86 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           line-height: 1.5;
         }
         
-        .photo-grid {
+        /* FIXED: Facebook-style photo grid layouts */
+        .photo-grid-container {
           margin: 0.5rem 0;
           border-radius: 0.5rem;
           overflow: hidden;
-          max-height: 350px; /* REDUCED: From 500px to 350px */
+          background: #f8f9fa;
         }
         
-        .photo-grid.single .photo-item {
+        .single-photo {
           width: 100%;
-          max-height: 280px; /* REDUCED: From 400px to 280px */
+          height: 300px;
+          cursor: pointer;
           overflow: hidden;
         }
         
-        .photo-grid.single .photo-item img {
+        .single-photo img {
           width: 100%;
           height: 100%;
-          max-height: 280px; /* REDUCED: From 400px to 280px */
           object-fit: cover;
+          transition: transform 0.2s;
         }
         
-        .photo-grid.two {
+        .single-photo:hover img {
+          transform: scale(1.02);
+        }
+        
+        .two-photos {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 2px;
-          max-height: 220px; /* REDUCED: From 300px to 220px */
+          height: 250px;
         }
         
-        .photo-grid.three {
+        .three-photos {
           display: grid;
           grid-template-columns: 2fr 1fr;
           gap: 2px;
-          max-height: 220px; /* REDUCED: From 300px to 220px */
+          height: 250px;
         }
         
-        .photo-grid.three .side-photos {
+        .three-photos .main-photo {
+          height: 100%;
+        }
+        
+        .three-photos .side-stack {
           display: flex;
           flex-direction: column;
           gap: 2px;
           height: 100%;
         }
         
-        .photo-grid.four {
+        .three-photos .side-stack .photo-item {
+          flex: 1;
+        }
+        
+        .four-photos {
           display: grid;
           grid-template-columns: 1fr 1fr;
           grid-template-rows: 1fr 1fr;
           gap: 2px;
-          max-height: 220px; /* REDUCED: From 300px to 220px */
+          height: 250px;
         }
         
-        .photo-grid.many {
-          max-height: 280px; /* REDUCED: From 400px to 280px */
+        .many-photos {
+          height: 250px;
         }
         
-        .photo-grid.many .main-row {
+        .many-photos .top-row {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 2px;
+          height: 60%;
           margin-bottom: 2px;
-          height: 150px; /* REDUCED: From 200px to 150px */
         }
         
-        .photo-grid.many .bottom-row {
+        .many-photos .bottom-row {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 2px;
-          height: 75px; /* REDUCED: From 100px to 75px */
+          height: calc(40% - 2px);
         }
         
         .photo-item {
@@ -1043,7 +960,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: pointer;
           overflow: hidden;
           background: #f7fafc;
-          min-height: 0; /* FIXED: Allow shrinking */
         }
         
         .photo-item img {
@@ -1069,27 +985,204 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           font-weight: 600;
         }
         
-        .videos-row {
-          margin-top: 8px;
+        .post-footer {
+          padding: 0.75rem 1rem;
+          border-top: 1px solid #e2e8f0;
+        }
+        
+        .engagement-stats {
           display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
+          gap: 1rem;
+          font-size: 0.875rem;
+          color: #718096;
+          margin-bottom: 0.5rem;
         }
         
-        .video-item {
+        .action-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+        
+        .action-btn {
           flex: 1;
-          min-width: 200px;
-          max-height: 200px; /* FIXED: Limit video height */
+          padding: 0.5rem;
+          background: none;
+          border: none;
+          color: #4a5568;
+          cursor: pointer;
+          border-radius: 0.375rem;
+          transition: background 0.2s;
         }
         
-        .video-item video {
-          width: 100%;
-          height: 100%;
-          max-height: 200px; /* FIXED: Consistent with container */
+        .action-btn:hover {
+          background: #f7fafc;
+        }
+        
+        .action-btn.liked {
+          color: #e53e3e;
+        }
+        
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        /* NEW: Comments styling */
+        .comments-section {
+          margin-top: 0.75rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid #f1f5f9;
+        }
+        
+        .comment {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
+        }
+        
+        .comment-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
           object-fit: cover;
-          border-radius: 8px;
+          flex-shrink: 0;
         }
         
+        .comment-content {
+          flex: 1;
+        }
+        
+        .comment-author {
+          font-weight: 600;
+          font-size: 0.875rem;
+          color: #1a202c;
+        }
+        
+        .comment-text {
+          font-size: 0.875rem;
+          color: #374151;
+          margin: 0.25rem 0;
+        }
+        
+        .comment-time {
+          font-size: 0.75rem;
+          color: #9ca3af;
+        }
+        
+        .show-more-comments {
+          background: none;
+          border: none;
+          color: #4a5568;
+          font-size: 0.875rem;
+          cursor: pointer;
+          padding: 0.25rem 0;
+          text-decoration: underline;
+        }
+        
+        .comment-input-section {
+          display: flex;
+          gap: 0.5rem;
+          padding: 0.75rem 0;
+          margin-top: 0.75rem;
+          border-top: 1px solid #f1f5f9;
+        }
+        
+        .comment-input {
+          flex: 1;
+          padding: 0.5rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          outline: none;
+          transition: border-color 0.2s;
+        }
+        
+        .comment-input:focus {
+          border-color: #4299e1;
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+        
+        .comment-submit {
+          padding: 0.5rem 1rem;
+          background: #4299e1;
+          color: white;
+          border: none;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          cursor: pointer;
+        }
+        
+        .comment-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        .post-actions {
+          position: relative;
+        }
+        
+        .menu-btn {
+          background: rgba(0,0,0,0.05);
+          border: none;
+          font-size: 1.25rem;
+          cursor: pointer;
+          padding: 0.5rem;
+          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #718096;
+          transition: all 0.2s;
+        }
+        
+        .menu-btn:hover {
+          background: rgba(0,0,0,0.1);
+          color: #4a5568;
+        }
+        
+        .menu-dropdown {
+          position: absolute;
+          right: 0;
+          top: calc(100% + 8px);
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.75rem;
+          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+          min-width: 180px;
+          z-index: 100;
+          overflow: hidden;
+        }
+        
+        .menu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 0.75rem 1rem;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+          transition: background 0.2s;
+        }
+        
+        .menu-item:hover {
+          background: #f8fafc;
+        }
+        
+        .menu-item.danger {
+          color: #dc2626;
+        }
+        
+        .menu-item.danger:hover {
+          background: #fef2f2;
+        }
+        
+        /* Lightbox styling */
         .lightbox-overlay {
           position: fixed;
           inset: 0;
@@ -1182,150 +1275,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           object-fit: cover;
         }
         
-        .post-footer {
-          padding: 0.75rem 1rem;
-          border-top: 1px solid #e2e8f0;
-        }
-        
-        .engagement-stats {
-          display: flex;
-          gap: 1rem;
-          font-size: 0.875rem;
-          color: #718096;
-          margin-bottom: 0.5rem;
-        }
-        
-        .action-buttons {
-          display: flex;
-          gap: 1rem;
-        }
-        
-        .action-btn {
-          flex: 1;
-          padding: 0.5rem;
-          background: none;
-          border: none;
-          color: #4a5568;
-          cursor: pointer;
-          border-radius: 0.375rem;
-          transition: background 0.2s;
-        }
-        
-        .action-btn:hover {
-          background: #f7fafc;
-        }
-        
-        .action-btn.liked {
-          color: #e53e3e;
-        }
-        
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .comment-input-section {
-          display: flex;
-          gap: 0.5rem;
-          padding: 0.75rem 1rem;
-          border-top: 1px solid #e2e8f0;
-        }
-        
-        .comment-input {
-          flex: 1;
-          padding: 0.5rem;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-        
-        .comment-input:focus {
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-        
-        .comment-submit {
-          padding: 0.5rem 1rem;
-          background: #4299e1;
-          color: white;
-          border: none;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        
-        .comment-submit:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .post-actions {
-          position: relative;
-        }
-        
-        .menu-btn {
-          background: rgba(0,0,0,0.05); /* FIXED: Subtle background instead of red */
-          border: none;
-          font-size: 1.25rem;
-          cursor: pointer;
-          padding: 0.5rem;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #718096;
-          transition: all 0.2s;
-        }
-        
-        .menu-btn:hover {
-          background: rgba(0,0,0,0.1);
-          color: #4a5568;
-        }
-        
-        .menu-dropdown {
-          position: absolute;
-          right: 0;
-          top: calc(100% + 8px);
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
-          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-          min-width: 180px;
-          z-index: 100;
-          overflow: hidden;
-        }
-        
-        .menu-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          width: 100%;
-          padding: 0.75rem 1rem;
-          background: none;
-          border: none;
-          text-align: left;
-          cursor: pointer;
-          font-size: 0.875rem;
-          color: #374151;
-          transition: background 0.2s;
-        }
-        
-        .menu-item:hover {
-          background: #f8fafc;
-        }
-        
-        .menu-item.danger {
-          color: #dc2626;
-        }
-        
-        .menu-item.danger:hover {
-          background: #fef2f2;
-        }
-
+        /* Modal styling */
         .modal-overlay {
           position: fixed;
           inset: 0;
@@ -1350,12 +1300,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           max-width: 400px;
         }
 
-        .modal-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin-bottom: 1rem;
-        }
-
         .modal-content h2 {
           font-size: 1.25rem;
           font-weight: 600;
@@ -1373,7 +1317,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           justify-content: flex-end;
         }
 
-        .modal-cancel, .modal-save, .modal-delete {
+        .modal-cancel, .modal-delete {
           padding: 0.5rem 1.25rem;
           border-radius: 0.375rem;
           border: none;
@@ -1386,11 +1330,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: #4a5568;
         }
 
-        .modal-save {
-          background: #4299e1;
-          color: white;
-        }
-
         .modal-delete {
           background: #e53e3e;
           color: white;
@@ -1400,16 +1339,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           background: #cbd5e0;
         }
 
-        .modal-save:hover {
-          background: #3182ce;
-        }
-
         .modal-delete:hover {
           background: #c53030;
         }
 
         .modal-cancel:disabled,
-        .modal-save:disabled,
         .modal-delete:disabled {
           opacity: 0.5;
           cursor: not-allowed;
@@ -1444,42 +1378,229 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           position: relative;
         }
 
+        .edit-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .edit-modal-header h2 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #1a202c;
+          margin: 0;
+        }
+
+        .close-button {
+          background: none;
+          border: none;
+          font-size: 2rem;
+          color: #718096;
+          cursor: pointer;
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          transition: all 0.2s;
+        }
+
+        .close-button:hover {
+          background: #f7fafc;
+          color: #2d3748;
+        }
+
+        .edit-modal-body {
+          padding: 1.5rem;
+          overflow-y: auto;
+          flex: 1;
+        }
+
+        .edit-textarea {
+          width: 100%;
+          padding: 1rem;
+          border: 2px solid #e2e8f0;
+          border-radius: 0.75rem;
+          resize: vertical;
+          margin-bottom: 1.5rem;
+          font-size: 1rem;
+          line-height: 1.5;
+          font-family: inherit;
+          outline: none;
+          min-height: 150px;
+        }
+
+        .edit-textarea:focus {
+          border-color: #4299e1;
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
+        .current-media {
+          margin-bottom: 1.5rem;
+          padding: 1.25rem;
+          background: #f8fafc;
+          border-radius: 0.75rem;
+        }
+
+        .current-media h3 {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #4a5568;
+          margin: 0 0 0.75rem 0;
+        }
+
+        .media-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+          gap: 0.75rem;
+        }
+
+        .media-item {
+          aspect-ratio: 1;
+          overflow: hidden;
+          border-radius: 0.5rem;
+          background: white;
+          border: 2px solid white;
+        }
+
+        .media-item img,
+        .media-item video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .file-upload {
+          margin-bottom: 1rem;
+        }
+
+        .upload-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.25rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-radius: 0.75rem;
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 1rem;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .upload-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-count {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.875rem;
+          color: #4a5568;
+          margin-top: 0.75rem;
+          margin-bottom: 0;
+        }
+
+        .file-count span:first-child {
+          background: #667eea;
+          color: white;
+          padding: 0.125rem 0.625rem;
+          border-radius: 9999px;
+          font-weight: 600;
+          font-size: 0.875rem;
+        }
+
+        .edit-modal-footer {
+          display: flex;
+          gap: 1rem;
+          justify-content: flex-end;
+          padding: 1.25rem 1.5rem;
+          border-top: 1px solid #e2e8f0;
+          background: #f8fafc;
+        }
+
+        .cancel-button,
+        .save-button {
+          padding: 0.75rem 1.5rem;
+          border-radius: 0.5rem;
+          font-size: 1rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .cancel-button {
+          background: white;
+          color: #4a5568;
+          border: 2px solid #e2e8f0;
+        }
+
+        .cancel-button:hover {
+          background: #f7fafc;
+          border-color: #cbd5e0;
+        }
+
+        .save-button {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .save-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .save-button:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .spinner {
+          display: inline-block;
+          animation: spin 1s linear infinite;
+        }
+
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
 
-        /* FIXED: Mobile responsiveness */
+        /* Mobile responsiveness */
         @media (max-width: 768px) {
-          .photo-grid.single .photo-item {
-            max-height: 300px;
+          .single-photo {
+            height: 250px;
           }
           
-          .photo-grid.single .photo-item img {
-            max-height: 300px;
+          .two-photos,
+          .three-photos,
+          .four-photos,
+          .many-photos {
+            height: 200px;
           }
           
-          .photo-grid.two,
-          .photo-grid.three,
-          .photo-grid.four {
-            max-height: 250px;
+          .lightbox-prev,
+          .lightbox-next {
+            font-size: 2rem;
+            padding: 0.5rem;
           }
           
-          .photo-grid.many .main-row {
-            height: 150px;
+          .lightbox-prev {
+            left: 10px;
           }
           
-          .photo-grid.many .bottom-row {
-            height: 75px;
-          }
-          
-          .video-item {
-            max-height: 150px;
-            min-width: 150px;
-          }
-          
-          .video-item video {
-            max-height: 150px;
+          .lightbox-next {
+            right: 10px;
           }
         }
       `}</style>
