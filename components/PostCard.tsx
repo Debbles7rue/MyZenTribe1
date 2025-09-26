@@ -583,16 +583,6 @@ function EditPostModal({
 }
 
 export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
-  // DEBUG LOGGING - This will help us understand what's happening
-  console.log('PostCard DEBUG:', {
-    postId: post.id,
-    currentUserId,
-    postUserId: post.user_id,
-    canEdit: currentUserId === post.user_id,
-    isCoCreator: post.co_creators?.includes(currentUserId || ''),
-    coCreators: post.co_creators
-  });
-  
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
   const [showEditMenu, setShowEditMenu] = useState(false);
@@ -730,9 +720,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const canEdit = currentUserId === post.user_id || isCoCreator;
   const canDelete = currentUserId === post.user_id;
   
-  // DEBUG: Log what we're checking for edit permissions
-  console.log('Edit permissions:', { canEdit, canDelete, currentUserId, postUserId: post.user_id });
-  
   const getDisplayName = () => {
     let name = post.author?.full_name || 'User';
     if (post.co_creators && post.co_creators.length > 0) {
@@ -769,52 +756,36 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </div>
           </div>
           
-          {/* DEBUG: Show edit menu state */}
-          <div style={{ fontSize: '10px', color: 'red', position: 'absolute', top: '5px', right: '5px' }}>
-            {canEdit ? 'CAN_EDIT' : 'NO_EDIT'}
-          </div>
-          
           {canEdit && (
             <div className="post-actions">
               <button 
                 className="menu-btn"
-                onClick={() => {
-                  console.log('Menu button clicked, current state:', showEditMenu);
-                  setShowEditMenu(!showEditMenu);
-                }}
-                style={{ 
-                  background: 'red',  // Make it super visible for debugging
-                  color: 'white',
-                  padding: '5px 10px',
-                  border: 'none',
-                  borderRadius: '3px',
-                  cursor: 'pointer'
-                }}
+                onClick={() => setShowEditMenu(!showEditMenu)}
+                title="Post options"
               >
-                ⋯ EDIT
+                ⋯
               </button>
               {showEditMenu && (
-                <div className="menu-dropdown" style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '100%',
-                  background: 'white',
-                  border: '1px solid #ccc',
-                  borderRadius: '5px',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-                  minWidth: '150px',
-                  zIndex: 1000
-                }}>
+                <div className="menu-dropdown">
                   {isCoCreator && !canDelete && (
                     <>
-                      <button className="menu-item" onClick={() => setShowEditModal(true)}>Add Photos</button>
-                      <button className="menu-item">Remove Tag</button>
+                      <button className="menu-item" onClick={() => {
+                        setShowEditModal(true);
+                        setShowEditMenu(false);
+                      }}>📷 Add Photos</button>
+                      <button className="menu-item">🏷️ Remove Tag</button>
                     </>
                   )}
                   {canDelete && (
                     <>
-                      <button className="menu-item" onClick={() => setShowEditModal(true)}>Edit Post</button>
-                      <button className="menu-item danger" onClick={() => setShowDeleteConfirm(true)}>Delete Post</button>
+                      <button className="menu-item" onClick={() => {
+                        setShowEditModal(true);
+                        setShowEditMenu(false);
+                      }}>✏️ Edit Post</button>
+                      <button className="menu-item danger" onClick={() => {
+                        setShowDeleteConfirm(true);
+                        setShowEditMenu(false);
+                      }}>🗑️ Delete Post</button>
                     </>
                   )}
                 </div>
@@ -946,6 +917,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           margin-bottom: 1rem;
           position: relative;
+          max-width: 100%;
+          overflow: hidden;
         }
         
         .post-header {
@@ -993,29 +966,41 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           margin: 0.5rem 0;
           border-radius: 0.5rem;
           overflow: hidden;
+          max-height: 500px; /* FIXED: Limit maximum height */
         }
         
         .photo-grid.single .photo-item {
           width: 100%;
-          max-height: 500px;
+          max-height: 400px; /* FIXED: Reasonable max height for single images */
+          overflow: hidden;
+        }
+        
+        .photo-grid.single .photo-item img {
+          width: 100%;
+          height: 100%;
+          max-height: 400px; /* FIXED: Consistent with container */
+          object-fit: cover;
         }
         
         .photo-grid.two {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 2px;
+          max-height: 300px; /* FIXED: Limit height for multiple photos */
         }
         
         .photo-grid.three {
           display: grid;
           grid-template-columns: 2fr 1fr;
           gap: 2px;
+          max-height: 300px; /* FIXED: Consistent height */
         }
         
         .photo-grid.three .side-photos {
           display: flex;
           flex-direction: column;
           gap: 2px;
+          height: 100%;
         }
         
         .photo-grid.four {
@@ -1023,6 +1008,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           grid-template-columns: 1fr 1fr;
           grid-template-rows: 1fr 1fr;
           gap: 2px;
+          max-height: 300px; /* FIXED: Consistent height */
+        }
+        
+        .photo-grid.many {
+          max-height: 400px; /* FIXED: Limit height for many photos */
         }
         
         .photo-grid.many .main-row {
@@ -1030,12 +1020,14 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           grid-template-columns: 1fr 1fr;
           gap: 2px;
           margin-bottom: 2px;
+          height: 200px; /* FIXED: Set explicit height */
         }
         
         .photo-grid.many .bottom-row {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 2px;
+          height: 100px; /* FIXED: Set explicit height */
         }
         
         .photo-item {
@@ -1043,6 +1035,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: pointer;
           overflow: hidden;
           background: #f7fafc;
+          min-height: 0; /* FIXED: Allow shrinking */
         }
         
         .photo-item img {
@@ -1066,6 +1059,27 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: white;
           font-size: 1.5rem;
           font-weight: 600;
+        }
+        
+        .videos-row {
+          margin-top: 8px;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        
+        .video-item {
+          flex: 1;
+          min-width: 200px;
+          max-height: 200px; /* FIXED: Limit video height */
+        }
+        
+        .video-item video {
+          width: 100%;
+          height: 100%;
+          max-height: 200px; /* FIXED: Consistent with container */
+          object-fit: cover;
+          border-radius: 8px;
         }
         
         .lightbox-overlay {
@@ -1099,6 +1113,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: white;
           font-size: 3rem;
           cursor: pointer;
+          z-index: 10001;
         }
         
         .lightbox-prev,
@@ -1112,6 +1127,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           font-size: 3rem;
           padding: 1rem;
           cursor: pointer;
+          z-index: 10001;
         }
         
         .lightbox-prev {
@@ -1235,41 +1251,64 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         }
         
         .menu-btn {
-          background: none;
+          background: rgba(0,0,0,0.05); /* FIXED: Subtle background instead of red */
           border: none;
           font-size: 1.25rem;
           cursor: pointer;
-          padding: 0.25rem 0.5rem;
+          padding: 0.5rem;
+          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #718096;
+          transition: all 0.2s;
+        }
+        
+        .menu-btn:hover {
+          background: rgba(0,0,0,0.1);
+          color: #4a5568;
         }
         
         .menu-dropdown {
           position: absolute;
           right: 0;
-          top: 100%;
+          top: calc(100% + 8px);
           background: white;
           border: 1px solid #e2e8f0;
-          border-radius: 0.5rem;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          min-width: 150px;
-          z-index: 10;
+          border-radius: 0.75rem;
+          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+          min-width: 180px;
+          z-index: 100;
+          overflow: hidden;
         }
         
         .menu-item {
-          display: block;
+          display: flex;
+          align-items: center;
+          gap: 8px;
           width: 100%;
-          padding: 0.5rem 1rem;
+          padding: 0.75rem 1rem;
           background: none;
           border: none;
           text-align: left;
           cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+          transition: background 0.2s;
         }
         
         .menu-item:hover {
-          background: #f7fafc;
+          background: #f8fafc;
         }
         
         .menu-item.danger {
-          color: #e53e3e;
+          color: #dc2626;
+        }
+        
+        .menu-item.danger:hover {
+          background: #fef2f2;
         }
 
         .modal-overlay {
@@ -1387,6 +1426,40 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+
+        /* FIXED: Mobile responsiveness */
+        @media (max-width: 768px) {
+          .photo-grid.single .photo-item {
+            max-height: 300px;
+          }
+          
+          .photo-grid.single .photo-item img {
+            max-height: 300px;
+          }
+          
+          .photo-grid.two,
+          .photo-grid.three,
+          .photo-grid.four {
+            max-height: 250px;
+          }
+          
+          .photo-grid.many .main-row {
+            height: 150px;
+          }
+          
+          .photo-grid.many .bottom-row {
+            height: 75px;
+          }
+          
+          .video-item {
+            max-height: 150px;
+            min-width: 150px;
+          }
+          
+          .video-item video {
+            max-height: 150px;
+          }
         }
       `}</style>
     </>
