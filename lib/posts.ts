@@ -1,1609 +1,555 @@
-// components/PostCard.tsx
-"use client";
-
-import { useState, useEffect } from "react";
-import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
-import Link from "next/link";
-import CoCreatorEditModal from "@/components/CoCreatorEditModal";
+// lib/posts.ts
 import { supabase } from "@/lib/supabaseClient";
 
-interface PostCardProps {
-  post: Post;
-  onChanged?: () => void;
-  currentUserId?: string;
-}
+export type MediaItem = {
+  url: string;
+  type: 'image' | 'video';
+};
 
-interface Comment {
+export type Post = {
   id: string;
-  body: string;
-  created_at: string;
   user_id: string;
-  author?: {
-    full_name: string;
-    avatar_url: string;
+  body: string;
+  image_url: string | null;
+  video_url: string | null;
+  additional_media?: MediaItem[];
+  privacy: "public" | "friends" | "private";
+  created_at: string;
+  allow_share: boolean;
+  co_creators?: string[] | null;
+  co_creators_info?: Array<{
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  }>;
+  author?: { 
+    id: string; 
+    full_name: string | null; 
+    avatar_url: string | null 
   };
+  like_count?: number;
+  liked_by_me?: boolean;
+  comment_count?: number;
+};
+
+export async function me() {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
 }
 
-// Photo Grid Component - FIXED for proper Facebook-style collage layout
-function PhotoGrid({ 
-  media, 
-  onPhotoClick 
-}: { 
-  media: Array<{url: string; type: 'image' | 'video'}>;
-  onPhotoClick: (index: number) => void;
-}) {
-  if (!media || !Array.isArray(media) || media.length === 0) {
-    return null;
-  }
-  
-  const validMedia = media.filter(m => {
-    return m && typeof m === 'object' && m.url && typeof m.url === 'string' && m.type;
-  });
-  
-  if (validMedia.length === 0) return null;
-  
-  const images = validMedia.filter(m => m.type === 'image');
-  const videos = validMedia.filter(m => m.type === 'video');
-  
-  // Single image layout
-  if (images.length === 1 && videos.length === 0) {
-    return (
-      <div className="photo-grid-container">
-        <div 
-          className="single-photo"
-          onClick={() => onPhotoClick(0)}
-        >
-          <img src={images[0].url} alt="" />
-        </div>
-      </div>
-    );
-  }
-  
-  // Two images side by side
-  if (images.length === 2) {
-    return (
-      <div className="photo-grid-container">
-        <div className="two-photos">
-          {images.map((img, idx) => (
-            <div 
-              key={idx}
-              className="photo-item"
-              onClick={() => onPhotoClick(idx)}
-            >
-              <img src={img.url} alt="" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  
-  // Three images - one large, two stacked
-  if (images.length === 3) {
-    return (
-      <div className="photo-grid-container">
-        <div className="three-photos">
-          <div 
-            className="main-photo"
-            onClick={() => onPhotoClick(0)}
-          >
-            <img src={images[0].url} alt="" />
-          </div>
-          <div className="side-stack">
-            {images.slice(1, 3).map((img, idx) => (
-              <div 
-                key={idx}
-                className="photo-item"
-                onClick={() => onPhotoClick(idx + 1)}
-              >
-                <img src={img.url} alt="" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Four images in grid
-  if (images.length === 4) {
-    return (
-      <div className="photo-grid-container">
-        <div className="four-photos">
-          {images.map((img, idx) => (
-            <div 
-              key={idx}
-              className="photo-item"
-              onClick={() => onPhotoClick(idx)}
-            >
-              <img src={img.url} alt="" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  
-  // Five or more images
-  if (images.length >= 5) {
-    return (
-      <div className="photo-grid-container">
-        <div className="many-photos">
-          <div className="top-row">
-            <div 
-              className="photo-item large"
-              onClick={() => onPhotoClick(0)}
-            >
-              <img src={images[0].url} alt="" />
-            </div>
-            <div 
-              className="photo-item large"
-              onClick={() => onPhotoClick(1)}
-            >
-              <img src={images[1].url} alt="" />
-            </div>
-          </div>
-          <div className="bottom-row">
-            {images.slice(2, 5).map((img, idx) => (
-              <div 
-                key={idx}
-                className="photo-item small"
-                onClick={() => onPhotoClick(idx + 2)}
-              >
-                <img src={img.url} alt="" />
-                {idx === 2 && images.length > 5 && (
-                  <div className="more-overlay">
-                    <span>+{images.length - 5}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  return null;
-}
+export async function listHomeFeed(limit = 20, before?: string) {
+  const uid = await me();
+  if (!uid) return { rows: [], error: "Not signed in" as const };
 
-// Lightbox Component - FIXED to prevent freezing
-function PhotoLightbox({ 
-  media, 
-  startIndex, 
-  onClose 
-}: { 
-  media: Array<{url: string; type: 'image' | 'video'}>;
-  startIndex: number;
-  onClose: () => void;
-}) {
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  // Simple query first - just get posts
+  let q = supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (before) q = q.lt("created_at", before);
+
+  const { data: posts, error } = await q;
   
-  // Filter to only images for lightbox
-  const images = media.filter(m => m && m.type === 'image' && m.url);
-  
-  if (!images || images.length === 0) {
-    onClose();
-    return null;
+  if (error) {
+    console.error("Error fetching posts:", error);
+    return { rows: [], error: error.message };
   }
   
-  // Ensure index is valid
-  const safeIndex = Math.max(0, Math.min(currentIndex, images.length - 1));
-  const currentImage = images[safeIndex];
+  if (!posts || posts.length === 0) {
+    return { rows: [], error: null };
+  }
+
+  const ids = posts.map((p: any) => p.id);
+  const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
+
+  // Get author profiles
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", authorIds);
+
+  const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
+
+  // Get co-creator info if they exist
+  const coCreatorIds = posts
+    .filter((p: any) => p.co_creators && p.co_creators.length > 0)
+    .flatMap((p: any) => p.co_creators);
   
-  if (!currentImage || !currentImage.url) {
-    onClose();
-    return null;
+  let coCreatorProfiles: any[] = [];
+  if (coCreatorIds.length > 0) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", coCreatorIds);
+    coCreatorProfiles = data || [];
   }
   
-  const goNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % images.length);
-  };
-  
-  const goPrev = () => {
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
-  
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') goNext();
-      if (e.key === 'ArrowLeft') goPrev();
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
-    
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, []);
-  
-  return (
-    <div className="lightbox-overlay" onClick={onClose}>
-      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-        <button className="lightbox-close" onClick={onClose}>×</button>
-        
-        {images.length > 1 && (
-          <>
-            <button className="lightbox-prev" onClick={goPrev}>‹</button>
-            <button className="lightbox-next" onClick={goNext}>›</button>
-          </>
-        )}
-        
-        <img src={currentImage.url} alt="" />
-        
-        {images.length > 1 && (
-          <div className="lightbox-counter">
-            {safeIndex + 1} / {images.length}
-          </div>
-        )}
-        
-        {images.length > 1 && (
-          <div className="lightbox-thumbnails">
-            {images.map((img, idx) => (
-              <div
-                key={idx}
-                className={`thumbnail ${idx === safeIndex ? 'active' : ''}`}
-                onClick={() => setCurrentIndex(idx)}
-              >
-                <img src={img.url} alt="" />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+  const coCreatorMap = Object.fromEntries(
+    coCreatorProfiles.map((p: any) => [p.id, p])
   );
-}
 
-// Edit Modal Component
-function EditPostModal({ 
-  post, 
-  currentMedia,
-  onClose, 
-  onSave 
-}: { 
-  post: Post;
-  currentMedia: Array<{url: string; type: 'image' | 'video'}>;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  const [editBody, setEditBody] = useState(post.body || '');
-  const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [newFiles, setNewFiles] = useState<File[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
+  // Try to get likes and comments
+  let likeCountBy: Record<string, number> = {};
+  let myLikeSet = new Set<string>();
+  let commentCountBy: Record<string, number> = {};
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    setNewFiles(Array.from(files));
-  };
+  try {
+    // Get all likes for these posts
+    const { data: likeCounts } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .in("post_id", ids);
 
-  const handleSave = async () => {
-    setIsSaving(true);
+    // Get my likes
+    const { data: myLikes } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", uid)
+      .in("post_id", ids);
+
+    // Get all comments for these posts
+    const { data: commentCounts } = await supabase
+      .from("post_comments")
+      .select("post_id")
+      .in("post_id", ids);
+
+    // Count likes per post
+    if (likeCounts) {
+      likeCounts.forEach((like: any) => {
+        likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
+      });
+    }
     
-    try {
-      // Update post text
-      if (editBody !== post.body) {
-        await updatePost(post.id, { body: editBody });
-      }
+    if (myLikes) {
+      myLikeSet = new Set(myLikes.map((r: any) => r.post_id));
+    }
+    
+    // Count comments per post
+    if (commentCounts) {
+      commentCounts.forEach((comment: any) => {
+        commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
+      });
+    }
+  } catch (e) {
+    console.log("Error fetching likes/comments:", e);
+  }
 
-      // Upload and add new files
-      if (newFiles.length > 0) {
-        setUploadingFiles(true);
-        for (const file of newFiles) {
-          const type = file.type.startsWith('video') ? 'video' : 'image';
-          const { url, error } = await uploadMedia(file, type);
-          if (!error && url) {
-            await addMediaToPost(post.id, url, type);
-          }
+  // Get additional media from post_media table - FIXED
+  let mediaByPost: Record<string, MediaItem[]> = {};
+  
+  try {
+    // Query all post media at once (much more efficient)
+    const { data: allMediaRows, error: mediaError } = await supabase
+      .from("post_media")
+      .select("post_id, storage_path, type")
+      .in("post_id", ids)
+      .order("sort_order", { ascending: true });
+    
+    if (!mediaError && allMediaRows) {
+      // Group media by post_id
+      for (const media of allMediaRows) {
+        if (!mediaByPost[media.post_id]) {
+          mediaByPost[media.post_id] = [];
         }
-      }
-
-      onSave();
-    } catch (error) {
-      console.error('Error updating post:', error);
-      alert('Failed to update post');
-    } finally {
-      setIsSaving(false);
-      setUploadingFiles(false);
-    }
-  };
-
-  return (
-    <div className="edit-modal-overlay" onClick={onClose}>
-      <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="edit-modal-header">
-          <h2>Edit Post</h2>
-          <button onClick={onClose} className="close-button">×</button>
-        </div>
         
-        <div className="edit-modal-body">
-          <textarea
-            value={editBody}
-            onChange={(e) => setEditBody(e.target.value)}
-            placeholder="What's on your mind?"
-            rows={6}
-            className="edit-textarea"
-          />
-
-          {currentMedia.length > 0 && (
-            <div className="current-media">
-              <h3>Current Media ({currentMedia.length})</h3>
-              <div className="media-grid">
-                {currentMedia.map((media, idx) => (
-                  <div key={idx} className="media-item">
-                    {media.type === 'image' ? (
-                      <img src={media.url} alt="" />
-                    ) : (
-                      <video src={media.url} />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="file-upload">
-            <label className="upload-button">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-              <span>📸</span>
-              <span>Add More Photos/Videos</span>
-            </label>
-            {newFiles.length > 0 && (
-              <p className="file-count">
-                <span>{newFiles.length}</span>
-                new file{newFiles.length > 1 ? 's' : ''} selected
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="edit-modal-footer">
-          <button onClick={onClose} disabled={isSaving} className="cancel-button">
-            Cancel
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving || uploadingFiles}
-            className="save-button"
-          >
-            {isSaving ? (
-              <>
-                <span className="spinner">⏳</span>
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
-  const [showLightbox, setShowLightbox] = useState(false);
-  const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
-  const [showEditMenu, setShowEditMenu] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isCoCreator, setIsCoCreator] = useState(false);
-  const [processedMedia, setProcessedMedia] = useState<Array<{url: string; type: 'image' | 'video'}>>([]);
-  
-  // Like, Comment, Share states
-  const [isLiking, setIsLiking] = useState(false);
-  const [showCommentInput, setShowCommentInput] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [isCommenting, setIsCommenting] = useState(false);
-  const [localLikeCount, setLocalLikeCount] = useState(post.like_count || 0);
-  const [localLikedByMe, setLocalLikedByMe] = useState(post.liked_by_me || false);
-  
-  // NEW: Comment loading and display
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
-  const [showAllComments, setShowAllComments] = useState(false);
-  
-  useEffect(() => {
-    if (currentUserId && post.co_creators) {
-      setIsCoCreator(post.co_creators.includes(currentUserId));
-    }
-  }, [currentUserId, post.co_creators]);
-  
-  // FIXED: Media processing with better error handling
-  useEffect(() => {
-    const processed = [];
-    
-    try {
-      // Add main image/video if exists
-      if (post.image_url) {
-        processed.push({ url: post.image_url, type: 'image' as const });
-      }
-      if (post.video_url) {
-        processed.push({ url: post.video_url, type: 'video' as const });
-      }
-      
-      // Add additional media with validation
-      if (post.additional_media && Array.isArray(post.additional_media)) {
-        post.additional_media.forEach(item => {
-          if (item && item.url && item.type) {
-            // Don't add duplicates of the main image/video
-            const isDuplicate = (item.type === 'image' && item.url === post.image_url) ||
-                              (item.type === 'video' && item.url === post.video_url);
-            if (!isDuplicate) {
-              processed.push({ url: item.url, type: item.type });
-            }
-          }
+        // Get public URL from storage path
+        const { data } = supabase.storage
+          .from('post-media')
+          .getPublicUrl(media.storage_path);
+        
+        mediaByPost[media.post_id].push({
+          url: data.publicUrl,
+          type: media.type as 'image' | 'video'
         });
       }
       
-      setProcessedMedia(processed);
-    } catch (error) {
-      console.error('Error processing media:', error);
-      setProcessedMedia([]);
+      console.log(`Found media for ${Object.keys(mediaByPost).length} posts`);
     }
-  }, [post.image_url, post.video_url, post.additional_media]);
-  
-  // NEW: Load comments when needed
-  const loadComments = async () => {
-    if (loadingComments) return;
-    setLoadingComments(true);
-    
-    try {
-      const { data, error } = await supabase
-        .from("post_comments")
-        .select(`
-          id,
-          body,
-          created_at,
-          user_id,
-          profiles!inner(
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq("post_id", post.id)
-        .order("created_at", { ascending: true });
-      
-      if (!error && data) {
-        const formattedComments = data.map((comment: any) => ({
-          id: comment.id,
-          body: comment.body,
-          created_at: comment.created_at,
-          user_id: comment.user_id,
-          author: {
-            full_name: comment.profiles.full_name || 'User',
-            avatar_url: comment.profiles.avatar_url || '/default-avatar.png'
-          }
-        }));
-        setComments(formattedComments);
-      }
-    } catch (error) {
-      console.error('Error loading comments:', error);
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-  
-  // Load comments when comment count > 0 and we haven't loaded them yet
-  useEffect(() => {
-    if (post.comment_count > 0 && comments.length === 0 && !loadingComments) {
-      loadComments();
-    }
-  }, [post.comment_count]);
-  
-  const handleLike = async () => {
-    if (isLiking || !currentUserId) return;
-    setIsLiking(true);
-    
-    try {
-      const result = await toggleLike(post.id);
-      if (result.ok) {
-        setLocalLikedByMe(!localLikedByMe);
-        setLocalLikeCount(localLikedByMe ? localLikeCount - 1 : localLikeCount + 1);
-      }
-    } catch (error) {
-      console.error("Error liking post:", error);
-    } finally {
-      setIsLiking(false);
-    }
-  };
+  } catch (e) {
+    console.log("Error fetching media:", e);
+  }
 
-  const handleComment = async () => {
-    if (!commentText.trim() || isCommenting || !currentUserId) return;
-    setIsCommenting(true);
+  // Build the rows with all the data we have
+  const rows: Post[] = posts.map((p: any) => {
+    const postMedia = mediaByPost[p.id] || [];
     
-    try {
-      const result = await addComment(post.id, commentText.trim());
-      if (result.ok) {
-        setCommentText("");
-        // Reload comments to show the new one
-        await loadComments();
-        if (onChanged) {
-          setTimeout(() => onChanged(), 100);
-        }
-      } else {
-        alert("Failed to add comment: " + (result.error || "Unknown error"));
-      }
-    } catch (error) {
-      console.error("Error adding comment:", error);
-      alert("Failed to add comment");
-    } finally {
-      setIsCommenting(false);
-    }
-  };
-
-  const handleShare = () => {
-    const postUrl = `${window.location.origin}/post/${post.id}`;
-    navigator.clipboard.writeText(postUrl);
-    alert("Post link copied to clipboard!");
-  };
-
-  const handleDelete = async () => {
-    if (!confirm("Delete this post? This cannot be undone.")) {
-      setShowDeleteConfirm(false);
-      return;
+    // Log what we're adding to each post
+    if (postMedia.length > 0) {
+      console.log(`Post ${p.id} has ${postMedia.length} additional media items`);
     }
     
-    setIsDeleting(true);
-    try {
-      const result = await deletePost(post.id);
-      if (result.ok) {
-        setShowDeleteConfirm(false);
-        setTimeout(() => {
-          if (onChanged) onChanged();
-        }, 100);
-      } else {
-        alert(result.error || "Failed to delete post");
-      }
-    } catch (error) {
-      console.error("Error deleting post:", error);
-      alert("Failed to delete post");
-    } finally {
-      setIsDeleting(false);
-    }
+    return {
+      id: p.id,
+      user_id: p.user_id,
+      body: p.body,
+      image_url: p.image_url || null,
+      video_url: p.video_url || null,
+      privacy: p.visibility || p.privacy || 'public', // Handle both field names
+      created_at: p.created_at,
+      allow_share: p.allow_share ?? true,
+      co_creators: p.co_creators || null,
+      author: profileMap[p.user_id] || null,
+      additional_media: postMedia,
+      co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
+      like_count: likeCountBy[p.id] ?? 0,
+      liked_by_me: myLikeSet.has(p.id),
+      comment_count: commentCountBy[p.id] ?? 0,
+    };
+  });
+
+  console.log('Final posts with media:', rows.map(r => ({
+    id: r.id,
+    media_count: r.additional_media?.length || 0,
+    comment_count: r.comment_count
+  })));
+
+  return { rows, error: null };
+}
+
+export async function createPost(
+  body: string, 
+  privacy: Post["privacy"] = "friends",
+  options?: {
+    image_url?: string;
+    video_url?: string;
+    media_type?: 'image' | 'video';
+    allow_share?: boolean;
+    co_creators?: string[] | null;
+    media?: Array<{ url: string; type: 'image' | 'video' }>;
+  }
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+  
+  const postData: any = {
+    user_id: uid,
+    body,
+    visibility: privacy,  // Database expects 'visibility', not 'privacy'
+    allow_share: options?.allow_share ?? true,
+    co_creators: options?.co_creators || null,
   };
-  
-  const handlePhotoClick = (index: number) => {
-    if (processedMedia && processedMedia.length > 0) {
-      setLightboxStartIndex(index);
-      setShowLightbox(true);
+
+  // Handle single media for backward compatibility
+  if (options?.image_url) {
+    postData.image_url = options.image_url;
+  }
+  if (options?.video_url) {
+    postData.video_url = options.video_url;
+  }
+
+  // If we have multiple media, use the first one as the main image/video
+  if (options?.media && options.media.length > 0) {
+    const firstMedia = options.media[0];
+    
+    // Get public URL for the first media to store in main fields
+    const { data } = supabase.storage
+      .from('post-media')
+      .getPublicUrl(firstMedia.url);
+    
+    if (firstMedia.type === 'image') {
+      postData.image_url = data.publicUrl;
+    } else {
+      postData.video_url = data.publicUrl;
     }
-  };
-  
-  const canEdit = currentUserId === post.user_id || isCoCreator;
-  const canDelete = currentUserId === post.user_id;
-  
-  const getDisplayName = () => {
-    let name = post.author?.full_name || 'User';
-    if (post.co_creators && post.co_creators.length > 0) {
-      const coCreatorNames = post.co_creators_info?.map(c => c.full_name).filter(Boolean) || [];
-      if (coCreatorNames.length > 0) {
-        name += ` with ${coCreatorNames.join(', ')}`;
-      }
+  }
+
+  const { data, error } = await supabase
+    .from("posts")
+    .insert(postData)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating post:", error);
+    return { ok: false, error: error.message };
+  }
+
+  // Add ALL media to post_media table
+  if (options?.media && options.media.length > 0) {
+    const allMedia = options.media.map((m, index) => ({
+      post_id: data.id,
+      storage_path: m.url,  // This should be the storage path
+      type: m.type,
+      sort_order: index,
+      created_by: uid,
+      uploaded_by: uid
+    }));
+
+    const { error: mediaError } = await supabase
+      .from("post_media")
+      .insert(allMedia);
+
+    if (mediaError) {
+      console.error("Error adding media:", mediaError);
+      // Don't fail the whole post, just log the error
+    } else {
+      console.log(`Added ${allMedia.length} media items to post ${data.id}`);
     }
-    return name;
-  };
+  }
+
+  // Send notifications to co-creators
+  if (options?.co_creators && options.co_creators.length > 0) {
+    await sendCoCreatorNotifications(data.id, uid, options.co_creators);
+  }
+
+  return { ok: true, error: null, data };
+}
+
+export async function updatePost(
+  postId: string,
+  updates: {
+    body?: string;
+    privacy?: Post["privacy"];
+    allow_share?: boolean;
+  }
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  // Check if user is creator or co-creator
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, co_creators")
+    .eq("id", postId)
+    .single();
+
+  if (!post) return { ok: false, error: "Post not found" };
+
+  const canEdit = post.user_id === uid || 
+    (post.co_creators && post.co_creators.includes(uid));
+
+  if (!canEdit) return { ok: false, error: "Not authorized to edit this post" };
+
+  // Convert privacy to visibility for database
+  const dbUpdates: any = { ...updates };
+  if (updates.privacy) {
+    dbUpdates.visibility = updates.privacy;
+    delete dbUpdates.privacy;
+  }
+
+  const { error } = await supabase
+    .from("posts")
+    .update(dbUpdates)
+    .eq("id", postId);
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function deletePost(postId: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  // Only the original creator can delete
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id")
+    .eq("id", postId)
+    .single();
+
+  if (!post || post.user_id !== uid) {
+    return { ok: false, error: "Not authorized to delete this post" };
+  }
+
+  // Delete associated media from storage and database
+  const { data: mediaItems } = await supabase
+    .from("post_media")
+    .select("storage_path")
+    .eq("post_id", postId);
+
+  if (mediaItems && mediaItems.length > 0) {
+    // Delete from storage
+    const filePaths = mediaItems.map(item => item.storage_path);
+    await supabase.storage.from("post-media").remove(filePaths);
+    
+    // Delete from database
+    await supabase.from("post_media").delete().eq("post_id", postId);
+  }
   
-  // Show first 3 comments by default, with option to see more
-  const displayedComments = showAllComments ? comments : comments.slice(0, 3);
+  // Delete the post (likes and comments should cascade delete)
+  const { error } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId);
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function addMediaToPost(
+  postId: string,
+  url: string,
+  mediaType: 'image' | 'video'
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  // Check if user can edit
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, co_creators")
+    .eq("id", postId)
+    .single();
+
+  if (!post) return { ok: false, error: "Post not found" };
+
+  const canEdit = post.user_id === uid || 
+    (post.co_creators && post.co_creators.includes(uid));
+
+  if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
+
+  // Get current max sort_order
+  const { data: existingMedia } = await supabase
+    .from("post_media")
+    .select("sort_order")
+    .eq("post_id", postId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const nextSortOrder = existingMedia && existingMedia.length > 0 
+    ? (existingMedia[0].sort_order || 0) + 1 
+    : 0;
+
+  // Add to post_media table
+  const { error } = await supabase
+    .from("post_media")
+    .insert({
+      post_id: postId,
+      storage_path: url,  // This should be the storage path, not public URL
+      type: mediaType,    
+      created_by: uid,
+      uploaded_by: uid,
+      sort_order: nextSortOrder
+    });
+
+  if (!error) {
+    console.log(`Successfully added media to post ${postId}`);
+  }
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function uploadMedia(file: File, type: 'image' | 'video') {
+  const uid = await me();
+  if (!uid) return { url: null, error: "Not signed in" };
+
+  // File validation
+  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 50 * 1024 * 1024; // 5MB for images, 50MB for videos
+  if (file.size > maxSize) {
+    return { 
+      url: null, 
+      error: `File too large. Max size: ${type === 'image' ? '5MB' : '50MB'}` 
+    };
+  }
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from('post-media')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (error) {
+    console.error('Upload error:', error);
+    return { url: null, error: error.message };
+  }
+
+  // Return the storage path, not the public URL
+  // This will be stored in the database
+  return { url: fileName, error: null };
+}
+
+export async function toggleLike(post_id: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  const { data: existing } = await supabase
+    .from("post_likes")
+    .select("post_id")
+    .eq("post_id", post_id)
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("post_likes")
+      .delete()
+      .eq("post_id", post_id)
+      .eq("user_id", uid);
+    return { ok: !error, liked: false, error: error?.message || null };
+  } else {
+    const { error } = await supabase
+      .from("post_likes")
+      .insert({ post_id, user_id: uid });
+    return { ok: !error, liked: true, error: error?.message || null };
+  }
+}
+
+export async function addComment(post_id: string, body: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
   
-  return (
-    <>
-      <div className="post-card">
-        <div className="post-header">
-          <div className="author-info">
-            <img 
-              src={post.author?.avatar_url || '/default-avatar.png'} 
-              alt=""
-              className="author-avatar"
-            />
-            <div>
-              <div className="author-name">{getDisplayName()}</div>
-              <div className="post-meta">
-                <span className="post-time">
-                  {new Date(post.created_at).toLocaleDateString()}
-                </span>
-                {post.privacy && (
-                  <span className="post-privacy">
-                    {post.privacy === 'public' ? '🌍' : '🔒'}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {canEdit && (
-            <div className="post-actions">
-              <button 
-                className="menu-btn"
-                onClick={() => setShowEditMenu(!showEditMenu)}
-                title="Post options"
-              >
-                ⋯
-              </button>
-              {showEditMenu && (
-                <div className="menu-dropdown">
-                  {isCoCreator && !canDelete && (
-                    <>
-                      <button className="menu-item" onClick={() => {
-                        setShowEditModal(true);
-                        setShowEditMenu(false);
-                      }}>📷 Add Photos</button>
-                      <button className="menu-item">🏷️ Remove Tag</button>
-                    </>
-                  )}
-                  {canDelete && (
-                    <>
-                      <button className="menu-item" onClick={() => {
-                        setShowEditModal(true);
-                        setShowEditMenu(false);
-                      }}>✏️ Edit Post</button>
-                      <button className="menu-item danger" onClick={() => {
-                        setShowDeleteConfirm(true);
-                        setShowEditMenu(false);
-                      }}>🗑️ Delete Post</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        
-        <div className="post-content">
-          {post.body && <p className="post-text">{post.body}</p>}
-          
-          {processedMedia && processedMedia.length > 0 && (
-            <PhotoGrid 
-              media={processedMedia} 
-              onPhotoClick={handlePhotoClick}
-            />
-          )}
-        </div>
-        
-        <div className="post-footer">
-          <div className="engagement-stats">
-            {localLikeCount > 0 && (
-              <span>{localLikeCount} likes</span>
-            )}
-            {post.comment_count > 0 && (
-              <span>{post.comment_count} comments</span>
-            )}
-          </div>
-          
-          <div className="action-buttons">
-            <button 
-              className={`action-btn ${localLikedByMe ? 'liked' : ''}`}
-              onClick={handleLike}
-              disabled={isLiking || !currentUserId}
-            >
-              {localLikedByMe ? '❤️' : '🤍'} Like
-            </button>
-            <button 
-              className="action-btn"
-              onClick={() => {
-                setShowCommentInput(!showCommentInput);
-                if (!showCommentInput && comments.length === 0 && post.comment_count > 0) {
-                  loadComments();
-                }
-              }}
-              disabled={!currentUserId}
-            >
-              💬 Comment
-            </button>
-            {post.allow_share && (
-              <button 
-                className="action-btn"
-                onClick={handleShare}
-              >
-                🔄 Share
-              </button>
-            )}
-          </div>
-          
-          {/* NEW: Display comments */}
-          {comments.length > 0 && (
-            <div className="comments-section">
-              {displayedComments.map((comment) => (
-                <div key={comment.id} className="comment">
-                  <img 
-                    src={comment.author?.avatar_url || '/default-avatar.png'} 
-                    alt=""
-                    className="comment-avatar"
-                  />
-                  <div className="comment-content">
-                    <div className="comment-author">{comment.author?.full_name}</div>
-                    <div className="comment-text">{comment.body}</div>
-                    <div className="comment-time">
-                      {new Date(comment.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {comments.length > 3 && !showAllComments && (
-                <button 
-                  className="show-more-comments"
-                  onClick={() => setShowAllComments(true)}
-                >
-                  View all {comments.length} comments
-                </button>
-              )}
-            </div>
-          )}
-          
-          {showCommentInput && (
-            <div className="comment-input-section">
-              <input
-                type="text"
-                className="comment-input"
-                placeholder="Write a comment..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleComment()}
-                disabled={isCommenting}
-              />
-              <button 
-                className="comment-submit"
-                onClick={handleComment}
-                disabled={!commentText.trim() || isCommenting}
-              >
-                {isCommenting ? 'Posting...' : 'Post'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Delete Post?</h2>
-            <p>This action cannot be undone. All photos, comments, and likes will be permanently removed.</p>
-            <div className="modal-buttons">
-              <button 
-                className="modal-cancel"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button 
-                className="modal-delete"
-                onClick={handleDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Deleting...' : 'Delete Post'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  console.log(`Adding comment to post ${post_id}: "${body}"`);
+  
+  const { data, error } = await supabase
+    .from("post_comments")
+    .insert({ 
+      post_id, 
+      user_id: uid, 
+      body 
+    })
+    .select()
+    .single();
+    
+  if (!error) {
+    console.log(`Comment added successfully:`, data);
+  } else {
+    console.error(`Error adding comment:`, error);
+  }
+    
+  return { ok: !error, error: error?.message || null };
+}
 
-      {/* Edit Post Modal */}
-      {showEditModal && (
-        <EditPostModal
-          post={post}
-          currentMedia={processedMedia}
-          onClose={() => setShowEditModal(false)}
-          onSave={() => {
-            setShowEditModal(false);
-            if (onChanged) onChanged();
-          }}
-        />
-      )}
-      
-      {showLightbox && processedMedia && processedMedia.length > 0 && (
-        <PhotoLightbox
-          media={processedMedia}
-          startIndex={lightboxStartIndex}
-          onClose={() => setShowLightbox(false)}
-        />
-      )}
-      
-      <style jsx>{`
-        .post-card {
-          background: white;
-          border: 2px solid #f1f5f9;
-          border-radius: 1rem;
-          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-          margin-bottom: 2rem;
-          position: relative;
-          max-width: 100%;
-          overflow: hidden;
-          transition: all 0.2s ease-in-out;
-        }
-        
-        .post-card:hover {
-          border-color: #e2e8f0;
-          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-          transform: translateY(-2px);
-        }
-        
-        .post-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          padding: 1rem;
-          position: relative;
-        }
-        
-        .author-info {
-          display: flex;
-          gap: 0.75rem;
-        }
-        
-        .author-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-        
-        .author-name {
-          font-weight: 600;
-          color: #1a202c;
-        }
-        
-        .post-meta {
-          display: flex;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #718096;
-        }
-        
-        .post-content {
-          padding: 0 1rem;
-        }
-        
-        .post-text {
-          margin-bottom: 0.75rem;
-          line-height: 1.5;
-        }
-        
-        /* FIXED: Facebook-style photo grid layouts */
-        .photo-grid-container {
-          margin: 0.5rem 0;
-          border-radius: 0.5rem;
-          overflow: hidden;
-          background: #f8f9fa;
-        }
-        
-        .single-photo {
-          width: 100%;
-          height: 300px;
-          cursor: pointer;
-          overflow: hidden;
-        }
-        
-        .single-photo img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.2s;
-        }
-        
-        .single-photo:hover img {
-          transform: scale(1.02);
-        }
-        
-        .two-photos {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 2px;
-          height: 250px;
-        }
-        
-        .three-photos {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: 2px;
-          height: 250px;
-        }
-        
-        .three-photos .main-photo {
-          height: 100%;
-        }
-        
-        .three-photos .side-stack {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          height: 100%;
-        }
-        
-        .three-photos .side-stack .photo-item {
-          flex: 1;
-        }
-        
-        .four-photos {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          grid-template-rows: 1fr 1fr;
-          gap: 2px;
-          height: 250px;
-        }
-        
-        .many-photos {
-          height: 250px;
-        }
-        
-        .many-photos .top-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 2px;
-          height: 60%;
-          margin-bottom: 2px;
-        }
-        
-        .many-photos .bottom-row {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 2px;
-          height: calc(40% - 2px);
-        }
-        
-        .photo-item {
-          position: relative;
-          cursor: pointer;
-          overflow: hidden;
-          background: #f7fafc;
-        }
-        
-        .photo-item img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.2s;
-        }
-        
-        .photo-item:hover img {
-          transform: scale(1.05);
-        }
-        
-        .more-overlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(0,0,0,0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 1.5rem;
-          font-weight: 600;
-        }
-        
-        .post-footer {
-          padding: 0.75rem 1rem;
-          border-top: 1px solid #e2e8f0;
-        }
-        
-        .engagement-stats {
-          display: flex;
-          gap: 1rem;
-          font-size: 0.875rem;
-          color: #718096;
-          margin-bottom: 0.5rem;
-        }
-        
-        .action-buttons {
-          display: flex;
-          gap: 1rem;
-        }
-        
-        .action-btn {
-          flex: 1;
-          padding: 0.5rem;
-          background: none;
-          border: none;
-          color: #4a5568;
-          cursor: pointer;
-          border-radius: 0.375rem;
-          transition: background 0.2s;
-        }
-        
-        .action-btn:hover {
-          background: #f7fafc;
-        }
-        
-        .action-btn.liked {
-          color: #e53e3e;
-        }
-        
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        /* NEW: Comments styling */
-        .comments-section {
-          margin-top: 0.75rem;
-          padding-top: 0.75rem;
-          border-top: 1px solid #f1f5f9;
-        }
-        
-        .comment {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.75rem;
-        }
-        
-        .comment-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          object-fit: cover;
-          flex-shrink: 0;
-        }
-        
-        .comment-content {
-          flex: 1;
-        }
-        
-        .comment-author {
-          font-weight: 600;
-          font-size: 0.875rem;
-          color: #1a202c;
-        }
-        
-        .comment-text {
-          font-size: 0.875rem;
-          color: #374151;
-          margin: 0.25rem 0;
-        }
-        
-        .comment-time {
-          font-size: 0.75rem;
-          color: #9ca3af;
-        }
-        
-        .show-more-comments {
-          background: none;
-          border: none;
-          color: #4a5568;
-          font-size: 0.875rem;
-          cursor: pointer;
-          padding: 0.25rem 0;
-          text-decoration: underline;
-        }
-        
-        .comment-input-section {
-          display: flex;
-          gap: 0.5rem;
-          padding: 0.75rem 0;
-          margin-top: 0.75rem;
-          border-top: 1px solid #f1f5f9;
-        }
-        
-        .comment-input {
-          flex: 1;
-          padding: 0.5rem;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-        
-        .comment-input:focus {
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-        
-        .comment-submit {
-          padding: 0.5rem 1rem;
-          background: #4299e1;
-          color: white;
-          border: none;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        
-        .comment-submit:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .post-actions {
-          position: relative;
-        }
-        
-        .menu-btn {
-          background: rgba(0,0,0,0.05);
-          border: none;
-          font-size: 1.25rem;
-          cursor: pointer;
-          padding: 0.5rem;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #718096;
-          transition: all 0.2s;
-        }
-        
-        .menu-btn:hover {
-          background: rgba(0,0,0,0.1);
-          color: #4a5568;
-        }
-        
-        .menu-dropdown {
-          position: absolute;
-          right: 0;
-          top: calc(100% + 8px);
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
-          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-          min-width: 180px;
-          z-index: 100;
-          overflow: hidden;
-        }
-        
-        .menu-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          width: 100%;
-          padding: 0.75rem 1rem;
-          background: none;
-          border: none;
-          text-align: left;
-          cursor: pointer;
-          font-size: 0.875rem;
-          color: #374151;
-          transition: background 0.2s;
-        }
-        
-        .menu-item:hover {
-          background: #f8fafc;
-        }
-        
-        .menu-item.danger {
-          color: #dc2626;
-        }
-        
-        .menu-item.danger:hover {
-          background: #fef2f2;
-        }
-        
-        /* Lightbox styling */
-        .lightbox-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.95);
-          z-index: 9999;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .lightbox-content {
-          position: relative;
-          max-width: 90vw;
-          max-height: 90vh;
-        }
-        
-        .lightbox-content img {
-          max-width: 100%;
-          max-height: 80vh;
-          object-fit: contain;
-        }
-        
-        .lightbox-close {
-          position: absolute;
-          top: -40px;
-          right: 0;
-          background: none;
-          border: none;
-          color: white;
-          font-size: 3rem;
-          cursor: pointer;
-          z-index: 10001;
-        }
-        
-        .lightbox-prev,
-        .lightbox-next {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          background: rgba(255,255,255,0.1);
-          border: none;
-          color: white;
-          font-size: 3rem;
-          padding: 1rem;
-          cursor: pointer;
-          z-index: 10001;
-        }
-        
-        .lightbox-prev {
-          left: -60px;
-        }
-        
-        .lightbox-next {
-          right: -60px;
-        }
-        
-        .lightbox-counter {
-          position: absolute;
-          bottom: -30px;
-          left: 50%;
-          transform: translateX(-50%);
-          color: white;
-        }
-        
-        .lightbox-thumbnails {
-          display: flex;
-          gap: 0.5rem;
-          justify-content: center;
-          margin-top: 1rem;
-          padding: 0.5rem;
-        }
-        
-        .thumbnail {
-          width: 60px;
-          height: 60px;
-          cursor: pointer;
-          opacity: 0.6;
-          transition: opacity 0.2s;
-          border: 2px solid transparent;
-        }
-        
-        .thumbnail.active {
-          opacity: 1;
-          border-color: white;
-        }
-        
-        .thumbnail img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        
-        /* Modal styling */
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.5);
-          z-index: 9998;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
+export async function sendCoCreatorNotifications(
+  postId: string,
+  creatorId: string,
+  coCreatorIds: string[]
+) {
+  // Get creator info
+  const { data: creator } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", creatorId)
+    .single();
 
-        .modal-content {
-          background: white;
-          border-radius: 0.75rem;
-          padding: 1.5rem;
-          max-width: 500px;
-          width: 90%;
-          max-height: 80vh;
-          overflow-y: auto;
-        }
+  const creatorName = creator?.full_name || "Someone";
 
-        .confirm-modal {
-          max-width: 400px;
-        }
+  // Send notifications to each co-creator
+  const notifications = coCreatorIds.map(userId => ({
+    user_id: userId,
+    type: 'co_creator_invite',
+    title: `${creatorName} tagged you in a post`,
+    message: `You've been tagged as a co-creator. You can now add your own photos and videos to this post!`,
+    link: `/post/${postId}`,
+    created_at: new Date().toISOString()
+  }));
 
-        .modal-content h2 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin-bottom: 0.75rem;
-        }
+  await supabase.from("notifications").insert(notifications);
+}
 
-        .modal-content p {
-          color: #4a5568;
-          margin-bottom: 1.5rem;
-        }
-
-        .modal-buttons {
-          display: flex;
-          gap: 0.75rem;
-          justify-content: flex-end;
-        }
-
-        .modal-cancel, .modal-delete {
-          padding: 0.5rem 1.25rem;
-          border-radius: 0.375rem;
-          border: none;
-          font-weight: 500;
-          cursor: pointer;
-        }
-
-        .modal-cancel {
-          background: #e2e8f0;
-          color: #4a5568;
-        }
-
-        .modal-delete {
-          background: #e53e3e;
-          color: white;
-        }
-
-        .modal-cancel:hover {
-          background: #cbd5e0;
-        }
-
-        .modal-delete:hover {
-          background: #c53030;
-        }
-
-        .modal-cancel:disabled,
-        .modal-delete:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .edit-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.6);
-          backdrop-filter: blur(4px);
-          z-index: 9998;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-          overflow-y: auto;
-        }
-
-        .edit-modal-content {
-          background: white;
-          border-radius: 1rem;
-          width: 100%;
-          max-width: 600px;
-          max-height: 90vh;
-          display: flex;
-          flex-direction: column;
-          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-          margin: auto;
-          position: relative;
-        }
-
-        .edit-modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.5rem;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .edit-modal-header h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a202c;
-          margin: 0;
-        }
-
-        .close-button {
-          background: none;
-          border: none;
-          font-size: 2rem;
-          color: #718096;
-          cursor: pointer;
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          transition: all 0.2s;
-        }
-
-        .close-button:hover {
-          background: #f7fafc;
-          color: #2d3748;
-        }
-
-        .edit-modal-body {
-          padding: 1.5rem;
-          overflow-y: auto;
-          flex: 1;
-        }
-
-        .edit-textarea {
-          width: 100%;
-          padding: 1rem;
-          border: 2px solid #e2e8f0;
-          border-radius: 0.75rem;
-          resize: vertical;
-          margin-bottom: 1.5rem;
-          font-size: 1rem;
-          line-height: 1.5;
-          font-family: inherit;
-          outline: none;
-          min-height: 150px;
-        }
-
-        .edit-textarea:focus {
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-
-        .current-media {
-          margin-bottom: 1.5rem;
-          padding: 1.25rem;
-          background: #f8fafc;
-          border-radius: 0.75rem;
-        }
-
-        .current-media h3 {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #4a5568;
-          margin: 0 0 0.75rem 0;
-        }
-
-        .media-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-          gap: 0.75rem;
-        }
-
-        .media-item {
-          aspect-ratio: 1;
-          overflow: hidden;
-          border-radius: 0.5rem;
-          background: white;
-          border: 2px solid white;
-        }
-
-        .media-item img,
-        .media-item video {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .file-upload {
-          margin-bottom: 1rem;
-        }
-
-        .upload-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.25rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border-radius: 0.75rem;
-          cursor: pointer;
-          font-weight: 500;
-          font-size: 1rem;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .upload-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .file-count {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #4a5568;
-          margin-top: 0.75rem;
-          margin-bottom: 0;
-        }
-
-        .file-count span:first-child {
-          background: #667eea;
-          color: white;
-          padding: 0.125rem 0.625rem;
-          border-radius: 9999px;
-          font-weight: 600;
-          font-size: 0.875rem;
-        }
-
-        .edit-modal-footer {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          padding: 1.25rem 1.5rem;
-          border-top: 1px solid #e2e8f0;
-          background: #f8fafc;
-        }
-
-        .cancel-button,
-        .save-button {
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.5rem;
-          font-size: 1rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .cancel-button {
-          background: white;
-          color: #4a5568;
-          border: 2px solid #e2e8f0;
-        }
-
-        .cancel-button:hover {
-          background: #f7fafc;
-          border-color: #cbd5e0;
-        }
-
-        .save-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .save-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .save-button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
-        }
-
-        .spinner {
-          display: inline-block;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        /* Mobile responsiveness */
-        @media (max-width: 768px) {
-          .single-photo {
-            height: 250px;
-          }
-          
-          .two-photos,
-          .three-photos,
-          .four-photos,
-          .many-photos {
-            height: 200px;
-          }
-          
-          .lightbox-prev,
-          .lightbox-next {
-            font-size: 2rem;
-            padding: 0.5rem;
-          }
-          
-          .lightbox-prev {
-            left: 10px;
-          }
-          
-          .lightbox-next {
-            right: 10px;
-          }
-        }
-      `}</style>
-    </>
-  );
+export function timeAgo(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  const w = Math.floor(d / 7);
+  if (w < 52) return `${w}w ago`;
+  return new Date(iso).toLocaleDateString();
 }
