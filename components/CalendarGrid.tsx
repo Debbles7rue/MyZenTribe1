@@ -37,9 +37,7 @@ try {
 const localizer = momentLocalizer(moment);
 
 // Create DnD calendar
-// TEMPORARY: Testing if DnD wrapper is blocking clicks
-const DnDCalendar = BigCalendar; // Disabled DnD temporarily
-// const DnDCalendar = withDragAndDrop(BigCalendar);
+const DnDCalendar = withDragAndDrop(BigCalendar);
 
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
