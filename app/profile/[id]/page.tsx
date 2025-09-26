@@ -236,26 +236,27 @@ export default function PublicProfilePage() {
     if (!currentUserId || !profileId) return;
 
     try {
-      // Check if friends
-      const { data: friendship } = await supabase
+      // Check if friends - simplified query for your database structure
+      const { data: friendships } = await supabase
         .from("friendships")
-        .select("relationship")
+        .select("status, relationship_type")
         .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
-        .single();
+        .eq('status', 'accepted');
 
-      if (friendship) {
+      if (friendships && friendships.length > 0) {
         setFriendStatus("friends");
-        setRelationshipType(friendship.relationship || 'friend');
+        setRelationshipType(friendships[0].relationship_type || 'friend');
       } else {
         // Check for pending request
         const { data: pending } = await supabase
           .from("friend_requests")
           .select("*")
-          .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`)
-          .single();
+          .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`);
 
-        if (pending) {
+        if (pending && pending.length > 0) {
           setFriendStatus("pending");
+        } else {
+          setFriendStatus("none");
         }
         setRelationshipType('none');
       }
