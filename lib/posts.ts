@@ -136,38 +136,40 @@ export async function listHomeFeed(limit = 20, before?: string) {
     console.log("Error fetching likes/comments:", e);
   }
 
-// Get additional media from post_media table - SIMPLIFIED FIX
+  // Get additional media from post_media table - FIXED
   let mediaByPost: Record<string, MediaItem[]> = {};
   
-  // Skip the .in() query entirely and just query each post individually
-  for (const postId of ids) {
-    try {
-      const { data: mediaRows, error } = await supabase
-        .from("post_media")
-        .select("storage_path, type")
-        .eq("post_id", postId)
-        .order("sort_order", { ascending: true });
-      
-      if (!error && mediaRows && mediaRows.length > 0) {
-        mediaByPost[postId] = mediaRows.map((m: any) => {
-          const { data } = supabase.storage
-            .from('post-media')
-            .getPublicUrl(m.storage_path);
-          
-          return { 
-            url: data.publicUrl, 
-            type: m.type as 'image' | 'video'
-          };
+  try {
+    // Query all post media at once (much more efficient)
+    const { data: allMediaRows, error: mediaError } = await supabase
+      .from("post_media")
+      .select("post_id, storage_path, type")
+      .in("post_id", ids)
+      .order("sort_order", { ascending: true });
+    
+    if (!mediaError && allMediaRows) {
+      // Group media by post_id
+      for (const media of allMediaRows) {
+        if (!mediaByPost[media.post_id]) {
+          mediaByPost[media.post_id] = [];
+        }
+        
+        // Get public URL from storage path
+        const { data } = supabase.storage
+          .from('post-media')
+          .getPublicUrl(media.storage_path);
+        
+        mediaByPost[media.post_id].push({
+          url: data.publicUrl,
+          type: media.type as 'image' | 'video'
         });
-        console.log(`Found ${mediaRows.length} media items for post ${postId}`);
       }
-    } catch (e) {
-      console.log(`Error fetching media for post ${postId}:`, e);
+      
+      console.log(`Found media for ${Object.keys(mediaByPost).length} posts`);
     }
+  } catch (e) {
+    console.log("Error fetching media:", e);
   }
-
-  // Wait for all media queries to complete
-  await Promise.all(mediaPromises);
 
   // Build the rows with all the data we have
   const rows: Post[] = posts.map((p: any) => {
@@ -184,12 +186,12 @@ export async function listHomeFeed(limit = 20, before?: string) {
       body: p.body,
       image_url: p.image_url || null,
       video_url: p.video_url || null,
-      privacy: p.visibility || p.privacy || 'public',
+      privacy: p.visibility || p.privacy || 'public', // Handle both field names
       created_at: p.created_at,
       allow_share: p.allow_share ?? true,
       co_creators: p.co_creators || null,
       author: profileMap[p.user_id] || null,
-      additional_media: postMedia, // This should now have the media
+      additional_media: postMedia,
       co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
       like_count: likeCountBy[p.id] ?? 0,
       liked_by_me: myLikeSet.has(p.id),
@@ -240,10 +242,16 @@ export async function createPost(
   // If we have multiple media, use the first one as the main image/video
   if (options?.media && options.media.length > 0) {
     const firstMedia = options.media[0];
+    
+    // Get public URL for the first media to store in main fields
+    const { data } = supabase.storage
+      .from('post-media')
+      .getPublicUrl(firstMedia.url);
+    
     if (firstMedia.type === 'image') {
-      postData.image_url = firstMedia.url;
+      postData.image_url = data.publicUrl;
     } else {
-      postData.video_url = firstMedia.url;
+      postData.video_url = data.publicUrl;
     }
   }
 
@@ -258,11 +266,11 @@ export async function createPost(
     return { ok: false, error: error.message };
   }
 
-  // Add ALL media to post_media table (including the first one)
+  // Add ALL media to post_media table
   if (options?.media && options.media.length > 0) {
     const allMedia = options.media.map((m, index) => ({
       post_id: data.id,
-      storage_path: m.url,  // This should be the path, not full URL
+      storage_path: m.url,  // This should be the storage path
       type: m.type,
       sort_order: index,
       created_by: uid,
@@ -276,6 +284,8 @@ export async function createPost(
     if (mediaError) {
       console.error("Error adding media:", mediaError);
       // Don't fail the whole post, just log the error
+    } else {
+      console.log(`Added ${allMedia.length} media items to post ${data.id}`);
     }
   }
 
@@ -312,9 +322,16 @@ export async function updatePost(
 
   if (!canEdit) return { ok: false, error: "Not authorized to edit this post" };
 
+  // Convert privacy to visibility for database
+  const dbUpdates: any = { ...updates };
+  if (updates.privacy) {
+    dbUpdates.visibility = updates.privacy;
+    delete dbUpdates.privacy;
+  }
+
   const { error } = await supabase
     .from("posts")
-    .update(updates)
+    .update(dbUpdates)
     .eq("id", postId);
 
   return { ok: !error, error: error?.message || null };
@@ -335,8 +352,20 @@ export async function deletePost(postId: string) {
     return { ok: false, error: "Not authorized to delete this post" };
   }
 
-  // Delete associated media first
-  await supabase.from("post_media").delete().eq("post_id", postId);
+  // Delete associated media from storage and database
+  const { data: mediaItems } = await supabase
+    .from("post_media")
+    .select("storage_path")
+    .eq("post_id", postId);
+
+  if (mediaItems && mediaItems.length > 0) {
+    // Delete from storage
+    const filePaths = mediaItems.map(item => item.storage_path);
+    await supabase.storage.from("post-media").remove(filePaths);
+    
+    // Delete from database
+    await supabase.from("post_media").delete().eq("post_id", postId);
+  }
   
   // Delete the post (likes and comments should cascade delete)
   const { error } = await supabase
@@ -386,12 +415,16 @@ export async function addMediaToPost(
     .from("post_media")
     .insert({
       post_id: postId,
-      storage_path: url,  
+      storage_path: url,  // This should be the storage path, not public URL
       type: mediaType,    
       created_by: uid,
       uploaded_by: uid,
       sort_order: nextSortOrder
     });
+
+  if (!error) {
+    console.log(`Successfully added media to post ${postId}`);
+  }
 
   return { ok: !error, error: error?.message || null };
 }
@@ -411,10 +444,9 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
 
   const fileExt = file.name.split('.').pop();
   const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-  const bucketName = 'post-media'; // Using unified bucket
 
   const { data, error } = await supabase.storage
-    .from(bucketName)
+    .from('post-media')
     .upload(fileName, file, {
       cacheControl: '3600',
       upsert: false,
@@ -460,13 +492,23 @@ export async function addComment(post_id: string, body: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
   
-  const { error } = await supabase
+  console.log(`Adding comment to post ${post_id}: "${body}"`);
+  
+  const { data, error } = await supabase
     .from("post_comments")
     .insert({ 
       post_id, 
       user_id: uid, 
       body 
-    });
+    })
+    .select()
+    .single();
+    
+  if (!error) {
+    console.log(`Comment added successfully:`, data);
+  } else {
+    console.error(`Error adding comment:`, error);
+  }
     
   return { ok: !error, error: error?.message || null };
 }
