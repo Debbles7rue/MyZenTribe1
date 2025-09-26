@@ -37,7 +37,9 @@ try {
 const localizer = momentLocalizer(moment);
 
 // Create DnD calendar
-const DnDCalendar = withDragAndDrop(BigCalendar);
+// TEMPORARY: Testing if DnD wrapper is blocking clicks
+const DnDCalendar = BigCalendar; // Disabled DnD temporarily
+// const DnDCalendar = withDragAndDrop(BigCalendar);
 
 type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
 
@@ -576,8 +578,19 @@ export default function CalendarGrid({
           date={date}
           onView={setView}
           onNavigate={setDate}
-          onSelectSlot={onSelectSlot}
-          onSelectEvent={onSelectEvent}
+          selectable={true}
+          onSelectSlot={(slotInfo: any) => {
+            console.log('CalendarGrid: Slot clicked!', slotInfo);
+            if (onSelectSlot) {
+              onSelectSlot(slotInfo);
+            }
+          }}
+          onSelectEvent={(event: any) => {
+            console.log('CalendarGrid: Event clicked!', event);
+            if (onSelectEvent) {
+              onSelectEvent(event);
+            }
+          }}
           onEventDrop={isMobile ? undefined : onDrop}
           onEventResize={isMobile ? undefined : onResize}
           onDropFromOutside={isMobile ? undefined : handleDropFromOutside}
@@ -585,7 +598,6 @@ export default function CalendarGrid({
           components={{
             event: EventComponent,
           }}
-          selectable
           resizable={!isMobile}
           popup
           step={30}
