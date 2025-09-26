@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ProfileViewer from "../components/ProfileViewer";
+import PostsFeed from "@/components/PostsFeed";
 import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
 
 type PublicProfile = {
