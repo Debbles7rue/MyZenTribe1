@@ -80,7 +80,6 @@ export default function PublicProfilePage() {
   const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
-  const [posts, setPosts] = useState<any[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -112,7 +111,6 @@ export default function PublicProfilePage() {
     if (profileId) {
       loadProfile();
       loadStats();
-      loadPostsCount();
       loadEvents();
     }
     
@@ -123,21 +121,6 @@ export default function PublicProfilePage() {
       loadTodayMemories();
     }
   }, [profileId, currentUserId]);
-
-  // Load posts count (your original working version)
-  async function loadPostsCount() {
-    try {
-      const { count } = await supabase
-        .from("posts")
-        .select("*", { count: "exact", head: true })
-        .or(`user_id.eq.${profileId},co_creators.cs.{${profileId}}`);
-      
-      setPosts(Array(count || 0).fill({})); // Just for counting
-    } catch (err) {
-      console.error("Error loading posts count:", err);
-      setPosts([]);
-    }
-  }
 
   async function loadProfile() {
     try {
@@ -537,15 +520,13 @@ export default function PublicProfilePage() {
       {(canViewFriendContent || profile.visibility === 'public') && (
         <div className="unified-feed">
           {/* Posts Feed - Displayed as continuous feed */}
-          {posts.length > 0 && (
-            <div className="posts-feed-section">
-              <PostsFeed 
-                userId={profileId}
-                currentUserId={currentUserId}
-                showUserInfo={false}
-              />
-            </div>
-          )}
+          <div className="posts-feed-section">
+            <PostsFeed 
+              userId={profileId}
+              viewerUserId={currentUserId}
+              maxPosts={20}
+            />
+          </div>
 
           {/* Events interspersed (if you want them mixed in later) */}
           {events.length > 0 && (
@@ -586,12 +567,12 @@ export default function PublicProfilePage() {
             </div>
           )}
 
-          {/* Empty state if no content */}
-          {posts.length === 0 && events.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-icon">📱</div>
-              <p className="empty-text">No posts or events yet</p>
-              <p className="empty-subtext">Check back later for updates!</p>
+          {/* Empty state if no events (PostsFeed handles its own empty state) */}
+          {events.length === 0 && (
+            <div className="empty-events-message">
+              <p className="text-gray-500 text-sm text-center py-4">
+                No upcoming events
+              </p>
             </div>
           )}
         </div>
