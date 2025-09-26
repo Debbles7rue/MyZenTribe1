@@ -45,6 +45,15 @@ const UserPlusIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+const FollowIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="8.5" cy="7" r="4"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+    <line x1="23" y1="11" x2="17" y2="11"/>
+  </svg>
+);
+
 // Social platform icons
 const InstagramIcon = ({ size = 20 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -82,6 +91,7 @@ interface ProfileViewerProps {
   onMessage?: () => void;
   onFollow?: () => void;
   isPending?: boolean;
+  isFollowing?: boolean;
 }
 
 export default function ProfileViewer({
@@ -92,7 +102,8 @@ export default function ProfileViewer({
   onAddFriend,
   onMessage,
   onFollow,
-  isPending = false
+  isPending = false,
+  isFollowing = false
 }: ProfileViewerProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
@@ -117,7 +128,7 @@ export default function ProfileViewer({
 
   return (
     <div className="profile-viewer">
-      {/* Cover & Header Section */}
+      {/* Cover & Header Section - FIXED POSITIONING */}
       <div className="viewer-header">
         {profile.cover_url ? (
           <img 
@@ -134,9 +145,9 @@ export default function ProfileViewer({
         <div className="header-overlay" />
       </div>
 
-      {/* Main Profile Info */}
+      {/* Main Profile Info - FIXED POSITIONING */}
       <div className="viewer-content">
-        {/* Avatar & Name Section */}
+        {/* Avatar & Name Section - UPDATED POSITIONING */}
         <div className="profile-identity">
           <div className="avatar-container">
             <img
@@ -191,7 +202,7 @@ export default function ProfileViewer({
           </div>
         )}
 
-        {/* Action Buttons - Mobile Optimized */}
+        {/* Action Buttons - Mobile Optimized & FIXED FOLLOW BUTTON */}
         <div className="action-buttons">
           {relationshipType === 'none' && !isPending && (
             <button 
@@ -223,11 +234,12 @@ export default function ProfileViewer({
           
           {!isFriend && (
             <button 
-              className="btn btn-outline"
+              className={`btn ${isFollowing ? 'btn-secondary' : 'btn-outline'}`}
               onClick={onFollow}
-              aria-label="Follow"
+              aria-label={isFollowing ? "Following" : "Follow"}
             >
-              <span>Follow</span>
+              <FollowIcon size={isMobile ? 18 : 16} />
+              <span>{isFollowing ? 'Following' : 'Follow'}</span>
             </button>
           )}
         </div>
@@ -336,13 +348,15 @@ export default function ProfileViewer({
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           max-width: 800px;
           margin: 0 auto;
+          position: relative;
         }
 
-        /* Header Section */
+        /* Header Section - FIXED */
         .viewer-header {
           position: relative;
           height: 200px;
           background: #f3f4f6;
+          overflow: hidden;
         }
 
         @media (max-width: 640px) {
@@ -355,6 +369,7 @@ export default function ProfileViewer({
           width: 100%;
           height: 100%;
           object-fit: cover;
+          display: block;
         }
 
         .cover-gradient {
@@ -373,24 +388,29 @@ export default function ProfileViewer({
           pointer-events: none;
         }
 
-        /* Content Section */
+        /* Content Section - FIXED SPACING */
         .viewer-content {
-          padding: 1.5rem;
+          position: relative;
+          padding: 0 1.5rem 1.5rem;
+          margin-top: -60px; /* Pull content up over header */
+          z-index: 2;
         }
 
         @media (max-width: 640px) {
           .viewer-content {
-            padding: 1rem;
+            padding: 0 1rem 1rem;
+            margin-top: -50px;
           }
         }
 
-        /* Profile Identity */
+        /* Profile Identity - FIXED POSITIONING */
         .profile-identity {
           display: flex;
-          align-items: flex-start;
+          align-items: flex-end;
           gap: 1.5rem;
-          margin-top: -3rem;
           margin-bottom: 1.5rem;
+          position: relative;
+          z-index: 3;
         }
 
         @media (max-width: 640px) {
@@ -398,7 +418,7 @@ export default function ProfileViewer({
             flex-direction: column;
             align-items: center;
             text-align: center;
-            margin-top: -2.5rem;
+            gap: 1rem;
           }
         }
 
@@ -414,7 +434,8 @@ export default function ProfileViewer({
           border: 4px solid white;
           background: white;
           object-fit: cover;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          display: block;
         }
 
         @media (max-width: 640px) {
@@ -456,6 +477,13 @@ export default function ProfileViewer({
         .identity-info {
           flex-grow: 1;
           min-width: 0;
+          padding-top: 40px; /* Space from top */
+        }
+
+        @media (max-width: 640px) {
+          .identity-info {
+            padding-top: 0;
+          }
         }
 
         .display-name {
@@ -464,6 +492,7 @@ export default function ProfileViewer({
           color: #111827;
           margin: 0 0 0.25rem 0;
           line-height: 1.2;
+          text-shadow: 0 1px 2px rgba(255,255,255,0.9);
         }
 
         @media (max-width: 640px) {
@@ -479,18 +508,21 @@ export default function ProfileViewer({
         }
 
         .tagline {
-          color: #9ca3af;
+          color: #374151;
           font-size: 0.875rem;
           margin: 0;
         }
 
-        /* Relationship Info */
+        /* Relationship Info - ENSURE VISIBILITY */}
         .relationship-info {
           display: flex;
           align-items: center;
           gap: 0.75rem;
           margin-bottom: 1rem;
           flex-wrap: wrap;
+          background: rgba(255,255,255,0.95);
+          padding: 0.5rem 0;
+          border-radius: 0.5rem;
         }
 
         @media (max-width: 640px) {
@@ -529,17 +561,22 @@ export default function ProfileViewer({
           font-size: 0.875rem;
         }
 
-        /* Action Buttons - Mobile Optimized */
+        /* Action Buttons - Mobile Optimized & IMPROVED VISIBILITY */}
         .action-buttons {
           display: flex;
           gap: 0.75rem;
           margin-bottom: 1.5rem;
           flex-wrap: wrap;
+          background: rgba(255,255,255,0.95);
+          padding: 0.75rem;
+          border-radius: 0.75rem;
+          backdrop-filter: blur(10px);
         }
 
         @media (max-width: 640px) {
           .action-buttons {
             gap: 0.5rem;
+            padding: 0.5rem;
           }
         }
 
@@ -594,6 +631,11 @@ export default function ProfileViewer({
           border: 1px solid #8b5cf6;
         }
 
+        .btn-outline:hover {
+          background: #8b5cf6;
+          color: white;
+        }
+
         .btn-disabled {
           background: #f3f4f6;
           color: #9ca3af;
@@ -601,11 +643,13 @@ export default function ProfileViewer({
           opacity: 0.6;
         }
 
-        /* Content Sections */
+        /* Content Sections - IMPROVED BACKGROUND */}
         .section {
           margin-bottom: 1.5rem;
-          padding-bottom: 1.5rem;
+          padding: 1rem 1.25rem 1.5rem;
           border-bottom: 1px solid #f3f4f6;
+          background: rgba(255,255,255,0.8);
+          border-radius: 0.75rem;
         }
 
         .section:last-child {
@@ -631,6 +675,9 @@ export default function ProfileViewer({
           flex-direction: column;
           gap: 0.75rem;
           margin-bottom: 1.5rem;
+          background: rgba(255,255,255,0.8);
+          padding: 1rem 1.25rem;
+          border-radius: 0.75rem;
         }
 
         .detail-item {
@@ -713,6 +760,8 @@ export default function ProfileViewer({
         .limited-view {
           padding: 2rem 1rem;
           text-align: center;
+          background: rgba(255,255,255,0.9);
+          border-radius: 0.75rem;
         }
 
         .privacy-notice, .restriction-notice {
