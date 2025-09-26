@@ -88,7 +88,6 @@ export default function PublicProfilePage() {
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
-  const [postsLoading, setPostsLoading] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'memories'>('posts');
@@ -121,7 +120,7 @@ export default function PublicProfilePage() {
     if (profileId) {
       loadProfile();
       loadStats();
-      loadPosts(); // Load actual posts from feed_posts
+      loadPostsCount(); // RESTORED: Back to your original working function
       loadEvents();
     }
     
@@ -133,34 +132,18 @@ export default function PublicProfilePage() {
     }
   }, [profileId, currentUserId]);
 
-  // FIXED: Load actual posts from feed_posts table
-  async function loadPosts() {
-    setPostsLoading(true);
+  // RESTORED: Load posts count (your original working version)
+  async function loadPostsCount() {
     try {
-      const { data, error } = await supabase
-        .from("feed_posts")
-        .select(`
-          id, user_id, content, post_type, created_at,
-          profiles:user_id (
-            full_name, avatar_url, username
-          )
-        `)
-        .eq("user_id", profileId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (error && error.code !== 'PGRST116') {
-        console.error("Error loading posts:", error);
-        setPosts([]);
-        return;
-      }
-
-      setPosts(data || []);
+      const { count } = await supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .or(`user_id.eq.${profileId},co_creators.cs.{${profileId}}`);
+      
+      setPosts(Array(count || 0).fill({})); // Just for counting
     } catch (err) {
-      console.error("Error loading posts:", err);
+      console.error("Error loading posts count:", err);
       setPosts([]);
-    } finally {
-      setPostsLoading(false);
     }
   }
 
@@ -563,19 +546,12 @@ export default function PublicProfilePage() {
           <div className="content-area">
             {activeTab === 'posts' && (
               <div className="posts-section">
-                {postsLoading ? (
-                  <div className="loading-state">
-                    <div className="loading-spinner"></div>
-                    <span>Loading posts...</span>
-                  </div>
-                ) : posts.length > 0 ? (
-                  <div className="posts-feed">
+                {posts.length > 0 ? (
+                  <div className="posts-display">
                     <PostsFeed 
-                      posts={posts}
+                      userId={profileId}
                       currentUserId={currentUserId}
-                      onLike={() => {}}
-                      onComment={() => {}}
-                      onShare={() => {}}
+                      showUserInfo={false}
                     />
                   </div>
                 ) : (
