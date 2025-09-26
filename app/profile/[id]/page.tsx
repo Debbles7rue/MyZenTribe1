@@ -1,11 +1,10 @@
-// app/profile/[id]/page.tsx - PUBLIC PROFILE VIEW (COMBINED VERSION)
+// app/profile/[id]/page.tsx - ENHANCED PUBLIC PROFILE VIEW
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ProfileViewer from "../components/ProfileViewer";
-import PhotosFeed from "@/components/PhotosFeed";
 import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
 
 type PublicProfile = {
@@ -28,6 +27,8 @@ type PublicProfile = {
   show_mutuals: boolean | null;
   verified: boolean | null;
   memories_visibility: 'public' | 'friends' | 'private' | null;
+  friends_count?: number | null;
+  posts_count?: number | null;
 };
 
 type RelationshipType = 'friend' | 'acquaintance' | 'restricted' | 'none';
@@ -43,6 +44,28 @@ type Memory = {
   created_at: string;
 };
 
+type Photo = {
+  id: string;
+  user_id: string;
+  image_url: string;
+  caption?: string;
+  created_at: string;
+  visibility: 'public' | 'friends' | 'private';
+};
+
+type Event = {
+  id: string;
+  host_id: string;
+  title: string;
+  description?: string;
+  start_date: string;
+  location?: string;
+  image_url?: string;
+  attendees_count: number;
+  max_attendees?: number;
+  visibility: 'public' | 'friends' | 'private';
+};
+
 export default function PublicProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -56,13 +79,21 @@ export default function PublicProfilePage() {
   const [friendsCount, setFriendsCount] = useState(0);
   const [followersCount, setFollowersCount] = useState(0);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
+  
+  // New state for enhanced features
   const [showMemories, setShowMemories] = useState(false);
   const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const [photosError, setPhotosError] = useState<string | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'photos' | 'events' | 'memories'>('photos');
   const [isMobile, setIsMobile] = useState(false);
 
-  // Detect mobile device
+  // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -78,7 +109,6 @@ export default function PublicProfilePage() {
       const userId = data.user?.id ?? null;
       setCurrentUserId(userId);
       
-      // If viewing own profile, redirect to /profile
       if (userId && userId === profileId) {
         router.push("/profile");
       }
@@ -90,6 +120,8 @@ export default function PublicProfilePage() {
     if (profileId) {
       loadProfile();
       loadStats();
+      loadPhotos();
+      loadEvents();
     }
     
     if (currentUserId && profileId) {
@@ -121,48 +153,155 @@ export default function PublicProfilePage() {
   }
 
   async function loadStats() {
-    // Get friends count
-    const { count: friends } = await supabase
-      .from("friendships")
-      .select("*", { count: "exact", head: true })
-      .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
-    
-    setFriendsCount(friends || 0);
+    try {
+      // Get friends count
+      const { count: friends } = await supabase
+        .from("friendships")
+        .select("*", { count: "exact", head: true })
+        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
+      
+      setFriendsCount(friends || 0);
 
-    // Get followers count
-    const { count: followers } = await supabase
-      .from("followers")
-      .select("*", { count: "exact", head: true })
-      .eq("following_id", profileId);
+      // Get followers count
+      const { count: followers } = await supabase
+        .from("followers")
+        .select("*", { count: "exact", head: true })
+        .eq("following_id", profileId);
+      
+      setFollowersCount(followers || 0);
+    } catch (err) {
+      console.error("Error loading stats:", err);
+    }
+  }
+
+  async function loadPhotos() {
+    setPhotosLoading(true);
+    setPhotosError(null);
     
-    setFollowersCount(followers || 0);
+    try {
+      // Try posts table first for images
+      const { data: posts, error: postsError } = await supabase
+        .from("posts")
+        .select("id, user_id, image_url, body as caption, created_at, privacy as visibility")
+        .eq("user_id", profileId)
+        .not("image_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(12);
+
+      if (postsError) {
+        console.log("Posts query error:", postsError);
+        // Try a photos table as fallback
+        const { data: photosData, error: photosError } = await supabase
+          .from("photos")
+          .select("*")
+          .eq("user_id", profileId)
+          .order("created_at", { ascending: false })
+          .limit(12);
+
+        if (photosError) {
+          throw new Error("No photos found");
+        }
+        
+        setPhotos(photosData || []);
+      } else {
+        // Filter based on privacy and relationship
+        const visiblePhotos = (posts || []).filter(post => {
+          const visibility = post.visibility || 'public';
+          if (visibility === 'public') return true;
+          if (visibility === 'friends' && relationshipType === 'friend') return true;
+          if (currentUserId === profileId) return true;
+          return false;
+        });
+
+        setPhotos(visiblePhotos.map(post => ({
+          id: post.id,
+          user_id: post.user_id,
+          image_url: post.image_url!,
+          caption: post.caption,
+          created_at: post.created_at,
+          visibility: post.visibility || 'public'
+        })));
+      }
+    } catch (err) {
+      console.error("Error loading photos:", err);
+      setPhotosError("Unable to load photos");
+      setPhotos([]);
+    } finally {
+      setPhotosLoading(false);
+    }
+  }
+
+  async function loadEvents() {
+    setEventsLoading(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .select(`
+          id, host_id, title, description, start_date, location, 
+          image_url, max_attendees, visibility,
+          event_attendees(count)
+        `)
+        .eq("host_id", profileId)
+        .gte("start_date", new Date().toISOString())
+        .order("start_date", { ascending: true })
+        .limit(6);
+
+      if (error) {
+        console.log("Events query error:", error);
+        setEvents([]);
+        return;
+      }
+
+      // Filter based on visibility and relationship
+      const visibleEvents = (data || []).filter(event => {
+        if (event.visibility === 'public') return true;
+        if (event.visibility === 'friends' && relationshipType === 'friend') return true;
+        if (currentUserId === profileId) return true;
+        return false;
+      });
+
+      setEvents(visibleEvents.map(event => ({
+        ...event,
+        attendees_count: event.event_attendees?.[0]?.count || 0
+      })));
+    } catch (err) {
+      console.error("Error loading events:", err);
+      setEvents([]);
+    } finally {
+      setEventsLoading(false);
+    }
   }
 
   async function checkRelationshipStatus() {
     if (!currentUserId || !profileId) return;
 
-    // Check if friends
-    const { data: friendship } = await supabase
-      .from("friendships")
-      .select("relationship")
-      .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
-      .single();
-
-    if (friendship) {
-      setFriendStatus("friends");
-      setRelationshipType(friendship.relationship || 'friend');
-    } else {
-      // Check for pending request
-      const { data: pending } = await supabase
-        .from("friend_requests")
-        .select("*")
-        .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`)
+    try {
+      // Check if friends
+      const { data: friendship } = await supabase
+        .from("friendships")
+        .select("relationship")
+        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
         .single();
 
-      if (pending) {
-        setFriendStatus("pending");
+      if (friendship) {
+        setFriendStatus("friends");
+        setRelationshipType(friendship.relationship || 'friend');
+      } else {
+        // Check for pending request
+        const { data: pending } = await supabase
+          .from("friend_requests")
+          .select("*")
+          .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`)
+          .single();
+
+        if (pending) {
+          setFriendStatus("pending");
+        }
+        setRelationshipType('none');
       }
-      setRelationshipType('none');
+    } catch (err) {
+      console.error("Error checking relationship:", err);
     }
   }
 
@@ -170,20 +309,17 @@ export default function PublicProfilePage() {
     if (!currentUserId || !profileId) return;
 
     try {
-      // Get current user's friends
       const { data: myFriends } = await supabase
         .from("friendships")
         .select("user_id, friend_id")
         .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`);
 
-      // Get profile user's friends
       const { data: theirFriends } = await supabase
         .from("friendships")
         .select("user_id, friend_id")
         .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`);
 
       if (myFriends && theirFriends) {
-        // Extract friend IDs
         const myFriendIds = myFriends.map(f => 
           f.user_id === currentUserId ? f.friend_id : f.user_id
         );
@@ -191,7 +327,6 @@ export default function PublicProfilePage() {
           f.user_id === profileId ? f.friend_id : f.user_id
         );
 
-        // Find mutual friends
         const mutuals = myFriendIds.filter(id => theirFriendIds.includes(id));
         setMutualFriendsCount(mutuals.length);
       }
@@ -215,15 +350,19 @@ export default function PublicProfilePage() {
         .like("date", `%${dayMonth}`)
         .order("date", { ascending: false });
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.log("Memories query error:", error);
+        setTodayMemories([]);
+        return;
+      }
 
       // Filter based on visibility and relationship
-      const visibleMemories = data?.filter(memory => {
+      const visibleMemories = (data || []).filter(memory => {
         if (memory.visibility === 'public') return true;
         if (memory.visibility === 'friends' && relationshipType === 'friend') return true;
         if (currentUserId === profileId) return true;
         return false;
-      }) || [];
+      });
 
       setTodayMemories(visibleMemories);
       if (visibleMemories.length > 0) {
@@ -231,6 +370,7 @@ export default function PublicProfilePage() {
       }
     } catch (err) {
       console.error("Error loading memories:", err);
+      setTodayMemories([]);
     } finally {
       setMemoriesLoading(false);
     }
@@ -257,7 +397,6 @@ export default function PublicProfilePage() {
 
   async function sendMessage() {
     if (!currentUserId || !profileId) return;
-    // Navigate to messages with this user
     router.push(`/messages?user=${profileId}`);
   }
 
@@ -294,6 +433,7 @@ export default function PublicProfilePage() {
             justify-content: center;
             min-height: 100vh;
             gap: 1rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
           }
           .loading-spinner {
             width: 3rem;
@@ -330,6 +470,7 @@ export default function PublicProfilePage() {
             gap: 1rem;
             text-align: center;
             padding: 2rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
           }
           .btn {
             padding: 0.75rem 1.5rem;
@@ -359,7 +500,7 @@ export default function PublicProfilePage() {
 
   return (
     <div className="profile-page">
-      {/* Use the ProfileViewer component for the main display */}
+      {/* Main Profile Display */}
       <ProfileViewer
         profile={profile}
         currentUserId={currentUserId}
@@ -371,32 +512,168 @@ export default function PublicProfilePage() {
         isPending={friendStatus === "pending"}
       />
 
-      {/* Memories Section - if applicable */}
-      {canViewMemories && todayMemories.length > 0 && (
-        <div className="memories-section">
-          <h3>Today in Past Years</h3>
-          <div className="memories-grid">
-            {todayMemories.map(memory => (
-              <div 
-                key={memory.id} 
-                className="memory-item"
-                onClick={() => setSelectedMemory(memory)}
-              >
-                <img src={memory.photo_url} alt={memory.caption} />
-                <p>{memory.caption}</p>
-                <span className="memory-date">
-                  {new Date(memory.date).toLocaleDateString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Photos Feed - if friend or public */}
+      {/* Enhanced Content Sections */}
       {(canViewFriendContent || profile.visibility === 'public') && (
-        <div className="photos-section">
-          <PhotosFeed userId={profile.id} />
+        <div className="content-sections">
+          {/* Tab Navigation */}
+          <div className="tabs-container">
+            <div className="tabs">
+              <button 
+                className={`tab ${activeTab === 'photos' ? 'active' : ''}`}
+                onClick={() => setActiveTab('photos')}
+              >
+                📸 Photos {photos.length > 0 && `(${photos.length})`}
+              </button>
+              <button 
+                className={`tab ${activeTab === 'events' ? 'active' : ''}`}
+                onClick={() => setActiveTab('events')}
+              >
+                🎉 Events {events.length > 0 && `(${events.length})`}
+              </button>
+              {canViewMemories && todayMemories.length > 0 && (
+                <button 
+                  className={`tab ${activeTab === 'memories' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('memories')}
+                >
+                  ✨ Memories ({todayMemories.length})
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Content based on active tab */}
+          <div className="content-area">
+            {activeTab === 'photos' && (
+              <div className="photos-section">
+                {photosLoading ? (
+                  <div className="loading-state">
+                    <div className="loading-spinner"></div>
+                    <span>Loading photos...</span>
+                  </div>
+                ) : photosError ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📸</div>
+                    <p className="empty-text">No photos available</p>
+                    <p className="empty-subtext">Photos will appear here when shared</p>
+                  </div>
+                ) : photos.length > 0 ? (
+                  <div className="photos-grid">
+                    {photos.map(photo => (
+                      <div key={photo.id} className="photo-item">
+                        <img 
+                          src={photo.image_url} 
+                          alt={photo.caption || 'Photo'} 
+                          loading="lazy"
+                        />
+                        {photo.caption && (
+                          <div className="photo-caption">{photo.caption}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">📷</div>
+                    <p className="empty-text">No photos yet</p>
+                    <p className="empty-subtext">Check back later for photos!</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'events' && (
+              <div className="events-section">
+                {eventsLoading ? (
+                  <div className="loading-state">
+                    <div className="loading-spinner"></div>
+                    <span>Loading events...</span>
+                  </div>
+                ) : events.length > 0 ? (
+                  <div className="events-grid">
+                    {events.map(event => (
+                      <div key={event.id} className="event-card">
+                        {event.image_url && (
+                          <img src={event.image_url} alt={event.title} className="event-image" />
+                        )}
+                        <div className="event-content">
+                          <h3 className="event-title">{event.title}</h3>
+                          {event.description && (
+                            <p className="event-description">{event.description}</p>
+                          )}
+                          <div className="event-details">
+                            <div className="event-date">
+                              📅 {new Date(event.start_date).toLocaleDateString()}
+                            </div>
+                            {event.location && (
+                              <div className="event-location">
+                                📍 {event.location}
+                              </div>
+                            )}
+                            <div className="event-attendees">
+                              👥 {event.attendees_count} attending
+                              {event.max_attendees && ` / ${event.max_attendees} max`}
+                            </div>
+                          </div>
+                          <div className="event-actions">
+                            <button className="btn btn-primary btn-sm">
+                              RSVP
+                            </button>
+                            <button className="btn btn-secondary btn-sm">
+                              Interested
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">🎪</div>
+                    <p className="empty-text">No upcoming events</p>
+                    <p className="empty-subtext">Events hosted by this user will appear here</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'memories' && canViewMemories && (
+              <div className="memories-section">
+                {memoriesLoading ? (
+                  <div className="loading-state">
+                    <div className="loading-spinner"></div>
+                    <span>Loading memories...</span>
+                  </div>
+                ) : todayMemories.length > 0 ? (
+                  <>
+                    <h3 className="section-title">Today in Past Years</h3>
+                    <div className="memories-grid">
+                      {todayMemories.map(memory => (
+                        <div 
+                          key={memory.id} 
+                          className="memory-item"
+                          onClick={() => setSelectedMemory(memory)}
+                        >
+                          <img src={memory.photo_url} alt={memory.caption} />
+                          <div className="memory-overlay">
+                            <p className="memory-caption">{memory.caption}</p>
+                            <span className="memory-date">
+                              {new Date(memory.date).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">✨</div>
+                    <p className="empty-text">No memories for today</p>
+                    <p className="empty-subtext">Past memories from this date will appear here</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -414,6 +691,26 @@ export default function PublicProfilePage() {
           min-height: 100vh;
           background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
           padding: 2rem 1rem;
+          position: relative;
+        }
+
+        .profile-page::before {
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: 
+            radial-gradient(circle at 20% 30%, rgba(139,92,246,0.08) 0%, transparent 50%),
+            radial-gradient(circle at 80% 70%, rgba(245,158,11,0.06) 0%, transparent 50%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .profile-page > * {
+          position: relative;
+          z-index: 1;
         }
 
         @media (max-width: 640px) {
@@ -422,56 +719,341 @@ export default function PublicProfilePage() {
           }
         }
 
-        .memories-section {
+        .content-sections {
           max-width: 800px;
-          margin: 2rem auto;
+          margin: 2rem auto 0;
+        }
+
+        .tabs-container {
           background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
+          border-radius: 1rem 1rem 0 0;
+          padding: 0;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        .memories-section h3 {
-          margin: 0 0 1rem 0;
+        .tabs {
+          display: flex;
+          border-bottom: 1px solid #e5e7eb;
+        }
+
+        @media (max-width: 640px) {
+          .tabs {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+        }
+
+        .tab {
+          flex: 1;
+          min-width: fit-content;
+          padding: 1rem 1.5rem;
+          background: none;
+          border: none;
+          border-bottom: 3px solid transparent;
+          font-weight: 500;
+          color: #6b7280;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.875rem;
+          white-space: nowrap;
+        }
+
+        @media (max-width: 640px) {
+          .tab {
+            padding: 0.875rem 1rem;
+            font-size: 0.8rem;
+          }
+        }
+
+        .tab:hover {
+          color: #8b5cf6;
+          background: rgba(139,92,246,0.05);
+        }
+
+        .tab.active {
+          color: #8b5cf6;
+          border-bottom-color: #8b5cf6;
+          background: rgba(139,92,246,0.05);
+        }
+
+        .content-area {
+          background: white;
+          border-radius: 0 0 1rem 1rem;
+          padding: 1.5rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          min-height: 400px;
+        }
+
+        @media (max-width: 640px) {
+          .content-area {
+            padding: 1rem;
+          }
+        }
+
+        /* Photos Section */
+        .photos-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 1rem;
+        }
+
+        @media (max-width: 640px) {
+          .photos-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.75rem;
+          }
+        }
+
+        .photo-item {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: 0.75rem;
+          overflow: hidden;
+          cursor: pointer;
+          transition: transform 0.2s;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .photo-item:hover {
+          transform: scale(1.02);
+        }
+
+        .photo-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .photo-caption {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: linear-gradient(transparent, rgba(0,0,0,0.7));
+          color: white;
+          padding: 1rem 0.75rem 0.5rem;
+          font-size: 0.875rem;
+        }
+
+        /* Events Section */
+        .events-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+          .events-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+        }
+
+        .event-card {
+          border: 1px solid #e5e7eb;
+          border-radius: 0.75rem;
+          overflow: hidden;
+          transition: transform 0.2s, box-shadow 0.2s;
+          background: white;
+        }
+
+        .event-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+
+        .event-image {
+          width: 100%;
+          height: 150px;
+          object-fit: cover;
+        }
+
+        .event-content {
+          padding: 1rem;
+        }
+
+        .event-title {
+          font-size: 1.125rem;
+          font-weight: 600;
           color: #1f2937;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .event-description {
+          color: #6b7280;
+          font-size: 0.875rem;
+          margin: 0 0 1rem 0;
+          line-height: 1.5;
+        }
+
+        .event-details {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+          margin-bottom: 1rem;
+          font-size: 0.875rem;
+          color: #4b5563;
+        }
+
+        .event-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .btn {
+          padding: 0.5rem 1rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+          font-size: 0.875rem;
+        }
+
+        .btn-sm {
+          padding: 0.375rem 0.75rem;
+          font-size: 0.8rem;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .btn-secondary {
+          background: white;
+          color: #8b5cf6;
+          border: 1px solid #8b5cf6;
+        }
+
+        .btn-secondary:hover {
+          background: #8b5cf6;
+          color: white;
+        }
+
+        /* Memories Section */
+        .section-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 1rem 0;
         }
 
         .memories-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
           gap: 1rem;
         }
 
+        @media (max-width: 640px) {
+          .memories-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.75rem;
+          }
+        }
+
         .memory-item {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: 0.75rem;
+          overflow: hidden;
           cursor: pointer;
           transition: transform 0.2s;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .memory-item:hover {
-          transform: scale(1.05);
+          transform: scale(1.02);
         }
 
         .memory-item img {
           width: 100%;
-          height: 150px;
+          height: 100%;
           object-fit: cover;
-          border-radius: 0.5rem;
         }
 
-        .memory-item p {
-          margin: 0.5rem 0 0.25rem 0;
+        .memory-overlay {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: linear-gradient(transparent, rgba(0,0,0,0.8));
+          color: white;
+          padding: 1.5rem 0.75rem 0.75rem;
+        }
+
+        .memory-caption {
           font-size: 0.875rem;
-          color: #374151;
+          margin: 0 0 0.25rem 0;
+          font-weight: 500;
         }
 
         .memory-date {
-          color: #6b7280;
           font-size: 0.75rem;
+          opacity: 0.9;
         }
 
-        .photos-section {
-          max-width: 800px;
-          margin: 2rem auto;
+        /* Empty States and Loading */
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 3rem 1rem;
+          text-align: center;
+        }
+
+        .empty-icon {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .empty-text {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #4b5563;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .empty-subtext {
+          color: #9ca3af;
+          margin: 0;
+        }
+
+        .loading-state {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          padding: 3rem;
+        }
+
+        .loading-spinner {
+          width: 1.5rem;
+          height: 1.5rem;
+          border: 2px solid #e5e7eb;
+          border-top: 2px solid #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+          .btn {
+            min-height: 44px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+          }
         }
       `}</style>
     </div>
