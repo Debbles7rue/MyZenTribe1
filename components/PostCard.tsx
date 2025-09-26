@@ -913,12 +913,20 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       <style jsx>{`
         .post-card {
           background: white;
-          border-radius: 0.75rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          margin-bottom: 1rem;
+          border: 2px solid #f1f5f9;
+          border-radius: 1rem;
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+          margin-bottom: 2rem;
           position: relative;
           max-width: 100%;
           overflow: hidden;
+          transition: all 0.2s ease-in-out;
+        }
+        
+        .post-card:hover {
+          border-color: #e2e8f0;
+          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+          transform: translateY(-2px);
         }
         
         .post-header {
@@ -966,19 +974,19 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           margin: 0.5rem 0;
           border-radius: 0.5rem;
           overflow: hidden;
-          max-height: 500px; /* FIXED: Limit maximum height */
+          max-height: 350px; /* REDUCED: From 500px to 350px */
         }
         
         .photo-grid.single .photo-item {
           width: 100%;
-          max-height: 400px; /* FIXED: Reasonable max height for single images */
+          max-height: 280px; /* REDUCED: From 400px to 280px */
           overflow: hidden;
         }
         
         .photo-grid.single .photo-item img {
           width: 100%;
           height: 100%;
-          max-height: 400px; /* FIXED: Consistent with container */
+          max-height: 280px; /* REDUCED: From 400px to 280px */
           object-fit: cover;
         }
         
@@ -986,14 +994,14 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 2px;
-          max-height: 300px; /* FIXED: Limit height for multiple photos */
+          max-height: 220px; /* REDUCED: From 300px to 220px */
         }
         
         .photo-grid.three {
           display: grid;
           grid-template-columns: 2fr 1fr;
           gap: 2px;
-          max-height: 300px; /* FIXED: Consistent height */
+          max-height: 220px; /* REDUCED: From 300px to 220px */
         }
         
         .photo-grid.three .side-photos {
@@ -1008,11 +1016,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           grid-template-columns: 1fr 1fr;
           grid-template-rows: 1fr 1fr;
           gap: 2px;
-          max-height: 300px; /* FIXED: Consistent height */
+          max-height: 220px; /* REDUCED: From 300px to 220px */
         }
         
         .photo-grid.many {
-          max-height: 400px; /* FIXED: Limit height for many photos */
+          max-height: 280px; /* REDUCED: From 400px to 280px */
         }
         
         .photo-grid.many .main-row {
@@ -1020,14 +1028,14 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           grid-template-columns: 1fr 1fr;
           gap: 2px;
           margin-bottom: 2px;
-          height: 200px; /* FIXED: Set explicit height */
+          height: 150px; /* REDUCED: From 200px to 150px */
         }
         
         .photo-grid.many .bottom-row {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 2px;
-          height: 100px; /* FIXED: Set explicit height */
+          height: 75px; /* REDUCED: From 100px to 75px */
         }
         
         .photo-item {
@@ -1229,6 +1237,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           border: 1px solid #e2e8f0;
           border-radius: 0.375rem;
           font-size: 0.875rem;
+          outline: none;
+          transition: border-color 0.2s;
+        }
+        
+        .comment-input:focus {
+          border-color: #4299e1;
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
         }
         
         .comment-submit {
@@ -1402,7 +1417,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
 
         .edit-modal-overlay {
           position: fixed;
-          inset: 0;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
           background: rgba(0,0,0,0.6);
           backdrop-filter: blur(4px);
           z-index: 9998;
@@ -1410,6 +1428,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           align-items: center;
           justify-content: center;
           padding: 1rem;
+          overflow-y: auto;
         }
 
         .edit-modal-content {
@@ -1421,6 +1440,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           display: flex;
           flex-direction: column;
           box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+          margin: auto;
+          position: relative;
         }
 
         @keyframes spin {
