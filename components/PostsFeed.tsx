@@ -1,422 +1,190 @@
-// app/profile/[id]/page.tsx - UNIFIED FEED VERSION (NO TABS)
+// components/PostsFeed.tsx - CORRECTED for actual posts table structure
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect } from 'react';
 import { supabase } from "@/lib/supabaseClient";
-import ProfileViewer from "../components/ProfileViewer";
-import PostsFeed from "@/components/PostsFeed";
-import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
 
-type PublicProfile = {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  location_text: string | null;
-  location_is_public: boolean | null;
-  username: string | null;
-  cover_url: string | null;
-  tagline: string | null;
-  interests: string[] | null;
-  website_url: string | null;
-  social_links: any | null;
-  languages: string[] | null;
-  visibility: 'public' | 'friends_only' | 'private' | null;
-  allow_messages: 'everyone' | 'friends' | 'no_one' | null;
-  show_online_status: boolean | null;
-  show_mutuals: boolean | null;
-  verified: boolean | null;
-  memories_visibility: 'public' | 'friends' | 'private' | null;
-  friends_count?: number | null;
-  posts_count?: number | null;
-};
-
-type RelationshipType = 'friend' | 'acquaintance' | 'restricted' | 'none';
-
-type Memory = {
+interface Post {
   id: string;
   user_id: string;
-  date: string;
-  photo_url: string;
-  caption: string;
-  event_title?: string;
-  visibility: 'public' | 'friends' | 'private';
+  body: string;
+  visibility: string;
   created_at: string;
-};
+  images: any[];
+  image_url: string | null;
+  video_url: string | null;
+  media_type: string | null;
+  co_creators: string[] | null;
+  author?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}
 
-type Event = {
-  id: string;
-  host_id: string;
-  title: string;
-  description?: string;
-  start_date: string;
-  location?: string;
-  image_url?: string;
-  attendees_count: number;
-  max_attendees?: number;
-  visibility: 'public' | 'friends' | 'private';
-  created_at: string;
-  type: 'event';
-};
+interface PostsFeedProps {
+  userId: string;
+  viewerUserId?: string | null;
+  maxPosts?: number;
+}
 
-export default function PublicProfilePage() {
-  const params = useParams();
-  const router = useRouter();
-  const profileId = params?.id as string;
-  
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
+export default function PostsFeed({ 
+  userId, 
+  viewerUserId, 
+  maxPosts = 20 
+}: PostsFeedProps) {
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [relationshipType, setRelationshipType] = useState<RelationshipType>('none');
-  const [friendStatus, setFriendStatus] = useState<"none" | "pending" | "friends">("none");
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [friendsCount, setFriendsCount] = useState(0);
-  const [followersCount, setFollowersCount] = useState(0);
-  const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
-  
-  // Enhanced features
-  const [showMemories, setShowMemories] = useState(false);
-  const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
-  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
-  const [memoriesLoading, setMemoriesLoading] = useState(false);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [viewerRelationship, setViewerRelationship] = useState<'friend' | 'none'>('none');
 
-  // Mobile detection
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (userId && viewerUserId) {
+      checkViewerRelationship();
+    } else {
+      loadUserPosts();
+    }
+  }, [userId, viewerUserId]);
 
-  // Get current user and check if viewing own profile
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const userId = data.user?.id ?? null;
-      setCurrentUserId(userId);
-      
-      if (userId && userId === profileId) {
-        router.push("/profile");
-      }
-    });
-  }, [profileId, router]);
+  async function checkViewerRelationship() {
+    if (!viewerUserId || !userId) {
+      setViewerRelationship('none');
+      loadUserPosts();
+      return;
+    }
 
-  // Load all data when profileId or currentUserId changes
-  useEffect(() => {
-    if (profileId) {
-      loadProfile();
-      loadStats();
-      loadEvents();
+    try {
+      // Check if viewer is friends with the profile owner
+      const { data: friendships } = await supabase
+        .from("friendships")
+        .select("status")
+        .or(`and(user_id.eq.${viewerUserId},friend_id.eq.${userId}),and(user_id.eq.${userId},friend_id.eq.${viewerUserId})`)
+        .eq('status', 'accepted');
+
+      setViewerRelationship(friendships && friendships.length > 0 ? 'friend' : 'none');
+    } catch (err) {
+      console.error('Error checking viewer relationship:', err);
+      setViewerRelationship('none');
     }
     
-    if (currentUserId && profileId) {
-      checkRelationshipStatus();
-      checkFollowStatus();
-      loadMutualFriends();
-      loadTodayMemories();
-    }
-  }, [profileId, currentUserId]);
+    loadUserPosts();
+  }
 
-  async function loadProfile() {
+  async function loadUserPosts() {
+    setLoading(true);
+    setError(null);
+    
+    console.log('🔍 DEBUG - Starting to load posts for userId:', userId);
+    console.log('🔍 DEBUG - Viewer relationship:', viewerRelationship);
+    console.log('🔍 DEBUG - Viewer is profile owner:', viewerUserId === userId);
+    
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", profileId)
-        .single();
-
-      if (error) throw error;
-
-      setProfile({
-        ...data,
-        memories_visibility: data.memories_visibility || 'private'
+      // Query the correct 'posts' table with correct column names
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select('id, user_id, body, visibility, created_at, images, image_url, video_url, media_type, co_creators')
+        .or(`user_id.eq.${userId},co_creators.cs.{${userId}}`) // Include posts user created OR was tagged as co-creator
+        .order('created_at', { ascending: false })
+        .limit(maxPosts);
+      
+      console.log('🔍 DEBUG - Posts query result:', { 
+        data: postsData, 
+        error: postsError,
+        count: postsData?.length || 0
       });
+      
+      if (postsError) {
+        console.error('❌ DEBUG - Posts query error:', postsError);
+        setError('Failed to load posts');
+        return;
+      }
+
+      if (!postsData || postsData.length === 0) {
+        console.log('📭 DEBUG - No posts found');
+        setPosts([]);
+        return;
+      }
+
+      // Filter posts based on privacy settings
+      const visiblePosts = postsData.filter(post => {
+        console.log(`🔒 DEBUG - Checking post ${post.id}: visibility="${post.visibility}", viewer relationship="${viewerRelationship}"`);
+        
+        // If viewer is the post owner or co-creator, show all posts
+        if (viewerUserId === post.user_id || (post.co_creators && post.co_creators.includes(viewerUserId))) {
+          console.log('✅ DEBUG - Post visible: viewer is owner/co-creator');
+          return true;
+        }
+        
+        // Public posts are visible to everyone
+        if (post.visibility === 'public') {
+          console.log('✅ DEBUG - Post visible: public post');
+          return true;
+        }
+        
+        // Friends posts are visible to friends
+        if (post.visibility === 'friends' && viewerRelationship === 'friend') {
+          console.log('✅ DEBUG - Post visible: friends post and viewer is friend');
+          return true;
+        }
+        
+        // Private posts are only visible to owner (already checked above)
+        console.log('❌ DEBUG - Post hidden: privacy restrictions');
+        return false;
+      });
+
+      console.log(`🎯 DEBUG - Showing ${visiblePosts.length} of ${postsData.length} posts after privacy filtering`);
+
+      // Get author profiles for all visible posts
+      const authorIds = [...new Set(visiblePosts.map(p => p.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", authorIds);
+
+      console.log('👤 DEBUG - Author profiles:', profiles);
+
+      // Format posts for display
+      const formattedPosts: Post[] = visiblePosts.map(p => {
+        const author = profiles?.find(profile => profile.id === p.user_id);
+        return {
+          ...p,
+          author: author || null,
+        };
+      });
+
+      console.log('🎨 DEBUG - Final formatted posts:', formattedPosts.length);
+
+      setPosts(formattedPosts);
     } catch (err) {
-      console.error("Error loading profile:", err);
+      console.error('❌ DEBUG - Error loading posts:', err);
+      setError('Failed to load posts');
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadStats() {
-    try {
-      // Get friends count
-      const { count: friends } = await supabase
-        .from("friendships")
-        .select("*", { count: "exact", head: true })
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
-        .eq('status', 'accepted');
-      
-      setFriendsCount(friends || 0);
-
-      // Get followers count
-      const { count: followers } = await supabase
-        .from("followers")
-        .select("*", { count: "exact", head: true })
-        .eq("following_id", profileId);
-      
-      setFollowersCount(followers || 0);
-    } catch (err) {
-      console.error("Error loading stats:", err);
-    }
-  }
-
-  async function loadEvents() {
-    setEventsLoading(true);
-    
-    try {
-      const { data, error } = await supabase
-        .from("events")
-        .select(`
-          id, host_id, title, description, start_date, location, 
-          image_url, max_attendees, visibility, created_at,
-          event_attendees(count)
-        `)
-        .eq("host_id", profileId)
-        .gte("start_date", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (error) {
-        console.log("Events query error:", error);
-        setEvents([]);
-        return;
-      }
-
-      // Filter based on visibility and relationship
-      const visibleEvents = (data || []).filter(event => {
-        if (event.visibility === 'public') return true;
-        if (event.visibility === 'friends' && relationshipType === 'friend') return true;
-        if (currentUserId === profileId) return true;
-        return false;
-      });
-
-      setEvents(visibleEvents.map(event => ({
-        ...event,
-        attendees_count: event.event_attendees?.[0]?.count || 0,
-        type: 'event' as const
-      })));
-    } catch (err) {
-      console.error("Error loading events:", err);
-      setEvents([]);
-    } finally {
-      setEventsLoading(false);
-    }
-  }
-
-  // Check relationship status with correct database query
-  async function checkRelationshipStatus() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      // Check if friends - using friendships table with status = 'accepted'
-      const { data: friendships } = await supabase
-        .from("friendships")
-        .select("status, relationship_type")
-        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
-        .eq('status', 'accepted');
-
-      if (friendships && friendships.length > 0) {
-        setFriendStatus("friends");
-        setRelationshipType(friendships[0].relationship_type || 'friend');
-      } else {
-        // Check for pending request
-        const { data: pending } = await supabase
-          .from("friend_requests")
-          .select("*")
-          .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`);
-
-        if (pending && pending.length > 0) {
-          setFriendStatus("pending");
-        } else {
-          setFriendStatus("none");
-        }
-        setRelationshipType('none');
-      }
-    } catch (err) {
-      console.error("Error checking relationship:", err);
-    }
-  }
-
-  // Check follow status
-  async function checkFollowStatus() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      const { data } = await supabase
-        .from("followers")
-        .select("id")
-        .eq("follower_id", currentUserId)
-        .eq("following_id", profileId)
-        .single();
-
-      setIsFollowing(!!data);
-    } catch (err) {
-      // Not following or error - default to false
-      setIsFollowing(false);
-    }
-  }
-
-  async function loadMutualFriends() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      const { data: myFriends } = await supabase
-        .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
-        .eq('status', 'accepted');
-
-      const { data: theirFriends } = await supabase
-        .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
-        .eq('status', 'accepted');
-
-      if (myFriends && theirFriends) {
-        const myFriendIds = myFriends.map(f => 
-          f.user_id === currentUserId ? f.friend_id : f.user_id
-        );
-        const theirFriendIds = theirFriends.map(f => 
-          f.user_id === profileId ? f.friend_id : f.user_id
-        );
-
-        const mutuals = myFriendIds.filter(id => theirFriendIds.includes(id));
-        setMutualFriendsCount(mutuals.length);
-      }
-    } catch (err) {
-      console.error("Error loading mutual friends:", err);
-    }
-  }
-
-  async function loadTodayMemories() {
-    if (!profileId) return;
-    
-    setMemoriesLoading(true);
-    try {
-      const today = new Date();
-      const dayMonth = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await supabase
-        .from("memories")
-        .select("*")
-        .eq("user_id", profileId)
-        .like("date", `%${dayMonth}`)
-        .order("date", { ascending: false });
-
-      if (error && error.code !== 'PGRST116') {
-        console.log("Memories query error:", error);
-        setTodayMemories([]);
-        return;
-      }
-
-      // Filter based on visibility and relationship
-      const canViewFriendContent = relationshipType === 'friend';
-      const visibleMemories = (data || []).filter(memory => {
-        if (memory.visibility === 'public') return true;
-        if (memory.visibility === 'friends' && canViewFriendContent) return true;
-        if (currentUserId === profileId) return true;
-        return false;
-      });
-
-      setTodayMemories(visibleMemories);
-      if (visibleMemories.length > 0) {
-        setShowMemories(true);
-      }
-    } catch (err) {
-      console.error("Error loading memories:", err);
-      setTodayMemories([]);
-    } finally {
-      setMemoriesLoading(false);
-    }
-  }
-
-  async function sendFriendRequest() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      const { error } = await supabase
-        .from("friend_requests")
-        .insert({
-          from_user: currentUserId,
-          to_user: profileId,
-        });
-
-      if (!error) {
-        setFriendStatus("pending");
-      }
-    } catch (err) {
-      console.error("Error sending friend request:", err);
-    }
-  }
-
-  async function sendMessage() {
-    if (!currentUserId || !profileId) return;
-    router.push(`/messages?user=${profileId}`);
-  }
-
-  // Follow/unfollow functionality
-  async function handleFollow() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      if (isFollowing) {
-        // Unfollow
-        const { error } = await supabase
-          .from("followers")
-          .delete()
-          .eq("follower_id", currentUserId)
-          .eq("following_id", profileId);
-
-        if (!error) {
-          setIsFollowing(false);
-          setFollowersCount(prev => Math.max(0, prev - 1));
-        }
-      } else {
-        // Follow
-        const { error } = await supabase
-          .from("followers")
-          .insert({
-            follower_id: currentUserId,
-            following_id: profileId,
-          });
-
-        if (!error) {
-          setIsFollowing(true);
-          setFollowersCount(prev => prev + 1);
-        }
-      }
-    } catch (err) {
-      console.error("Error following/unfollowing user:", err);
-    }
-  }
-
-  // Loading state
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="posts-loading">
         <div className="loading-spinner"></div>
-        <span>Loading profile...</span>
+        <span>Loading posts...</span>
+        <p style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+          DEBUG: Loading posts for user {userId}
+        </p>
         <style jsx>{`
-          .loading-container {
+          .posts-loading {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            gap: 1rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
+            gap: 0.75rem;
+            padding: 3rem 1rem;
           }
           .loading-spinner {
-            width: 3rem;
-            height: 3rem;
-            border: 3px solid #e5e7eb;
-            border-top: 3px solid #8b5cf6;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #8b5cf6;
             border-radius: 50%;
             animation: spin 1s linear infinite;
           }
@@ -428,437 +196,255 @@ export default function PublicProfilePage() {
     );
   }
 
-  // Error state - profile not found
-  if (!profile) {
+  if (error) {
     return (
-      <div className="error-container">
-        <h2>Profile Not Found</h2>
-        <p>This profile doesn't exist or has been removed.</p>
-        <button onClick={() => router.push("/")} className="btn btn-primary">
-          Go Home
+      <div className="posts-error">
+        <div className="error-icon">⚠️</div>
+        <p className="error-text">Unable to load posts</p>
+        <p style={{ fontSize: '12px', color: '#666', marginBottom: '16px' }}>
+          DEBUG: {error} for user {userId}
+        </p>
+        <button onClick={() => loadUserPosts()} className="retry-btn">
+          Try Again
         </button>
         <style jsx>{`
-          .error-container {
+          .posts-error {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            gap: 1rem;
+            padding: 3rem 1rem;
             text-align: center;
-            padding: 2rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
           }
-          .btn {
-            padding: 0.75rem 1.5rem;
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            color: white;
-            border: none;
-            border-radius: 0.5rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-          }
+          .error-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+          .error-text { font-size: 1.125rem; font-weight: 600; color: #4b5563; margin: 0 0 1rem 0; }
+          .retry-btn { padding: 0.5rem 1rem; background: #8b5cf6; color: white; border: none; border-radius: 0.5rem; cursor: pointer; }
+          .retry-btn:hover { background: #7c3aed; }
         `}</style>
       </div>
     );
   }
 
-  // Determine what content viewer can see
-  const canViewFriendContent = relationshipType === 'friend';
-  const canViewMemories = 
-    profile?.memories_visibility === 'public' ||
-    (profile?.memories_visibility === 'friends' && canViewFriendContent) ||
-    currentUserId === profileId;
+  if (posts.length === 0) {
+    return (
+      <div className="posts-empty">
+        <div className="empty-icon">📝</div>
+        <p className="empty-text">No posts yet</p>
+        <p className="empty-subtext">Posts will appear here when shared</p>
+        <p style={{ fontSize: '12px', color: '#666', marginTop: '16px' }}>
+          DEBUG: Searched posts table for user {userId} with relationship "{viewerRelationship}"
+        </p>
+        <style jsx>{`
+          .posts-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 3rem 1rem;
+            text-align: center;
+          }
+          .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+          .empty-text { font-size: 1.125rem; font-weight: 600; color: #4b5563; margin: 0 0 0.5rem 0; }
+          .empty-subtext { color: #9ca3af; margin: 0; }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
-    <div className="profile-page">
-      {/* Main Profile Display */}
-      <ProfileViewer
-        profile={profile}
-        currentUserId={currentUserId}
-        relationshipType={relationshipType}
-        mutualFriendsCount={mutualFriendsCount}
-        onAddFriend={sendFriendRequest}
-        onMessage={sendMessage}
-        onFollow={handleFollow}
-        isPending={friendStatus === "pending"}
-        isFollowing={isFollowing}
-      />
-
-      {/* Today's Memories Section (if available) */}
-      {canViewMemories && todayMemories.length > 0 && (
-        <div className="memories-section">
-          <div className="section-header">
-            <h3 className="section-title">✨ Today in Past Years</h3>
-          </div>
-          <div className="memories-grid">
-            {todayMemories.slice(0, 4).map(memory => (
-              <div 
-                key={memory.id} 
-                className="memory-item"
-                onClick={() => setSelectedMemory(memory)}
-              >
-                <img src={memory.photo_url} alt={memory.caption} />
-                <div className="memory-overlay">
-                  <p className="memory-caption">{memory.caption}</p>
-                  <span className="memory-date">
-                    {new Date(memory.date).getFullYear()}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Unified Posts and Events Feed */}
-      {(canViewFriendContent || profile.visibility === 'public') && (
-        <div className="unified-feed">
-          {/* Posts Feed - Displayed as continuous feed */}
-          <div className="posts-feed-section">
-            <PostsFeed 
-              userId={profileId}
-              viewerUserId={currentUserId}
-              maxPosts={20}
-            />
-          </div>
-
-          {/* Events interspersed (if you want them mixed in later) */}
-          {events.length > 0 && (
-            <div className="events-feed-section">
-              <div className="section-header">
-                <h3 className="section-title">🎉 Upcoming Events</h3>
-              </div>
-              {events.map(event => (
-                <div key={event.id} className="event-feed-item">
-                  {event.image_url && (
-                    <img src={event.image_url} alt={event.title} className="event-image" />
-                  )}
-                  <div className="event-content">
-                    <h4 className="event-title">{event.title}</h4>
-                    {event.description && (
-                      <p className="event-description">{event.description}</p>
-                    )}
-                    <div className="event-details">
-                      <span className="event-date">
-                        📅 {new Date(event.start_date).toLocaleDateString()}
-                      </span>
-                      {event.location && (
-                        <span className="event-location">
-                          📍 {event.location}
-                        </span>
-                      )}
-                      <span className="event-attendees">
-                        👥 {event.attendees_count} attending
-                      </span>
-                    </div>
-                    <div className="event-actions">
-                      <button className="btn btn-primary btn-sm">RSVP</button>
-                      <button className="btn btn-secondary btn-sm">Interested</button>
-                    </div>
+    <div className="posts-feed">
+      <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px', textAlign: 'center' }}>
+        DEBUG: Showing {posts.length} posts for user {userId} (relationship: {viewerRelationship})
+      </div>
+      <div className="posts-list">
+        {posts.map((post) => (
+          <div key={post.id} className="post-card">
+            <div className="post-header">
+              <div className="author-info">
+                <img 
+                  src={post.author?.avatar_url || '/default-avatar.png'} 
+                  alt=""
+                  className="author-avatar"
+                />
+                <div>
+                  <div className="author-name">
+                    {post.author?.full_name || 'User'}
+                  </div>
+                  <div className="post-date">
+                    {new Date(post.created_at).toLocaleDateString()}
                   </div>
                 </div>
-              ))}
+              </div>
+              <div className="post-privacy-badge">
+                {post.visibility}
+              </div>
             </div>
-          )}
-
-          {/* Empty state if no events (PostsFeed handles its own empty state) */}
-          {events.length === 0 && (
-            <div className="empty-events-message">
-              <p className="text-gray-500 text-sm text-center py-4">
-                No upcoming events
-              </p>
+            
+            <div className="post-content">
+              <p className="post-text">{post.body}</p>
+              
+              {/* Display images if available */}
+              {post.images && post.images.length > 0 && (
+                <div className="post-images">
+                  {post.images.map((img, index) => (
+                    <img 
+                      key={index}
+                      src={img.url} 
+                      alt="" 
+                      className="post-image"
+                    />
+                  ))}
+                </div>
+              )}
+              
+              {/* Display single image if available */}
+              {post.image_url && (
+                <div className="post-images">
+                  <img src={post.image_url} alt="" className="post-image" />
+                </div>
+              )}
+              
+              {/* Display video if available */}
+              {post.video_url && (
+                <div className="post-video">
+                  <video src={post.video_url} controls className="post-video-player" />
+                </div>
+              )}
+              
+              {/* Show co-creators if any */}
+              {post.co_creators && post.co_creators.length > 0 && (
+                <div className="co-creators">
+                  <small>With: {post.co_creators.length} collaborator{post.co_creators.length > 1 ? 's' : ''}</small>
+                </div>
+              )}
+              
+              <div style={{ fontSize: '10px', color: '#999', marginTop: '8px' }}>
+                DEBUG: Post ID {post.id}, Media: {post.media_type || 'none'}
+              </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Memory Modal */}
-      {selectedMemory && (
-        <PhotoMemories
-          memories={[selectedMemory]}
-          onClose={() => setSelectedMemory(null)}
-          isMobile={isMobile}
-        />
-      )}
-
+          </div>
+        ))}
+      </div>
+      
       <style jsx>{`
-        .profile-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
-          padding: 2rem 1rem;
-          position: relative;
-        }
-
-        .profile-page::before {
-          content: '';
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: 
-            radial-gradient(circle at 20% 30%, rgba(139,92,246,0.08) 0%, transparent 50%),
-            radial-gradient(circle at 80% 70%, rgba(245,158,11,0.06) 0%, transparent 50%);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .profile-page > * {
-          position: relative;
-          z-index: 1;
-        }
-
-        @media (max-width: 640px) {
-          .profile-page {
-            padding: 1rem 0.5rem;
-          }
-        }
-
-        /* Memories Section */
-        .memories-section {
-          max-width: 800px;
-          margin: 2rem auto 0;
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .section-header {
-          margin-bottom: 1rem;
-        }
-
-        .section-title {
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0;
-        }
-
-        .memories-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          gap: 1rem;
-        }
-
-        .memory-item {
-          position: relative;
-          aspect-ratio: 1;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          cursor: pointer;
-          transition: transform 0.2s;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .memory-item:hover {
-          transform: scale(1.02);
-        }
-
-        .memory-item img {
+        .posts-feed {
           width: 100%;
-          height: 100%;
-          object-fit: cover;
         }
-
-        .memory-overlay {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: linear-gradient(transparent, rgba(0,0,0,0.8));
-          color: white;
-          padding: 1rem 0.75rem 0.75rem;
-        }
-
-        .memory-caption {
-          font-size: 0.875rem;
-          margin: 0 0 0.25rem 0;
-          font-weight: 500;
-          line-height: 1.2;
-        }
-
-        .memory-date {
-          font-size: 0.75rem;
-          opacity: 0.9;
-        }
-
-        /* Unified Feed Section */
-        .unified-feed {
-          max-width: 800px;
-          margin: 2rem auto 0;
-        }
-
-        .posts-feed-section {
-          /* PostsFeed component will handle its own styling */
-        }
-
-        .events-feed-section {
-          margin-top: 2rem;
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .event-feed-item {
-          border: 1px solid #e5e7eb;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          margin-bottom: 1.5rem;
-          transition: transform 0.2s, box-shadow 0.2s;
-          background: white;
-        }
-
-        .event-feed-item:last-child {
-          margin-bottom: 0;
-        }
-
-        .event-feed-item:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .event-image {
-          width: 100%;
-          height: 200px;
-          object-fit: cover;
-        }
-
-        .event-content {
-          padding: 1.25rem;
-        }
-
-        .event-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 0.75rem 0;
-          line-height: 1.3;
-        }
-
-        .event-description {
-          color: #6b7280;
-          font-size: 0.875rem;
-          margin: 0 0 1rem 0;
-          line-height: 1.5;
-        }
-
-        .event-details {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 1rem;
-          margin-bottom: 1.25rem;
-          font-size: 0.875rem;
-          color: #4b5563;
-        }
-
-        @media (max-width: 640px) {
-          .event-details {
-            flex-direction: column;
-            gap: 0.5rem;
-          }
-        }
-
-        .event-actions {
-          display: flex;
-          gap: 0.75rem;
-        }
-
-        @media (max-width: 640px) {
-          .event-actions {
-            flex-direction: column;
-          }
-        }
-
-        .btn {
-          padding: 0.625rem 1.25rem;
-          border-radius: 0.5rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          border: none;
-          font-size: 0.875rem;
-          min-height: 44px;
-          touch-action: manipulation;
-        }
-
-        .btn-sm {
-          padding: 0.5rem 1rem;
-          font-size: 0.8rem;
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-          color: white;
-        }
-
-        .btn-primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-        }
-
-        .btn-secondary {
-          background: white;
-          color: #8b5cf6;
-          border: 1px solid #8b5cf6;
-        }
-
-        .btn-secondary:hover {
-          background: #8b5cf6;
-          color: white;
-        }
-
-        /* Empty States */
-        .empty-state {
+        
+        .posts-list {
           display: flex;
           flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 3rem 1rem;
-          text-align: center;
+          gap: 1.5rem;
+        }
+        
+        .post-card {
           background: white;
-          border-radius: 1rem;
+          border-radius: 0.75rem;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          overflow: hidden;
         }
-
-        .empty-icon {
-          font-size: 3rem;
-          margin-bottom: 1rem;
-          opacity: 0.5;
+        
+        .post-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 1rem;
+          border-bottom: 1px solid #f3f4f6;
         }
-
-        .empty-text {
-          font-size: 1.125rem;
+        
+        .author-info {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
+        }
+        
+        .author-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        
+        .author-name {
           font-weight: 600;
-          color: #4b5563;
-          margin: 0 0 0.5rem 0;
+          color: #1a202c;
+          font-size: 0.9rem;
         }
-
-        .empty-subtext {
-          color: #9ca3af;
-          margin: 0;
+        
+        .post-date {
+          font-size: 0.8rem;
+          color: #718096;
         }
-
-        /* Mobile optimizations */
+        
+        .post-privacy-badge {
+          padding: 0.25rem 0.5rem;
+          background: #ede9fe;
+          color: #7c3aed;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+        
+        .post-content {
+          padding: 1rem;
+        }
+        
+        .post-text {
+          margin: 0 0 1rem 0;
+          line-height: 1.6;
+          color: #374151;
+        }
+        
+        .post-images {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        
+        .post-image {
+          max-width: 100%;
+          height: auto;
+          border-radius: 0.5rem;
+        }
+        
+        .post-video {
+          margin-bottom: 1rem;
+        }
+        
+        .post-video-player {
+          width: 100%;
+          max-height: 400px;
+          border-radius: 0.5rem;
+        }
+        
+        .co-creators {
+          margin-top: 0.5rem;
+          padding: 0.5rem;
+          background: #f8f9fa;
+          border-radius: 0.375rem;
+          border-left: 3px solid #8b5cf6;
+        }
+        
+        .co-creators small {
+          color: #6b7280;
+          font-style: italic;
+        }
+        
         @media (max-width: 640px) {
-          .memories-section,
-          .events-feed-section {
-            padding: 1rem;
+          .post-header {
+            padding: 0.75rem;
           }
-
-          .event-content {
-            padding: 1rem;
+          
+          .post-content {
+            padding: 0.75rem;
           }
-
-          .btn {
-            -webkit-tap-highlight-color: transparent;
+          
+          .author-avatar {
+            width: 36px;
+            height: 36px;
+          }
+          
+          .post-images {
+            gap: 0.25rem;
           }
         }
       `}</style>
