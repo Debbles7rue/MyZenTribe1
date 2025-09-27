@@ -1,4 +1,4 @@
-// components/PostCard/PostLightbox.tsx - Enhanced with better mobile UX
+// components/PostCard/PostLightbox.tsx - Complete and Enhanced
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -18,12 +18,8 @@ export default function PostLightbox({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const [showThumbnails, setShowThumbnails] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
   // Filter to images and videos for the lightbox
   const items = media.filter(m => m && (m.type === 'image' || m.type === 'video') && m.url);
@@ -48,9 +44,6 @@ export default function PostLightbox({
       setCurrentIndex((prev) => (prev + 1) % items.length);
       setIsLoading(true);
       setHasError(false);
-      setIsZoomed(false);
-      setZoomLevel(1);
-      setDragOffset({ x: 0, y: 0 });
     }
   }, [items.length]);
   
@@ -59,9 +52,6 @@ export default function PostLightbox({
       setCurrentIndex((prev) => (prev - 1 + items.length) % items.length);
       setIsLoading(true);
       setHasError(false);
-      setIsZoomed(false);
-      setZoomLevel(1);
-      setDragOffset({ x: 0, y: 0 });
     }
   }, [items.length]);
 
@@ -70,30 +60,8 @@ export default function PostLightbox({
       setCurrentIndex(index);
       setIsLoading(true);
       setHasError(false);
-      setIsZoomed(false);
-      setZoomLevel(1);
-      setDragOffset({ x: 0, y: 0 });
     }
   }, [items.length]);
-
-  // Zoom functionality
-  const handleZoom = useCallback((delta: number, clientX?: number, clientY?: number) => {
-    if (currentItem.type !== 'image') return;
-    
-    const newZoom = Math.max(1, Math.min(4, zoomLevel + delta));
-    setZoomLevel(newZoom);
-    setIsZoomed(newZoom > 1);
-    
-    if (newZoom === 1) {
-      setDragOffset({ x: 0, y: 0 });
-    }
-  }, [zoomLevel, currentItem.type]);
-
-  const resetZoom = useCallback(() => {
-    setZoomLevel(1);
-    setIsZoomed(false);
-    setDragOffset({ x: 0, y: 0 });
-  }, []);
   
   // Handle keyboard navigation
   useEffect(() => {
@@ -105,42 +73,24 @@ export default function PostLightbox({
         case 'ArrowRight':
         case ' ':
           e.preventDefault();
-          if (!isZoomed) goNext();
+          goNext();
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          if (!isZoomed) goPrev();
+          goPrev();
           break;
         case 'Home':
           e.preventDefault();
-          if (!isZoomed) goToIndex(0);
+          goToIndex(0);
           break;
         case 'End':
           e.preventDefault();
-          if (!isZoomed) goToIndex(items.length - 1);
+          goToIndex(items.length - 1);
           break;
         case 'i':
         case 'I':
           e.preventDefault();
           setShowInfo(!showInfo);
-          break;
-        case 't':
-        case 'T':
-          e.preventDefault();
-          setShowThumbnails(!showThumbnails);
-          break;
-        case '=':
-        case '+':
-          e.preventDefault();
-          handleZoom(0.25);
-          break;
-        case '-':
-          e.preventDefault();
-          handleZoom(-0.25);
-          break;
-        case '0':
-          e.preventDefault();
-          resetZoom();
           break;
       }
     };
@@ -152,21 +102,7 @@ export default function PostLightbox({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [showInfo, showThumbnails, isZoomed, goNext, goPrev, goToIndex, handleZoom, resetZoom, onClose]);
-
-  // Handle wheel zoom
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.25 : 0.25;
-        handleZoom(delta, e.clientX, e.clientY);
-      }
-    };
-
-    document.addEventListener('wheel', handleWheel, { passive: false });
-    return () => document.removeEventListener('wheel', handleWheel);
-  }, [handleZoom]);
+  }, [showInfo, goNext, goPrev, goToIndex, onClose]);
 
   // Handle touch gestures for mobile
   const minSwipeDistance = 50;
@@ -181,7 +117,7 @@ export default function PostLightbox({
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd || isZoomed) return;
+    if (!touchStart || !touchEnd) return;
     
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > minSwipeDistance;
@@ -195,64 +131,13 @@ export default function PostLightbox({
     }
   };
 
-  // Handle pinch zoom on mobile
-  const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
-
-  const getTouchDistance = (touches: TouchList) => {
-    if (touches.length < 2) return 0;
-    const touch1 = touches[0];
-    const touch2 = touches[1];
-    return Math.sqrt(
-      Math.pow(touch2.clientX - touch1.clientX, 2) + 
-      Math.pow(touch2.clientY - touch1.clientY, 2)
-    );
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      setLastTouchDistance(getTouchDistance(e.touches));
-    } else if (e.touches.length === 1) {
-      onTouchStart(e);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && lastTouchDistance && currentItem.type === 'image') {
-      e.preventDefault();
-      const newDistance = getTouchDistance(e.touches);
-      const scale = newDistance / lastTouchDistance;
-      const delta = (scale - 1) * 2;
-      handleZoom(delta);
-      setLastTouchDistance(newDistance);
-    } else if (e.touches.length === 1) {
-      onTouchMove(e);
-    }
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (e.touches.length === 0) {
-      setLastTouchDistance(null);
-      onTouchEnd();
-    }
-  };
-
-  // Handle image loading
-  const handleImageLoad = () => {
+  // Handle image/video loading
+  const handleLoad = () => {
     setIsLoading(false);
     setHasError(false);
   };
 
-  const handleImageError = () => {
-    setIsLoading(false);
-    setHasError(true);
-  };
-
-  const handleVideoLoad = () => {
-    setIsLoading(false);
-    setHasError(false);
-  };
-
-  const handleVideoError = () => {
+  const handleError = () => {
     setIsLoading(false);
     setHasError(true);
   };
@@ -284,34 +169,9 @@ export default function PostLightbox({
     }
   }, [currentIndex, items]);
 
-  // Auto-hide UI elements on mobile after inactivity
-  const [showUI, setShowUI] = useState(true);
-  const [uiTimeout, setUiTimeout] = useState<NodeJS.Timeout | null>(null);
-
-  const resetUITimeout = useCallback(() => {
-    setShowUI(true);
-    if (uiTimeout) clearTimeout(uiTimeout);
-    
-    if (window.innerWidth <= 768) {
-      const timeout = setTimeout(() => setShowUI(false), 3000);
-      setUiTimeout(timeout);
-    }
-  }, [uiTimeout]);
-
-  useEffect(() => {
-    resetUITimeout();
-    return () => {
-      if (uiTimeout) clearTimeout(uiTimeout);
-    };
-  }, [currentIndex]);
-
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
-      if (isZoomed) {
-        resetZoom();
-      } else {
-        onClose();
-      }
+      onClose();
     }
   };
   
@@ -319,75 +179,32 @@ export default function PostLightbox({
     <div 
       className="lightbox-overlay"
       onClick={handleOverlayClick}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseMove={resetUITimeout}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
     >
-      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-        {/* Control Buttons */}
-        <div className={`lightbox-controls ${showUI ? 'visible' : 'hidden'}`}>
-          <button 
-            className="lightbox-close" 
-            onClick={onClose}
-            title="Close (Esc)"
-          >
-            ✕
-          </button>
+      <div className="lightbox-content">
+        {/* Close button */}
+        <button 
+          className="lightbox-close" 
+          onClick={onClose}
+          title="Close (Esc)"
+        >
+          ×
+        </button>
 
-          <button 
-            className="lightbox-info" 
-            onClick={() => setShowInfo(!showInfo)}
-            title="Toggle info (I)"
-          >
-            ℹ️
-          </button>
-
-          {items.length > 3 && (
-            <button 
-              className="lightbox-thumbnails" 
-              onClick={() => setShowThumbnails(!showThumbnails)}
-              title="Toggle thumbnails (T)"
-            >
-              🎞️
-            </button>
-          )}
-
-          {currentItem.type === 'image' && (
-            <div className="zoom-controls">
-              <button 
-                className="zoom-btn"
-                onClick={() => handleZoom(-0.25)}
-                disabled={zoomLevel <= 1}
-                title="Zoom out (-)"
-              >
-                🔍−
-              </button>
-              <span className="zoom-level">{Math.round(zoomLevel * 100)}%</span>
-              <button 
-                className="zoom-btn"
-                onClick={() => handleZoom(0.25)}
-                disabled={zoomLevel >= 4}
-                title="Zoom in (+)"
-              >
-                🔍+
-              </button>
-              {isZoomed && (
-                <button 
-                  className="zoom-reset"
-                  onClick={resetZoom}
-                  title="Reset zoom (0)"
-                >
-                  ↻
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Info toggle button */}
+        <button 
+          className="lightbox-info" 
+          onClick={() => setShowInfo(!showInfo)}
+          title="Toggle info (I)"
+        >
+          ℹ️
+        </button>
         
         {/* Navigation buttons */}
-        {items.length > 1 && !isZoomed && (
-          <div className={`navigation-buttons ${showUI ? 'visible' : 'hidden'}`}>
+        {items.length > 1 && (
+          <>
             <button 
               className="lightbox-prev" 
               onClick={goPrev}
@@ -404,7 +221,7 @@ export default function PostLightbox({
             >
               ›
             </button>
-          </div>
+          </>
         )}
         
         {/* Main content */}
@@ -436,8 +253,8 @@ export default function PostLightbox({
               controls
               autoPlay
               muted
-              onLoadedData={handleVideoLoad}
-              onError={handleVideoError}
+              onLoadedData={handleLoad}
+              onError={handleError}
               style={{ display: isLoading ? 'none' : 'block' }}
             />
           ) : (
@@ -445,28 +262,23 @@ export default function PostLightbox({
               src={currentItem.url} 
               alt={`${currentItem.type} ${safeIndex + 1} of ${items.length}`}
               className="lightbox-image"
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-              style={{ 
-                display: isLoading ? 'none' : 'block',
-                transform: `scale(${zoomLevel}) translate(${dragOffset.x}px, ${dragOffset.y}px)`,
-                cursor: isZoomed ? 'grab' : 'zoom-in'
-              }}
-              onDoubleClick={() => isZoomed ? resetZoom() : handleZoom(1)}
+              onLoad={handleLoad}
+              onError={handleError}
+              style={{ display: isLoading ? 'none' : 'block' }}
             />
           )}
         </div>
         
         {/* Counter */}
         {items.length > 1 && (
-          <div className={`lightbox-counter ${showUI ? 'visible' : 'hidden'}`}>
+          <div className="lightbox-counter">
             {safeIndex + 1} / {items.length}
           </div>
         )}
 
-        {/* Thumbnail strip */}
-        {showThumbnails && items.length > 1 && (
-          <div className="lightbox-thumbnails-container">
+        {/* Thumbnail strip for many items */}
+        {items.length > 3 && (
+          <div className="lightbox-thumbnails">
             <div className="thumbnail-strip">
               {items.map((item, index) => (
                 <button
@@ -496,10 +308,7 @@ export default function PostLightbox({
               <h3>{currentItem.type.charAt(0).toUpperCase() + currentItem.type.slice(1)} {safeIndex + 1} of {items.length}</h3>
               <div className="info-details">
                 <p><strong>Type:</strong> {currentItem.type}</p>
-                <p><strong>URL:</strong> <span className="url-text">{currentItem.url}</span></p>
-                {currentItem.type === 'image' && (
-                  <p><strong>Zoom:</strong> {Math.round(zoomLevel * 100)}%</p>
-                )}
+                <p><strong>Navigation:</strong> Use arrow keys or swipe on mobile</p>
                 <div className="info-shortcuts">
                   <p><strong>Shortcuts:</strong></p>
                   <ul>
@@ -507,14 +316,6 @@ export default function PostLightbox({
                     <li>← → / Space - Navigate</li>
                     <li>Home/End - First/last item</li>
                     <li>I - Toggle info</li>
-                    <li>T - Toggle thumbnails</li>
-                    {currentItem.type === 'image' && (
-                      <>
-                        <li>+/- - Zoom in/out</li>
-                        <li>0 - Reset zoom</li>
-                        <li>Double-click - Toggle zoom</li>
-                      </>
-                    )}
                   </ul>
                 </div>
               </div>
@@ -523,11 +324,9 @@ export default function PostLightbox({
         )}
 
         {/* Mobile hints */}
-        <div className={`mobile-hints ${showUI ? 'visible' : 'hidden'}`}>
+        <div className="mobile-hints">
           <div className="swipe-hint">
-            {items.length > 1 && !isZoomed && 'Swipe left or right to navigate'}
-            {currentItem.type === 'image' && isZoomed && 'Pinch to zoom • Tap to reset'}
-            {currentItem.type === 'image' && !isZoomed && 'Double-tap to zoom • Pinch to zoom'}
+            {items.length > 1 && 'Swipe left or right to navigate'}
           </div>
         </div>
       </div>
@@ -554,29 +353,10 @@ export default function PostLightbox({
           justify-content: center;
         }
 
-        .lightbox-controls {
+        .lightbox-close,
+        .lightbox-info {
           position: absolute;
           top: 20px;
-          right: 20px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          z-index: 10;
-          transition: opacity 0.3s ease;
-        }
-
-        .lightbox-controls.visible {
-          opacity: 1;
-        }
-
-        .lightbox-controls.hidden {
-          opacity: 0;
-          pointer-events: none;
-        }
-
-        .lightbox-close,
-        .lightbox-info,
-        .lightbox-thumbnails {
           width: 44px;
           height: 44px;
           border-radius: 50%;
@@ -590,69 +370,21 @@ export default function PostLightbox({
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
+          z-index: 10;
+        }
+
+        .lightbox-close {
+          right: 20px;
+        }
+
+        .lightbox-info {
+          right: 80px;
         }
 
         .lightbox-close:hover,
-        .lightbox-info:hover,
-        .lightbox-thumbnails:hover {
+        .lightbox-info:hover {
           background: rgba(0,0,0,0.9);
           transform: scale(1.05);
-        }
-
-        .zoom-controls {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(0,0,0,0.7);
-          backdrop-filter: blur(8px);
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 22px;
-          padding: 6px 12px;
-        }
-
-        .zoom-btn,
-        .zoom-reset {
-          background: none;
-          border: none;
-          color: white;
-          cursor: pointer;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 14px;
-          transition: background 0.2s ease;
-        }
-
-        .zoom-btn:hover,
-        .zoom-reset:hover {
-          background: rgba(255,255,255,0.1);
-        }
-
-        .zoom-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .zoom-level {
-          color: white;
-          font-size: 12px;
-          font-weight: 500;
-          min-width: 40px;
-          text-align: center;
-        }
-
-        .navigation-buttons {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          transition: opacity 0.3s ease;
-        }
-
-        .navigation-buttons.visible {
-          opacity: 1;
-        }
-
-        .navigation-buttons.hidden {
-          opacity: 0;
         }
 
         .lightbox-prev,
@@ -675,7 +407,6 @@ export default function PostLightbox({
           justify-content: center;
           z-index: 10;
           transition: all 0.2s ease;
-          pointer-events: auto;
         }
 
         .lightbox-prev:disabled,
@@ -713,7 +444,6 @@ export default function PostLightbox({
           max-height: 100%;
           object-fit: contain;
           border-radius: 8px;
-          transition: transform 0.3s ease;
         }
 
         .lightbox-video {
@@ -787,18 +517,9 @@ export default function PostLightbox({
           font-size: 14px;
           font-weight: 500;
           border: 1px solid rgba(255,255,255,0.2);
-          transition: opacity 0.3s ease;
         }
 
-        .lightbox-counter.visible {
-          opacity: 1;
-        }
-
-        .lightbox-counter.hidden {
-          opacity: 0;
-        }
-
-        .lightbox-thumbnails-container {
+        .lightbox-thumbnails {
           position: absolute;
           bottom: 80px;
           left: 50%;
@@ -897,13 +618,6 @@ export default function PostLightbox({
           line-height: 1.4;
         }
 
-        .url-text {
-          word-break: break-all;
-          font-family: monospace;
-          font-size: 12px;
-          opacity: 0.8;
-        }
-
         .info-shortcuts {
           margin-top: 16px;
           border-top: 1px solid rgba(255,255,255,0.2);
@@ -922,17 +636,172 @@ export default function PostLightbox({
           bottom: 120px;
           left: 50%;
           transform: translateX(-50%);
-          transition: opacity 0.3s ease;
-          pointer-events: none;
-        }
-
-        .mobile-hints.visible {
-          opacity: 1;
-        }
-
-        .mobile-hints.hidden {
-          opacity: 0;
+          display: none;
         }
 
         .swipe-hint {
-          background: rgba(0,0,0
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(8px);
+          color: white;
+          padding: 8px 16px;
+          border-radius: 16px;
+          font-size: 13px;
+          text-align: center;
+          border: 1px solid rgba(255,255,255,0.2);
+          white-space: nowrap;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+          .lightbox-close,
+          .lightbox-info {
+            top: 10px;
+            width: 40px;
+            height: 40px;
+            font-size: 16px;
+          }
+
+          .lightbox-close {
+            right: 10px;
+          }
+
+          .lightbox-info {
+            right: 60px;
+          }
+
+          .lightbox-prev,
+          .lightbox-next {
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+          }
+
+          .lightbox-prev {
+            left: 10px;
+          }
+
+          .lightbox-next {
+            right: 10px;
+          }
+
+          .lightbox-counter {
+            bottom: 20px;
+            font-size: 13px;
+            padding: 6px 12px;
+          }
+
+          .lightbox-thumbnails {
+            bottom: 60px;
+            max-width: 95vw;
+            padding: 8px;
+          }
+
+          .thumbnail {
+            width: 60px;
+            height: 60px;
+          }
+
+          .lightbox-info-panel {
+            top: 60px;
+            left: 10px;
+            right: 10px;
+            max-width: none;
+            padding: 16px;
+          }
+
+          .info-content h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+          }
+
+          .info-details p {
+            font-size: 13px;
+          }
+
+          .info-shortcuts ul {
+            font-size: 12px;
+          }
+
+          .mobile-hints {
+            display: block;
+            bottom: 100px;
+          }
+
+          .swipe-hint {
+            font-size: 12px;
+            padding: 6px 12px;
+          }
+
+          .lightbox-image-container {
+            max-width: 100vw;
+            max-height: 100vh;
+            padding: 0 10px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .lightbox-close,
+          .lightbox-info {
+            top: 5px;
+            width: 36px;
+            height: 36px;
+            font-size: 14px;
+          }
+
+          .lightbox-close {
+            right: 5px;
+          }
+
+          .lightbox-info {
+            right: 50px;
+          }
+
+          .lightbox-prev,
+          .lightbox-next {
+            width: 44px;
+            height: 44px;
+            font-size: 18px;
+          }
+
+          .lightbox-prev {
+            left: 5px;
+          }
+
+          .lightbox-next {
+            right: 5px;
+          }
+
+          .thumbnail {
+            width: 50px;
+            height: 50px;
+          }
+
+          .lightbox-info-panel {
+            top: 50px;
+            left: 5px;
+            right: 5px;
+            padding: 12px;
+          }
+
+          .swipe-hint {
+            font-size: 11px;
+            padding: 4px 8px;
+          }
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
