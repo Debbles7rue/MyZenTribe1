@@ -1,4 +1,4 @@
-// components/PostCard/EditPostModal.tsx - Redesigned with Better UX
+// components/PostCard/EditPostModal.tsx - Mobile-Optimized with ALL Features Preserved
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -237,7 +237,7 @@ export default function EditPostModal({
   return (
     <div className="edit-modal-overlay" onClick={onClose}>
       <div className="edit-modal-container" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+        {/* Enhanced Mobile Header */}
         <div className="edit-modal-header">
           <div className="header-content">
             <h2>{isPostOwner ? 'Edit Post' : 'Add to Post'}</h2>
@@ -250,9 +250,56 @@ export default function EditPostModal({
           </button>
         </div>
 
+        {/* Mobile Tab Navigation */}
+        <div className="mobile-tab-bar">
+          <div className="tab-strip">
+            <button 
+              className={`mobile-tab ${activeTab === 'content' ? 'active' : ''}`}
+              onClick={() => setActiveTab('content')}
+            >
+              <span className="tab-icon">📝</span>
+              <span className="tab-label">Caption</span>
+            </button>
+            
+            <button 
+              className={`mobile-tab ${activeTab === 'media' ? 'active' : ''}`}
+              onClick={() => setActiveTab('media')}
+            >
+              <span className="tab-icon">📷</span>
+              <span className="tab-label">Media</span>
+              {(filteredCurrentMedia.length + selectedFiles.length) > 0 && (
+                <span className="tab-badge">{filteredCurrentMedia.length + selectedFiles.length}</span>
+              )}
+            </button>
+
+            {isPostOwner && (
+              <>
+                <button 
+                  className={`mobile-tab ${activeTab === 'people' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('people')}
+                >
+                  <span className="tab-icon">👥</span>
+                  <span className="tab-label">People</span>
+                  {(coCreators.length + taggedUsers.length) > 0 && (
+                    <span className="tab-badge">{coCreators.length + taggedUsers.length}</span>
+                  )}
+                </button>
+
+                <button 
+                  className={`mobile-tab ${activeTab === 'privacy' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('privacy')}
+                >
+                  <span className="tab-icon">🔒</span>
+                  <span className="tab-label">Privacy</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
         <div className="edit-modal-body">
-          {/* Sidebar Navigation */}
-          <div className="sidebar">
+          {/* Desktop Sidebar (Hidden on Mobile) */}
+          <div className="sidebar desktop-only">
             <nav className="tab-nav">
               <button 
                 className={`tab-button ${activeTab === 'content' ? 'active' : ''}`}
@@ -297,7 +344,7 @@ export default function EditPostModal({
               )}
             </nav>
 
-            {/* Save Actions in Sidebar */}
+            {/* Desktop Save Actions */}
             <div className="sidebar-actions">
               <button 
                 onClick={handleSave}
@@ -365,8 +412,18 @@ export default function EditPostModal({
                   <p>Add new media or manage existing files</p>
                 </div>
 
-                {/* Add New Media */}
-                <div className="section">
+                {/* Mobile File Upload Zone */}
+                <div 
+                  className="mobile-file-upload"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <span className="mobile-file-upload-icon">📁</span>
+                  <div className="mobile-file-upload-text">Add Photos & Videos</div>
+                  <div className="mobile-file-upload-hint">Tap to choose files from your device</div>
+                </div>
+
+                {/* Desktop Add Media Section */}
+                <div className="section desktop-only">
                   <div className="section-header">
                     <h4>Add New Files</h4>
                     <button 
@@ -378,45 +435,45 @@ export default function EditPostModal({
                       Choose Files
                     </button>
                   </div>
-                  
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,video/*"
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                  />
-
-                  {selectedFiles.length > 0 && (
-                    <div className="new-files-preview">
-                      <h5>New Files to Upload</h5>
-                      <div className="file-list">
-                        {selectedFiles.map((file, index) => (
-                          <div key={index} className="file-item">
-                            <div className="file-info">
-                              <span className="file-icon">
-                                {file.type.startsWith('video') ? '🎥' : '📷'}
-                              </span>
-                              <div className="file-details">
-                                <span className="file-name">{file.name}</span>
-                                <span className="file-size">
-                                  {(file.size / 1024 / 1024).toFixed(1)} MB
-                                </span>
-                              </div>
-                            </div>
-                            <button 
-                              onClick={() => removeFile(index)}
-                              className="remove-file-button"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+
+                {selectedFiles.length > 0 && (
+                  <div className="new-files-preview">
+                    <h5>New Files to Upload</h5>
+                    <div className="file-list">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="file-item">
+                          <div className="file-info">
+                            <span className="file-icon">
+                              {file.type.startsWith('video') ? '🎥' : '📷'}
+                            </span>
+                            <div className="file-details">
+                              <span className="file-name">{file.name}</span>
+                              <span className="file-size">
+                                {(file.size / 1024 / 1024).toFixed(1)} MB
+                              </span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => removeFile(index)}
+                            className="remove-file-button"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Current Media */}
                 {filteredCurrentMedia.length > 0 && (
@@ -454,7 +511,7 @@ export default function EditPostModal({
                   <div className="section">
                     <div className="section-header">
                       <h4>Removed Media</h4>
-                      <p>Click any item to restore it</p>
+                      <p>Tap any item to restore it</p>
                     </div>
                     
                     <div className="media-grid">
@@ -472,7 +529,7 @@ export default function EditPostModal({
                               <img src={media.url} alt="" className="media-preview" />
                             )}
                             <div className="restore-overlay">
-                              <span>↺ Click to restore</span>
+                              <span>↺ Tap to restore</span>
                             </div>
                           </div>
                         ))}
@@ -585,6 +642,41 @@ export default function EditPostModal({
             )}
           </div>
         </div>
+
+        {/* Mobile Action Bar */}
+        <div className="mobile-action-bar">
+          <div className="mobile-actions">
+            <button onClick={onClose} className="mobile-cancel-button">
+              Cancel
+            </button>
+            <button 
+              onClick={handleSave}
+              disabled={isSaving || uploadingFiles || !hasChanges}
+              className="mobile-save-button"
+            >
+              {isSaving ? (
+                <>
+                  <span className="spinner"></span>
+                  Saving...
+                </>
+              ) : uploadingFiles ? (
+                <>
+                  <span className="spinner"></span>
+                  Uploading...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </button>
+          </div>
+          
+          {hasChanges && (
+            <div className="mobile-changes-indicator">
+              <span className="changes-dot"></span>
+              You have unsaved changes
+            </div>
+          )}
+        </div>
       </div>
 
       <style jsx>{`
@@ -635,8 +727,8 @@ export default function EditPostModal({
         }
 
         .close-button {
-          width: 40px;
-          height: 40px;
+          width: 44px;
+          height: 44px;
           border-radius: 50%;
           background: #f3f4f6;
           border: none;
@@ -647,6 +739,8 @@ export default function EditPostModal({
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
         }
 
         .close-button:hover {
@@ -655,12 +749,95 @@ export default function EditPostModal({
           transform: scale(1.05);
         }
 
+        .close-button:active {
+          transform: scale(0.95);
+        }
+
+        /* Mobile Tab Bar */
+        .mobile-tab-bar {
+          display: none;
+          background: white;
+          border-bottom: 1px solid #f3f4f6;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .mobile-tab-bar::-webkit-scrollbar {
+          display: none;
+        }
+
+        .tab-strip {
+          display: flex;
+          min-width: 100%;
+        }
+
+        .mobile-tab {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          padding: 16px 20px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+          color: #6b7280;
+          transition: all 0.2s ease;
+          position: relative;
+          min-width: 80px;
+          flex: 1;
+          border-bottom: 3px solid transparent;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
+        }
+
+        .mobile-tab:hover {
+          background: rgba(139,92,246,0.05);
+          color: #8b5cf6;
+        }
+
+        .mobile-tab:active {
+          transform: scale(0.95);
+        }
+
+        .mobile-tab.active {
+          color: #8b5cf6;
+          font-weight: 600;
+          border-bottom-color: #8b5cf6;
+        }
+
+        .mobile-tab .tab-icon {
+          font-size: 16px;
+        }
+
+        .mobile-tab .tab-label {
+          font-size: 11px;
+          text-align: center;
+        }
+
+        .mobile-tab .tab-badge {
+          position: absolute;
+          top: 8px;
+          right: 12px;
+          background: #8b5cf6;
+          color: white;
+          font-size: 10px;
+          padding: 1px 6px;
+          border-radius: 8px;
+          min-width: 16px;
+          text-align: center;
+          font-weight: 600;
+        }
+
         .edit-modal-body {
           display: flex;
           flex: 1;
           overflow: hidden;
         }
 
+        /* Desktop Sidebar */
         .sidebar {
           width: 280px;
           background: #fafafa;
@@ -754,6 +931,7 @@ export default function EditPostModal({
           gap: 8px;
           margin-bottom: 12px;
           box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+          min-height: 48px;
         }
 
         .save-button:hover:not(:disabled) {
@@ -779,6 +957,7 @@ export default function EditPostModal({
           font-size: 14px;
           cursor: pointer;
           transition: all 0.2s ease;
+          min-height: 44px;
         }
 
         .cancel-button:hover {
@@ -894,6 +1073,7 @@ export default function EditPostModal({
           min-height: 120px;
           font-family: inherit;
           line-height: 1.5;
+          -webkit-appearance: none;
         }
 
         .caption-textarea:focus {
@@ -909,6 +1089,49 @@ export default function EditPostModal({
           margin-top: 8px;
         }
 
+        /* Mobile File Upload */
+        .mobile-file-upload {
+          display: none;
+          width: 100%;
+          padding: 24px;
+          border: 2px dashed #8b5cf6;
+          border-radius: 12px;
+          background: rgba(139,92,246,0.05);
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 24px;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
+        }
+
+        .mobile-file-upload:hover {
+          background: rgba(139,92,246,0.1);
+          border-color: #7c3aed;
+        }
+
+        .mobile-file-upload:active {
+          transform: scale(0.98);
+        }
+
+        .mobile-file-upload-icon {
+          font-size: 36px;
+          margin-bottom: 12px;
+          display: block;
+        }
+
+        .mobile-file-upload-text {
+          font-size: 18px;
+          font-weight: 600;
+          color: #8b5cf6;
+          margin-bottom: 6px;
+        }
+
+        .mobile-file-upload-hint {
+          font-size: 14px;
+          color: #6b7280;
+        }
+
         .add-media-button {
           display: flex;
           align-items: center;
@@ -922,6 +1145,7 @@ export default function EditPostModal({
           font-size: 14px;
           cursor: pointer;
           transition: all 0.2s ease;
+          min-height: 40px;
         }
 
         .add-media-button:hover:not(:disabled) {
@@ -980,12 +1204,15 @@ export default function EditPostModal({
           display: flex;
           flex-direction: column;
           gap: 2px;
+          min-width: 0;
+          flex: 1;
         }
 
         .file-name {
           font-size: 14px;
           font-weight: 500;
           color: #374151;
+          word-break: break-word;
         }
 
         .file-size {
@@ -994,22 +1221,30 @@ export default function EditPostModal({
         }
 
         .remove-file-button {
-          width: 24px;
-          height: 24px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           background: #fee2e2;
           color: #dc2626;
           border: none;
           cursor: pointer;
-          font-size: 12px;
+          font-size: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
+          flex-shrink: 0;
+          -webkit-tap-highlight-color: rgba(220, 38, 38, 0.1);
+          touch-action: manipulation;
         }
 
         .remove-file-button:hover {
           background: #fecaca;
+          transform: scale(1.05);
+        }
+
+        .remove-file-button:active {
+          transform: scale(0.95);
         }
 
         .media-grid {
@@ -1027,11 +1262,17 @@ export default function EditPostModal({
           border: 1px solid #e5e7eb;
           cursor: pointer;
           transition: all 0.2s ease;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
         }
 
         .media-item:hover {
           transform: scale(1.02);
           box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .media-item:active {
+          transform: scale(0.98);
         }
 
         .media-item.removed {
@@ -1048,23 +1289,29 @@ export default function EditPostModal({
           position: absolute;
           top: 8px;
           right: 8px;
-          width: 28px;
-          height: 28px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           background: rgba(0,0,0,0.7);
           color: white;
           border: none;
           cursor: pointer;
-          font-size: 12px;
+          font-size: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
+          -webkit-tap-highlight-color: rgba(220, 38, 38, 0.1);
+          touch-action: manipulation;
         }
 
         .remove-media-button:hover {
           background: #dc2626;
           transform: scale(1.1);
+        }
+
+        .remove-media-button:active {
+          transform: scale(0.9);
         }
 
         .restore-overlay {
@@ -1082,12 +1329,14 @@ export default function EditPostModal({
 
         .privacy-select {
           width: 100%;
-          padding: 12px 16px;
+          padding: 14px 16px;
           border: 1px solid #e5e7eb;
           border-radius: 8px;
           background: white;
-          font-size: 14px;
+          font-size: 16px;
           cursor: pointer;
+          -webkit-appearance: none;
+          min-height: 48px;
         }
 
         .privacy-select:focus {
@@ -1105,12 +1354,14 @@ export default function EditPostModal({
         .checkbox-label {
           display: flex;
           align-items: flex-start;
-          gap: 12px;
+          gap: 16px;
           cursor: pointer;
-          padding: 16px;
+          padding: 20px;
           border: 1px solid #e5e7eb;
           border-radius: 12px;
           transition: all 0.2s ease;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
         }
 
         .checkbox-label:hover {
@@ -1118,13 +1369,17 @@ export default function EditPostModal({
           background: rgba(139,92,246,0.02);
         }
 
+        .checkbox-label:active {
+          transform: scale(0.98);
+        }
+
         .checkbox-input {
           display: none;
         }
 
         .checkbox-custom {
-          width: 20px;
-          height: 20px;
+          width: 24px;
+          height: 24px;
           border: 2px solid #e5e7eb;
           border-radius: 4px;
           display: flex;
@@ -1142,25 +1397,25 @@ export default function EditPostModal({
         .checkbox-input:checked + .checkbox-custom::after {
           content: '✓';
           color: white;
-          font-size: 12px;
+          font-size: 14px;
           font-weight: 700;
         }
 
         .checkbox-text {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
           flex: 1;
         }
 
         .checkbox-title {
           font-weight: 500;
-          font-size: 14px;
+          font-size: 16px;
           color: #374151;
         }
 
         .checkbox-description {
-          font-size: 13px;
+          font-size: 14px;
           color: #6b7280;
         }
 
@@ -1180,33 +1435,57 @@ export default function EditPostModal({
         /* Mobile Action Bar */
         .mobile-action-bar {
           display: none;
-          position: fixed;
+          position: absolute;
           bottom: 0;
           left: 0;
           right: 0;
           background: white;
           border-top: 1px solid #e5e7eb;
           padding: 16px 20px;
-          z-index: 1001;
+          z-index: 10;
           box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
         }
 
         .mobile-actions {
           display: flex;
           gap: 12px;
-          max-width: 400px;
-          margin: 0 auto;
+          margin-bottom: 8px;
+        }
+
+        .mobile-cancel-button {
+          flex: 1;
+          padding: 16px 20px;
+          background: #f3f4f6;
+          color: #6b7280;
+          border: none;
+          border-radius: 12px;
+          font-weight: 500;
+          font-size: 16px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          min-height: 52px;
+          -webkit-tap-highlight-color: rgba(107, 114, 128, 0.1);
+          touch-action: manipulation;
+        }
+
+        .mobile-cancel-button:hover {
+          background: #e5e7eb;
+          color: #374151;
+        }
+
+        .mobile-cancel-button:active {
+          transform: scale(0.98);
         }
 
         .mobile-save-button {
           flex: 2;
-          padding: 14px 20px;
+          padding: 16px 20px;
           background: linear-gradient(135deg, #8b5cf6, #7c3aed);
           color: white;
           border: none;
           border-radius: 12px;
           font-weight: 600;
-          font-size: 15px;
+          font-size: 16px;
           cursor: pointer;
           transition: all 0.3s ease;
           display: flex;
@@ -1214,11 +1493,19 @@ export default function EditPostModal({
           justify-content: center;
           gap: 8px;
           box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+          min-height: 52px;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
         }
 
         .mobile-save-button:hover:not(:disabled) {
           background: linear-gradient(135deg, #7c3aed, #6d28d9);
           transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(139,92,246,0.4);
+        }
+
+        .mobile-save-button:active:not(:disabled) {
+          transform: scale(0.98);
         }
 
         .mobile-save-button:disabled {
@@ -1227,84 +1514,17 @@ export default function EditPostModal({
           transform: none;
         }
 
-        .mobile-cancel-button {
-          flex: 1;
-          padding: 14px 20px;
-          background: #f3f4f6;
-          color: #6b7280;
-          border: none;
-          border-radius: 12px;
-          font-weight: 500;
-          font-size: 15px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .mobile-cancel-button:hover {
-          background: #e5e7eb;
-          color: #374151;
-        }
-
-        /* Enhanced File Upload for Mobile */
-        .mobile-file-upload {
-          display: none;
-          width: 100%;
-          padding: 20px;
-          border: 2px dashed #8b5cf6;
-          border-radius: 12px;
-          background: rgba(139,92,246,0.05);
-          text-align: center;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          margin-bottom: 20px;
-        }
-
-        .mobile-file-upload:hover {
-          background: rgba(139,92,246,0.1);
-          border-color: #7c3aed;
-        }
-
-        .mobile-file-upload-icon {
-          font-size: 32px;
-          margin-bottom: 8px;
-          display: block;
-        }
-
-        .mobile-file-upload-text {
-          font-size: 16px;
-          font-weight: 600;
-          color: #8b5cf6;
-          margin-bottom: 4px;
-        }
-
-        .mobile-file-upload-hint {
+        .mobile-changes-indicator {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
           font-size: 13px;
-          color: #6b7280;
+          color: #f59e0b;
+          margin-top: 8px;
         }
 
-        /* Swipe Navigation Indicator */
-        .swipe-indicator {
-          display: none;
-          text-align: center;
-          padding: 8px 0;
-          font-size: 12px;
-          color: #9ca3af;
-          background: #f9fafb;
-          border-bottom: 1px solid #f3f4f6;
-        }
-
-        /* Touch Feedback */
-        .tab-button:active {
-          transform: scale(0.98);
-          background: rgba(139,92,246,0.15);
-        }
-
-        .mobile-save-button:active,
-        .mobile-cancel-button:active {
-          transform: scale(0.98);
-        }
-
-        /* Mobile Responsiveness */
+        /* Responsive Styles */
         @media (max-width: 768px) {
           .edit-modal-overlay {
             padding: 0;
@@ -1317,7 +1537,8 @@ export default function EditPostModal({
             height: 100vh;
             border-radius: 0;
             border-radius: 20px 20px 0 0;
-            margin-top: 40px;
+            margin-top: 20px;
+            position: relative;
           }
 
           .edit-modal-header {
@@ -1329,63 +1550,44 @@ export default function EditPostModal({
             border-bottom: 1px solid #f3f4f6;
           }
 
-          .edit-modal-body {
-            flex-direction: column;
-            padding-bottom: 100px; /* Space for fixed action bar */
+          .header-content h2 {
+            font-size: 20px;
           }
 
-          .sidebar {
-            width: 100%;
-            border-right: none;
-            border-bottom: 1px solid #f3f4f6;
+          .close-button {
+            width: 40px;
+            height: 40px;
+            font-size: 16px;
+          }
+
+          .mobile-tab-bar {
+            display: block;
             position: sticky;
-            top: 89px; /* Height of header */
+            top: 89px;
             z-index: 9;
             background: white;
           }
 
-          .swipe-indicator {
-            display: block;
+          .edit-modal-body {
+            flex-direction: column;
+            padding-bottom: 120px;
           }
 
-          .tab-nav {
-            display: flex;
-            overflow-x: auto;
-            padding: 0;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-            scroll-behavior: smooth;
-          }
-
-          .tab-nav::-webkit-scrollbar {
+          .sidebar {
             display: none;
           }
 
-          .tab-button {
-            min-width: 140px;
-            padding: 16px 20px;
-            white-space: nowrap;
-            border-bottom: 3px solid transparent;
+          .desktop-only {
+            display: none !important;
           }
 
-          .tab-button.active {
-            border-bottom-color: #8b5cf6;
-          }
-
-          .tab-button.active::before {
-            display: none;
-          }
-
-          .sidebar-actions {
-            display: none;
-          }
-
-          .mobile-action-bar {
+          .mobile-file-upload {
             display: block;
           }
 
           .tab-content {
             padding: 24px 20px;
+            max-width: none;
             min-height: calc(100vh - 300px);
           }
 
@@ -1394,51 +1596,27 @@ export default function EditPostModal({
           }
 
           .media-grid {
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             gap: 12px;
           }
 
-          /* Show mobile file upload instead of button */
-          .add-media-button {
-            display: none;
-          }
-
-          .mobile-file-upload {
+          .mobile-action-bar {
             display: block;
           }
 
           /* Better touch targets */
-          .remove-media-button {
-            width: 32px;
-            height: 32px;
-            font-size: 14px;
-          }
-
-          .remove-file-button {
-            width: 28px;
-            height: 28px;
-            font-size: 14px;
-          }
-
-          /* Larger checkboxes for touch */
-          .checkbox-custom {
-            width: 24px;
-            height: 24px;
-          }
-
-          .checkbox-input:checked + .checkbox-custom::after {
-            font-size: 14px;
-          }
-
-          /* Better textarea sizing */
           .caption-textarea {
             min-height: 140px;
-            font-size: 16px; /* Prevents zoom on iOS */
+            font-size: 16px;
+            padding: 16px;
           }
 
-          .privacy-select {
-            font-size: 16px; /* Prevents zoom on iOS */
-            padding: 14px 16px;
+          .checkbox-title {
+            font-size: 15px;
+          }
+
+          .checkbox-description {
+            font-size: 13px;
           }
         }
 
@@ -1448,13 +1626,16 @@ export default function EditPostModal({
           }
 
           .header-content h2 {
-            font-size: 20px;
+            font-size: 18px;
           }
 
-          .tab-button {
-            min-width: 120px;
-            padding: 14px 16px;
-            font-size: 14px;
+          .mobile-tab .tab-label {
+            font-size: 10px;
+          }
+
+          .mobile-tab {
+            min-width: 70px;
+            padding: 12px 16px;
           }
 
           .tab-content {
@@ -1471,25 +1652,51 @@ export default function EditPostModal({
 
           .mobile-save-button,
           .mobile-cancel-button {
-            padding: 12px 16px;
-            font-size: 14px;
+            padding: 14px 16px;
+            font-size: 15px;
+            min-height: 48px;
           }
 
           .media-grid {
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             gap: 8px;
           }
 
           .mobile-file-upload {
-            padding: 16px;
+            padding: 20px 16px;
           }
 
           .mobile-file-upload-icon {
-            font-size: 28px;
+            font-size: 32px;
           }
 
           .mobile-file-upload-text {
-            font-size: 15px;
+            font-size: 16px;
+          }
+
+          .file-item {
+            padding: 10px 12px;
+          }
+
+          .remove-file-button {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+          }
+
+          .remove-media-button {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+          }
+        }
+
+        /* Hide mobile elements on desktop */
+        @media (min-width: 769px) {
+          .mobile-tab-bar,
+          .mobile-action-bar,
+          .mobile-file-upload {
+            display: none !important;
           }
         }
 
