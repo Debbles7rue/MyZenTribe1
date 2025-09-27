@@ -1,4 +1,4 @@
-// components/PostCard/PhotoGrid.tsx - Fixed with working interactions
+// components/PostCard/PhotoGrid.tsx - Mobile-Optimized with ALL Features Preserved
 "use client";
 
 import { useState } from "react";
@@ -60,7 +60,27 @@ export default function PhotoGrid({
     setLoadingImages(prev => new Set(prev).add(url));
   };
 
-  // COMPACT MODE - Use existing CSS classes
+  // Enhanced photo click with mobile feedback
+  const handlePhotoClick = (index: number, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Mobile touch feedback
+    const target = event.currentTarget as HTMLElement;
+    target.style.transform = 'scale(0.98)';
+    setTimeout(() => {
+      target.style.transform = '';
+    }, 150);
+    
+    // Haptic feedback on supported devices
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
+    
+    onPhotoClick(index);
+  };
+
+  // COMPACT MODE - Use existing CSS classes with mobile enhancements
   if (isCompact) {
     if (validMedia.length === 0) return null;
     
@@ -69,13 +89,17 @@ export default function PhotoGrid({
       const item = validMedia[0];
       return (
         <div className={styles.photoGridContainerCompact}>
-          <div className={styles.compactSinglePhoto} onClick={() => onPhotoClick(0)}>
+          <div 
+            className={styles.compactSinglePhoto} 
+            onClick={(e) => handlePhotoClick(0, e)}
+          >
             {item.type === 'video' ? (
               <div className="video-container">
                 <video 
                   src={item.url} 
                   className="media-content"
                   muted
+                  playsInline
                   preload="metadata"
                 />
                 <div className="video-play-overlay">
@@ -98,6 +122,7 @@ export default function PhotoGrid({
                   <img 
                     src={item.url} 
                     alt="" 
+                    draggable={false}
                     onLoad={() => handleImageLoad(item.url)}
                     onError={() => handleImageError(item.url)}
                     onLoadStart={() => handleImageLoadStart(item.url)}
@@ -117,13 +142,18 @@ export default function PhotoGrid({
         <div className={styles.photoGridContainerCompact}>
           <div className={styles.compactTwoPhotos}>
             {validMedia.map((item, idx) => (
-              <div key={idx} className={styles.compactPhotoItem} onClick={() => onPhotoClick(idx)}>
+              <div 
+                key={idx} 
+                className={styles.compactPhotoItem} 
+                onClick={(e) => handlePhotoClick(idx, e)}
+              >
                 {item.type === 'video' ? (
                   <div className="video-container">
                     <video 
                       src={item.url} 
                       className="media-content"
                       muted
+                      playsInline
                       preload="metadata"
                     />
                     <div className="video-play-overlay-small">
@@ -141,6 +171,7 @@ export default function PhotoGrid({
                       <img 
                         src={item.url} 
                         alt="" 
+                        draggable={false}
                         onLoad={() => handleImageLoad(item.url)}
                         onError={() => handleImageError(item.url)}
                         onLoadStart={() => handleImageLoadStart(item.url)}
@@ -161,13 +192,17 @@ export default function PhotoGrid({
       return (
         <div className={styles.photoGridContainerCompact}>
           <div className={styles.compactThreePhotos}>
-            <div className={`${styles.compactPhotoItem} ${styles.main}`} onClick={() => onPhotoClick(0)}>
+            <div 
+              className={`${styles.compactPhotoItem} ${styles.main}`} 
+              onClick={(e) => handlePhotoClick(0, e)}
+            >
               {validMedia[0].type === 'video' ? (
                 <div className="video-container">
                   <video 
                     src={validMedia[0].url} 
                     className="media-content"
                     muted
+                    playsInline
                     preload="metadata"
                   />
                   <div className="video-play-overlay">
@@ -188,6 +223,7 @@ export default function PhotoGrid({
                     <img 
                       src={validMedia[0].url} 
                       alt="" 
+                      draggable={false}
                       onLoad={() => handleImageLoad(validMedia[0].url)}
                       onError={() => handleImageError(validMedia[0].url)}
                       onLoadStart={() => handleImageLoadStart(validMedia[0].url)}
@@ -199,13 +235,18 @@ export default function PhotoGrid({
             </div>
             <div className={styles.compactSideStack}>
               {validMedia.slice(1, 3).map((item, idx) => (
-                <div key={idx} className={styles.compactPhotoItem} onClick={() => onPhotoClick(idx + 1)}>
+                <div 
+                  key={idx} 
+                  className={styles.compactPhotoItem} 
+                  onClick={(e) => handlePhotoClick(idx + 1, e)}
+                >
                   {item.type === 'video' ? (
                     <div className="video-container">
                       <video 
                         src={item.url} 
                         className="media-content"
                         muted
+                        playsInline
                         preload="metadata"
                       />
                       <div className="video-play-overlay-small">
@@ -223,6 +264,7 @@ export default function PhotoGrid({
                         <img 
                           src={item.url} 
                           alt="" 
+                          draggable={false}
                           onLoad={() => handleImageLoad(item.url)}
                           onError={() => handleImageError(item.url)}
                           onLoadStart={() => handleImageLoadStart(item.url)}
@@ -245,13 +287,17 @@ export default function PhotoGrid({
         <div className={styles.photoGridContainerCompact}>
           <div className={styles.compactManyPhotos}>
             <div className={styles.compactTopRow}>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(0)}>
+              <div 
+                className={styles.compactPhotoItem} 
+                onClick={(e) => handlePhotoClick(0, e)}
+              >
                 {validMedia[0].type === 'video' ? (
                   <div className="video-container">
                     <video 
                       src={validMedia[0].url} 
                       className="media-content"
                       muted
+                      playsInline
                       preload="metadata"
                     />
                     <div className="video-play-overlay-small">
@@ -269,6 +315,7 @@ export default function PhotoGrid({
                       <img 
                         src={validMedia[0].url} 
                         alt="" 
+                        draggable={false}
                         onLoad={() => handleImageLoad(validMedia[0].url)}
                         onError={() => handleImageError(validMedia[0].url)}
                         onLoadStart={() => handleImageLoadStart(validMedia[0].url)}
@@ -278,13 +325,17 @@ export default function PhotoGrid({
                   </>
                 )}
               </div>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(1)}>
+              <div 
+                className={styles.compactPhotoItem} 
+                onClick={(e) => handlePhotoClick(1, e)}
+              >
                 {validMedia[1].type === 'video' ? (
                   <div className="video-container">
                     <video 
                       src={validMedia[1].url} 
                       className="media-content"
                       muted
+                      playsInline
                       preload="metadata"
                     />
                     <div className="video-play-overlay-small">
@@ -302,6 +353,7 @@ export default function PhotoGrid({
                       <img 
                         src={validMedia[1].url} 
                         alt="" 
+                        draggable={false}
                         onLoad={() => handleImageLoad(validMedia[1].url)}
                         onError={() => handleImageError(validMedia[1].url)}
                         onLoadStart={() => handleImageLoadStart(validMedia[1].url)}
@@ -313,13 +365,17 @@ export default function PhotoGrid({
               </div>
             </div>
             <div className={styles.compactBottomRow}>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(2)}>
+              <div 
+                className={styles.compactPhotoItem} 
+                onClick={(e) => handlePhotoClick(2, e)}
+              >
                 {validMedia[2].type === 'video' ? (
                   <div className="video-container">
                     <video 
                       src={validMedia[2].url} 
                       className="media-content"
                       muted
+                      playsInline
                       preload="metadata"
                     />
                     <div className="video-play-overlay-small">
@@ -337,6 +393,7 @@ export default function PhotoGrid({
                       <img 
                         src={validMedia[2].url} 
                         alt="" 
+                        draggable={false}
                         onLoad={() => handleImageLoad(validMedia[2].url)}
                         onError={() => handleImageError(validMedia[2].url)}
                         onLoadStart={() => handleImageLoadStart(validMedia[2].url)}
@@ -346,13 +403,17 @@ export default function PhotoGrid({
                   </>
                 )}
               </div>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(3)}>
+              <div 
+                className={styles.compactPhotoItem} 
+                onClick={(e) => handlePhotoClick(3, e)}
+              >
                 {validMedia[3].type === 'video' ? (
                   <div className="video-container">
                     <video 
                       src={validMedia[3].url} 
                       className="media-content"
                       muted
+                      playsInline
                       preload="metadata"
                     />
                     <div className="video-play-overlay-small">
@@ -370,6 +431,7 @@ export default function PhotoGrid({
                       <img 
                         src={validMedia[3].url} 
                         alt="" 
+                        draggable={false}
                         onLoad={() => handleImageLoad(validMedia[3].url)}
                         onError={() => handleImageError(validMedia[3].url)}
                         onLoadStart={() => handleImageLoadStart(validMedia[3].url)}
@@ -393,7 +455,7 @@ export default function PhotoGrid({
     return null;
   }
   
-  // EXPANDED MODE - Individual media with WORKING interaction buttons
+  // EXPANDED MODE - Individual media with WORKING interaction buttons + mobile enhancements
   return (
     <div className={styles.photoGridExpanded}>
       {validMedia.map((item, idx) => (
@@ -405,6 +467,7 @@ export default function PhotoGrid({
                   src={item.url} 
                   className={styles.individualPhoto}
                   controls
+                  playsInline
                   preload="metadata"
                   onClick={() => onPhotoClick(idx)}
                 />
@@ -439,6 +502,7 @@ export default function PhotoGrid({
                       src={item.url} 
                       alt="" 
                       className={styles.individualPhoto}
+                      draggable={false}
                       onClick={() => onPhotoClick(idx)}
                       onLoad={() => handleImageLoad(item.url)}
                       onError={() => handleImageError(item.url)}
@@ -454,6 +518,10 @@ export default function PhotoGrid({
                 className={styles.photoInteractBtn}
                 onClick={(e) => {
                   e.stopPropagation();
+                  // Haptic feedback
+                  if ('vibrate' in navigator) {
+                    navigator.vibrate(50);
+                  }
                   // Use the parent's like function if available
                   if (onLike) {
                     onLike();
@@ -462,8 +530,10 @@ export default function PhotoGrid({
                   }
                 }}
                 disabled={!currentUserId}
+                title="Like this photo"
               >
-                🤍 Like
+                <span>🤍</span>
+                <span>Like</span>
               </button>
               <button 
                 className={styles.photoInteractBtn}
@@ -477,8 +547,10 @@ export default function PhotoGrid({
                   }
                 }}
                 disabled={!currentUserId}
+                title="Comment on this photo"
               >
-                💬 Comment
+                <span>💬</span>
+                <span>Comment</span>
               </button>
               <button 
                 className={styles.photoInteractBtn}
@@ -490,8 +562,10 @@ export default function PhotoGrid({
                   }
                 }}
                 disabled={!currentUserId}
+                title="Edit caption"
               >
-                ✏️ Caption
+                <span>✏️</span>
+                <span>Caption</span>
               </button>
             </div>
           </div>
@@ -509,6 +583,8 @@ export default function PhotoGrid({
           width: 100%;
           height: 100%;
           object-fit: cover;
+          -webkit-user-drag: none;
+          user-select: none;
         }
 
         .video-play-overlay,
@@ -520,6 +596,8 @@ export default function PhotoGrid({
           align-items: center;
           justify-content: center;
           transition: background 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
 
         .video-play-overlay:hover,
@@ -530,7 +608,7 @@ export default function PhotoGrid({
         .play-button {
           width: 60px;
           height: 60px;
-          background: rgba(255,255,255,0.9);
+          background: rgba(255,255,255,0.95);
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -539,12 +617,13 @@ export default function PhotoGrid({
           color: #374151;
           box-shadow: 0 4px 12px rgba(0,0,0,0.3);
           transition: all 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
         }
 
         .play-button-small {
           width: 40px;
           height: 40px;
-          background: rgba(255,255,255,0.9);
+          background: rgba(255,255,255,0.95);
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -552,12 +631,19 @@ export default function PhotoGrid({
           font-size: 16px;
           color: #374151;
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          transition: all 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
         }
 
         .play-button:hover,
         .play-button-small:hover {
           background: white;
           transform: scale(1.1);
+        }
+
+        .play-button:active,
+        .play-button-small:active {
+          transform: scale(0.95);
         }
 
         .loading-overlay,
@@ -647,7 +733,7 @@ export default function PhotoGrid({
         }
 
         .retry-btn {
-          padding: 8px 16px;
+          padding: 12px 20px;
           background: #8b5cf6;
           color: white;
           border: none;
@@ -655,11 +741,19 @@ export default function PhotoGrid({
           cursor: pointer;
           font-size: 14px;
           font-weight: 500;
-          transition: background 0.2s ease;
+          transition: all 0.2s ease;
+          min-height: 44px;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
 
         .retry-btn:hover {
           background: #7c3aed;
+          transform: translateY(-1px);
+        }
+
+        .retry-btn:active {
+          transform: translateY(0);
         }
 
         @keyframes pulse {
@@ -669,6 +763,76 @@ export default function PhotoGrid({
 
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .play-button {
+            width: 50px;
+            height: 50px;
+            font-size: 20px;
+          }
+
+          .play-button-small {
+            width: 36px;
+            height: 36px;
+            font-size: 14px;
+          }
+
+          .loading-overlay {
+            font-size: 28px;
+          }
+
+          .loading-overlay-small {
+            font-size: 20px;
+          }
+
+          .individual-error span {
+            font-size: 40px;
+          }
+
+          .retry-btn {
+            padding: 10px 16px;
+            font-size: 13px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .play-button {
+            width: 44px;
+            height: 44px;
+            font-size: 18px;
+          }
+
+          .play-button-small {
+            width: 32px;
+            height: 32px;
+            font-size: 12px;
+          }
+
+          .individual-error span {
+            font-size: 32px;
+          }
+
+          .individual-error p {
+            font-size: 14px;
+          }
+
+          .retry-btn {
+            padding: 8px 14px;
+            font-size: 12px;
+          }
+        }
+
+        /* Touch device optimizations */
+        @media (hover: none) and (pointer: coarse) {
+          .video-play-overlay,
+          .video-play-overlay-small,
+          .play-button,
+          .play-button-small,
+          .retry-btn {
+            -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          }
         }
       `}</style>
     </div>
