@@ -171,8 +171,8 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
           align-items: center;
           gap: 1.5rem;
           position: relative;
-          overflow: hidden;
-          min-height: 320px;
+          overflow: visible;
+          min-height: 380px;
         }
 
         .candle-display:hover {
