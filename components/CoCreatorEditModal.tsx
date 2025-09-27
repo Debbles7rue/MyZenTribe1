@@ -39,7 +39,27 @@ export default function CoCreatorEditModal({
   // Load existing media and validate permissions on mount
   useEffect(() => {
     async function loadPostData() {
+      // Log device/browser info for debugging
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      
       console.log('🔍 Loading post data for user:', currentUserId);
+      console.log('📱 Device info:', {
+        userAgent: navigator.userAgent,
+        isMobile,
+        isIOS,
+        cookieEnabled: navigator.cookieEnabled,
+        onLine: navigator.onLine
+      });
+      
+      // Check authentication state
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      console.log('🔐 Auth state:', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        accessToken: session?.access_token ? 'present' : 'missing',
+        authError
+      });
       
       // First, get the post to verify co-creator status
       const { data: post, error: postError } = await supabase
@@ -50,6 +70,12 @@ export default function CoCreatorEditModal({
       
       if (postError) {
         console.error('❌ Error loading post:', postError);
+        console.log('🚨 Post error details:', {
+          code: postError.code,
+          message: postError.message,
+          details: postError.details,
+          hint: postError.hint
+        });
         return;
       }
       
@@ -70,6 +96,12 @@ export default function CoCreatorEditModal({
       
       if (mediaError) {
         console.error('❌ Error loading media:', mediaError);
+        console.log('🚨 Media error details:', {
+          code: mediaError.code,
+          message: mediaError.message,
+          details: mediaError.details,
+          hint: mediaError.hint
+        });
       } else {
         console.log('📸 Media loaded:', media?.length || 0, 'items');
         media?.forEach((m, i) => {
