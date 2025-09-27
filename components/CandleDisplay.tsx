@@ -1,7 +1,7 @@
 // components/CandleDisplay.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 type Candle = {
   id: string;
@@ -25,583 +25,437 @@ interface CandleDisplayProps {
   candle: Candle;
 }
 
-export default function CandleDisplay({ candle }: CandleDisplayProps) {
-  const isEternal = candle?.candle_type === "eternal";
-  const color = candle?.color || "white";
+/** A tiny WebGL shader canvas that renders a realistic, noisy flame with alpha.
+ *  0 external assets; pure code. Works on mobile + desktop. */
+function CanvasFlame({
+  width = 46,
+  height = 76,
+  className,
+  style,
+}: {
+  width?: number;
+  height?: number;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [ok, setOk] = useState(true);
 
-  const colorMap: Record<string, { main: string; wax: string; shadow: string; glow: string }> = {
-    white: { 
-      main: "#f8f9fa", 
-      wax: "#ffffff", 
-      shadow: "rgba(0,0,0,0.15)", 
-      glow: "rgba(255,248,220,0.8)" 
-    },
-    gold: { 
-      main: "#fdf6e3", 
-      wax: "#f4e4bc", 
-      shadow: "rgba(139,69,19,0.2)", 
-      glow: "rgba(255,215,0,0.6)" 
-    },
-    rose: { 
-      main: "#fef7f7", 
-      wax: "#f7e6e6", 
-      shadow: "rgba(139,69,19,0.15)", 
-      glow: "rgba(255,182,193,0.5)" 
-    },
-    azure: { 
-      main: "#f0f8ff", 
-      wax: "#e6f3ff", 
-      shadow: "rgba(70,130,180,0.15)", 
-      glow: "rgba(173,216,230,0.6)" 
-    },
-    violet: { 
-      main: "#f8f4ff", 
-      wax: "#f0e6ff", 
-      shadow: "rgba(75,0,130,0.15)", 
-      glow: "rgba(221,160,221,0.5)" 
-    },
-    emerald: { 
-      main: "#f0fff0", 
-      wax: "#e6ffe6", 
-      shadow: "rgba(34,139,34,0.15)", 
-      glow: "rgba(144,238,144,0.5)" 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const gl =
+      canvas.getContext("webgl", { premultipliedAlpha: false, alpha: true }) ||
+      canvas.getContext("experimental-webgl");
+    if (!gl) {
+      setOk(false);
+      return;
     }
-  };
 
-  const palette = colorMap[color] || colorMap.white;
+    const vertSrc = `
+      attribute vec2 position;
+      varying vec2 vUv;
+      void main() {
+        vUv = (position + 1.0)*0.5;
+        gl_Position = vec4(position, 0.0, 1.0);
+      }
+    `;
 
+    // Fragment shader: fBm noise + teardrop SDF + heat-shimmer + color ramp
+    const fragSrc = `
+      precision mediump float;
+      varying vec2 vUv;
+      uniform float u_time;
+      uniform vec2 u_res;
+
+      // hash / noise (iq)
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123); }
+      float noise(vec2 p){
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        vec2 u = f*f*(3.0-2.0*f);
+        return mix(a, b, u.x) + (c - a)*u.y*(1.0-u.x) + (d - b)*u.x*u.y;
+      }
+      float fbm(vec2 p){
+        float v = 0.0;
+        float a = 0.55;
+        for(int i=0;i<5;i++){
+          v += a*noise(p);
+          p *= 2.02;
+          a *= 0.55;
+        }
+        return v;
+      }
+
+      // teardrop-like mask centered horizontally
+      float flameMask(vec2 uv){
+        // uv in [0,1]
+        uv.x = (uv.x-0.5)*1.1;  // widen control
+        uv.y = (uv.y)*1.2;      // height scale
+        float r = length(vec2(uv.x, max(uv.y*0.9, 0.0)));
+        // base teardrop curve
+        float base = 1.0 - smoothstep(0.0, 1.0, r + 0.15*uv.y);
+        // pinch top
+        base *= smoothstep(0.0, 0.18, 1.0-uv.y);
+        return clamp(base, 0.0, 1.0);
+      }
+
+      // color ramp from white/yellow to orange
+      vec3 ramp(float t){
+        vec3 c1 = vec3(1.000, 0.980, 0.930);
+        vec3 c2 = vec3(1.000, 0.910, 0.520);
+        vec3 c3 = vec3(1.000, 0.620, 0.240);
+        vec3 c4 = vec3(0.950, 0.420, 0.120);
+        if (t < 0.33) return mix(c1, c2, smoothstep(0.0,0.33,t));
+        if (t < 0.66) return mix(c2, c3, smoothstep(0.33,0.66,t));
+        return mix(c3, c4, smoothstep(0.66,1.0,t));
+      }
+
+      void main(){
+        // keep aspect so flame doesn't squash
+        vec2 uv = vUv;
+        uv.x = (uv.x - 0.5) * (u_res.x/u_res.y) + 0.5;
+
+        // rise + swirl using time
+        float t = u_time;
+        vec2 p = vec2(uv.x*2.2, uv.y*3.2 - t*1.6);
+
+        // flicker field
+        float n = fbm(p + vec2(0.0, t*0.8));
+        float n2 = fbm(p*1.4 + vec2(2.7, -t*1.1));
+
+        // base mask + turbulence to edges
+        float mask = flameMask(uv);
+        mask *= smoothstep(0.05, 0.85, n*0.75 + n2*0.25 + 0.2);
+
+        // heat shimmer: offset sample position subtly
+        float shimmer = (noise(uv*12.0 + t*2.0) - 0.5)*0.02;
+        float intensity = clamp(mask + shimmer, 0.0, 1.0);
+
+        // brighten near base like a real wick
+        float wickGlow = smoothstep(0.0, 0.25, uv.y) * (1.0 - uv.y);
+        intensity = clamp(intensity + wickGlow*0.35, 0.0, 1.0);
+
+        // color + alpha
+        vec3 col = ramp(intensity);
+        float alpha = pow(intensity, 1.2);
+
+        // softer edges
+        alpha *= smoothstep(0.02, 0.9, intensity);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `;
+
+    function compile(type: number, src: string) {
+      const s = gl.createShader(type)!;
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(s));
+        setOk(false);
+        return null;
+      }
+      return s;
+    }
+
+    const vs = compile(gl.VERTEX_SHADER, vertSrc);
+    const fs = compile(gl.FRAGMENT_SHADER, fragSrc);
+    if (!vs || !fs) return;
+
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(program));
+      setOk(false);
+      return;
+    }
+    gl.useProgram(program);
+
+    // fullscreen quad
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    const verts = new Float32Array([
+      -1, -1, 1, -1, -1, 1,
+      -1,  1, 1, -1, 1, 1,
+    ]);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(program, "position");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    const u_time = gl.getUniformLocation(program, "u_time");
+    const u_res = gl.getUniformLocation(program, "u_res");
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(u_res, canvas.width, canvas.height);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    let raf = 0;
+    const start = performance.now();
+    const render = () => {
+      const t = (performance.now() - start) / 1000;
+      gl.uniform1f(u_time, t);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      raf = requestAnimationFrame(render);
+    };
+    render();
+
+    return () => cancelAnimationFrame(raf);
+  }, [width, height]);
+
+  if (!ok) return null;
+  return <canvas ref={canvasRef} className={className} style={style} />;
+}
+
+export default function CandleDisplay({ candle }: CandleDisplayProps) {
+  const isEternal = candle.candle_type === "eternal";
   const createdDate = new Date(candle.created_at);
   const formattedDate = createdDate.toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
-
-  // Randomized animation timing for natural feel
-  const flickerDelay = (Math.random() * 2).toFixed(2) + "s";
-  const glowDelay = (Math.random() * 1.5).toFixed(2) + "s";
 
   return (
     <>
       <div className="candle-display">
-        <div className="candle-container">
-          {/* Ambient glow background */}
-          <div 
-            className="ambient-glow"
-            style={{ 
-              background: `radial-gradient(circle at center, ${palette.glow} 0%, transparent 70%)`,
-              animationDelay: glowDelay
-            }}
-          ></div>
+        <div className="stage">
+          {/* Ambient warm halo */}
+          <div className="ambient" aria-hidden />
 
-          {/* Candle holder/base */}
-          <div className="candle-holder">
-            <div className="holder-rim"></div>
-            <div className="holder-body"></div>
+          {/* Photoreal-leaning candle body (shaded SVG) */}
+          <svg
+            className="candle-svg"
+            viewBox="0 0 200 300"
+            role="img"
+            aria-label="White memorial candle"
+          >
+            <defs>
+              {/* edge darkening + front subsurface glow */}
+              <linearGradient id={`waxSide-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stopColor="#d7d7d7" />
+                <stop offset="16%" stopColor="#f7f7f7" />
+                <stop offset="50%" stopColor="#ffffff" />
+                <stop offset="84%" stopColor="#f4f4f4" />
+                <stop offset="100%" stopColor="#d0d0d0" />
+              </linearGradient>
+              <radialGradient id={`waxFront-${candle.id}`} cx="50%" cy="35%" r="65%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="55%" stopColor="#fff7ea" />
+                <stop offset="100%" stopColor="#f1ede7" />
+              </radialGradient>
+              <radialGradient id={`pool-${candle.id}`} cx="50%" cy="55%" r="70%">
+                <stop offset="0%" stopColor="#fff8e6" />
+                <stop offset="60%" stopColor="#ffe7bf" />
+                <stop offset="100%" stopColor="#ffd79e" />
+              </radialGradient>
+              <filter id={`softShadow-${candle.id}`} x="-35%" y="-35%" width="170%" height="190%">
+                <feDropShadow dx="0" dy="2.5" stdDeviation="3" floodOpacity="0.18" />
+              </filter>
+            </defs>
+
+            {/* body */}
+            <g filter={`url(#softShadow-${candle.id})`}>
+              <rect x="40" y="56" width="120" height="210" rx="22" fill={`url(#waxSide-${candle.id})`} />
+              <rect x="40" y="56" width="120" height="210" rx="22" fill={`url(#waxFront-${candle.id})`} opacity="0.9" />
+              {/* concave melted top */}
+              <path
+                d="M50 56 Q100 42 150 56 C153 60 151 64 146 65 C129 71 71 71 54 65 C49 64 47 60 50 56 Z"
+                fill="#fff1db"
+              />
+              {/* inner wax pool */}
+              <ellipse cx="100" cy="67" rx="36" ry="10" fill={`url(#pool-${candle.id})`} opacity="0.9" />
+              {/* vertical glossy band */}
+              <rect x="58" y="64" width="12" height="188" rx="6" fill="#ffffff" opacity="0.35" />
+              <rect x="128" y="64" width="6" height="184" rx="3" fill="#ffffff" opacity="0.22" />
+            </g>
+
+            {/* wick */}
+            <rect x="98.8" y="60" width="2.4" height="18" rx="1" fill="#2a2a2a" />
+          </svg>
+
+          {/* Procedural flame overlay (code-only) */}
+          <CanvasFlame
+            width={46}
+            height={76}
+            className="flame"
+          />
+
+          {/* Soft breathing glow near the flame */}
+          <div className="glow" aria-hidden />
+
+          {/* Gold name tag */}
+          <div className="name-tag" role="img" aria-label={`Name: ${candle.name}`}>
+            <span className="name">{candle.name}</span>
           </div>
 
-          {/* Main candle body */}
-          <div className="candle-body" style={{ backgroundColor: palette.main }}>
-            {/* Wax texture overlay */}
-            <div className="wax-texture" style={{ backgroundColor: palette.wax }}></div>
-            
-            {/* Subtle highlights */}
-            <div className="candle-highlight-left"></div>
-            <div className="candle-highlight-right"></div>
-            
-            {/* Very subtle wax drip */}
-            <div className="wax-drip"></div>
-            
-            {/* Candle top (slightly oval) */}
-            <div className="candle-top" style={{ backgroundColor: palette.wax }}></div>
-          </div>
-
-          {/* Wick */}
-          <div className="wick"></div>
-
-          {/* Realistic flame */}
-          <div className="flame-container" style={{ animationDelay: flickerDelay }}>
-            <div className="flame-outer"></div>
-            <div className="flame-inner"></div>
-            <div className="flame-core"></div>
-          </div>
-
-          {/* Name plaque - elegant and understated */}
-          <div className="name-plaque">
-            <div className="plaque-background"></div>
-            <span className="candle-name-text">{candle.name}</span>
-          </div>
-
-          {/* Eternal indicator */}
-          {isEternal && (
-            <div className="eternal-indicator">
-              <div className="eternal-glow"></div>
-              <span className="eternal-text">∞</span>
-            </div>
-          )}
+          {isEternal && <div className="eternal-badge">Eternal Flame</div>}
         </div>
 
-        {/* Candle information */}
-        <div className="candle-info">
-          <h3 className="candle-title">{candle.name}</h3>
-          
-          {candle.message && (
-            <p className="candle-message">"{candle.message}"</p>
-          )}
-          
-          <div className="candle-meta">
-            <span className="candle-date">Lit on {formattedDate}</span>
-            {candle.amount_paid && (
-              <span className="candle-amount">
-                ${(candle.amount_paid / 100).toFixed(2)}
-              </span>
-            )}
+        <div className="info">
+          <h3 className="title">{candle.name}</h3>
+          {candle.message && <p className="message">"{candle.message}"</p>}
+          <div className="meta">
+            <span>Lit on {formattedDate}</span>
+            {candle.amount_paid && <span>${(candle.amount_paid / 100).toFixed(2)}</span>}
           </div>
         </div>
       </div>
 
       <style jsx>{`
         .candle-display {
-          background: rgba(255,255,255,0.02);
-          backdrop-filter: blur(8px);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 1.25rem;
-          padding: 2rem 1.5rem;
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          background: radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+          border: 1px solid rgba(251,191,36,0.15);
+          backdrop-filter: blur(10px);
+          border-radius: 16px;
+          padding: 20px 18px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 1.5rem;
+          gap: 16px;
+          overflow: hidden;
+        }
+
+        .stage {
           position: relative;
-          overflow: visible;
-          min-height: 380px;
+          width: 260px;
+          max-width: 90vw;
+          display: grid;
+          place-items: center;
+          padding-top: 8px;
         }
 
-        .candle-display:hover {
-          transform: translateY(-2px);
-          background: rgba(255,255,255,0.03);
-          box-shadow: 
-            0 20px 40px rgba(0,0,0,0.1),
-            0 0 30px rgba(251,191,36,0.1);
-          border-color: rgba(255,255,255,0.15);
-        }
-
-        .candle-container {
-          position: relative;
-          width: 80px;
-          height: 200px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-
-        /* Ambient glow effect */
-        .ambient-glow {
+        .ambient {
           position: absolute;
-          top: -10px;
-          left: -15px;
-          right: -15px;
-          bottom: -10px;
-          border-radius: 50%;
-          animation: gentleGlow 4s ease-in-out infinite;
-          z-index: 0;
-          opacity: 0.4;
+          inset: -40px -40px auto -40px;
+          height: 260px;
+          background: radial-gradient(180px 120px at 50% 35%, rgba(255,222,170,0.5), rgba(255,180,80,0.14) 60%, transparent 70%);
+          filter: blur(2px);
+          animation: breathe 3.2s ease-in-out infinite;
+          pointer-events: none;
         }
 
-        @keyframes gentleGlow {
-          0%, 100% { opacity: 0.3; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.05); }
+        @keyframes breathe {
+          0%, 100% { opacity: 0.55; transform: scale(1); }
+          50%      { opacity: 0.85; transform: scale(1.03); }
         }
 
-        /* Candle holder/base */
-        .candle-holder {
+        .candle-svg {
+          width: 200px;
+          height: 300px;
+          display: block;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        .flame {
           position: absolute;
-          bottom: 0;
-          width: 90px;
-          height: 12px;
-          z-index: 1;
-        }
-
-        .holder-rim {
-          width: 100%;
-          height: 4px;
-          background: linear-gradient(135deg, #d4af37 0%, #ffd700 50%, #b8860b 100%);
-          border-radius: 4px 4px 0 0;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
-
-        .holder-body {
-          width: 95%;
-          height: 8px;
-          margin: 0 auto;
-          background: linear-gradient(135deg, #b8860b 0%, #daa520 50%, #8b6914 100%);
-          border-radius: 0 0 2px 2px;
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-        }
-
-        /* Main candle body - more realistic proportions */
-        .candle-body {
-          position: absolute;
-          bottom: 12px;
-          width: 64px;
-          height: 160px;
-          border-radius: 2px 2px 4px 4px;
-          box-shadow: 
-            0 0 20px rgba(0,0,0,0.1),
-            inset -8px 0 15px rgba(0,0,0,0.05),
-            inset 8px 0 15px rgba(255,255,255,0.1);
-          z-index: 2;
-        }
-
-        /* Wax texture overlay */
-        .wax-texture {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          border-radius: inherit;
-          opacity: 0.7;
-          background-image: 
-            radial-gradient(circle at 20% 30%, rgba(255,255,255,0.1) 1px, transparent 1px),
-            radial-gradient(circle at 70% 60%, rgba(0,0,0,0.02) 1px, transparent 1px),
-            radial-gradient(circle at 40% 80%, rgba(255,255,255,0.05) 1px, transparent 1px);
-          background-size: 8px 8px, 12px 12px, 6px 6px;
-        }
-
-        /* Subtle highlights for realism */
-        .candle-highlight-left {
-          position: absolute;
-          top: 10px;
-          left: 2px;
-          width: 8px;
-          height: 120px;
-          background: linear-gradient(to bottom, 
-            rgba(255,255,255,0.3) 0%,
-            rgba(255,255,255,0.1) 50%,
-            transparent 100%);
-          border-radius: 4px;
-          filter: blur(1px);
-        }
-
-        .candle-highlight-right {
-          position: absolute;
-          top: 20px;
-          right: 4px;
-          width: 3px;
-          height: 80px;
-          background: linear-gradient(to bottom, 
-            transparent 0%,
-            rgba(255,255,255,0.15) 30%,
-            rgba(255,255,255,0.05) 100%);
-          border-radius: 2px;
-          filter: blur(0.5px);
-        }
-
-        /* Subtle wax drip */
-        .wax-drip {
-          position: absolute;
-          top: 40px;
-          right: -1px;
-          width: 3px;
-          height: 15px;
-          background: inherit;
-          border-radius: 0 2px 2px 0;
-          opacity: 0.8;
-          box-shadow: 1px 0 2px rgba(0,0,0,0.1);
-        }
-
-        /* Candle top */
-        .candle-top {
-          position: absolute;
-          top: -2px;
-          left: -2px;
-          right: -2px;
-          height: 8px;
-          border-radius: 50%;
-          box-shadow: 
-            0 2px 4px rgba(0,0,0,0.1),
-            inset 0 1px 2px rgba(255,255,255,0.2);
-        }
-
-        /* Wick */
-        .wick {
-          position: absolute;
-          top: -15px;
+          top: 18px;      /* tune to align with the SVG wick */
           left: 50%;
           transform: translateX(-50%);
-          width: 2px;
-          height: 12px;
-          background: linear-gradient(to bottom, #2d2d2d 0%, #1a1a1a 100%);
-          border-radius: 1px;
-          z-index: 4;
+          width: 46px;
+          height: 76px;
+          mix-blend-mode: screen;
+          filter: drop-shadow(0 0 12px rgba(255,170,60,0.6));
+          pointer-events: none;
         }
 
-        /* Realistic flame */
-        .flame-container {
-          position: absolute;
-          top: -35px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 16px;
-          height: 28px;
-          z-index: 5;
-          animation: naturalFlicker 2.5s ease-in-out infinite;
-        }
-
-        @keyframes naturalFlicker {
-          0%, 100% { 
-            transform: translateX(-50%) scale(1) rotate(-0.5deg); 
-            opacity: 0.95; 
-          }
-          25% { 
-            transform: translateX(-50%) scale(1.02) rotate(0.5deg); 
-            opacity: 1; 
-          }
-          50% { 
-            transform: translateX(-50%) scale(0.98) rotate(-0.3deg); 
-            opacity: 0.92; 
-          }
-          75% { 
-            transform: translateX(-50%) scale(1.01) rotate(0.3deg); 
-            opacity: 0.98; 
-          }
-        }
-
-        .flame-outer {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: radial-gradient(ellipse at 50% 80%, 
-            #ff6b1a 0%, 
-            #ff8c42 30%, 
-            #ffaa6b 60%, 
-            rgba(255,170,107,0.4) 100%);
-          border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-          filter: blur(1px);
-        }
-
-        .flame-inner {
-          position: absolute;
-          top: 3px;
-          left: 3px;
-          right: 3px;
-          bottom: 6px;
-          background: radial-gradient(ellipse at 50% 70%, 
-            #ffd93d 0%, 
-            #ffeb3b 40%, 
-            rgba(255,235,59,0.8) 80%, 
-            transparent 100%);
-          border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-        }
-
-        .flame-core {
+        .glow {
           position: absolute;
           top: 6px;
           left: 50%;
           transform: translateX(-50%);
-          width: 4px;
-          height: 12px;
-          background: radial-gradient(ellipse at center, 
-            #ffffff 0%, 
-            #fff8dc 50%, 
-            rgba(255,248,220,0.5) 100%);
-          border-radius: 50%;
-          filter: blur(0.5px);
+          width: 220px;
+          height: 160px;
+          background: radial-gradient(110px 80px at 50% 35%, rgba(255,220,150,0.85), rgba(255,185,90,0.25) 60%, transparent 70%);
+          filter: blur(10px);
+          opacity: 0.7;
+          animation: breathe 3.2s ease-in-out infinite;
+          pointer-events: none;
         }
 
-        /* Elegant name plaque */
-        .name-plaque {
-          position: absolute;
-          bottom: -8px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 3;
-          text-align: center;
-          min-width: 100px;
-        }
-
-        .plaque-background {
-          position: absolute;
-          top: -4px;
-          left: -12px;
-          right: -12px;
-          bottom: -4px;
-          background: linear-gradient(135deg, 
-            rgba(212,175,55,0.9) 0%, 
-            rgba(255,215,0,0.8) 50%, 
-            rgba(184,134,11,0.9) 100%);
-          border-radius: 12px;
-          box-shadow: 
-            0 2px 8px rgba(0,0,0,0.2),
-            inset 0 1px 2px rgba(255,255,255,0.3);
-          filter: blur(0.5px);
-        }
-
-        .candle-name-text {
-          position: relative;
-          display: inline-block;
-          padding: 4px 8px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: #2d1810;
-          text-shadow: 0 1px 1px rgba(255,255,255,0.3);
-          letter-spacing: 0.5px;
-          z-index: 1;
-        }
-
-        /* Eternal indicator */
-        .eternal-indicator {
-          position: absolute;
-          top: -45px;
-          right: -10px;
-          z-index: 6;
-        }
-
-        .eternal-glow {
-          position: absolute;
-          top: -2px;
-          left: -2px;
-          right: -2px;
-          bottom: -2px;
-          background: radial-gradient(circle, rgba(255,215,0,0.4) 0%, transparent 70%);
-          border-radius: 50%;
-          animation: eternalPulse 3s ease-in-out infinite;
-        }
-
-        @keyframes eternalPulse {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.2); }
-        }
-
-        .eternal-text {
-          position: relative;
-          display: flex;
+        .name-tag {
+          margin-top: 8px;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 20px;
-          height: 20px;
-          background: linear-gradient(135deg, #ffd700, #ffed4e);
-          border-radius: 50%;
-          font-size: 0.875rem;
-          font-weight: bold;
-          color: #8b4513;
-          text-shadow: 0 1px 1px rgba(255,255,255,0.3);
-          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+          padding: 6px 12px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #caa85a, #a27d2c);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.35),
+            0 6px 16px rgba(251,191,36,0.25);
+          min-width: 120px;
+        }
+        .name {
+          display: inline-block;
+          background: linear-gradient(180deg, #fff2c9, #e9c15a);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          font-weight: 700;
+          letter-spacing: 0.2px;
+          text-shadow: 0 1px 0 rgba(0,0,0,0.1);
+          font-size: 0.9rem;
         }
 
-        /* Candle information styling */
-        .candle-info {
-          text-align: center;
-          width: 100%;
-          max-width: 240px;
+        .eternal-badge {
+          position: absolute;
+          top: 6px;
+          right: 8px;
+          background: linear-gradient(135deg, #fbbf24, #f59e0b);
+          color: #fff;
+          padding: 3px 8px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
 
-        .candle-title {
-          font-size: 1.125rem;
-          font-weight: 600;
+        .info { text-align: center; max-width: 420px; }
+        .title {
+          margin: 8px 0 6px 0;
+          font-size: 1.12rem;
           color: #fbbf24;
-          margin: 0 0 0.75rem 0;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-          line-height: 1.3;
+          font-weight: 600;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.25);
         }
-
-        .candle-message {
-          font-size: 0.875rem;
+        .message {
+          margin: 0 0 10px 0;
+          font-size: 0.9rem;
           color: #fde68a;
           font-style: italic;
-          margin: 0 0 1rem 0;
-          opacity: 0.9;
-          line-height: 1.4;
-          text-align: center;
+          opacity: 0.95;
         }
-
-        .candle-meta {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 1rem;
-          font-size: 0.75rem;
+        .meta {
+          display: inline-flex;
+          gap: 12px;
+          font-size: 0.78rem;
           color: #fde68a;
-          opacity: 0.7;
+          opacity: 0.8;
         }
 
-        .candle-date, .candle-amount {
-          font-weight: 500;
-        }
-
-        /* Mobile Optimizations */
-        @media (max-width: 640px) {
-          .candle-display { 
-            padding: 1.5rem 1rem;
-            min-height: 280px;
-          }
-          
-          .candle-container {
-            width: 70px;
-            height: 180px;
-          }
-          
-          .candle-body {
-            width: 56px;
-            height: 140px;
-          }
-          
-          .candle-holder {
-            width: 80px;
-          }
-          
-          .candle-title { 
-            font-size: 1rem; 
-          }
-          
-          .candle-message { 
-            font-size: 0.8125rem; 
-          }
-        }
-
-        @media (max-width: 375px) {
-          .candle-display { 
-            padding: 1.25rem 0.75rem;
-            min-height: 260px;
-          }
-          
-          .candle-container {
-            width: 60px;
-            height: 160px;
-          }
-          
-          .candle-body {
-            width: 48px;
-            height: 120px;
-          }
-          
-          .candle-holder {
-            width: 70px;
-          }
-          
-          .candle-title { 
-            font-size: 0.9375rem; 
-          }
-          
-          .candle-message { 
-            font-size: 0.75rem; 
-          }
-          
-          .candle-meta {
-            flex-direction: column;
-            gap: 0.25rem;
-            font-size: 0.6875rem;
-          }
-
-          .name-plaque {
-            min-width: 80px;
-          }
-
-          .candle-name-text {
-            font-size: 0.6875rem;
-            padding: 3px 6px;
-          }
+        /* Mobile tweaks */
+        @media (max-width: 480px) {
+          .stage { width: 220px; }
+          .candle-svg { width: 180px; height: 270px; }
+          .flame { top: 16px; width: 42px; height: 70px; }
+          .name { font-size: 0.85rem; }
         }
       `}</style>
     </>
