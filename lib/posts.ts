@@ -41,10 +41,11 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // Simple query first - just get posts
+  // FIXED: Add proper filtering for home feed
   let q = supabase
     .from("posts")
     .select("*")
+    .or(`user_id.eq.${uid},visibility.eq.public`) // Show my posts + public posts
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -442,8 +443,11 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
     };
   }
 
-  const fileExt = file.name.split('.').pop();
+  // FIXED: Better file extension handling
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+  console.log(`Uploading ${type}: ${fileName}`); // Add logging
 
   const { data, error } = await supabase.storage
     .from('post-media')
@@ -457,9 +461,11 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
     return { url: null, error: error.message };
   }
 
+  console.log(`Upload successful: ${data.path}`); // Add logging
+
   // Return the storage path, not the public URL
   // This will be stored in the database
-  return { url: fileName, error: null };
+  return { url: data.path, error: null };
 }
 
 export async function toggleLike(post_id: string) {
@@ -492,25 +498,34 @@ export async function addComment(post_id: string, body: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
   
+  if (!body.trim()) {
+    return { ok: false, error: "Comment cannot be empty" };
+  }
+  
   console.log(`Adding comment to post ${post_id}: "${body}"`);
   
-  const { data, error } = await supabase
-    .from("post_comments")
-    .insert({ 
-      post_id, 
-      user_id: uid, 
-      body 
-    })
-    .select()
-    .single();
-    
-  if (!error) {
-    console.log(`Comment added successfully:`, data);
-  } else {
-    console.error(`Error adding comment:`, error);
+  try {
+    const { data, error } = await supabase
+      .from("post_comments")
+      .insert({ 
+        post_id, 
+        user_id: uid, 
+        body: body.trim() // Ensure trimmed
+      })
+      .select()
+      .single();
+      
+    if (!error) {
+      console.log(`Comment added successfully:`, data);
+    } else {
+      console.error(`Error adding comment:`, error);
+    }
+      
+    return { ok: !error, error: error?.message || null };
+  } catch (err) {
+    console.error('Comment error:', err);
+    return { ok: false, error: 'Failed to add comment' };
   }
-    
-  return { ok: !error, error: error?.message || null };
 }
 
 export async function sendCoCreatorNotifications(
