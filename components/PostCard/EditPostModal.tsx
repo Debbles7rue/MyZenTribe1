@@ -1,11 +1,10 @@
-// components/PostCard/EditPostModal.tsx
+// components/PostCard/EditPostModal.tsx - Redesigned with Better UX
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Post, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
 import { supabase } from "@/lib/supabaseClient";
 import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
-import styles from "./styles.module.css";
 
 interface EditPostModalProps {
   post: Post;
@@ -14,24 +13,17 @@ interface EditPostModalProps {
   onSave: () => void;
 }
 
-interface Friend {
-  id: string;
-  full_name: string;
-  avatar_url?: string;
-}
-
 export default function EditPostModal({ 
   post, 
   currentMedia,
   onClose, 
   onSave 
 }: EditPostModalProps) {
+  const [activeTab, setActiveTab] = useState<'content' | 'media' | 'people' | 'privacy'>('content');
   const [editBody, setEditBody] = useState(post.body || '');
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [showCoCreators, setShowCoCreators] = useState(false);
-  const [showTagging, setShowTagging] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>(post.co_creators || []);
   const [taggedUsers, setTaggedUsers] = useState<string[]>(post.tagged_users || []);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -41,6 +33,7 @@ export default function EditPostModal({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [mediaToRemove, setMediaToRemove] = useState<string[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get current user
   useEffect(() => {
@@ -231,215 +224,360 @@ export default function EditPostModal({
     !mediaToRemove.includes(media.url)
   );
 
+  const hasChanges = 
+    editBody !== post.body ||
+    JSON.stringify(coCreators) !== JSON.stringify(post.co_creators) ||
+    JSON.stringify(taggedUsers) !== JSON.stringify(post.tagged_users) ||
+    privacy !== post.privacy ||
+    allowShare !== post.allow_share ||
+    allowComments !== post.allow_comments ||
+    newFiles.length > 0 ||
+    mediaToRemove.length > 0;
+
   return (
-    <div className={styles.editModalOverlay} onClick={onClose}>
-      <div className={`${styles.editModalContent} ${styles.professional}`} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.editModalHeader}>
-          <h2>{isPostOwner ? 'Edit Post' : 'Add to Post'}</h2>
-          <button onClick={onClose} className={styles.closeButton}>×</button>
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-container" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="edit-modal-header">
+          <div className="header-content">
+            <h2>{isPostOwner ? 'Edit Post' : 'Add to Post'}</h2>
+            <p className="header-subtitle">
+              {isPostOwner ? 'Make changes to your post' : 'Add photos and videos to this post'}
+            </p>
+          </div>
+          <button onClick={onClose} className="close-button">
+            <span>✕</span>
+          </button>
         </div>
-        
-        <div className={styles.editModalBody}>
-          {/* Text Content Section */}
-          <div className={styles.editSection}>
-            <label className={styles.editLabel}>
-              {isPostOwner ? 'Edit Caption' : 'Add Caption'}
-            </label>
-            <textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              placeholder="What's on your mind?"
-              rows={4}
-              className={styles.editTextareaClean}
-              disabled={!isPostOwner && !isCoCreator}
-            />
+
+        <div className="edit-modal-body">
+          {/* Sidebar Navigation */}
+          <div className="sidebar">
+            <nav className="tab-nav">
+              <button 
+                className={`tab-button ${activeTab === 'content' ? 'active' : ''}`}
+                onClick={() => setActiveTab('content')}
+              >
+                <span className="tab-icon">📝</span>
+                <span className="tab-label">Caption</span>
+              </button>
+              
+              <button 
+                className={`tab-button ${activeTab === 'media' ? 'active' : ''}`}
+                onClick={() => setActiveTab('media')}
+              >
+                <span className="tab-icon">📷</span>
+                <span className="tab-label">Photos & Videos</span>
+                {(filteredCurrentMedia.length + selectedFiles.length) > 0 && (
+                  <span className="tab-badge">{filteredCurrentMedia.length + selectedFiles.length}</span>
+                )}
+              </button>
+
+              {isPostOwner && (
+                <>
+                  <button 
+                    className={`tab-button ${activeTab === 'people' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('people')}
+                  >
+                    <span className="tab-icon">👥</span>
+                    <span className="tab-label">Tag People</span>
+                    {(coCreators.length + taggedUsers.length) > 0 && (
+                      <span className="tab-badge">{coCreators.length + taggedUsers.length}</span>
+                    )}
+                  </button>
+
+                  <button 
+                    className={`tab-button ${activeTab === 'privacy' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('privacy')}
+                  >
+                    <span className="tab-icon">🔒</span>
+                    <span className="tab-label">Privacy</span>
+                  </button>
+                </>
+              )}
+            </nav>
+
+            {/* Save Actions in Sidebar */}
+            <div className="sidebar-actions">
+              <button 
+                onClick={handleSave}
+                disabled={isSaving || uploadingFiles || !hasChanges}
+                className="save-button"
+              >
+                {isSaving ? (
+                  <>
+                    <span className="spinner"></span>
+                    Saving...
+                  </>
+                ) : uploadingFiles ? (
+                  <>
+                    <span className="spinner"></span>
+                    Uploading...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+              
+              <button onClick={onClose} className="cancel-button">
+                Cancel
+              </button>
+              
+              {hasChanges && (
+                <p className="changes-indicator">
+                  <span className="changes-dot"></span>
+                  You have unsaved changes
+                </p>
+              )}
+            </div>
           </div>
 
-          {/* Current Media Preview */}
-          {filteredCurrentMedia.length > 0 && (
-            <div className={styles.editSection}>
-              <label className={styles.editLabel}>Current Photos & Videos</label>
-              <div className={styles.currentMediaGrid}>
-                {filteredCurrentMedia.map((media, index) => (
-                  <div key={index} className={styles.mediaPreviewItem}>
-                    {media.type === 'video' ? (
-                      <video src={media.url} className={styles.mediaPreview} />
-                    ) : (
-                      <img src={media.url} alt="" className={styles.mediaPreview} />
-                    )}
-                    {isPostOwner && (
-                      <button
-                        onClick={() => removeExistingMedia(media.url)}
-                        className={styles.removeMediaBtn}
-                        title="Remove this media"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
+          {/* Main Content Area */}
+          <div className="content-area">
+            {/* Caption Tab */}
+            {activeTab === 'content' && (
+              <div className="tab-content">
+                <div className="content-header">
+                  <h3>Edit Caption</h3>
+                  <p>Update the text content of your post</p>
+                </div>
+                
+                <div className="input-group">
+                  <label className="input-label">Caption</label>
+                  <textarea
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                    placeholder="What's on your mind? Share your gratitude, intention, or moment..."
+                    rows={6}
+                    className="caption-textarea"
+                    disabled={!isPostOwner && !isCoCreator}
+                  />
+                  <div className="char-count">{editBody.length}/1000</div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Removed Media (can be restored) */}
-          {mediaToRemove.length > 0 && (
-            <div className={styles.editSection}>
-              <label className={styles.editLabel}>Removed Media (click to restore)</label>
-              <div className={styles.removedMediaGrid}>
-                {currentMedia
-                  .filter(media => mediaToRemove.includes(media.url))
-                  .map((media, index) => (
-                    <div key={index} className={styles.removedMediaItem} onClick={() => restoreExistingMedia(media.url)}>
-                      {media.type === 'video' ? (
-                        <video src={media.url} className={styles.mediaPreview} />
-                      ) : (
-                        <img src={media.url} alt="" className={styles.mediaPreview} />
-                      )}
-                      <div className={styles.removedOverlay}>
-                        <span>Click to restore</span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
+            {/* Media Tab */}
+            {activeTab === 'media' && (
+              <div className="tab-content">
+                <div className="content-header">
+                  <h3>Photos & Videos</h3>
+                  <p>Add new media or manage existing files</p>
+                </div>
 
-          <div className={styles.editActionsGrid}>
-            {/* Add Photos & Videos */}
-            <div className={styles.actionCard}>
-              <h3>📸 Add Photos & Videos</h3>
-              <p>Add more memories to this post</p>
-              <label className={`${styles.actionButton} ${styles.primary}`}>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-                Choose Files
-              </label>
-              {selectedFiles.length > 0 && (
-                <div className={styles.filePreview}>
-                  <div className={styles.selectedFiles}>
-                    {selectedFiles.map((file, index) => (
-                      <div key={index} className={styles.fileItem}>
-                        <span className={styles.fileName}>{file.name}</span>
-                        <span className={styles.fileSize}>
-                          ({(file.size / 1024 / 1024).toFixed(1)}MB)
-                        </span>
-                        <button 
-                          onClick={() => removeFile(index)}
-                          className={styles.removeFileBtn}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                {/* Add New Media */}
+                <div className="section">
+                  <div className="section-header">
+                    <h4>Add New Files</h4>
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="add-media-button"
+                      disabled={uploadingFiles}
+                    >
+                      <span>📁</span>
+                      Choose Files
+                    </button>
                   </div>
                   
-                  {/* Preview new images */}
-                  {previewUrls.length > 0 && (
-                    <div className={styles.newMediaPreview}>
-                      {previewUrls.map((url, index) => (
-                        <img 
-                          key={index}
-                          src={url} 
-                          alt="Preview" 
-                          className={styles.mediaPreview}
-                        />
-                      ))}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                  />
+
+                  {selectedFiles.length > 0 && (
+                    <div className="new-files-preview">
+                      <h5>New Files to Upload</h5>
+                      <div className="file-list">
+                        {selectedFiles.map((file, index) => (
+                          <div key={index} className="file-item">
+                            <div className="file-info">
+                              <span className="file-icon">
+                                {file.type.startsWith('video') ? '🎥' : '📷'}
+                              </span>
+                              <div className="file-details">
+                                <span className="file-name">{file.name}</span>
+                                <span className="file-size">
+                                  {(file.size / 1024 / 1024).toFixed(1)} MB
+                                </span>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => removeFile(index)}
+                              className="remove-file-button"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Co-Creators (Owner only) */}
-            {isPostOwner && (
-              <div className={styles.actionCard}>
-                <h3>👥 Co-Creators</h3>
-                <p>Tag friends who can add photos</p>
-                <button 
-                  className={`${styles.actionButton} ${styles.secondary}`}
-                  onClick={() => setShowCoCreators(!showCoCreators)}
-                >
-                  {coCreators.length > 0 ? `${coCreators.length} Tagged` : 'Tag Friends'}
-                </button>
-                {showCoCreators && (
-                  <div className={styles.dropdownSection}>
+                {/* Current Media */}
+                {filteredCurrentMedia.length > 0 && (
+                  <div className="section">
+                    <div className="section-header">
+                      <h4>Current Media</h4>
+                      <p>{filteredCurrentMedia.length} files</p>
+                    </div>
+                    
+                    <div className="media-grid">
+                      {filteredCurrentMedia.map((media, index) => (
+                        <div key={index} className="media-item">
+                          {media.type === 'video' ? (
+                            <video src={media.url} className="media-preview" />
+                          ) : (
+                            <img src={media.url} alt="" className="media-preview" />
+                          )}
+                          {isPostOwner && (
+                            <button
+                              onClick={() => removeExistingMedia(media.url)}
+                              className="remove-media-button"
+                              title="Remove this media"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Removed Media */}
+                {mediaToRemove.length > 0 && (
+                  <div className="section">
+                    <div className="section-header">
+                      <h4>Removed Media</h4>
+                      <p>Click any item to restore it</p>
+                    </div>
+                    
+                    <div className="media-grid">
+                      {currentMedia
+                        .filter(media => mediaToRemove.includes(media.url))
+                        .map((media, index) => (
+                          <div 
+                            key={index} 
+                            className="media-item removed"
+                            onClick={() => restoreExistingMedia(media.url)}
+                          >
+                            {media.type === 'video' ? (
+                              <video src={media.url} className="media-preview" />
+                            ) : (
+                              <img src={media.url} alt="" className="media-preview" />
+                            )}
+                            <div className="restore-overlay">
+                              <span>↺ Click to restore</span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* People Tab */}
+            {activeTab === 'people' && isPostOwner && (
+              <div className="tab-content">
+                <div className="content-header">
+                  <h3>Tag People</h3>
+                  <p>Tag friends and add co-creators to your post</p>
+                </div>
+
+                <div className="section">
+                  <div className="input-group">
+                    <label className="input-label">
+                      <span className="label-icon">👥</span>
+                      Co-Creators
+                    </label>
+                    <p className="input-description">
+                      Co-creators can add their own photos and videos to this post
+                    </p>
                     <SimpleFriendDropdown
                       value={coCreators}
                       onChange={setCoCreators}
                     />
                   </div>
-                )}
-              </div>
-            )}
+                </div>
 
-            {/* Tag People (Owner only) */}
-            {isPostOwner && (
-              <div className={styles.actionCard}>
-                <h3>🏷️ Tag People</h3>
-                <p>Tag people in this post</p>
-                <button 
-                  className={`${styles.actionButton} ${styles.secondary}`}
-                  onClick={() => setShowTagging(!showTagging)}
-                >
-                  {taggedUsers.length > 0 ? `${taggedUsers.length} Tagged` : 'Tag People'}
-                </button>
-                {showTagging && (
-                  <div className={styles.dropdownSection}>
+                <div className="section">
+                  <div className="input-group">
+                    <label className="input-label">
+                      <span className="label-icon">🏷️</span>
+                      Tagged People
+                    </label>
+                    <p className="input-description">
+                      People tagged in this post will be notified and can view it
+                    </p>
                     <SimpleFriendDropdown
                       value={taggedUsers}
                       onChange={setTaggedUsers}
                     />
                   </div>
-                )}
+                </div>
               </div>
             )}
 
-            {/* Privacy Settings (Owner only) */}
-            {isPostOwner && (
-              <div className={styles.actionCard}>
-                <h3>🔒 Privacy & Settings</h3>
-                <div className={styles.privacySettings}>
-                  <div className={styles.settingItem}>
-                    <label>Who can see this post</label>
+            {/* Privacy Tab */}
+            {activeTab === 'privacy' && isPostOwner && (
+              <div className="tab-content">
+                <div className="content-header">
+                  <h3>Privacy & Settings</h3>
+                  <p>Control who can see and interact with your post</p>
+                </div>
+
+                <div className="section">
+                  <div className="input-group">
+                    <label className="input-label">
+                      <span className="label-icon">👁️</span>
+                      Who can see this post
+                    </label>
                     <select 
-                      className={styles.privacySelect}
+                      className="privacy-select"
                       value={privacy}
                       onChange={(e) => setPrivacy(e.target.value)}
                     >
-                      <option value="friends">Friends</option>
-                      <option value="public">Everyone</option>
-                      <option value="private">Only Me</option>
+                      <option value="private">🔒 Only Me</option>
+                      <option value="friends">👥 Friends</option>
+                      <option value="public">🌍 Everyone</option>
                     </select>
                   </div>
-                  
-                  <div className={styles.settingItem}>
-                    <label>
+                </div>
+
+                <div className="section">
+                  <div className="checkbox-group">
+                    <label className="checkbox-label">
                       <input
                         type="checkbox"
                         checked={allowShare}
                         onChange={(e) => setAllowShare(e.target.checked)}
-                        className={styles.checkbox}
+                        className="checkbox-input"
                       />
-                      Allow sharing
+                      <span className="checkbox-custom"></span>
+                      <span className="checkbox-text">
+                        <span className="checkbox-title">Allow sharing</span>
+                        <span className="checkbox-description">Others can share this post</span>
+                      </span>
                     </label>
-                  </div>
-                  
-                  <div className={styles.settingItem}>
-                    <label>
+                    
+                    <label className="checkbox-label">
                       <input
                         type="checkbox"
                         checked={allowComments}
                         onChange={(e) => setAllowComments(e.target.checked)}
-                        className={styles.checkbox}
+                        className="checkbox-input"
                       />
-                      Allow comments
+                      <span className="checkbox-custom"></span>
+                      <span className="checkbox-text">
+                        <span className="checkbox-title">Allow comments</span>
+                        <span className="checkbox-description">People can comment on this post</span>
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -447,20 +585,640 @@ export default function EditPostModal({
             )}
           </div>
         </div>
-
-        <div className={styles.editModalFooter}>
-          <button onClick={onClose} disabled={isSaving} className={styles.cancelButton}>
-            Cancel
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving || uploadingFiles}
-            className={`${styles.saveButton} ${styles.primary}`}
-          >
-            {isSaving ? 'Saving...' : uploadingFiles ? 'Uploading...' : 'Save Changes'}
-          </button>
-        </div>
       </div>
+
+      <style jsx>{`
+        .edit-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.8);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+          backdrop-filter: blur(4px);
+        }
+
+        .edit-modal-container {
+          background: white;
+          border-radius: 20px;
+          width: 100%;
+          max-width: 1000px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .edit-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 24px 28px;
+          border-bottom: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+
+        .header-content h2 {
+          margin: 0 0 4px 0;
+          font-size: 24px;
+          font-weight: 700;
+          color: #1a202c;
+        }
+
+        .header-subtitle {
+          margin: 0;
+          font-size: 14px;
+          color: #6b7280;
+        }
+
+        .close-button {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #f3f4f6;
+          border: none;
+          cursor: pointer;
+          font-size: 18px;
+          color: #6b7280;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .close-button:hover {
+          background: #e5e7eb;
+          color: #374151;
+          transform: scale(1.05);
+        }
+
+        .edit-modal-body {
+          display: flex;
+          flex: 1;
+          overflow: hidden;
+        }
+
+        .sidebar {
+          width: 280px;
+          background: #fafafa;
+          border-right: 1px solid #f3f4f6;
+          display: flex;
+          flex-direction: column;
+          padding: 0;
+        }
+
+        .tab-nav {
+          flex: 1;
+          padding: 20px 0;
+        }
+
+        .tab-button {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px 24px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 15px;
+          font-weight: 500;
+          color: #6b7280;
+          transition: all 0.2s ease;
+          position: relative;
+        }
+
+        .tab-button:hover {
+          background: rgba(139,92,246,0.05);
+          color: #8b5cf6;
+        }
+
+        .tab-button.active {
+          background: rgba(139,92,246,0.1);
+          color: #8b5cf6;
+          font-weight: 600;
+        }
+
+        .tab-button.active::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 4px;
+          background: #8b5cf6;
+        }
+
+        .tab-icon {
+          font-size: 18px;
+        }
+
+        .tab-label {
+          flex: 1;
+          text-align: left;
+        }
+
+        .tab-badge {
+          background: #8b5cf6;
+          color: white;
+          font-size: 12px;
+          padding: 2px 8px;
+          border-radius: 12px;
+          min-width: 20px;
+          text-align: center;
+          font-weight: 600;
+        }
+
+        .sidebar-actions {
+          padding: 20px 24px;
+          border-top: 1px solid #f3f4f6;
+        }
+
+        .save-button {
+          width: 100%;
+          padding: 14px 20px;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-weight: 600;
+          font-size: 15px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-bottom: 12px;
+          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .save-button:hover:not(:disabled) {
+          background: linear-gradient(135deg, #7c3aed, #6d28d9);
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(139,92,246,0.4);
+        }
+
+        .save-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .cancel-button {
+          width: 100%;
+          padding: 12px 20px;
+          background: #f3f4f6;
+          color: #6b7280;
+          border: none;
+          border-radius: 12px;
+          font-weight: 500;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .cancel-button:hover {
+          background: #e5e7eb;
+          color: #374151;
+        }
+
+        .changes-indicator {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 12px;
+          font-size: 13px;
+          color: #f59e0b;
+        }
+
+        .changes-dot {
+          width: 8px;
+          height: 8px;
+          background: #f59e0b;
+          border-radius: 50%;
+          animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
+        .content-area {
+          flex: 1;
+          overflow-y: auto;
+          padding: 0;
+        }
+
+        .tab-content {
+          padding: 28px 32px;
+          max-width: 600px;
+        }
+
+        .content-header {
+          margin-bottom: 32px;
+        }
+
+        .content-header h3 {
+          margin: 0 0 8px 0;
+          font-size: 20px;
+          font-weight: 700;
+          color: #1a202c;
+        }
+
+        .content-header p {
+          margin: 0;
+          font-size: 14px;
+          color: #6b7280;
+        }
+
+        .section {
+          margin-bottom: 32px;
+        }
+
+        .section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .section-header h4 {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .section-header p {
+          margin: 0;
+          font-size: 13px;
+          color: #9ca3af;
+        }
+
+        .input-group {
+          margin-bottom: 24px;
+        }
+
+        .input-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+          font-size: 14px;
+          color: #374151;
+          margin-bottom: 8px;
+        }
+
+        .label-icon {
+          font-size: 16px;
+        }
+
+        .input-description {
+          margin: 0 0 12px 0;
+          font-size: 13px;
+          color: #6b7280;
+        }
+
+        .caption-textarea {
+          width: 100%;
+          padding: 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          font-size: 15px;
+          resize: vertical;
+          min-height: 120px;
+          font-family: inherit;
+          line-height: 1.5;
+        }
+
+        .caption-textarea:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+
+        .char-count {
+          text-align: right;
+          font-size: 12px;
+          color: #9ca3af;
+          margin-top: 8px;
+        }
+
+        .add-media-button {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: #8b5cf6;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 500;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .add-media-button:hover:not(:disabled) {
+          background: #7c3aed;
+          transform: translateY(-1px);
+        }
+
+        .add-media-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .new-files-preview {
+          margin-top: 20px;
+          padding: 20px;
+          background: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .new-files-preview h5 {
+          margin: 0 0 16px 0;
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .file-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .file-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+        }
+
+        .file-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+        }
+
+        .file-icon {
+          font-size: 18px;
+        }
+
+        .file-details {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .file-name {
+          font-size: 14px;
+          font-weight: 500;
+          color: #374151;
+        }
+
+        .file-size {
+          font-size: 12px;
+          color: #9ca3af;
+        }
+
+        .remove-file-button {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: #fee2e2;
+          color: #dc2626;
+          border: none;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .remove-file-button:hover {
+          background: #fecaca;
+        }
+
+        .media-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 16px;
+        }
+
+        .media-item {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: 12px;
+          overflow: hidden;
+          background: #f3f4f6;
+          border: 1px solid #e5e7eb;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .media-item:hover {
+          transform: scale(1.02);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .media-item.removed {
+          opacity: 0.6;
+        }
+
+        .media-preview {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .remove-media-button {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(0,0,0,0.7);
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .remove-media-button:hover {
+          background: #dc2626;
+          transform: scale(1.1);
+        }
+
+        .restore-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          text-align: center;
+        }
+
+        .privacy-select {
+          width: 100%;
+          padding: 12px 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          background: white;
+          font-size: 14px;
+          cursor: pointer;
+        }
+
+        .privacy-select:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+
+        .checkbox-group {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .checkbox-label {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          cursor: pointer;
+          padding: 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          transition: all 0.2s ease;
+        }
+
+        .checkbox-label:hover {
+          border-color: #8b5cf6;
+          background: rgba(139,92,246,0.02);
+        }
+
+        .checkbox-input {
+          display: none;
+        }
+
+        .checkbox-custom {
+          width: 20px;
+          height: 20px;
+          border: 2px solid #e5e7eb;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          flex-shrink: 0;
+        }
+
+        .checkbox-input:checked + .checkbox-custom {
+          background: #8b5cf6;
+          border-color: #8b5cf6;
+        }
+
+        .checkbox-input:checked + .checkbox-custom::after {
+          content: '✓';
+          color: white;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .checkbox-text {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          flex: 1;
+        }
+
+        .checkbox-title {
+          font-weight: 500;
+          font-size: 14px;
+          color: #374151;
+        }
+
+        .checkbox-description {
+          font-size: 13px;
+          color: #6b7280;
+        }
+
+        .spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top: 2px solid white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+          .edit-modal-container {
+            margin: 10px;
+            max-height: 95vh;
+          }
+
+          .edit-modal-body {
+            flex-direction: column;
+          }
+
+          .sidebar {
+            width: 100%;
+            border-right: none;
+            border-bottom: 1px solid #f3f4f6;
+          }
+
+          .tab-nav {
+            display: flex;
+            overflow-x: auto;
+            padding: 0;
+          }
+
+          .tab-button {
+            min-width: 120px;
+            padding: 12px 16px;
+          }
+
+          .sidebar-actions {
+            display: none;
+          }
+
+          .tab-content {
+            padding: 20px;
+          }
+
+          .media-grid {
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
