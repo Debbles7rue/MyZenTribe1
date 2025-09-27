@@ -1255,18 +1255,16 @@
 
 /* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
-  * {
+  .postCardCompact,
+  .postCardExpanded,
+  .modalOverlay,
+  .lightboxOverlay,
+  .editModalContainer {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
   
-  .swipeHint {
-    animation: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
   .postCardCompact *,
   .postCardExpanded *,
   .photoGridExpanded *,
@@ -1275,5 +1273,9 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  
+  .swipeHint {
+    animation: none;
   }
 }
