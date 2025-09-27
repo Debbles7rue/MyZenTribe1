@@ -1,4 +1,4 @@
-// components/PostComposer.tsx - Enhanced with PhotosFeed features
+// components/PostComposer.tsx - Streamlined and User-Friendly
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -24,26 +24,26 @@ type StatusMessage = {
   message: string;
 };
 
-const VISIBILITY_OPTIONS = [
-  { value: "private", label: "🔒 Only Me", description: "Only appears on your profile" },
-  { value: "friends", label: "🤝 Friends", description: "Shows in friends' feeds" },
-  { value: "public", label: "🌍 Everyone", description: "Visible to all users" },
+const PRIVACY_OPTIONS = [
+  { value: "private", label: "Only Me", icon: "🔒", description: "Only appears on your profile" },
+  { value: "friends", label: "Friends", icon: "👥", description: "Visible to your friends" },
+  { value: "public", label: "Everyone", icon: "🌍", description: "Visible to all users" },
 ] as const;
 
 export default function PostComposer({ onPostCreated, className = "" }: PostComposerProps) {
   const [body, setBody] = useState("");
-  const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState<Post["privacy"]>("friends");
   const [allowShare, setAllowShare] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [uploadedMedia, setUploadedMedia] = useState<MediaUpload[]>([]);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoCreators, setShowCoCreators] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusMessage | null>(null);
+  const [showPrivacyOptions, setShowPrivacyOptions] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-dismiss status messages
   useEffect(() => {
@@ -53,8 +53,13 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     }
   }, [status]);
 
-  // Meditation-themed emojis
-  const zenEmojis = ['🧘', '🙏', '✨', '💜', '🌸', '☮️', '🕉️', '💫', '🌟', '🤲', '🧘‍♀️', '🧘‍♂️', '🌺', '🍃', '🌿'];
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [body]);
 
   async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -162,15 +167,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     setUploadedMedia(prev => prev.filter((_, i) => i !== index));
   }
 
-  function clearAllMedia() {
-    uploadedMedia.forEach(media => {
-      if (media.preview.startsWith('blob:')) {
-        URL.revokeObjectURL(media.preview);
-      }
-    });
-    setUploadedMedia([]);
-  }
-
   async function post() {
     if (!body.trim() && uploadedMedia.length === 0) {
       setStatus({ type: 'error', message: "Please add some text or media to your post" });
@@ -187,11 +183,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         type: m.type
       }));
 
-      // Create post with enhanced description
-      const postBody = body.trim() || "Shared a moment";
-      const fullDescription = description.trim() ? `${postBody}\n\n${description.trim()}` : postBody;
-
-      const result = await createPost(fullDescription, privacy, {
+      const result = await createPost(body.trim() || "Shared a moment", privacy, {
         allow_share: allowShare,
         co_creators: coCreators.length > 0 ? coCreators : null,
         media: mediaItems.length > 0 ? mediaItems : undefined
@@ -212,11 +204,11 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       
       // Reset form
       setBody("");
-      setDescription("");
       setUploadedMedia([]);
       setCoCreators([]);
       setShowCoCreators(false);
-      setStatus({ type: 'success', message: 'Post created successfully!' });
+      setShowPrivacyOptions(false);
+      setStatus({ type: 'success', message: 'Post shared successfully!' });
       
       // Call callback
       if (onPostCreated) {
@@ -230,12 +222,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     }
   }
 
-  function insertEmoji(emoji: string) {
-    setBody(body + emoji);
-    setShowEmojiPicker(false);
-  }
-
   const canPost = body.trim() || uploadedMedia.length > 0;
+  const selectedPrivacy = PRIVACY_OPTIONS.find(opt => opt.value === privacy);
 
   return (
     <div className={`post-composer ${className}`}>
@@ -250,232 +238,181 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       )}
 
       <div className="composer-card">
-        <h3 className="composer-title">Share Your Journey</h3>
-        
-        {/* Mood Check-in */}
-        <div className="mood-section">
-          <p className="mood-prompt">How are you feeling today?</p>
-          <div className="mood-buttons">
-            {['😌 Peaceful', '😊 Grateful', '💪 Energized', '😔 Struggling', '🤗 Loved'].map(mood => (
-              <button
-                key={mood}
-                className="mood-btn"
-                onClick={() => setBody(`Feeling ${mood} today. ${body}`)}
-              >
-                {mood}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Main Text Input */}
-        <div className="input-group">
-          <label className="input-label">Share your thoughts</label>
-          <div className="text-input-container">
-            <textarea
-              className="main-textarea"
-              rows={3}
-              placeholder="What's on your mind? Share your gratitude, intention, or moment..."
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              maxLength={500}
-            />
-            <button
-              className="emoji-btn"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              title="Add emoji"
-            >
-              🧘
-            </button>
-          </div>
-          <div className="char-count">{body.length}/500</div>
-          
-          {/* Emoji Picker */}
-          {showEmojiPicker && (
-            <div className="emoji-picker">
-              <div className="emoji-grid">
-                {zenEmojis.map(emoji => (
-                  <button
-                    key={emoji}
-                    className="emoji-option"
-                    onClick={() => insertEmoji(emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Description Field */}
-        <div className="input-group">
-          <label className="input-label">Tell the full story (optional)</label>
+        <div className="text-section">
           <textarea
-            className="description-textarea"
-            rows={2}
-            placeholder="Add more details... Friends you tag can contribute to this story!"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            ref={textareaRef}
+            className="main-textarea"
+            placeholder="What's on your mind? Share your gratitude, intention, or moment..."
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
             maxLength={1000}
+            rows={3}
           />
-          <div className="char-count">{description.length}/1000</div>
+          <div className="char-count">{body.length}/1000</div>
         </div>
 
-        {/* Media Upload Section */}
-        <div className="media-section">
-          <label className="input-label">Photos & Videos</label>
-          
-          <div className="file-upload-area">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={handleMediaSelect}
-              className="file-input"
-              id="media-upload"
-              disabled={uploadingMedia}
-            />
-            <label htmlFor="media-upload" className="file-upload-label">
-              <span className="upload-icon">📁</span>
-              <span className="upload-text">Choose photos & videos</span>
-              <span className="upload-hint">Up to 10 files, 50MB each</span>
-            </label>
+        {/* Media Preview Grid */}
+        {uploadedMedia.length > 0 && (
+          <div className="media-preview">
+            <div className="media-grid">
+              {uploadedMedia.map((media, index) => (
+                <div key={index} className="media-item">
+                  {media.type === 'image' ? (
+                    <img 
+                      src={media.preview} 
+                      alt="Preview"
+                      className="media-thumbnail"
+                    />
+                  ) : (
+                    <div className="video-preview">
+                      <span className="video-icon">🎥</span>
+                      <span className="video-name">{media.filename}</span>
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => removeMedia(index)}
+                    className="remove-media-btn"
+                    title="Remove file"
+                    type="button"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            {uploadingMedia && (
+              <div className="uploading-indicator">
+                <div className="upload-spinner"></div>
+                <span>Uploading files...</span>
+              </div>
+            )}
           </div>
-
-          {/* Media Preview Grid */}
-          {uploadedMedia.length > 0 && (
-            <div className="media-preview">
-              <div className="media-header">
-                <span className="media-count">Selected Files ({uploadedMedia.length}/10)</span>
-                <button 
-                  onClick={clearAllMedia}
-                  className="clear-all-btn"
-                  type="button"
-                >
-                  Clear All
-                </button>
-              </div>
-              <div className="media-grid">
-                {uploadedMedia.map((media, index) => (
-                  <div key={index} className="media-item">
-                    {media.type === 'image' ? (
-                      <img 
-                        src={media.preview} 
-                        alt="Preview"
-                        className="media-thumbnail"
-                      />
-                    ) : (
-                      <div className="video-preview">
-                        <span className="video-icon">🎥</span>
-                        <span className="video-name">{media.filename}</span>
-                      </div>
-                    )}
-                    <button 
-                      onClick={() => removeMedia(index)}
-                      className="remove-media-btn"
-                      title="Remove file"
-                      type="button"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {uploadingMedia && (
-            <div className="uploading-indicator">
-              <div className="upload-spinner"></div>
-              <span>Uploading files...</span>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Co-creators Section */}
-        <div className="collaborators-section">
-          <button
-            type="button"
-            className="collaborators-toggle"
-            onClick={() => setShowCoCreators(!showCoCreators)}
-          >
-            👥 Tag Friends for Collaboration {coCreators.length > 0 && `(${coCreators.length})`}
-          </button>
-          
-          {showCoCreators && (
-            <div className="collaborators-content">
-              <p className="collaborators-help">
-                Tagged friends can add their own photos and videos to this post!
-              </p>
-              <SimpleFriendDropdown
-                value={coCreators}
-                onChange={setCoCreators}
-              />
-              {coCreators.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setCoCreators([])}
-                  className="clear-collaborators-btn"
-                >
-                  Clear all selections
-                </button>
-              )}
+        {showCoCreators && (
+          <div className="collaborators-section">
+            <div className="section-header">
+              <h4>Tag Friends to Collaborate</h4>
+              <p>Tagged friends can add their own photos and videos to this post!</p>
             </div>
-          )}
-        </div>
+            <SimpleFriendDropdown
+              value={coCreators}
+              onChange={setCoCreators}
+            />
+            {coCreators.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setCoCreators([])}
+                className="clear-btn"
+              >
+                Clear selections
+              </button>
+            )}
+          </div>
+        )}
 
-        {/* Visibility & Options */}
-        <div className="options-section">
-          <div className="visibility-group">
-            <label className="input-label">Who can see this?</label>
-            <div className="visibility-options">
-              {VISIBILITY_OPTIONS.map(option => (
-                <label key={option.value} className="visibility-option">
+        {/* Privacy Options */}
+        {showPrivacyOptions && (
+          <div className="privacy-section">
+            <div className="section-header">
+              <h4>Who can see this post?</h4>
+            </div>
+            <div className="privacy-options">
+              {PRIVACY_OPTIONS.map(option => (
+                <label key={option.value} className="privacy-option">
                   <input
                     type="radio"
-                    name="visibility"
+                    name="privacy"
                     value={option.value}
                     checked={privacy === option.value}
                     onChange={(e) => setPrivacy(e.target.value as Post["privacy"])}
                   />
                   <div className="option-content">
-                    <div className="option-label">{option.label}</div>
+                    <div className="option-label">
+                      <span className="option-icon">{option.icon}</span>
+                      {option.label}
+                    </div>
                     <div className="option-description">{option.description}</div>
                   </div>
                 </label>
               ))}
             </div>
+            
+            <label className="share-option">
+              <input
+                type="checkbox"
+                checked={allowShare}
+                onChange={(e) => setAllowShare(e.target.checked)}
+              />
+              <span>Allow others to share this post</span>
+            </label>
           </div>
-          
-          <label className="share-option">
-            <input
-              type="checkbox"
-              checked={allowShare}
-              onChange={(e) => setAllowShare(e.target.checked)}
-            />
-            <span>Allow others to share this post</span>
-          </label>
+        )}
+
+        {/* Action Bar */}
+        <div className="action-bar">
+          <div className="action-buttons">
+            <button
+              type="button"
+              className="action-btn media-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingMedia}
+            >
+              📷 Photos & Videos
+              {uploadedMedia.length > 0 && (
+                <span className="count-badge">{uploadedMedia.length}</span>
+              )}
+            </button>
+            
+            <button
+              type="button"
+              className="action-btn collaborators-btn"
+              onClick={() => setShowCoCreators(!showCoCreators)}
+            >
+              👥 Tag Friends
+              {coCreators.length > 0 && (
+                <span className="count-badge">{coCreators.length}</span>
+              )}
+            </button>
+            
+            <button
+              type="button"
+              className="action-btn privacy-btn"
+              onClick={() => setShowPrivacyOptions(!showPrivacyOptions)}
+            >
+              <span className="privacy-icon">{selectedPrivacy?.icon}</span>
+              {selectedPrivacy?.label}
+            </button>
+          </div>
+
+          <button 
+            className="post-btn"
+            onClick={post} 
+            disabled={saving || uploadingMedia || !canPost}
+          >
+            {saving ? (
+              <>
+                <span className="btn-spinner">⏳</span>
+                Sharing...
+              </>
+            ) : (
+              'Share'
+            )}
+          </button>
         </div>
 
-        {/* Post Button */}
-        <button 
-          className="post-btn"
-          onClick={post} 
-          disabled={saving || uploadingMedia || !canPost}
-        >
-          {saving ? (
-            <>
-              <span className="btn-spinner">⏳</span>
-              Creating...
-            </>
-          ) : (
-            <>
-              ✨ Share Post
-            </>
-          )}
-        </button>
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleMediaSelect}
+          className="file-input"
+          disabled={uploadingMedia}
+        />
       </div>
 
       <style jsx>{`
@@ -524,240 +461,62 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         .composer-card {
           background: white;
           border-radius: 1rem;
-          padding: 1.5rem;
+          padding: 0;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
           border: 1px solid rgba(139,92,246,0.1);
+          overflow: hidden;
         }
 
-        .composer-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 1.5rem 0;
-        }
-
-        /* Mood Section */
-        .mood-section {
-          margin-bottom: 1.5rem;
-          padding: 1rem;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-          border-radius: 0.75rem;
-        }
-
-        .mood-prompt {
-          font-size: 0.875rem;
-          color: #4b5563;
-          margin: 0 0 0.75rem 0;
-        }
-
-        .mood-buttons {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-        }
-
-        .mood-btn {
-          padding: 0.5rem 0.75rem;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 9999px;
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .mood-btn:hover {
-          background: #8b5cf6;
-          color: white;
-          border-color: #8b5cf6;
-        }
-
-        /* Input Groups */
-        .input-group {
-          margin-bottom: 1.5rem;
-        }
-
-        .input-label {
-          display: block;
-          font-weight: 500;
-          color: #374151;
-          margin-bottom: 0.5rem;
-          font-size: 0.875rem;
-        }
-
-        .text-input-container {
-          position: relative;
-        }
-
-        .main-textarea,
-        .description-textarea {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #d1d5db;
-          border-radius: 0.5rem;
-          font-size: 1rem;
-          resize: vertical;
-          font-family: inherit;
-          transition: all 0.2s;
+        /* Text Section */
+        .text-section {
+          padding: 1.5rem 1.5rem 1rem;
         }
 
         .main-textarea {
-          padding-right: 3rem;
-        }
-
-        .main-textarea:focus,
-        .description-textarea:focus {
-          outline: none;
-          border-color: #8b5cf6;
-          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
-        }
-
-        .emoji-btn {
-          position: absolute;
-          top: 0.5rem;
-          right: 0.5rem;
-          background: none;
+          width: 100%;
+          padding: 0;
           border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          padding: 0.25rem;
-          border-radius: 0.375rem;
-          transition: background 0.2s;
+          font-size: 1.1rem;
+          resize: none;
+          font-family: inherit;
+          background: transparent;
+          min-height: 60px;
+          overflow-y: hidden;
         }
 
-        .emoji-btn:hover {
-          background: rgba(139,92,246,0.1);
+        .main-textarea:focus {
+          outline: none;
+        }
+
+        .main-textarea::placeholder {
+          color: #9ca3af;
         }
 
         .char-count {
           text-align: right;
           font-size: 0.75rem;
-          color: #6b7280;
-          margin-top: 0.25rem;
-        }
-
-        /* Emoji Picker */
-        .emoji-picker {
-          position: absolute;
-          top: 100%;
-          right: 0;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.5rem;
-          padding: 0.75rem;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          z-index: 10;
-        }
-
-        .emoji-grid {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 0.25rem;
-        }
-
-        .emoji-option {
-          background: none;
-          border: none;
-          font-size: 1.25rem;
-          padding: 0.5rem;
-          cursor: pointer;
-          border-radius: 0.25rem;
-          transition: background 0.2s;
-        }
-
-        .emoji-option:hover {
-          background: #f3f4f6;
-        }
-
-        /* Media Section */
-        .media-section {
-          margin-bottom: 1.5rem;
-        }
-
-        .file-input {
-          display: none;
-        }
-
-        .file-upload-area {
-          margin-bottom: 1rem;
-        }
-
-        .file-upload-label {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          border: 2px dashed #d1d5db;
-          border-radius: 0.75rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          background: #f9fafb;
-        }
-
-        .file-upload-label:hover {
-          border-color: #8b5cf6;
-          background: rgba(139,92,246,0.02);
-        }
-
-        .upload-icon {
-          font-size: 2rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .upload-text {
-          font-weight: 500;
-          color: #374151;
-        }
-
-        .upload-hint {
-          font-size: 0.75rem;
-          color: #6b7280;
-          margin-top: 0.25rem;
+          color: #9ca3af;
+          margin-top: 0.5rem;
         }
 
         /* Media Preview */
         .media-preview {
-          padding: 1rem;
-          background: #f9fafb;
-          border-radius: 0.75rem;
-          border: 1px solid #e5e7eb;
-        }
-
-        .media-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-          font-size: 0.875rem;
-        }
-
-        .media-count {
-          font-weight: 500;
-          color: #374151;
-        }
-
-        .clear-all-btn {
-          background: none;
-          border: none;
-          color: #dc2626;
-          cursor: pointer;
-          font-size: 0.875rem;
-          text-decoration: underline;
+          padding: 0 1.5rem 1rem;
         }
 
         .media-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
           gap: 0.75rem;
+          margin-bottom: 1rem;
         }
 
         .media-item {
           position: relative;
           aspect-ratio: 1;
-          border-radius: 0.5rem;
+          border-radius: 0.75rem;
           overflow: hidden;
-          background: white;
+          background: #f3f4f6;
           border: 1px solid #e5e7eb;
         }
 
@@ -775,7 +534,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           height: 100%;
           padding: 0.5rem;
           text-align: center;
-          background: #f3f4f6;
         }
 
         .video-icon {
@@ -792,8 +550,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
 
         .remove-media-btn {
           position: absolute;
-          top: 0.25rem;
-          right: 0.25rem;
+          top: 0.375rem;
+          right: 0.375rem;
           width: 1.5rem;
           height: 1.5rem;
           background: rgba(0,0,0,0.7);
@@ -818,7 +576,9 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           gap: 0.5rem;
           color: #6b7280;
           font-size: 0.875rem;
-          margin-top: 0.5rem;
+          padding: 0.5rem;
+          background: #f9fafb;
+          border-radius: 0.5rem;
         }
 
         .upload-spinner {
@@ -830,87 +590,59 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           animation: spin 1s linear infinite;
         }
 
-        /* Collaborators Section */
-        .collaborators-section {
-          margin-bottom: 1.5rem;
+        /* Expandable Sections */
+        .collaborators-section,
+        .privacy-section {
+          padding: 1rem 1.5rem;
+          border-top: 1px solid #f3f4f6;
+          background: #fafafa;
         }
 
-        .collaborators-toggle {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          width: 100%;
-          padding: 0.75rem 1rem;
-          background: linear-gradient(135deg, #fef3c7, #fde68a);
-          border: 1px solid #f59e0b;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          font-weight: 500;
-          color: #92400e;
-          transition: all 0.2s;
+        .section-header h4 {
+          margin: 0 0 0.25rem 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #374151;
         }
 
-        .collaborators-toggle:hover {
-          background: linear-gradient(135deg, #fde68a, #fcd34d);
-        }
-
-        .collaborators-content {
-          margin-top: 1rem;
-          padding: 1rem;
-          background: #fffbeb;
-          border-radius: 0.5rem;
-          border: 1px solid #fde68a;
-        }
-
-        .collaborators-help {
-          font-size: 0.875rem;
-          color: #92400e;
+        .section-header p {
           margin: 0 0 1rem 0;
+          font-size: 0.875rem;
+          color: #6b7280;
         }
 
-        .clear-collaborators-btn {
+        .clear-btn {
           background: none;
           border: none;
           color: #dc2626;
           cursor: pointer;
           font-size: 0.875rem;
           text-decoration: underline;
-          margin-top: 0.5rem;
+          margin-top: 0.75rem;
         }
 
-        /* Options Section */
-        .options-section {
-          margin-bottom: 1.5rem;
-        }
-
-        .visibility-group {
+        /* Privacy Options */
+        .privacy-options {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
           margin-bottom: 1rem;
         }
 
-        .visibility-options {
+        .privacy-option {
           display: flex;
-          flex-direction: column;
+          align-items: center;
           gap: 0.75rem;
-        }
-
-        .visibility-option {
-          display: flex;
-          align-items: flex-start;
-          gap: 0.75rem;
-          padding: 1rem;
+          padding: 0.75rem;
           border: 1px solid #e5e7eb;
           border-radius: 0.5rem;
           cursor: pointer;
           transition: all 0.2s;
         }
 
-        .visibility-option:hover {
+        .privacy-option:hover {
           border-color: #8b5cf6;
           background: rgba(139,92,246,0.02);
-        }
-
-        .visibility-option input[type="radio"] {
-          margin-top: 0.125rem;
         }
 
         .option-content {
@@ -918,13 +650,20 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         }
 
         .option-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
           font-weight: 500;
-          margin-bottom: 0.25rem;
           color: #374151;
+          margin-bottom: 0.125rem;
+        }
+
+        .option-icon {
+          font-size: 1rem;
         }
 
         .option-description {
-          font-size: 0.875rem;
+          font-size: 0.75rem;
           color: #6b7280;
         }
 
@@ -937,22 +676,76 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           color: #374151;
         }
 
-        /* Post Button */
+        /* Action Bar */
+        .action-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem 1.5rem;
+          border-top: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .action-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.375rem;
+          padding: 0.5rem 0.75rem;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+          transition: all 0.2s;
+          position: relative;
+        }
+
+        .action-btn:hover {
+          border-color: #8b5cf6;
+          background: rgba(139,92,246,0.02);
+        }
+
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .count-badge {
+          background: #8b5cf6;
+          color: white;
+          font-size: 0.75rem;
+          padding: 0.125rem 0.375rem;
+          border-radius: 9999px;
+          margin-left: 0.25rem;
+          min-width: 1.25rem;
+          text-align: center;
+        }
+
+        .privacy-icon {
+          font-size: 1rem;
+        }
+
         .post-btn {
-          width: 100%;
-          padding: 0.875rem;
+          padding: 0.75rem 1.5rem;
           background: linear-gradient(135deg, #8b5cf6, #7c3aed);
           color: white;
           border: none;
           border-radius: 0.5rem;
           font-weight: 600;
-          font-size: 1rem;
+          font-size: 0.875rem;
           cursor: pointer;
           transition: all 0.2s;
           display: flex;
           align-items: center;
-          justify-content: center;
           gap: 0.5rem;
+          min-width: 80px;
+          justify-content: center;
         }
 
         .post-btn:hover:not(:disabled) {
@@ -971,30 +764,40 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           animation: spin 1s linear infinite;
         }
 
+        .file-input {
+          display: none;
+        }
+
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
 
         /* Mobile Responsiveness */
         @media (max-width: 640px) {
-          .composer-card {
-            padding: 1rem;
+          .action-buttons {
+            flex-wrap: wrap;
+            gap: 0.375rem;
           }
 
-          .mood-buttons {
-            justify-content: center;
+          .action-btn {
+            font-size: 0.8125rem;
+            padding: 0.4375rem 0.625rem;
           }
 
           .media-grid {
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
           }
 
-          .visibility-options {
-            gap: 0.5rem;
+          .privacy-options {
+            gap: 0.375rem;
           }
 
-          .visibility-option {
-            padding: 0.75rem;
+          .privacy-option {
+            padding: 0.625rem;
+          }
+
+          .option-description {
+            font-size: 0.6875rem;
           }
         }
       `}</style>
