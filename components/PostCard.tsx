@@ -237,6 +237,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const handleIndividualPhotoClick = (photo: {url: string; type: 'image' | 'video'; id?: string}) => {
     setSelectedPhoto(photo);
   };
+
+  const handleToggleCommentInput = () => {
+    setShowCommentInput(!showCommentInput);
+    if (!showCommentInput && comments.length === 0 && post.comment_count > 0) {
+      loadComments();
+    }
+  };
   
   const canEdit = currentUserId === post.user_id || isCoCreator;
   const canDelete = currentUserId === post.user_id;
@@ -389,6 +396,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               onPhotoClick={handlePhotoClick}
               isCompact={false}
               onIndividualPhotoClick={handleIndividualPhotoClick}
+              onLike={handleLike}
+              currentUserId={currentUserId}
+              onToggleCommentInput={handleToggleCommentInput}
+              showCommentInput={showCommentInput}
             />
           )}
         </div>
@@ -407,12 +418,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           onLike={handleLike}
           onComment={handleComment}
           onShare={handleShare}
-          onToggleCommentInput={() => {
-            setShowCommentInput(!showCommentInput);
-            if (!showCommentInput && comments.length === 0 && post.comment_count > 0) {
-              loadComments();
-            }
-          }}
+          onToggleCommentInput={handleToggleCommentInput}
           onCommentTextChange={setCommentText}
           onShowAllComments={() => setShowAllComments(true)}
           allCommentsCount={comments.length}
