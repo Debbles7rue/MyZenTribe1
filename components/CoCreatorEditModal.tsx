@@ -33,8 +33,16 @@ export default function CoCreatorEditModal({
   const [additionalComment, setAdditionalComment] = useState("");
   const [existingMedia, setExistingMedia] = useState<any[]>([]);
   const [mediaToRemove, setMediaToRemove] = useState<string[]>([]);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper function to add debug messages that appear in UI
+  const addDebug = (message: string) => {
+    console.log(message);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
 
   // Load existing media and validate permissions on mount
   useEffect(() => {
@@ -43,23 +51,16 @@ export default function CoCreatorEditModal({
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       
-      console.log('🔍 Loading post data for user:', currentUserId);
-      console.log('📱 Device info:', {
-        userAgent: navigator.userAgent,
-        isMobile,
-        isIOS,
-        cookieEnabled: navigator.cookieEnabled,
-        onLine: navigator.onLine
-      });
+      addDebug(`Loading post data for user: ${currentUserId}`);
+      addDebug(`Device info - Mobile: ${isMobile}, iOS: ${isIOS}, Online: ${navigator.onLine}`);
       
       // Check authentication state
       const { data: { session }, error: authError } = await supabase.auth.getSession();
-      console.log('🔐 Auth state:', {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        accessToken: session?.access_token ? 'present' : 'missing',
-        authError
-      });
+      addDebug(`Auth state - Has session: ${!!session}, User ID: ${session?.user?.id}, Token: ${session?.access_token ? 'present' : 'missing'}`);
+      
+      if (authError) {
+        addDebug(`Auth error: ${authError.message}`);
+      }
       
       // First, get the post to verify co-creator status
       const { data: post, error: postError } = await supabase
@@ -69,23 +70,12 @@ export default function CoCreatorEditModal({
         .single();
       
       if (postError) {
-        console.error('❌ Error loading post:', postError);
-        console.log('🚨 Post error details:', {
-          code: postError.code,
-          message: postError.message,
-          details: postError.details,
-          hint: postError.hint
-        });
+        addDebug(`Error loading post: ${postError.message} (Code: ${postError.code})`);
         return;
       }
       
-      console.log('📋 Post data:', {
-        originalCreator: post.user_id,
-        coCreators: post.co_creators,
-        isUserCreator: post.user_id === currentUserId,
-        isUserCoCreator: post.co_creators?.includes(currentUserId),
-        passedIsCreator: isCreator
-      });
+      addDebug(`Post data - Creator: ${post.user_id}, Co-creators: [${post.co_creators?.join(', ') || 'none'}]`);
+      addDebug(`User status - Is creator: ${post.user_id === currentUserId}, Is co-creator: ${post.co_creators?.includes(currentUserId)}, Passed isCreator: ${isCreator}`);
       
       // Load existing media
       const { data: media, error: mediaError } = await supabase
@@ -95,23 +85,9 @@ export default function CoCreatorEditModal({
         .order('created_at', { ascending: true });
       
       if (mediaError) {
-        console.error('❌ Error loading media:', mediaError);
-        console.log('🚨 Media error details:', {
-          code: mediaError.code,
-          message: mediaError.message,
-          details: mediaError.details,
-          hint: mediaError.hint
-        });
+        addDebug(`Error loading media: ${mediaError.message} (Code: ${mediaError.code})`);
       } else {
-        console.log('📸 Media loaded:', media?.length || 0, 'items');
-        media?.forEach((m, i) => {
-          console.log(`Media ${i}:`, {
-            id: m.id,
-            uploadedBy: m.uploaded_by,
-            canCurrentUserRemove: isCreator || m.uploaded_by === currentUserId,
-            type: m.type || m.media_type
-          });
-        });
+        addDebug(`Media loaded: ${media?.length || 0} items`);
         setExistingMedia(media || []);
       }
     }
