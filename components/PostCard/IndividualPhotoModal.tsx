@@ -1,9 +1,8 @@
-// components/PostCard/IndividualPhotoModal.tsx
+// components/PostCard/IndividualPhotoModal.tsx - Enhanced with better mobile UX
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import styles from "./styles.module.css";
 
 interface IndividualPhotoModalProps {
   photo: {url: string; type: 'image' | 'video'; id?: string};
@@ -32,6 +31,15 @@ interface PhotoReaction {
   };
 }
 
+const reactionTypes = [
+  { type: 'like', emoji: '👍', label: 'Like' },
+  { type: 'love', emoji: '❤️', label: 'Love' },
+  { type: 'laugh', emoji: '😂', label: 'Laugh' },
+  { type: 'wow', emoji: '😮', label: 'Wow' },
+  { type: 'sad', emoji: '😢', label: 'Sad' },
+  { type: 'angry', emoji: '😠', label: 'Angry' }
+];
+
 export default function IndividualPhotoModal({ 
   photo, 
   onClose 
@@ -44,6 +52,13 @@ export default function IndividualPhotoModal({
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [isLoadingReactions, setIsLoadingReactions] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
+  const [hasImageError, setHasImageError] = useState(false);
+  const [activeTab, setActiveTab] = useState<'reactions' | 'comments'>('reactions');
+  
+  const commentInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // Get current user on mount
   useEffect(() => {
@@ -55,7 +70,7 @@ export default function IndividualPhotoModal({
   }, []);
 
   // Load photo-specific comments
-  const loadPhotoComments = async () => {
+  const loadPhotoComments = useCallback(async () => {
     if (!photo.id || isLoadingComments) return;
     
     setIsLoadingComments(true);
@@ -93,10 +108,10 @@ export default function IndividualPhotoModal({
     } finally {
       setIsLoadingComments(false);
     }
-  };
+  }, [photo.id, isLoadingComments]);
 
   // Load photo-specific reactions
-  const loadPhotoReactions = async () => {
+  const loadPhotoReactions = useCallback(async () => {
     if (!photo.id || isLoadingReactions) return;
     
     setIsLoadingReactions(true);
@@ -150,7 +165,7 @@ export default function IndividualPhotoModal({
     } finally {
       setIsLoadingReactions(false);
     }
-  };
+  }, [photo.id, currentUserId, isLoadingReactions]);
 
   // Load data on mount
   useEffect(() => {
@@ -158,7 +173,7 @@ export default function IndividualPhotoModal({
       loadPhotoComments();
       loadPhotoReactions();
     }
-  }, [photo.id, currentUserId]);
+  }, [photo.id, currentUserId, loadPhotoComments, loadPhotoReactions]);
 
   // Handle adding a reaction
   const handleReaction = async (reactionType: string) => {
@@ -203,11 +218,14 @@ export default function IndividualPhotoModal({
       }
     } catch (error) {
       console.error('Error handling reaction:', error);
+    } finally {
+      setShowReactionPicker(false);
     }
   };
 
   // Handle adding a comment
-  const handleAddComment = async () => {
+  const handleAddComment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!commentText.trim() || isCommenting || !currentUserId || !photo.id) return;
     
     setIsCommenting(true);
@@ -234,138 +252,607 @@ export default function IndividualPhotoModal({
     }
   };
 
-  const reactionTypes = [
-    { type: 'like', emoji: '👍', label: 'Like' },
-    { type: 'love', emoji: '❤️', label: 'Love' },
-    { type: 'laugh', emoji: '😂', label: 'Laugh' },
-    { type: 'wow', emoji: '😮', label: 'Wow' },
-    { type: 'sad', emoji: '😢', label: 'Sad' },
-    { type: 'angry', emoji: '😠', label: 'Angry' }
-  ];
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  // Focus comment input when comments tab is selected
+  useEffect(() => {
+    if (activeTab === 'comments' && commentInputRef.current) {
+      commentInputRef.current.focus();
+    }
+  }, [activeTab]);
+
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+    
+    return date.toLocaleDateString();
+  };
+
+  const getTotalReactions = () => {
+    return Object.values(photoReactions).reduce((total, reactions) => total + reactions.length, 0);
+  };
+
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   return (
-    <div className={styles.photoModalOverlay} onClick={onClose}>
-      <div className={styles.photoModalContent} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.modalClose} onClick={onClose}>×</button>
+    <div className="photo-modal-overlay" onClick={handleOverlayClick}>
+      <div className="photo-modal-content" ref={modalRef} onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Close modal">
+          ✕
+        </button>
         
-        <div className={styles.photoModalLayout}>
-          <div className={styles.photoSide}>
+        <div className="photo-modal-layout">
+          {/* Media Side */}
+          <div className="photo-side">
             {photo.type === 'video' ? (
               <video 
                 src={photo.url} 
-                className={styles.modalPhoto}
+                className="modal-photo"
                 controls
                 autoPlay
                 muted
+                onLoadedData={() => setIsImageLoading(false)}
+                onError={() => {
+                  setIsImageLoading(false);
+                  setHasImageError(true);
+                }}
               />
             ) : (
-              <img src={photo.url} alt="" className={styles.modalPhoto} />
+              <>
+                {isImageLoading && (
+                  <div className="media-loading">
+                    <div className="loading-spinner"></div>
+                    <p>Loading image...</p>
+                  </div>
+                )}
+                {hasImageError ? (
+                  <div className="media-error">
+                    <span>🖼️</span>
+                    <p>Failed to load image</p>
+                    <button 
+                      className="retry-button"
+                      onClick={() => {
+                        setHasImageError(false);
+                        setIsImageLoading(true);
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <img 
+                    src={photo.url} 
+                    alt="" 
+                    className="modal-photo"
+                    onLoad={() => setIsImageLoading(false)}
+                    onError={() => {
+                      setIsImageLoading(false);
+                      setHasImageError(true);
+                    }}
+                    style={{ display: isImageLoading ? 'none' : 'block' }}
+                  />
+                )}
+              </>
             )}
           </div>
           
-          <div className={styles.interactionsSide}>
-            <div className={styles.photoReactions}>
-              <h4>Reactions</h4>
-              <div className={styles.reactionButtons}>
-                {reactionTypes.map((reaction) => {
-                  const count = photoReactions[reaction.type]?.length || 0;
-                  const isActive = myReaction === reaction.type;
-                  
-                  return (
-                    <button 
-                      key={reaction.type}
-                      className={`${styles.reactionBtn} ${isActive ? styles.active : ''}`}
-                      onClick={() => handleReaction(reaction.type)}
-                      disabled={!currentUserId}
-                      title={`${reaction.label} this photo`}
-                    >
-                      {reaction.emoji} {reaction.label} {count > 0 && `(${count})`}
-                    </button>
-                  );
-                })}
-              </div>
-              
-              {/* Show who reacted */}
-              {Object.keys(photoReactions).length > 0 && (
-                <div className={styles.reactionsList}>
-                  {Object.entries(photoReactions).map(([type, reactions]) => {
-                    if (reactions.length === 0) return null;
-                    const reactionInfo = reactionTypes.find(r => r.type === type);
-                    if (!reactionInfo) return null;
-                    
-                    return (
-                      <div key={type} className={styles.reactionGroup}>
-                        <span className={styles.reactionEmoji}>{reactionInfo.emoji}</span>
-                        <div className={styles.reactionNames}>
-                          {reactions.slice(0, 3).map((reaction, idx) => (
-                            <span key={reaction.id}>
-                              {reaction.author?.full_name}
-                              {idx < Math.min(reactions.length, 3) - 1 ? ', ' : ''}
-                            </span>
-                          ))}
-                          {reactions.length > 3 && (
-                            <span> and {reactions.length - 3} others</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+          {/* Interactions Side */}
+          <div className="interactions-side">
+            {/* Tab Navigation */}
+            <div className="tab-navigation">
+              <button 
+                className={`tab-btn ${activeTab === 'reactions' ? 'active' : ''}`}
+                onClick={() => setActiveTab('reactions')}
+              >
+                <span className="tab-icon">👍</span>
+                <span className="tab-label">Reactions</span>
+                {getTotalReactions() > 0 && (
+                  <span className="tab-count">{getTotalReactions()}</span>
+                )}
+              </button>
+              <button 
+                className={`tab-btn ${activeTab === 'comments' ? 'active' : ''}`}
+                onClick={() => setActiveTab('comments')}
+              >
+                <span className="tab-icon">💬</span>
+                <span className="tab-label">Comments</span>
+                {photoComments.length > 0 && (
+                  <span className="tab-count">{photoComments.length}</span>
+                )}
+              </button>
             </div>
 
-            <div className={styles.photoComments}>
-              <h4>Comments on this photo</h4>
-              
-              <div className={styles.commentsList}>
-                {isLoadingComments ? (
-                  <div className={styles.loadingComments}>Loading comments...</div>
-                ) : photoComments.length > 0 ? (
-                  photoComments.map(comment => (
-                    <div key={comment.id} className={styles.photoComment}>
-                      <img 
-                        src={comment.author?.avatar_url || '/default-avatar.png'} 
-                        alt="" 
-                        className={styles.commentAvatar}
-                      />
-                      <div className={styles.commentContent}>
-                        <div className={styles.commentAuthor}>{comment.author?.full_name}</div>
-                        <div className={styles.commentText}>{comment.body}</div>
-                        <div className={styles.commentTime}>
-                          {new Date(comment.created_at).toLocaleDateString()}
-                        </div>
+            {/* Tab Content */}
+            <div className="tab-content">
+              {activeTab === 'reactions' ? (
+                <div className="reactions-tab">
+                  {/* Quick Reaction Button */}
+                  {currentUserId && (
+                    <div className="quick-reactions">
+                      <div className="reaction-picker-container">
+                        <button 
+                          className={`quick-reaction-btn ${myReaction ? 'has-reaction' : ''}`}
+                          onClick={() => setShowReactionPicker(!showReactionPicker)}
+                        >
+                          <span className="reaction-emoji">
+                            {myReaction ? reactionTypes.find(r => r.type === myReaction)?.emoji : '👍'}
+                          </span>
+                          <span className="reaction-text">
+                            {myReaction ? reactionTypes.find(r => r.type === myReaction)?.label : 'React'}
+                          </span>
+                        </button>
+
+                        {showReactionPicker && (
+                          <div className="reaction-picker">
+                            {reactionTypes.map((reaction) => (
+                              <button
+                                key={reaction.type}
+                                className={`reaction-option ${myReaction === reaction.type ? 'selected' : ''}`}
+                                onClick={() => handleReaction(reaction.type)}
+                                title={reaction.label}
+                              >
+                                <span className="reaction-emoji">{reaction.emoji}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className={styles.noComments}>No comments on this photo yet</div>
-                )}
-              </div>
+                  )}
 
-              {currentUserId && (
-                <div className={styles.commentInputSection}>
-                  <input
-                    type="text"
-                    placeholder="Comment on this photo..."
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
-                    className={styles.photoCommentInput}
-                    disabled={isCommenting}
-                  />
-                  <button 
-                    onClick={handleAddComment}
-                    disabled={!commentText.trim() || isCommenting}
-                    className={styles.photoCommentBtn}
-                  >
-                    {isCommenting ? 'Posting...' : 'Post'}
-                  </button>
+                  {/* Reactions List */}
+                  <div className="reactions-content">
+                    {isLoadingReactions ? (
+                      <div className="loading-state">
+                        <div className="small-spinner"></div>
+                        <span>Loading reactions...</span>
+                      </div>
+                    ) : Object.keys(photoReactions).length > 0 ? (
+                      <div className="reactions-list">
+                        {Object.entries(photoReactions).map(([type, reactions]) => {
+                          if (reactions.length === 0) return null;
+                          const reactionInfo = reactionTypes.find(r => r.type === type);
+                          if (!reactionInfo) return null;
+                          
+                          return (
+                            <div key={type} className="reaction-group">
+                              <div className="reaction-header">
+                                <span className="reaction-emoji">{reactionInfo.emoji}</span>
+                                <span className="reaction-count">{reactions.length}</span>
+                              </div>
+                              <div className="reaction-users">
+                                {reactions.slice(0, 5).map((reaction) => (
+                                  <div key={reaction.id} className="reaction-user">
+                                    <img 
+                                      src={reaction.author?.avatar_url || '/default-avatar.png'}
+                                      alt=""
+                                      className="reaction-avatar"
+                                    />
+                                    <span className="reaction-name">
+                                      {reaction.author?.full_name || 'User'}
+                                    </span>
+                                    <span className="reaction-time">
+                                      {formatTimeAgo(reaction.created_at)}
+                                    </span>
+                                  </div>
+                                ))}
+                                {reactions.length > 5 && (
+                                  <div className="more-reactions">
+                                    and {reactions.length - 5} others
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <span className="empty-icon">👍</span>
+                        <p>No reactions yet</p>
+                        <span className="empty-hint">Be the first to react!</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="comments-tab">
+                  {/* Comments List */}
+                  <div className="comments-content">
+                    {isLoadingComments ? (
+                      <div className="loading-state">
+                        <div className="small-spinner"></div>
+                        <span>Loading comments...</span>
+                      </div>
+                    ) : photoComments.length > 0 ? (
+                      <div className="comments-list">
+                        {photoComments.map(comment => (
+                          <article key={comment.id} className="photo-comment">
+                            <div className="comment-avatar-container">
+                              <img 
+                                src={comment.author?.avatar_url || '/default-avatar.png'} 
+                                alt={`${comment.author?.full_name || 'User'}'s profile picture`}
+                                className="comment-avatar"
+                              />
+                            </div>
+                            <div className="comment-content">
+                              <div className="comment-bubble">
+                                <div className="comment-author">{comment.author?.full_name || 'User'}</div>
+                                <div className="comment-text">{comment.body}</div>
+                              </div>
+                              <div className="comment-time">
+                                {formatTimeAgo(comment.created_at)}
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <span className="empty-icon">💬</span>
+                        <p>No comments yet</p>
+                        <span className="empty-hint">Start the conversation!</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comment Input */}
+                  {currentUserId && (
+                    <form className="comment-input-section" onSubmit={handleAddComment}>
+                      <div className="comment-input-container">
+                        <input
+                          ref={commentInputRef}
+                          type="text"
+                          placeholder="Add a comment..."
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          className="photo-comment-input"
+                          disabled={isCommenting}
+                          maxLength={500}
+                        />
+                        <button 
+                          type="submit"
+                          disabled={!commentText.trim() || isCommenting}
+                          className="photo-comment-btn"
+                        >
+                          {isCommenting ? (
+                            <span className="small-spinner"></span>
+                          ) : (
+                            'Post'
+                          )}
+                        </button>
+                      </div>
+                      {commentText.length > 400 && (
+                        <div className="char-count">
+                          {commentText.length}/500
+                        </div>
+                      )}
+                    </form>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
+
+      <style jsx>{`
+        .photo-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.9);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+          backdrop-filter: blur(4px);
+        }
+
+        .photo-modal-content {
+          background: white;
+          border-radius: 20px;
+          max-width: 1200px;
+          width: 100%;
+          max-height: 90vh;
+          overflow: hidden;
+          position: relative;
+          box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+
+        .modal-close {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(8px);
+          border: none;
+          color: white;
+          cursor: pointer;
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+          transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+          background: rgba(0,0,0,0.9);
+          transform: scale(1.05);
+        }
+
+        .photo-modal-layout {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          height: 80vh;
+          min-height: 600px;
+        }
+
+        .photo-side {
+          background: #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          border-radius: 20px 0 0 20px;
+          overflow: hidden;
+        }
+
+        .modal-photo {
+          max-width: 100%;
+          max-height: 100%;
+          object-fit: contain;
+        }
+
+        .media-loading,
+        .media-error {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          gap: 16px;
+        }
+
+        .loading-spinner {
+          width: 48px;
+          height: 48px;
+          border: 4px solid rgba(255,255,255,0.3);
+          border-top: 4px solid white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        .small-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid #e5e7eb;
+          border-top: 2px solid #6366f1;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .media-error span {
+          font-size: 48px;
+        }
+
+        .retry-button {
+          padding: 8px 16px;
+          background: #6366f1;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .interactions-side {
+          display: flex;
+          flex-direction: column;
+          background: white;
+          border-radius: 0 20px 20px 0;
+        }
+
+        .tab-navigation {
+          display: flex;
+          border-bottom: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+
+        .tab-btn {
+          flex: 1;
+          padding: 16px 20px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          color: #6b7280;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          justify-content: center;
+          position: relative;
+        }
+
+        .tab-btn:hover {
+          background: rgba(99,102,241,0.05);
+          color: #6366f1;
+        }
+
+        .tab-btn.active {
+          color: #6366f1;
+          background: white;
+          border-bottom: 2px solid #6366f1;
+        }
+
+        .tab-icon {
+          font-size: 16px;
+        }
+
+        .tab-label {
+          font-weight: 600;
+        }
+
+        .tab-count {
+          background: #6366f1;
+          color: white;
+          font-size: 12px;
+          padding: 2px 6px;
+          border-radius: 8px;
+          min-width: 16px;
+          text-align: center;
+          font-weight: 600;
+        }
+
+        .tab-content {
+          flex: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .reactions-tab,
+        .comments-tab {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          padding: 20px;
+        }
+
+        .quick-reactions {
+          margin-bottom: 20px;
+        }
+
+        .reaction-picker-container {
+          position: relative;
+        }
+
+        .quick-reaction-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 16px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 24px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          color: #374151;
+          transition: all 0.2s ease;
+          width: 100%;
+          justify-content: center;
+        }
+
+        .quick-reaction-btn:hover {
+          background: #f1f5f9;
+          border-color: #6366f1;
+          color: #6366f1;
+        }
+
+        .quick-reaction-btn.has-reaction {
+          background: #eef2ff;
+          border-color: #6366f1;
+          color: #6366f1;
+        }
+
+        .reaction-picker {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 50%;
+          transform: translateX(-50%);
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          padding: 8px;
+          box-shadow: 0 10px 32px rgba(0,0,0,0.15);
+          z-index: 10;
+          display: flex;
+          gap: 4px;
+          animation: slideIn 0.2s ease-out;
+        }
+
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        .reaction-option {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: none;
+          border: 2px solid transparent;
+          cursor: pointer;
+          font-size: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .reaction-option:hover {
+          background: #f8fafc;
+          transform: scale(1.1);
+        }
+
+        .reaction-option.selected {
+          border-color: #6366f1;
+          background: #eef2ff;
+        }
+
+        .reactions-content,
+        .comments-content {
+          flex: 1;
+          overflow-y: auto;
+        }
+
+        .loading-state {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          justify-content: center;
+          padding: 40px 20px;
+          color: #6b7280;
