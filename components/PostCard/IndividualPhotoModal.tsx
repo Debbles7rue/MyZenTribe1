@@ -856,3 +856,353 @@ export default function IndividualPhotoModal({
           justify-content: center;
           padding: 40px 20px;
           color: #6b7280;
+          font-size: 14px;
+        }
+
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 60px 20px;
+          text-align: center;
+        }
+
+        .empty-icon {
+          font-size: 48px;
+          margin-bottom: 16px;
+          opacity: 0.5;
+        }
+
+        .empty-state p {
+          margin: 0 0 8px 0;
+          font-size: 16px;
+          font-weight: 500;
+          color: #374151;
+        }
+
+        .empty-hint {
+          font-size: 14px;
+          color: #9ca3af;
+        }
+
+        .reactions-list {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .reaction-group {
+          background: #f8fafc;
+          border-radius: 12px;
+          padding: 16px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .reaction-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+
+        .reaction-emoji {
+          font-size: 20px;
+        }
+
+        .reaction-count {
+          background: #6366f1;
+          color: white;
+          font-size: 12px;
+          padding: 2px 6px;
+          border-radius: 6px;
+          font-weight: 600;
+        }
+
+        .reaction-users {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .reaction-user {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .reaction-avatar {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 1px solid #e5e7eb;
+        }
+
+        .reaction-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: #374151;
+          flex: 1;
+        }
+
+        .reaction-time {
+          font-size: 12px;
+          color: #9ca3af;
+        }
+
+        .more-reactions {
+          font-size: 12px;
+          color: #9ca3af;
+          font-style: italic;
+          padding-left: 32px;
+        }
+
+        .comments-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .photo-comment {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+        }
+
+        .comment-avatar-container {
+          flex-shrink: 0;
+        }
+
+        .comment-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #f8fafc;
+        }
+
+        .comment-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .comment-bubble {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 10px 12px;
+          margin-bottom: 4px;
+        }
+
+        .comment-author {
+          font-weight: 600;
+          font-size: 12px;
+          color: #374151;
+          margin-bottom: 4px;
+        }
+
+        .comment-text {
+          font-size: 13px;
+          color: #4a5568;
+          line-height: 1.4;
+          word-wrap: break-word;
+        }
+
+        .comment-time {
+          font-size: 11px;
+          color: #9ca3af;
+          margin-left: 12px;
+        }
+
+        .comment-input-section {
+          margin-top: 16px;
+          padding-top: 16px;
+          border-top: 1px solid #f3f4f6;
+        }
+
+        .comment-input-container {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .photo-comment-input {
+          flex: 1;
+          padding: 10px 12px;
+          border: 1px solid #e2e8f0;
+          border-radius: 20px;
+          font-size: 14px;
+          background: white;
+          transition: border-color 0.2s ease;
+        }
+
+        .photo-comment-input:focus {
+          outline: none;
+          border-color: #6366f1;
+        }
+
+        .photo-comment-btn {
+          padding: 10px 16px;
+          background: #6366f1;
+          color: white;
+          border: none;
+          border-radius: 20px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          transition: background 0.2s ease;
+          min-width: 50px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .photo-comment-btn:hover:not(:disabled) {
+          background: #4f46e5;
+        }
+
+        .photo-comment-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .char-count {
+          text-align: right;
+          font-size: 11px;
+          color: #9ca3af;
+          margin-top: 4px;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+          .photo-modal-overlay {
+            padding: 0;
+          }
+
+          .photo-modal-content {
+            width: 100vw;
+            height: 100vh;
+            max-width: 100vw;
+            max-height: 100vh;
+            border-radius: 0;
+          }
+
+          .photo-modal-layout {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr auto;
+            height: 100vh;
+          }
+
+          .photo-side {
+            border-radius: 0;
+          }
+
+          .interactions-side {
+            max-height: 50vh;
+            border-radius: 0;
+          }
+
+          .modal-close {
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            font-size: 16px;
+          }
+
+          .tab-btn {
+            padding: 12px 16px;
+            font-size: 13px;
+          }
+
+          .reactions-tab,
+          .comments-tab {
+            padding: 16px;
+          }
+
+          .quick-reaction-btn {
+            padding: 10px 14px;
+            font-size: 13px;
+          }
+
+          .reaction-picker {
+            width: calc(100vw - 40px);
+            left: 20px;
+            right: 20px;
+            transform: none;
+          }
+
+          .reaction-option {
+            width: 36px;
+            height: 36px;
+            font-size: 18px;
+          }
+
+          .empty-state {
+            padding: 40px 20px;
+          }
+
+          .empty-icon {
+            font-size: 40px;
+          }
+
+          .photo-comment {
+            gap: 8px;
+          }
+
+          .comment-avatar {
+            width: 28px;
+            height: 28px;
+          }
+
+          .comment-input-container {
+            gap: 6px;
+          }
+
+          .photo-comment-input {
+            font-size: 16px; /* Prevents zoom on iOS */
+            padding: 8px 10px;
+          }
+
+          .photo-comment-btn {
+            padding: 8px 12px;
+            font-size: 12px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .tab-btn {
+            padding: 10px 12px;
+            font-size: 12px;
+          }
+
+          .tab-icon {
+            font-size: 14px;
+          }
+
+          .reactions-tab,
+          .comments-tab {
+            padding: 12px;
+          }
+
+          .reaction-group {
+            padding: 12px;
+          }
+
+          .comment-bubble {
+            padding: 8px 10px;
+          }
+
+          .comment-author {
+            font-size: 11px;
+          }
+
+          .comment-text {
+            font-size: 12px;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
