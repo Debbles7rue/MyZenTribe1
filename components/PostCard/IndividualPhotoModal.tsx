@@ -815,3 +815,5 @@ export default function IndividualPhotoModal({
         }
       `}</style>
     </div>
+  );
+}
