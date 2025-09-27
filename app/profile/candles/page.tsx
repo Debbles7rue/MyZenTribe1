@@ -1,7 +1,10 @@
-// components/CandleDisplay.tsx
+// app/profile/candles/page.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+import CandleDisplay from "@/components/CandleDisplay";
 
 type Candle = {
   id: string;
@@ -21,589 +24,485 @@ type Candle = {
   created_by?: string;
 };
 
-interface CandleDisplayProps {
-  candle: Candle;
+// Starry Background Component
+function StarryBackground() {
+  return (
+    <div className="starry-container">
+      {/* Generate random stars */}
+      {Array.from({ length: 50 }).map((_, i) => (
+        <div
+          key={i}
+          className="star"
+          style={{
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 3}s`,
+            animationDuration: `${2 + Math.random() * 3}s`
+          }}
+        />
+      ))}
+      
+      {/* Floating sparkles */}
+      {Array.from({ length: 15 }).map((_, i) => (
+        <div
+          key={`sparkle-${i}`}
+          className="sparkle"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 5}s`,
+            animationDuration: `${10 + Math.random() * 20}s`
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
-export default function CandleDisplay({ candle }: CandleDisplayProps) {
-  const isEternal = candle.candle_type === "eternal";
-  const color = candle.color || "white";
+export default function MyCandlesPage() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [myCandles, setMyCandles] = useState<Candle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "eternal" | "renewable">("all");
 
-  const colorMap: Record<string, { main: string; wax: string; shadow: string; glow: string }> = {
-    white: { 
-      main: "#f8f9fa", 
-      wax: "#ffffff", 
-      shadow: "rgba(0,0,0,0.15)", 
-      glow: "rgba(255,248,220,0.8)" 
-    },
-    gold: { 
-      main: "#fdf6e3", 
-      wax: "#f4e4bc", 
-      shadow: "rgba(139,69,19,0.2)", 
-      glow: "rgba(255,215,0,0.6)" 
-    },
-    rose: { 
-      main: "#fef7f7", 
-      wax: "#f7e6e6", 
-      shadow: "rgba(139,69,19,0.15)", 
-      glow: "rgba(255,182,193,0.5)" 
-    },
-    azure: { 
-      main: "#f0f8ff", 
-      wax: "#e6f3ff", 
-      shadow: "rgba(70,130,180,0.15)", 
-      glow: "rgba(173,216,230,0.6)" 
-    },
-    violet: { 
-      main: "#f8f4ff", 
-      wax: "#f0e6ff", 
-      shadow: "rgba(75,0,130,0.15)", 
-      glow: "rgba(221,160,221,0.5)" 
-    },
-    emerald: { 
-      main: "#f0fff0", 
-      wax: "#e6ffe6", 
-      shadow: "rgba(34,139,34,0.15)", 
-      glow: "rgba(144,238,144,0.5)" 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data.user;
+      setUserId(user?.id ?? null);
+    });
+  }, []);
+
+  const loadMyCandles = async () => {
+    if (!userId) return;
+
+    setLoading(true);
+    try {
+      // Query using created_by field (where purchased candles are stored)
+      const { data, error } = await supabase
+        .from("candle_offerings")
+        .select("*")
+        .eq("created_by", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error loading candles:", error);
+      } else {
+        setMyCandles(data || []);
+      }
+    } catch (error) {
+      console.error("Error loading candles:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const palette = colorMap[color] || colorMap.white;
+  useEffect(() => {
+    if (userId) {
+      loadMyCandles();
+    }
+  }, [userId]);
 
-  const createdDate = new Date(candle.created_at);
-  const formattedDate = createdDate.toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  });
+  // Filter and categorize candles
+  const { eternalCandles, renewableCandles, displayCandles } = useMemo(() => {
+    const eternal = myCandles.filter((c) => c.candle_type === "eternal");
+    const renewable = myCandles.filter((c) => !c.candle_type || c.candle_type !== "eternal");
 
-  // Randomized animation timing for natural feel
-  const flickerDelay = (Math.random() * 2).toFixed(2) + "s";
-  const glowDelay = (Math.random() * 1.5).toFixed(2) + "s";
+    let display = myCandles;
+    if (filter === "eternal") display = eternal;
+    if (filter === "renewable") display = renewable;
+
+    return {
+      eternalCandles: eternal,
+      renewableCandles: renewable,
+      displayCandles: display,
+    };
+  }, [myCandles, filter]);
+
+  // Calculate total spent
+  const totalSpent = useMemo(() => {
+    return myCandles.reduce((sum, candle) => sum + (candle.amount_paid || 0), 0) / 100;
+  }, [myCandles]);
 
   return (
-    <>
-      <div className="candle-display">
-        <div className="candle-container">
-          {/* Ambient glow background */}
-          <div 
-            className="ambient-glow"
-            style={{ 
-              background: `radial-gradient(circle at center, ${palette.glow} 0%, transparent 70%)`,
-              animationDelay: glowDelay
-            }}
-          ></div>
+    <div className="my-candles-page">
+      {/* Animated Starry Background */}
+      <StarryBackground />
+      <div className="page-background"></div>
 
-          {/* Candle holder/base */}
-          <div className="candle-holder">
-            <div className="holder-rim"></div>
-            <div className="holder-body"></div>
-          </div>
+      {/* Inspirational Quote */}
+      <div className="inspirational-quote">
+        "Each flame carries a prayer, each light holds a memory, each candle bridges heaven and earth."
+      </div>
 
-          {/* Main candle body */}
-          <div className="candle-body" style={{ backgroundColor: palette.main }}>
-            {/* Wax texture overlay */}
-            <div className="wax-texture" style={{ backgroundColor: palette.wax }}></div>
-            
-            {/* Subtle highlights */}
-            <div className="candle-highlight-left"></div>
-            <div className="candle-highlight-right"></div>
-            
-            {/* Very subtle wax drip */}
-            <div className="wax-drip"></div>
-            
-            {/* Candle top (slightly oval) */}
-            <div className="candle-top" style={{ backgroundColor: palette.wax }}></div>
-          </div>
+      <header className="page-header">
+        <Link href="/profile" className="back-button">
+          ← Back to Profile
+        </Link>
 
-          {/* Wick */}
-          <div className="wick"></div>
+        <h1 className="page-title">
+          <span className="title-icon">🕯️</span>
+          My Sacred Candles
+        </h1>
 
-          {/* Realistic flame */}
-          <div className="flame-container" style={{ animationDelay: flickerDelay }}>
-            <div className="flame-outer"></div>
-            <div className="flame-inner"></div>
-            <div className="flame-core"></div>
-          </div>
+        <Link href="/meditation/candles" className="visit-sanctuary">
+          Visit Sanctuary →
+        </Link>
+      </header>
 
-          {/* Name plaque - elegant and understated */}
-          <div className="name-plaque">
-            <div className="plaque-background"></div>
-            <span className="candle-name-text">{candle.name}</span>
-          </div>
-
-          {/* Eternal indicator */}
-          {isEternal && (
-            <div className="eternal-indicator">
-              <div className="eternal-glow"></div>
-              <span className="eternal-text">∞</span>
-            </div>
-          )}
+      {/* Stats Overview */}
+      <div className="stats-overview">
+        <div className="stat-card total">
+          <div className="stat-value">{myCandles.length}</div>
+          <div className="stat-label">Total Candles</div>
         </div>
 
-        {/* Candle information */}
-        <div className="candle-info">
-          <h3 className="candle-title">{candle.name}</h3>
-          
-          {candle.message && (
-            <p className="candle-message">"{candle.message}"</p>
-          )}
-          
-          <div className="candle-meta">
-            <span className="candle-date">Lit on {formattedDate}</span>
-            {candle.amount_paid && (
-              <span className="candle-amount">
-                ${(candle.amount_paid / 100).toFixed(2)}
-              </span>
-            )}
-          </div>
+        <div className="stat-card eternal">
+          <div className="stat-value">{eternalCandles.length}</div>
+          <div className="stat-label">Eternal Flames</div>
+        </div>
+
+        <div className="stat-card renewable">
+          <div className="stat-value">{renewableCandles.length}</div>
+          <div className="stat-label">Prayer Candles</div>
+        </div>
+
+        <div className="stat-card contribution">
+          <div className="stat-value">${totalSpent.toFixed(2)}</div>
+          <div className="stat-label">Total Contribution</div>
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="filter-tabs">
+        <button
+          onClick={() => setFilter("all")}
+          className={`filter-tab ${filter === "all" ? "active" : ""}`}
+        >
+          All Candles ({myCandles.length})
+        </button>
+        <button
+          onClick={() => setFilter("eternal")}
+          className={`filter-tab ${filter === "eternal" ? "active" : ""}`}
+        >
+          ✨ Eternal ({eternalCandles.length})
+        </button>
+        <button
+          onClick={() => setFilter("renewable")}
+          className={`filter-tab ${filter === "renewable" ? "active" : ""}`}
+        >
+          🕯️ Renewable ({renewableCandles.length})
+        </button>
+      </div>
+
+      {/* Candles Grid */}
+      {loading ? (
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading your sacred candles...</p>
+        </div>
+      ) : displayCandles.length > 0 ? (
+        <div className="candles-grid">
+          {displayCandles.map((candle) => (
+            <CandleDisplay key={candle.id} candle={candle} />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-icon">🕯️</div>
+          <h2>No Candles Yet</h2>
+          <p>Light your first candle to create a sacred space</p>
+          <Link href="/meditation/candles" className="cta-button">
+            Visit Candle Sanctuary
+          </Link>
+        </div>
+      )}
+
       <style jsx>{`
-        .candle-display {
-          background: rgba(255,255,255,0.02);
-          backdrop-filter: blur(8px);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 1.25rem;
-          padding: 2rem 1.5rem;
-          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1.5rem;
+        .my-candles-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #b8b5c7 0%, #a8a3b8 25%, #9892a9 50%, #88819a 75%, #78708b 100%);
           position: relative;
-          overflow: visible;
-          min-height: 380px;
+          padding: 2rem 1rem;
+          overflow-x: hidden;
         }
 
-        .candle-display:hover {
-          transform: translateY(-2px);
-          background: rgba(255,255,255,0.03);
-          box-shadow: 
-            0 20px 40px rgba(0,0,0,0.1),
-            0 0 30px rgba(251,191,36,0.1);
-          border-color: rgba(255,255,255,0.15);
-        }
-
-        .candle-container {
-          position: relative;
-          width: 80px;
-          height: 200px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-
-        /* Ambient glow effect */
-        .ambient-glow {
-          position: absolute;
-          top: -10px;
-          left: -15px;
-          right: -15px;
-          bottom: -10px;
-          border-radius: 50%;
-          animation: gentleGlow 4s ease-in-out infinite;
+        .starry-container {
+          position: fixed;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
           z-index: 0;
-          opacity: 0.4;
         }
 
-        @keyframes gentleGlow {
-          0%, 100% { opacity: 0.3; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.05); }
-        }
-
-        /* Candle holder/base */
-        .candle-holder {
+        .star {
           position: absolute;
-          bottom: 0;
-          width: 90px;
-          height: 12px;
+          width: 3px;
+          height: 3px;
+          background: rgba(255, 255, 255, 0.9);
+          border-radius: 50%;
+          animation: twinkle 3s infinite;
+          box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.5); }
+        }
+
+        .sparkle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: #fbbf24;
+          border-radius: 50%;
+          animation: floatSparkle 20s infinite linear;
+          box-shadow: 
+            0 0 10px rgba(251, 191, 36, 0.5),
+            0 0 20px rgba(251, 191, 36, 0.3);
+        }
+
+        @keyframes floatSparkle {
+          0% { 
+            transform: translateY(100vh) translateX(0) rotate(0deg);
+            opacity: 0;
+          }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { 
+            transform: translateY(-100vh) translateX(100px) rotate(720deg);
+            opacity: 0;
+          }
+        }
+
+        .page-background {
+          position: fixed;
+          inset: 0;
+          background: 
+            radial-gradient(circle at 20% 30%, rgba(251,191,36,0.15) 0%, transparent 40%),
+            radial-gradient(circle at 80% 70%, rgba(139,92,246,0.1) 0%, transparent 40%),
+            radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08) 0%, transparent 50%);
+          pointer-events: none;
           z-index: 1;
         }
 
-        .holder-rim {
-          width: 100%;
-          height: 4px;
-          background: linear-gradient(135deg, #d4af37 0%, #ffd700 50%, #b8860b 100%);
-          border-radius: 4px 4px 0 0;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        .inspirational-quote {
+          text-align: center;
+          color: #fde68a;
+          font-style: italic;
+          font-size: 1.125rem;
+          margin-bottom: 2rem;
+          padding: 0 1rem;
+          position: relative;
+          z-index: 2;
+          opacity: 0.9;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
-        .holder-body {
-          width: 95%;
-          height: 8px;
-          margin: 0 auto;
-          background: linear-gradient(135deg, #b8860b 0%, #daa520 50%, #8b6914 100%);
-          border-radius: 0 0 2px 2px;
-          box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-        }
-
-        /* Main candle body - more realistic proportions */
-        .candle-body {
-          position: absolute;
-          bottom: 12px;
-          width: 64px;
-          height: 160px;
-          border-radius: 2px 2px 4px 4px;
-          box-shadow: 
-            0 0 20px rgba(0,0,0,0.1),
-            inset -8px 0 15px rgba(0,0,0,0.05),
-            inset 8px 0 15px rgba(255,255,255,0.1);
+        .page-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 2rem;
+          flex-wrap: wrap;
+          gap: 1rem;
+          position: relative;
           z-index: 2;
         }
 
-        /* Wax texture overlay */
-        .wax-texture {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          border-radius: inherit;
-          opacity: 0.7;
-          background-image: 
-            radial-gradient(circle at 20% 30%, rgba(255,255,255,0.1) 1px, transparent 1px),
-            radial-gradient(circle at 70% 60%, rgba(0,0,0,0.02) 1px, transparent 1px),
-            radial-gradient(circle at 40% 80%, rgba(255,255,255,0.05) 1px, transparent 1px);
-          background-size: 8px 8px, 12px 12px, 6px 6px;
-        }
-
-        /* Subtle highlights for realism */
-        .candle-highlight-left {
-          position: absolute;
-          top: 10px;
-          left: 2px;
-          width: 8px;
-          height: 120px;
-          background: linear-gradient(to bottom, 
-            rgba(255,255,255,0.3) 0%,
-            rgba(255,255,255,0.1) 50%,
-            transparent 100%);
-          border-radius: 4px;
-          filter: blur(1px);
-        }
-
-        .candle-highlight-right {
-          position: absolute;
-          top: 20px;
-          right: 4px;
-          width: 3px;
-          height: 80px;
-          background: linear-gradient(to bottom, 
-            transparent 0%,
-            rgba(255,255,255,0.15) 30%,
-            rgba(255,255,255,0.05) 100%);
-          border-radius: 2px;
-          filter: blur(0.5px);
-        }
-
-        /* Subtle wax drip */
-        .wax-drip {
-          position: absolute;
-          top: 40px;
-          right: -1px;
-          width: 3px;
-          height: 15px;
-          background: inherit;
-          border-radius: 0 2px 2px 0;
-          opacity: 0.8;
-          box-shadow: 1px 0 2px rgba(0,0,0,0.1);
-        }
-
-        /* Candle top */
-        .candle-top {
-          position: absolute;
-          top: -2px;
-          left: -2px;
-          right: -2px;
-          height: 8px;
-          border-radius: 50%;
-          box-shadow: 
-            0 2px 4px rgba(0,0,0,0.1),
-            inset 0 1px 2px rgba(255,255,255,0.2);
-        }
-
-        /* Wick */
-        .wick {
-          position: absolute;
-          top: -15px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 2px;
-          height: 12px;
-          background: linear-gradient(to bottom, #2d2d2d 0%, #1a1a1a 100%);
-          border-radius: 1px;
-          z-index: 4;
-        }
-
-        /* Realistic flame */
-        .flame-container {
-          position: absolute;
-          top: -35px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 16px;
-          height: 28px;
-          z-index: 5;
-          animation: naturalFlicker 2.5s ease-in-out infinite;
-        }
-
-        @keyframes naturalFlicker {
-          0%, 100% { 
-            transform: translateX(-50%) scale(1) rotate(-0.5deg); 
-            opacity: 0.95; 
-          }
-          25% { 
-            transform: translateX(-50%) scale(1.02) rotate(0.5deg); 
-            opacity: 1; 
-          }
-          50% { 
-            transform: translateX(-50%) scale(0.98) rotate(-0.3deg); 
-            opacity: 0.92; 
-          }
-          75% { 
-            transform: translateX(-50%) scale(1.01) rotate(0.3deg); 
-            opacity: 0.98; 
-          }
-        }
-
-        .flame-outer {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: radial-gradient(ellipse at 50% 80%, 
-            #ff6b1a 0%, 
-            #ff8c42 30%, 
-            #ffaa6b 60%, 
-            rgba(255,170,107,0.4) 100%);
-          border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-          filter: blur(1px);
-        }
-
-        .flame-inner {
-          position: absolute;
-          top: 3px;
-          left: 3px;
-          right: 3px;
-          bottom: 6px;
-          background: radial-gradient(ellipse at 50% 70%, 
-            #ffd93d 0%, 
-            #ffeb3b 40%, 
-            rgba(255,235,59,0.8) 80%, 
-            transparent 100%);
-          border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-        }
-
-        .flame-core {
-          position: absolute;
-          top: 6px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 4px;
-          height: 12px;
-          background: radial-gradient(ellipse at center, 
-            #ffffff 0%, 
-            #fff8dc 50%, 
-            rgba(255,248,220,0.5) 100%);
-          border-radius: 50%;
-          filter: blur(0.5px);
-        }
-
-        /* Elegant name plaque */
-        .name-plaque {
-          position: absolute;
-          bottom: -8px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 3;
-          text-align: center;
-          min-width: 100px;
-        }
-
-        .plaque-background {
-          position: absolute;
-          top: -4px;
-          left: -12px;
-          right: -12px;
-          bottom: -4px;
-          background: linear-gradient(135deg, 
-            rgba(212,175,55,0.9) 0%, 
-            rgba(255,215,0,0.8) 50%, 
-            rgba(184,134,11,0.9) 100%);
-          border-radius: 12px;
-          box-shadow: 
-            0 2px 8px rgba(0,0,0,0.2),
-            inset 0 1px 2px rgba(255,255,255,0.3);
-          filter: blur(0.5px);
-        }
-
-        .candle-name-text {
-          position: relative;
-          display: inline-block;
-          padding: 4px 8px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: #2d1810;
-          text-shadow: 0 1px 1px rgba(255,255,255,0.3);
-          letter-spacing: 0.5px;
-          z-index: 1;
-        }
-
-        /* Eternal indicator */
-        .eternal-indicator {
-          position: absolute;
-          top: -45px;
-          right: -10px;
-          z-index: 6;
-        }
-
-        .eternal-glow {
-          position: absolute;
-          top: -2px;
-          left: -2px;
-          right: -2px;
-          bottom: -2px;
-          background: radial-gradient(circle, rgba(255,215,0,0.4) 0%, transparent 70%);
-          border-radius: 50%;
-          animation: eternalPulse 3s ease-in-out infinite;
-        }
-
-        @keyframes eternalPulse {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.2); }
-        }
-
-        .eternal-text {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 20px;
-          height: 20px;
-          background: linear-gradient(135deg, #ffd700, #ffed4e);
-          border-radius: 50%;
-          font-size: 0.875rem;
-          font-weight: bold;
-          color: #8b4513;
-          text-shadow: 0 1px 1px rgba(255,255,255,0.3);
-          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-        }
-
-        /* Candle information styling */
-        .candle-info {
-          text-align: center;
-          width: 100%;
-          max-width: 240px;
-        }
-
-        .candle-title {
-          font-size: 1.125rem;
-          font-weight: 600;
+        .back-button, .visit-sanctuary {
+          padding: 0.5rem 1rem;
+          background: rgba(255,255,255,0.1);
+          backdrop-filter: blur(10px);
           color: #fbbf24;
-          margin: 0 0 0.75rem 0;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-          line-height: 1.3;
-        }
-
-        .candle-message {
+          border-radius: 0.5rem;
+          text-decoration: none;
+          transition: all 0.2s;
           font-size: 0.875rem;
-          color: #fde68a;
-          font-style: italic;
-          margin: 0 0 1rem 0;
-          opacity: 0.9;
-          line-height: 1.4;
-          text-align: center;
+          border: 1px solid rgba(251,191,36,0.2);
         }
 
-        .candle-meta {
+        .back-button:hover, .visit-sanctuary:hover {
+          background: rgba(255,255,255,0.15);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(251,191,36,0.2);
+        }
+
+        .page-title {
           display: flex;
-          justify-content: center;
           align-items: center;
+          gap: 0.75rem;
+          font-size: 1.875rem;
+          font-weight: 700;
+          color: #fbbf24;
+          margin: 0;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .title-icon { font-size: 2rem; }
+
+        .stats-overview {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
           gap: 1rem;
+          margin-bottom: 2rem;
+          position: relative;
+          z-index: 2;
+        }
+
+        .stat-card {
+          background: rgba(255,255,255,0.05);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(251,191,36,0.2);
+          border-radius: 0.75rem;
+          padding: 1.25rem;
+          text-align: center;
+          transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+          transform: translateY(-2px);
+          background: rgba(255,255,255,0.08);
+          box-shadow: 0 8px 24px rgba(251,191,36,0.15);
+        }
+
+        .stat-value {
+          font-size: 1.75rem;
+          font-weight: 700;
+          color: #fbbf24;
+          margin-bottom: 0.25rem;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .stat-label {
           font-size: 0.75rem;
           color: #fde68a;
-          opacity: 0.7;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
-        .candle-date, .candle-amount {
-          font-weight: 500;
+        .stat-card.eternal {
+          border-color: rgba(168,85,247,0.3);
+          background: linear-gradient(135deg, rgba(168,85,247,0.05), rgba(139,92,246,0.05));
         }
+
+        .stat-card.renewable {
+          border-color: rgba(59,130,246,0.3);
+          background: linear-gradient(135deg, rgba(59,130,246,0.05), rgba(37,99,235,0.05));
+        }
+
+        .stat-card.contribution {
+          border-color: rgba(34,197,94,0.3);
+          background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(22,163,74,0.05));
+        }
+
+        .filter-tabs {
+          display: flex;
+          justify-content: center;
+          gap: 0.5rem;
+          margin-bottom: 2rem;
+          position: relative;
+          z-index: 2;
+          flex-wrap: wrap;
+        }
+
+        .filter-tab {
+          padding: 0.625rem 1.25rem;
+          background: rgba(255,255,255,0.05);
+          backdrop-filter: blur(10px);
+          color: #fde68a;
+          border: 1px solid rgba(251,191,36,0.2);
+          border-radius: 2rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.875rem;
+        }
+
+        .filter-tab:hover {
+          background: rgba(255,255,255,0.08);
+          transform: translateY(-1px);
+        }
+
+        .filter-tab.active {
+          background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.3));
+          border-color: #fbbf24;
+          color: #fbbf24;
+          box-shadow: 0 4px 12px rgba(251,191,36,0.2);
+        }
+
+        .candles-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1.5rem;
+          position: relative;
+          z-index: 2;
+        }
+
+        @media (min-width: 768px) {
+          .candles-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        }
+
+        .loading-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 300px;
+          color: #fde68a;
+          position: relative;
+          z-index: 2;
+        }
+
+        .loading-spinner {
+          width: 3rem;
+          height: 3rem;
+          border: 3px solid rgba(251,191,36,0.2);
+          border-top: 3px solid #fbbf24;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          box-shadow: 0 0 20px rgba(251,191,36,0.3);
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state { text-align: center; padding: 4rem 2rem; color: #fde68a; position: relative; z-index: 2; }
+        .empty-icon { font-size: 4rem; margin-bottom: 1rem; animation: float 3s infinite ease-in-out; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .empty-state h2 { font-size: 1.5rem; color: #fbbf24; margin: 0 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .empty-state p { margin: 0 0 1.5rem 0; opacity: 0.9; }
+
+        .cta-button {
+          display: inline-block;
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #fbbf24, #f59e0b);
+          color: white;
+          border-radius: 0.5rem;
+          text-decoration: none;
+          font-weight: 600;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(251,191,36,0.3);
+        }
+        .cta-button:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(251,191,36,0.4); }
 
         /* Mobile Optimizations */
         @media (max-width: 640px) {
-          .candle-display { 
-            padding: 1.5rem 1rem;
-            min-height: 280px;
-          }
-          
-          .candle-container {
-            width: 70px;
-            height: 180px;
-          }
-          
-          .candle-body {
-            width: 56px;
-            height: 140px;
-          }
-          
-          .candle-holder {
-            width: 80px;
-          }
-          
-          .candle-title { 
-            font-size: 1rem; 
-          }
-          
-          .candle-message { 
-            font-size: 0.8125rem; 
-          }
+          .my-candles-page { padding: 1rem 0.5rem; }
+          .inspirational-quote { font-size: 1rem; margin-bottom: 1.5rem; }
+          .page-header { flex-direction: column; text-align: center; gap: 0.75rem; }
+          .page-title { font-size: 1.5rem; }
+          .back-button, .visit-sanctuary { width: 100%; text-align: center; }
+          .stats-overview { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+          .stat-card { padding: 1rem; }
+          .stat-value { font-size: 1.5rem; }
+          .filter-tabs { justify-content: center; width: 100%; }
+          .filter-tab { padding: 0.5rem 1rem; font-size: 0.8125rem; }
+          .candles-grid { grid-template-columns: 1fr; gap: 1rem; }
+          .empty-state { padding: 3rem 1.5rem; }
+          .empty-icon { font-size: 3rem; }
+          .empty-state h2 { font-size: 1.25rem; }
         }
 
         @media (max-width: 375px) {
-          .candle-display { 
-            padding: 1.25rem 0.75rem;
-            min-height: 260px;
-          }
-          
-          .candle-container {
-            width: 60px;
-            height: 160px;
-          }
-          
-          .candle-body {
-            width: 48px;
-            height: 120px;
-          }
-          
-          .candle-holder {
-            width: 70px;
-          }
-          
-          .candle-title { 
-            font-size: 0.9375rem; 
-          }
-          
-          .candle-message { 
-            font-size: 0.75rem; 
-          }
-          
-          .candle-meta {
-            flex-direction: column;
-            gap: 0.25rem;
-            font-size: 0.6875rem;
-          }
-
-          .name-plaque {
-            min-width: 80px;
-          }
-
-          .candle-name-text {
-            font-size: 0.6875rem;
-            padding: 3px 6px;
-          }
+          .filter-tab { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
         }
       `}</style>
-    </>
+    </div>
   );
 }
