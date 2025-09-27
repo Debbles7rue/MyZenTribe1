@@ -219,7 +219,7 @@ export default function MyCandlesPage() {
       <style jsx>{`
         .my-candles-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #6d5bd0 0%, #8b7dd8 25%, #a89ade 50%, #c5b5e4 75%, #d4c5e8 100%);
+          background: linear-gradient(135deg, #b8b5c7 0%, #a8a3b8 25%, #9892a9 50%, #88819a 75%, #78708b 100%);
           position: relative;
           padding: 2rem 1rem;
           overflow-x: hidden;
@@ -237,10 +237,10 @@ export default function MyCandlesPage() {
           position: absolute;
           width: 2px;
           height: 2px;
-          background: white;
+          background: rgba(255, 255, 255, 0.8);
           border-radius: 50%;
           animation: twinkle 3s infinite;
-          box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+          box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
         }
 
         @keyframes twinkle {
