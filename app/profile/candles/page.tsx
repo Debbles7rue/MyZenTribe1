@@ -219,7 +219,7 @@ export default function MyCandlesPage() {
       <style jsx>{`
         .my-candles-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #b8b5c7 0%, #a8a3b8 25%, #9892a9 50%, #88819a 75%, #78708b 100%);
+          background: linear-gradient(to bottom right, #0f172a, rgba(88, 28, 135, 0.2), #0f172a);
           position: relative;
           padding: 2rem 1rem;
           overflow-x: hidden;
@@ -252,12 +252,12 @@ export default function MyCandlesPage() {
           position: absolute;
           width: 4px;
           height: 4px;
-          background: #fbbf24;
+          background: #f59e0b;
           border-radius: 50%;
           animation: floatSparkle 20s infinite linear;
           box-shadow: 
-            0 0 10px rgba(251, 191, 36, 0.5),
-            0 0 20px rgba(251, 191, 36, 0.3);
+            0 0 10px rgba(245, 158, 11, 0.5),
+            0 0 20px rgba(245, 158, 11, 0.3);
         }
 
         @keyframes floatSparkle {
@@ -277,7 +277,7 @@ export default function MyCandlesPage() {
           position: fixed;
           inset: 0;
           background: 
-            radial-gradient(circle at 20% 30%, rgba(251,191,36,0.15) 0%, transparent 40%),
+            radial-gradient(circle at 20% 30%, rgba(245,158,11,0.15) 0%, transparent 40%),
             radial-gradient(circle at 80% 70%, rgba(139,92,246,0.1) 0%, transparent 40%),
             radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08) 0%, transparent 50%);
           pointer-events: none;
@@ -286,7 +286,7 @@ export default function MyCandlesPage() {
 
         .inspirational-quote {
           text-align: center;
-          color: #fde68a;
+          color: #fcd34d;
           font-style: italic;
           font-size: 1.125rem;
           margin-bottom: 2rem;
@@ -310,20 +310,20 @@ export default function MyCandlesPage() {
 
         .back-button, .visit-sanctuary {
           padding: 0.5rem 1rem;
-          background: rgba(255,255,255,0.1);
+          background: rgba(51,65,85,0.6);
           backdrop-filter: blur(10px);
-          color: #fbbf24;
+          color: #fcd34d;
           border-radius: 0.5rem;
           text-decoration: none;
           transition: all 0.2s;
           font-size: 0.875rem;
-          border: 1px solid rgba(251,191,36,0.2);
+          border: 1px solid rgba(245,158,11,0.3);
         }
 
         .back-button:hover, .visit-sanctuary:hover {
-          background: rgba(255,255,255,0.15);
+          background: rgba(71,85,105,0.8);
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(251,191,36,0.2);
+          box-shadow: 0 4px 12px rgba(245,158,11,0.2);
         }
 
         .page-title {
@@ -332,7 +332,7 @@ export default function MyCandlesPage() {
           gap: 0.75rem;
           font-size: 1.875rem;
           font-weight: 700;
-          color: #fbbf24;
+          color: #fcd34d;
           margin: 0;
           text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
@@ -349,9 +349,9 @@ export default function MyCandlesPage() {
         }
 
         .stat-card {
-          background: rgba(255,255,255,0.05);
+          background: rgba(51,65,85,0.6);
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(251,191,36,0.2);
+          border: 1px solid rgba(245,158,11,0.3);
           border-radius: 0.75rem;
           padding: 1.25rem;
           text-align: center;
@@ -360,14 +360,14 @@ export default function MyCandlesPage() {
 
         .stat-card:hover {
           transform: translateY(-2px);
-          background: rgba(255,255,255,0.08);
-          box-shadow: 0 8px 24px rgba(251,191,36,0.15);
+          background: rgba(71,85,105,0.8);
+          box-shadow: 0 8px 24px rgba(245,158,11,0.15);
         }
 
         .stat-value {
           font-size: 1.75rem;
           font-weight: 700;
-          color: #fbbf24;
+          color: #fcd34d;
           margin-bottom: 0.25rem;
           text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
@@ -406,10 +406,10 @@ export default function MyCandlesPage() {
 
         .filter-tab {
           padding: 0.625rem 1.25rem;
-          background: rgba(255,255,255,0.05);
+          background: rgba(51,65,85,0.6);
           backdrop-filter: blur(10px);
           color: #fde68a;
-          border: 1px solid rgba(251,191,36,0.2);
+          border: 1px solid rgba(245,158,11,0.2);
           border-radius: 2rem;
           cursor: pointer;
           transition: all 0.2s;
@@ -417,15 +417,15 @@ export default function MyCandlesPage() {
         }
 
         .filter-tab:hover {
-          background: rgba(255,255,255,0.08);
+          background: rgba(71,85,105,0.8);
           transform: translateY(-1px);
         }
 
         .filter-tab.active {
-          background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.3));
-          border-color: #fbbf24;
-          color: #fbbf24;
-          box-shadow: 0 4px 12px rgba(251,191,36,0.2);
+          background: linear-gradient(135deg, rgba(245,158,11,0.3), rgba(245,158,11,0.3));
+          border-color: #fcd34d;
+          color: #fcd34d;
+          box-shadow: 0 4px 12px rgba(245,158,11,0.2);
         }
 
         .candles-grid {
@@ -454,32 +454,32 @@ export default function MyCandlesPage() {
         .loading-spinner {
           width: 3rem;
           height: 3rem;
-          border: 3px solid rgba(251,191,36,0.2);
-          border-top: 3px solid #fbbf24;
+          border: 3px solid rgba(245,158,11,0.2);
+          border-top: 3px solid #fcd34d;
           border-radius: 50%;
           animation: spin 1s linear infinite;
-          box-shadow: 0 0 20px rgba(251,191,36,0.3);
+          box-shadow: 0 0 20px rgba(245,158,11,0.3);
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .empty-state { text-align: center; padding: 4rem 2rem; color: #fde68a; position: relative; z-index: 2; }
         .empty-icon { font-size: 4rem; margin-bottom: 1rem; animation: float 3s infinite ease-in-out; }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        .empty-state h2 { font-size: 1.5rem; color: #fbbf24; margin: 0 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .empty-state h2 { font-size: 1.5rem; color: #fcd34d; margin: 0 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
         .empty-state p { margin: 0 0 1.5rem 0; opacity: 0.9; }
 
         .cta-button {
           display: inline-block;
           padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #fbbf24, #f59e0b);
+          background: linear-gradient(135deg, #f59e0b, #d97706);
           color: white;
           border-radius: 0.5rem;
           text-decoration: none;
           font-weight: 600;
           transition: all 0.2s;
-          box-shadow: 0 4px 12px rgba(251,191,36,0.3);
+          box-shadow: 0 4px 12px rgba(245,158,11,0.3);
         }
-        .cta-button:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(251,191,36,0.4); }
+        .cta-button:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.4); }
 
         /* Mobile Optimizations */
         @media (max-width: 640px) {
