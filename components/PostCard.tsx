@@ -2171,4 +2171,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             right: 10px;
           }
         }
-      `}
+      `}</style>
+    </>
+  );
+}
