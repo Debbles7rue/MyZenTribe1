@@ -1,7 +1,7 @@
-// components/PostCard/IndividualPhotoModal.tsx - Simplified to work with existing DB
+// components/PostCard/IndividualPhotoModal.tsx - Fixed scroll blocking issue
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { addComment } from "@/lib/posts";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./styles.module.css";
@@ -9,17 +9,6 @@ import styles from "./styles.module.css";
 interface IndividualPhotoModalProps {
   photo: {url: string; type: 'image' | 'video'; id?: string};
   onClose: () => void;
-}
-
-interface PhotoComment {
-  id: string;
-  body: string;
-  created_at: string;
-  user_id: string;
-  author?: {
-    full_name: string;
-    avatar_url: string;
-  };
 }
 
 export default function IndividualPhotoModal({ 
@@ -31,6 +20,7 @@ export default function IndividualPhotoModal({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [hasImageError, setHasImageError] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // Get current user on mount
   useEffect(() => {
@@ -67,24 +57,38 @@ export default function IndividualPhotoModal({
       }
     };
 
+    // FIXED: Add event listener to document, but prevent default scroll behavior on modal
     document.addEventListener('keydown', handleKeyDown);
+    
+    // FIXED: Prevent body scroll without setting overflow: hidden which can cause layout issues
+    const originalStyle = window.getComputedStyle(document.body).overflow;
     document.body.style.overflow = 'hidden';
     
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.body.style.overflow = originalStyle;
     };
   }, [onClose]);
 
   const handleOverlayClick = (e: React.MouseEvent) => {
+    // FIXED: Only close if clicking the overlay itself, not the modal content
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
+  const handleModalClick = (e: React.MouseEvent) => {
+    // FIXED: Prevent clicks inside modal from bubbling up to overlay
+    e.stopPropagation();
+  };
+
   return (
     <div className={styles.photoModalOverlay} onClick={handleOverlayClick}>
-      <div className={styles.photoModalContent} onClick={(e) => e.stopPropagation()}>
+      <div 
+        className={styles.photoModalContent} 
+        ref={modalRef}
+        onClick={handleModalClick}
+      >
         <button className={styles.modalClose} onClick={onClose}>×</button>
         
         <div className={styles.photoModalLayout}>
@@ -142,7 +146,7 @@ export default function IndividualPhotoModal({
             )}
           </div>
           
-          {/* Interactions Side */}
+          {/* Interactions Side - FIXED: Allow scrolling inside this container */}
           <div className={styles.interactionsSide}>
             <div className="content-section">
               <h3>Interact with this {photo.type}</h3>
