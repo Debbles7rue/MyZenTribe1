@@ -1,4 +1,4 @@
-/* PostCard Modular Styles - Fixed & Professional */
+/* PostCard Modular Styles - Enhanced Mobile Optimization */
 
 /* ======================
    COMPACT MODE STYLES
@@ -13,6 +13,9 @@
   transition: all 0.3s ease;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  /* Mobile touch optimization */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
 }
 
 .postCardCompact:hover {
@@ -173,8 +176,9 @@
 
 .closeBtn,
 .menuBtn {
-  width: 36px;
-  height: 36px;
+  /* MOBILE OPTIMIZATION: Larger touch targets */
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #f7fafc;
   border: none;
@@ -185,6 +189,10 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .closeBtn:hover,
@@ -192,6 +200,11 @@
   background: #e2e8f0;
   color: #4a5568;
   transform: scale(1.05);
+}
+
+.closeBtn:active,
+.menuBtn:active {
+  transform: scale(0.95);
 }
 
 .postActions {
@@ -226,7 +239,8 @@
 .menuItem {
   display: block;
   width: 100%;
-  padding: 12px 16px;
+  /* MOBILE: Larger touch targets */
+  padding: 16px 20px;
   background: none;
   border: none;
   text-align: left;
@@ -235,10 +249,17 @@
   color: #374151;
   transition: background 0.2s ease;
   font-weight: 500;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
 }
 
 .menuItem:hover {
   background: #f9fafb;
+}
+
+.menuItem:active {
+  background: #f3f4f6;
 }
 
 .menuItem.danger {
@@ -272,16 +293,18 @@
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   background: white;
-  /* DOUBLED THE HEIGHT */
   min-height: 320px;
 }
 
 .compactSinglePhoto {
   width: 100%;
-  height: 320px; /* Doubled from 160px */
+  height: 320px;
   cursor: pointer;
   overflow: hidden;
   border-radius: 12px;
+  /* Mobile touch optimization */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
 }
 
 .compactSinglePhoto img {
@@ -299,14 +322,14 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  height: 280px; /* Increased height */
+  height: 280px;
 }
 
 .compactThreePhotos {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  height: 280px; /* Increased height */
+  height: 280px;
 }
 
 .compactSideStack {
@@ -316,7 +339,7 @@
 }
 
 .compactManyPhotos {
-  height: 280px; /* Increased height */
+  height: 280px;
 }
 
 .compactTopRow {
@@ -340,6 +363,9 @@
   overflow: hidden;
   background: #f7fafc;
   border-radius: 8px;
+  /* Mobile touch optimization */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
 }
 
 .compactPhotoItem img {
@@ -399,13 +425,16 @@
 .individualPhoto {
   width: 100%;
   height: auto;
-  max-height: 600px; /* Increased from 500px */
+  max-height: 600px;
   object-fit: contain;
   cursor: pointer;
   border-radius: 12px;
   background: white;
   transition: transform 0.3s ease;
   display: block;
+  /* Mobile touch optimization */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
 }
 
 .individualPhoto:hover {
@@ -418,13 +447,16 @@
   padding: 16px;
   background: #fafafa;
   border-top: 1px solid #f3f4f6;
+  gap: 8px;
 }
 
 .photoInteractBtn {
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 24px;
-  padding: 12px 20px;
+  /* MOBILE: Larger touch targets */
+  padding: 14px 20px;
+  min-height: 44px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
@@ -432,8 +464,14 @@
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  flex: 1;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .photoInteractBtn:hover {
@@ -442,6 +480,10 @@
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+}
+
+.photoInteractBtn:active {
+  transform: translateY(0);
 }
 
 /* ======================
@@ -471,7 +513,9 @@
 
 .actionBtn {
   flex: 1;
-  padding: 12px 16px;
+  /* MOBILE: Larger touch targets */
+  padding: 14px 16px;
+  min-height: 48px;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -485,6 +529,10 @@
   justify-content: center;
   gap: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .actionBtn:hover:not(:disabled) {
@@ -493,6 +541,10 @@
   color: #8b5cf6;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(139,92,246,0.15);
+}
+
+.actionBtn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .actionBtn:disabled {
@@ -565,7 +617,12 @@
   font-weight: 600;
   text-decoration: underline;
   margin-top: 8px;
-  padding: 8px 0;
+  /* MOBILE: Larger touch target */
+  padding: 12px 0;
+  min-height: 44px;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
 }
 
 .commentInputSection {
@@ -579,12 +636,17 @@
 
 .commentInput {
   flex: 1;
-  padding: 12px 16px;
+  /* MOBILE: Larger touch target */
+  padding: 14px 16px;
+  min-height: 48px;
   border: 1px solid #e2e8f0;
   border-radius: 24px;
   font-size: 14px;
   background: white;
   transition: all 0.2s ease;
+  /* Mobile improvements */
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .commentInput:focus {
@@ -594,7 +656,9 @@
 }
 
 .commentSubmit {
-  padding: 12px 24px;
+  /* MOBILE: Larger touch target */
+  padding: 14px 24px;
+  min-height: 48px;
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: white;
   border: none;
@@ -604,12 +668,20 @@
   font-weight: 600;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(139,92,246,0.3);
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .commentSubmit:hover:not(:disabled) {
   background: linear-gradient(135deg, #7c3aed, #6d28d9);
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(139,92,246,0.4);
+}
+
+.commentSubmit:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .commentSubmit:disabled {
@@ -670,14 +742,20 @@
 
 .modalCancel,
 .modalDelete {
-  padding: 12px 24px;
+  /* MOBILE: Larger touch targets */
+  padding: 14px 24px;
+  min-height: 48px;
   border: none;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
   transition: all 0.3s ease;
-  min-width: 100px;
+  min-width: 120px;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .modalCancel {
@@ -688,6 +766,10 @@
 .modalCancel:hover {
   background: #e2e8f0;
   transform: translateY(-1px);
+}
+
+.modalCancel:active {
+  transform: translateY(0);
 }
 
 .modalDelete {
@@ -702,10 +784,210 @@
   box-shadow: 0 4px 16px rgba(220,38,38,0.4);
 }
 
+.modalDelete:active {
+  transform: translateY(0);
+}
+
+/* ======================
+   LIGHTBOX MOBILE OPTIMIZATIONS
+   ====================== */
+
+.lightboxOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  /* Mobile: Prevent scroll */
+  overflow: hidden;
+  touch-action: none;
+}
+
+.lightboxContent {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Mobile touch handling */
+  touch-action: pan-x;
+}
+
+.lightboxImage {
+  max-width: 90vw;
+  max-height: 80vh;
+  object-fit: contain;
+  /* Mobile: Disable image dragging */
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.lightboxClose {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  /* MOBILE: Larger close button */
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: none;
+  cursor: pointer;
+  font-size: 24px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.lightboxPrev,
+.lightboxNext {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  /* MOBILE: Larger navigation buttons */
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: none;
+  cursor: pointer;
+  font-size: 24px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: opacity 0.2s;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.lightboxPrev:disabled,
+.lightboxNext:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.lightboxPrev {
+  left: 20px;
+}
+
+.lightboxNext {
+  right: 20px;
+}
+
+.lightboxCounter {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lightboxThumbnails {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  overflow-x: auto;
+  /* Mobile: Better scrolling */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.lightboxThumbnails::-webkit-scrollbar {
+  display: none;
+}
+
+.thumbnailStrip {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.thumbnail {
+  /* MOBILE: Larger thumbnail touch targets */
+  width: 70px;
+  height: 70px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.2s;
+  background: none;
+  padding: 0;
+  flex-shrink: 0;
+  /* Mobile touch improvements */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.thumbnail.active {
+  border-color: white;
+  opacity: 1;
+}
+
+.thumbnail:hover {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Mobile: Disable image dragging */
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.mobileHints {
+  position: absolute;
+  bottom: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Show on mobile only */
+  display: block;
+}
+
+.swipeHint {
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  text-align: center;
+  animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; }
+  10%, 90% { opacity: 1; }
+}
+
 /* ======================
    MOBILE RESPONSIVENESS
    ====================== */
 
+/* Tablet optimizations */
 @media (max-width: 768px) {
   .postCardCompact,
   .postCardExpanded {
@@ -718,13 +1000,13 @@
   }
   
   .authorAvatar {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
   
   .compactAvatar {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
   }
   
   .authorName {
@@ -754,7 +1036,7 @@
   }
   
   .photoInteractBtn {
-    padding: 8px 12px;
+    padding: 12px 16px;
     font-size: 13px;
   }
   
@@ -762,15 +1044,17 @@
     padding: 16px 20px;
   }
   
+  /* MOBILE: Stack action buttons vertically for better touch */
   .actionButtons {
     flex-direction: column;
     gap: 8px;
   }
   
   .actionBtn {
-    padding: 12px 16px;
+    padding: 14px 16px;
   }
   
+  /* MOBILE: Stack comment input vertically */
   .commentInputSection {
     flex-direction: column;
     align-items: stretch;
@@ -783,32 +1067,65 @@
   }
   
   .compactSinglePhoto {
-    height: 240px;
+    height: 260px;
   }
   
   .compactTwoPhotos,
   .compactManyPhotos {
-    height: 200px;
+    height: 220px;
   }
   
   .photoGridContainerCompact {
-    min-height: 240px;
+    min-height: 260px;
+  }
+  
+  /* Mobile lightbox adjustments */
+  .lightboxClose,
+  .lightboxPrev,
+  .lightboxNext {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+  
+  .lightboxClose {
+    top: 15px;
+    right: 15px;
+  }
+  
+  .lightboxPrev {
+    left: 15px;
+  }
+  
+  .lightboxNext {
+    right: 15px;
+  }
+  
+  .thumbnail {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .mobileHints {
+    display: block;
   }
 }
 
+/* Small mobile optimizations */
 @media (max-width: 480px) {
   .authorAvatar {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .compactAvatar {
     width: 36px;
     height: 36px;
   }
   
-  .compactAvatar {
-    width: 32px;
-    height: 32px;
-  }
-  
   .postText {
     font-size: 13px;
+    padding: 14px 16px;
   }
   
   .individualPhoto {
@@ -816,35 +1133,135 @@
   }
   
   .photoInteractBtn {
-    padding: 6px 10px;
+    padding: 10px 12px;
     font-size: 12px;
   }
   
   .actionBtn {
-    padding: 10px 12px;
+    padding: 12px 14px;
     font-size: 13px;
   }
   
   .commentInput {
     font-size: 13px;
-    padding: 10px 14px;
+    padding: 12px 14px;
   }
   
   .commentSubmit {
-    padding: 10px 20px;
+    padding: 12px 20px;
     font-size: 13px;
   }
   
   .compactSinglePhoto {
-    height: 200px;
+    height: 220px;
   }
   
   .compactTwoPhotos,
   .compactManyPhotos {
-    height: 180px;
+    height: 200px;
   }
   
   .photoGridContainerCompact {
-    min-height: 200px;
+    min-height: 220px;
+    margin: 8px 16px 12px;
+  }
+  
+  .postHeader {
+    padding: 14px 16px 10px;
+  }
+  
+  .postFooter {
+    padding: 14px 16px;
+  }
+  
+  .photoGridExpanded {
+    padding: 0 16px 14px;
+  }
+  
+  /* Extra small mobile: Smaller modal padding */
+  .confirmModal {
+    padding: 24px 20px;
+  }
+  
+  .modalButtons {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .modalCancel,
+  .modalDelete {
+    width: 100%;
+  }
+}
+
+/* Very small screens (320px) */
+@media (max-width: 360px) {
+  .postCardCompact,
+  .postCardExpanded {
+    margin-bottom: 12px;
+  }
+  
+  .compactSinglePhoto {
+    height: 180px;
+  }
+  
+  .compactTwoPhotos,
+  .compactManyPhotos {
+    height: 160px;
+  }
+  
+  .photoGridContainerCompact {
+    min-height: 180px;
+    margin: 6px 12px 10px;
+  }
+  
+  .individualPhoto {
+    max-height: 250px;
+  }
+  
+  .thumbnail {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+/* Landscape mobile optimizations */
+@media (max-height: 500px) and (orientation: landscape) {
+  .lightboxImage {
+    max-height: 70vh;
+  }
+  
+  .lightboxCounter {
+    bottom: 60px;
+  }
+  
+  .lightboxThumbnails {
+    bottom: 10px;
+  }
+  
+  .mobileHints {
+    bottom: 80px;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+  .authorAvatar,
+  .compactAvatar,
+  .commentAvatar {
+    border-width: 1px;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .swipeHint {
+    animation: none;
   }
 }
