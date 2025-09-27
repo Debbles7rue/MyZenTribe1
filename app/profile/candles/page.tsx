@@ -57,95 +57,60 @@ function StarryBackground() {
   );
 }
 
-// Beautiful Candle Display Component (updated visual only)
+// Beautiful Candle Display Component (updated visuals + true flicker)
 function CandleDisplay({ candle }: { candle: Candle }) {
   const isEternal = candle.candle_type === "eternal";
   const color = candle.color || "white";
 
-  // Kept your map; we still default to a white candle, but only
-  // use the palette for subtle accents (e.g., plaque rim if desired)
-  const colorMap: Record<
-    string,
-    { main: string; gradient: string[]; rim?: string }
-  > = {
-    white: {
-      main: "#ffffff",
-      gradient: ["#ffffff", "#F6F4FB", "#EEEAF7"],
-      rim: "#e9e4f4",
-    },
-    gold: {
-      main: "#f8e3b1",
-      gradient: ["#fff5d6", "#f8e3b1", "#e6c56e"],
-      rim: "#e7cf98",
-    },
-    rose: {
-      main: "#f7c4c9",
-      gradient: ["#ffd6d9", "#f7c4c9", "#e8a5ab"],
-      rim: "#eab0b7",
-    },
-    azure: {
-      main: "#c5e3ff",
-      gradient: ["#dceeff", "#c5e3ff", "#9bc8f7"],
-      rim: "#b4d3f0",
-    },
-    violet: {
-      main: "#d8c7ff",
-      gradient: ["#e8dcff", "#d8c7ff", "#c0a8f7"],
-      rim: "#cdbbfa",
-    },
-    emerald: {
-      main: "#cdebd3",
-      gradient: ["#dff5e3", "#cdebd3", "#a8d6b3"],
-      rim: "#bfe1c6",
-    },
+  const colorMap: Record<string, { main: string; gradient: string[]; rim?: string }> = {
+    white: { main: "#ffffff", gradient: ["#ffffff", "#F6F4FB", "#EEEAF7"], rim: "#e9e4f4" },
+    gold: { main: "#f8e3b1", gradient: ["#fff5d6", "#f8e3b1", "#e6c56e"], rim: "#e7cf98" },
+    rose: { main: "#f7c4c9", gradient: ["#ffd6d9", "#f7c4c9", "#e8a5ab"], rim: "#eab0b7" },
+    azure:{ main: "#c5e3ff", gradient: ["#dceeff", "#c5e3ff", "#9bc8f7"], rim: "#b4d3f0" },
+    violet:{ main: "#d8c7ff", gradient: ["#e8dcff", "#d8c7ff", "#c0a8f7"], rim: "#cdbbfa" },
+    emerald:{ main: "#cdebd3", gradient: ["#dff5e3", "#cdebd3", "#a8d6b3"], rim: "#bfe1c6" }
   };
 
   const palette = colorMap[color] || colorMap.white;
 
   const createdDate = new Date(candle.created_at);
   const formattedDate = createdDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: "short", day: "numeric", year: "numeric",
   });
 
-  // random offsets so multiple flames don't sync
-  const swayDelay = `${(Math.random() * 1.2).toFixed(2)}s`;
-  const flickerDelay = `${(Math.random() * 0.9).toFixed(2)}s`;
+  // Slight randomization so multiple flames don’t sync perfectly
+  const beginOffset = (Math.random() * 1.2).toFixed(2) + "s";
 
   return (
     <div className="candle-display">
       <div className="candle-visual">
         <svg viewBox="0 0 120 160" className="candle-svg" aria-hidden>
           <defs>
-            {/* Candle body gradients (white glossy cylinder) */}
+            {/* Body gradients */}
             <linearGradient id={`body-grad-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="#faf9ff" />
-              <stop offset="25%" stopColor="#ffffff" />
-              <stop offset="55%" stopColor="#f3f0fa" />
+              <stop offset="0%"  stopColor="#f7f6fc" />
+              <stop offset="18%" stopColor="#ffffff" />
+              <stop offset="55%" stopColor="#f1eef9" />
               <stop offset="100%" stopColor="#ece8f6" />
             </linearGradient>
-            {/* vertical gloss */}
-            <linearGradient id={`body-vert-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
-              <stop offset="50%" stopColor="#ffffff" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#d9d3eb" stopOpacity="0.45" />
-            </linearGradient>
-
-            {/* Top ellipse (wax rim) */}
             <radialGradient id={`top-ell-${candle.id}`} cx="50%" cy="45%" r="60%">
               <stop offset="0%" stopColor="#ffffff" />
               <stop offset="70%" stopColor="#f2effa" />
               <stop offset="100%" stopColor="#e8e3f4" />
             </radialGradient>
-
-            {/* Subtle inner emboss squiggle */}
             <linearGradient id={`squiggle-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="#d7d2ea" stopOpacity="0.5" />
               <stop offset="100%" stopColor="#ffffff" stopOpacity="0.2" />
             </linearGradient>
 
-            {/* Flame */}
+            {/* Base plate (soft) */}
+            <radialGradient id={`plate-${candle.id}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="rgba(0,0,0,0.18)" />
+              <stop offset="70%"  stopColor="rgba(0,0,0,0.12)" />
+              <stop offset="100%" stopColor="rgba(0,0,0,0.00)" />
+            </radialGradient>
+
+            {/* Flame + glow */}
             <linearGradient id={`flame-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="#fff7d5" />
               <stop offset="35%" stopColor="#ffd27a" />
@@ -158,98 +123,113 @@ function CandleDisplay({ candle }: { candle: Candle }) {
               <stop offset="100%" stopColor="rgba(255,255,255,0)" />
             </radialGradient>
             <filter id={`flame-blur-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="0.6" />
+              <feGaussianBlur stdDeviation="0.55">
+                <animate attributeName="stdDeviation" values="0.45;0.8;0.5;0.7;0.55" dur="1.6s" begin={beginOffset} repeatCount="indefinite"/>
+              </feGaussianBlur>
             </filter>
-
-            {/* Glow */}
             <radialGradient id={`glow-${candle.id}`} cx="50%" cy="30%" r="60%">
-              <stop offset="0%" stopColor="rgba(255, 230, 160, 0.95)" />
-              <stop offset="60%" stopColor="rgba(255, 190, 90, 0.35)" />
-              <stop offset="100%" stopColor="rgba(255, 150, 40, 0)" />
+              <stop offset="0%" stopColor="rgba(255, 232, 170, 0.95)" />
+              <stop offset="60%" stopColor="rgba(255, 194, 100, 0.35)" />
+              <stop offset="100%" stopColor="rgba(255, 160, 40, 0)" />
             </radialGradient>
 
-            {/* Soft drop shadow */}
+            {/* Soft shadow */}
             <filter id={`shadow-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
               <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
             </filter>
 
-            {/* Name plaque gradients */}
+            {/* Plaque */}
             <linearGradient id={`plaque-base-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#caa85a" />
+              <stop offset="0%"   stopColor="#caa85a" />
               <stop offset="100%" stopColor="#a27d2c" />
             </linearGradient>
             <linearGradient id={`plaque-face-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#fff2c9" />
-              <stop offset="60%" stopColor="#f6d784" />
+              <stop offset="0%"   stopColor="#fff2c9" />
+              <stop offset="55%"  stopColor="#f6d784" />
               <stop offset="100%" stopColor="#e9c15a" />
             </linearGradient>
           </defs>
 
-          {/* Ground shadow */}
-          <ellipse cx="60" cy="150" rx="30" ry="6" fill="#000" opacity="0.12" />
+          {/* Ground plate + soft vignette */}
+          <ellipse cx="60" cy="151" rx="38" ry="8" fill={`url(#plate-${candle.id})`} />
 
-          {/* CANDLE BODY (simple, elegant white cylinder) */}
-          {/* Main body */}
+          {/* Candle body (sleek white) */}
           <g filter={`url(#shadow-${candle.id})`}>
-            <rect x="37" y="58" width="46" height="86" rx="10" fill={`url(#body-grad-${candle.id})`} />
-            {/* top wax ellipse */}
-            <ellipse cx="60" cy="58" rx="23" ry="8" fill={`url(#top-ell-${candle.id})`} />
-            {/* subtle vertical gloss strip */}
-            <rect x="44" y="60" width="6" height="80" rx="3" fill="white" opacity="0.5" />
-            <rect x="70" y="60" width="3" height="78" rx="1.5" fill="#efeaff" opacity="0.35" />
-            {/* a gentle embossed squiggle like in your screenshot */}
-            <path
-              d="M56 88c6 8-5 10 1 16c4 4 8-4 10-8"
-              fill="none"
-              stroke={`url(#squiggle-${candle.id})`}
-              strokeWidth="2"
-              strokeLinecap="round"
-              opacity="0.6"
-            />
+            <rect x="36.5" y="58" width="47" height="86" rx="11" fill={`url(#body-grad-${candle.id})`} />
+            {/* top ellipse */}
+            <ellipse cx="60" cy="58" rx="23.5" ry="8.3" fill={`url(#top-ell-${candle.id})`} />
+            {/* vertical gloss strips */}
+            <rect x="45" y="62" width="6" height="78" rx="3" fill="#ffffff" opacity="0.45" />
+            <rect x="70.5" y="62" width="3.2" height="76" rx="1.6" fill="#efeaff" opacity="0.35" />
+            {/* subtle embossed squiggle */}
+            <path d="M56 88c6 8-5 10 1 16c4 4 8-4 10-8" fill="none" stroke={`url(#squiggle-${candle.id})`} strokeWidth="2" strokeLinecap="round" opacity="0.55" />
           </g>
 
           {/* Wick */}
           <rect x="59" y="45" width="2" height="12.5" rx="1" fill="#1e1e1e" />
 
-          {/* Flame (flicker + glow) */}
-          <g className="flame-group" style={{ animationDelay: swayDelay }}>
+          {/* Flame group with TRUE flicker (SVG animate) */}
+          <g id={`flamegrp-${candle.id}`} transform="rotate(0,60,52)">
+            {/* rotate/sway */}
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              values="-2 60 52; 1 60 52; 0 60 52; -1 60 52; -2 60 52"
+              dur="1.6s"
+              begin={beginOffset}
+              repeatCount="indefinite"
+            />
+            {/* opacity twinkle */}
+            <animate
+              attributeName="opacity"
+              values="0.92;1;0.88;0.98;0.92"
+              dur="1.6s"
+              begin={beginOffset}
+              repeatCount="indefinite"
+            />
+            {/* scale breathing */}
+            <animateTransform
+              attributeName="transform"
+              additive="sum"
+              type="scale"
+              values="1 1; 1.04 1.06; 0.98 0.96; 1.02 1.02; 1 1"
+              dur="1.6s"
+              begin={beginOffset}
+              repeatCount="indefinite"
+            />
+
+            {/* outer flame */}
             <path d="M60 27 C55.4 36 55 42 60 51 C65 42 64.6 36 60 27 Z" fill={`url(#flame-${candle.id})`} filter={`url(#flame-blur-${candle.id})`} />
+            {/* inner hot core */}
             <path d="M60 30 C57.2 37 56.7 41 60 47 C63.3 41 62.8 37 60 30 Z" fill={`url(#flame-inner-${candle.id})`} />
-            <circle cx="60" cy="28.6" r="0.9" fill="#fff6d5" opacity="0.9" />
+            {/* tip sparkle */}
+            <circle cx="60" cy="28.6" r="0.9" fill="#fff6d5" opacity="0.95" />
           </g>
 
-          {/* Warm glow */}
-          <ellipse
-            cx="60"
-            cy="40"
-            rx="32"
-            ry="22"
-            fill={`url(#glow-${candle.id})`}
-            className="glow-effect"
-            style={{ animationDelay: flickerDelay }}
-          />
+          {/* Warm glow that also breathes */}
+          <ellipse cx="60" cy="41" rx="32" ry="22" fill={`url(#glow-${candle.id})`}>
+            <animate attributeName="opacity" values="0.55;0.9;0.6;0.85;0.55" dur="2.2s" begin={beginOffset} repeatCount="indefinite" />
+          </ellipse>
 
           {/* Eternal mark */}
           {isEternal && (
-            <text x="60" y="18" textAnchor="middle" fontSize="14" fill="#f3e4b0">
-              ✨
-            </text>
+            <text x="60" y="18" textAnchor="middle" fontSize="14" fill="#f3e4b0">✨</text>
           )}
 
-          {/* NAME PLAQUE (gold, separate from candle body) */}
-          <g transform="translate(0, 0)">
-            {/* shadowy under-base */}
+          {/* Gold name plaque (ornate, centered under candle) */}
+          <g>
+            {/* rim/back */}
             <path
-              d="M36 126 h48 a8 8 0 0 1 8 8 v2 a8 8 0 0 1 -8 8 h-48 a8 8 0 0 1 -8 -8 v-2 a8 8 0 0 1 8 -8 z"
+              d="M34 125 h52 a9 9 0 0 1 9 9 v3 a9 9 0 0 1 -9 9 h-52 a9 9 0 0 1 -9 -9 v-3 a9 9 0 0 1 9 -9 z"
               fill={`url(#plaque-base-${candle.id})`}
-              opacity="0.85"
+              opacity="0.9"
               filter={`url(#shadow-${candle.id})`}
             />
             {/* face */}
             <rect x="38" y="128" width="44" height="16" rx="8" fill={`url(#plaque-face-${candle.id})`} stroke="rgba(0,0,0,0.1)" />
-            {/* inner inset highlight */}
-            <rect x="40" y="130" width="40" height="12" rx="6" fill="rgba(255,255,255,0.35)" opacity="0.5" />
-            {/* name text */}
+            {/* inner highlight */}
+            <rect x="40" y="130" width="40" height="12" rx="6" fill="rgba(255,255,255,0.4)" opacity="0.5" />
+            {/* name */}
             <text
               x="60"
               y="139"
@@ -495,12 +475,8 @@ export default function MyCandlesPage() {
             transform: translateY(100vh) translateX(0) rotate(0deg);
             opacity: 0;
           }
-          10% {
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
           100% { 
             transform: translateY(-100vh) translateX(100px) rotate(720deg);
             opacity: 0;
@@ -571,9 +547,7 @@ export default function MyCandlesPage() {
           text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
-        .title-icon {
-          font-size: 2rem;
-        }
+        .title-icon { font-size: 2rem; }
 
         .stats-overview {
           display: grid;
@@ -673,9 +647,7 @@ export default function MyCandlesPage() {
         }
 
         @media (min-width: 768px) {
-          .candles-grid {
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-          }
+          .candles-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
         }
 
         .candle-display {
@@ -700,12 +672,7 @@ export default function MyCandlesPage() {
           left: -50%;
           width: 200%;
           height: 200%;
-          background: linear-gradient(
-            45deg,
-            transparent,
-            rgba(251,191,36,0.1),
-            transparent
-          );
+          background: linear-gradient(45deg, transparent, rgba(251,191,36,0.1), transparent);
           transform: rotate(45deg);
           transition: all 0.5s;
           opacity: 0;
@@ -728,47 +695,11 @@ export default function MyCandlesPage() {
           border-color: rgba(251,191,36,0.3);
         }
 
-        .candle-visual {
-          position: relative;
-          width: 120px;
-          height: 160px;
-        }
+        .candle-visual { position: relative; width: 120px; height: 160px; }
+        .candle-svg { width: 100%; height: 100%; }
 
-        .candle-svg {
-          width: 100%;
-          height: 100%;
-        }
-
-        /* Flicker + sway */
-        .flame-group {
-          animation: flicker 1.6s infinite ease-in-out, sway 2.8s infinite ease-in-out;
-          transform-origin: 60px 52px;
-        }
-
-        @keyframes flicker {
-          0%, 100% { filter: brightness(1); }
-          20% { filter: brightness(1.05); }
-          40% { filter: brightness(0.95); }
-          60% { filter: brightness(1.08); }
-          80% { filter: brightness(0.98); }
-        }
-
-        @keyframes sway {
-          0%   { transform: rotate(-1deg) translateX(-0.3px) scale(1); opacity: 0.96; }
-          25%  { transform: rotate(1deg) translateX(0.4px)  scale(1.03); opacity: 1; }
-          50%  { transform: rotate(0deg) translateX(0px)    scale(0.98); opacity: 0.92; }
-          75%  { transform: rotate(-0.6deg) translateX(-0.2px) scale(1.02); opacity: 0.96; }
-          100% { transform: rotate(-1deg) translateX(-0.3px) scale(1); opacity: 0.96; }
-        }
-
-        .glow-effect {
-          animation: glow 2.5s infinite ease-in-out;
-        }
-
-        @keyframes glow {
-          0%, 100% { opacity: 0.55; }
-          50% { opacity: 0.9; }
-        }
+        .glow-effect { animation: glow 2.5s infinite ease-in-out; }
+        @keyframes glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.9; } }
 
         .eternal-badge {
           position: absolute;
@@ -786,10 +717,7 @@ export default function MyCandlesPage() {
           box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
 
-        .candle-info {
-          text-align: center;
-          width: 100%;
-        }
+        .candle-info { text-align: center; width: 100%; }
 
         .candle-name {
           font-size: 1.125rem;
@@ -837,41 +765,13 @@ export default function MyCandlesPage() {
           animation: spin 1s linear infinite;
           box-shadow: 0 0 20px rgba(251,191,36,0.3);
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .empty-state {
-          text-align: center;
-          padding: 4rem 2rem;
-          color: #fde68a;
-          position: relative;
-          z-index: 2;
-        }
-
-        .empty-icon {
-          font-size: 4rem;
-          margin-bottom: 1rem;
-          animation: float 3s infinite ease-in-out;
-        }
-
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-
-        .empty-state h2 {
-          font-size: 1.5rem;
-          color: #fbbf24;
-          margin: 0 0 0.5rem 0;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .empty-state p {
-          margin: 0 0 1.5rem 0;
-          opacity: 0.9;
-        }
+        .empty-state { text-align: center; padding: 4rem 2rem; color: #fde68a; position: relative; z-index: 2; }
+        .empty-icon { font-size: 4rem; margin-bottom: 1rem; animation: float 3s infinite ease-in-out; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .empty-state h2 { font-size: 1.5rem; color: #fbbf24; margin: 0 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .empty-state p { margin: 0 0 1.5rem 0; opacity: 0.9; }
 
         .cta-button {
           display: inline-block;
@@ -884,101 +784,32 @@ export default function MyCandlesPage() {
           transition: all 0.2s;
           box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
-
-        .cta-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(251,191,36,0.4);
-        }
+        .cta-button:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(251,191,36,0.4); }
 
         /* Mobile Optimizations */
         @media (max-width: 640px) {
-          .my-candles-page {
-            padding: 1rem 0.5rem;
-          }
-          
-          .inspirational-quote {
-            font-size: 1rem;
-            margin-bottom: 1.5rem;
-          }
-
-          .page-header {
-            flex-direction: column;
-            text-align: center;
-            gap: 0.75rem;
-          }
-          
-          .page-title {
-            font-size: 1.5rem;
-          }
-
-          .back-button, .visit-sanctuary {
-            width: 100%;
-            text-align: center;
-          }
-          
-          .stats-overview {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-          }
-
-          .stat-card {
-            padding: 1rem;
-          }
-
-          .stat-value {
-            font-size: 1.5rem;
-          }
-
-          .filter-tabs {
-            justify-content: center;
-            width: 100%;
-          }
-
-          .filter-tab {
-            padding: 0.5rem 1rem;
-            font-size: 0.8125rem;
-          }
-          
-          .candles-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-          }
-
-          .candle-display {
-            padding: 1.25rem;
-          }
-
-          .candle-visual {
-            width: 100px;
-            height: 140px;
-          }
-
-          .candle-name {
-            font-size: 1rem;
-          }
-
-          .candle-message {
-            font-size: 0.8125rem;
-          }
-
-          .empty-state {
-            padding: 3rem 1.5rem;
-          }
-
-          .empty-icon {
-            font-size: 3rem;
-          }
-
-          .empty-state h2 {
-            font-size: 1.25rem;
-          }
+          .my-candles-page { padding: 1rem 0.5rem; }
+          .inspirational-quote { font-size: 1rem; margin-bottom: 1.5rem; }
+          .page-header { flex-direction: column; text-align: center; gap: 0.75rem; }
+          .page-title { font-size: 1.5rem; }
+          .back-button, .visit-sanctuary { width: 100%; text-align: center; }
+          .stats-overview { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+          .stat-card { padding: 1rem; }
+          .stat-value { font-size: 1.5rem; }
+          .filter-tabs { justify-content: center; width: 100%; }
+          .filter-tab { padding: 0.5rem 1rem; font-size: 0.8125rem; }
+          .candles-grid { grid-template-columns: 1fr; gap: 1rem; }
+          .candle-display { padding: 1.25rem; }
+          .candle-visual { width: 100px; height: 140px; }
+          .candle-name { font-size: 1rem; }
+          .candle-message { font-size: 0.8125rem; }
+          .empty-state { padding: 3rem 1.5rem; }
+          .empty-icon { font-size: 3rem; }
+          .empty-state h2 { font-size: 1.25rem; }
         }
 
         @media (max-width: 375px) {
-          .filter-tab {
-            padding: 0.5rem 0.75rem;
-            font-size: 0.75rem;
-          }
+          .filter-tab { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
         }
       `}</style>
     </div>
