@@ -49,23 +49,88 @@ function PhotoGrid({
   
   const images = validMedia.filter(m => m.type === 'image');
   
-  // In compact mode, show larger preview in card style
+  // In compact mode, show Facebook-style grid with clean separation
   if (isCompact) {
-    const firstImage = images[0];
-    if (!firstImage) return null;
+    if (images.length === 0) return null;
     
-    return (
-      <div className="photo-grid-container compact">
-        <div className="compact-preview-large" onClick={() => onPhotoClick(0)}>
-          <img src={firstImage.url} alt="" />
-          {images.length > 1 && (
-            <div className="media-count-overlay">
-              +{images.length - 1} more photos
-            </div>
-          )}
+    // Single image
+    if (images.length === 1) {
+      return (
+        <div className="photo-grid-container compact">
+          <div className="compact-single-photo" onClick={() => onPhotoClick(0)}>
+            <img src={images[0].url} alt="" />
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
+    
+    // Two images side by side
+    if (images.length === 2) {
+      return (
+        <div className="photo-grid-container compact">
+          <div className="compact-two-photos">
+            {images.map((img, idx) => (
+              <div key={idx} className="compact-photo-item" onClick={() => onPhotoClick(idx)}>
+                <img src={img.url} alt="" />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
+    // Three images - one large, two stacked
+    if (images.length === 3) {
+      return (
+        <div className="photo-grid-container compact">
+          <div className="compact-three-photos">
+            <div className="compact-photo-item main" onClick={() => onPhotoClick(0)}>
+              <img src={images[0].url} alt="" />
+            </div>
+            <div className="compact-side-stack">
+              {images.slice(1, 3).map((img, idx) => (
+                <div key={idx} className="compact-photo-item" onClick={() => onPhotoClick(idx + 1)}>
+                  <img src={img.url} alt="" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Four or more images
+    if (images.length >= 4) {
+      return (
+        <div className="photo-grid-container compact">
+          <div className="compact-many-photos">
+            <div className="compact-top-row">
+              <div className="compact-photo-item" onClick={() => onPhotoClick(0)}>
+                <img src={images[0].url} alt="" />
+              </div>
+              <div className="compact-photo-item" onClick={() => onPhotoClick(1)}>
+                <img src={images[1].url} alt="" />
+              </div>
+            </div>
+            <div className="compact-bottom-row">
+              <div className="compact-photo-item" onClick={() => onPhotoClick(2)}>
+                <img src={images[2].url} alt="" />
+              </div>
+              <div className="compact-photo-item" onClick={() => onPhotoClick(3)}>
+                <img src={images[3].url} alt="" />
+                {images.length > 4 && (
+                  <div className="more-photos-overlay">
+                    +{images.length - 4}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    return null;
   }
   
   // Expanded mode - individual photos with spacing and interaction buttons
@@ -80,15 +145,33 @@ function PhotoGrid({
               className="individual-photo"
               onClick={() => onPhotoClick(idx)}
             />
-            <div className="photo-actions">
+            <div className="photo-interaction-bar">
               <button 
-                className="photo-action-btn"
+                className="photo-interact-btn like-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Handle photo like
+                }}
+              >
+                🤍 Like
+              </button>
+              <button 
+                className="photo-interact-btn comment-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   onIndividualPhotoClick?.(photo);
                 }}
               >
-                💬 Comment on this photo
+                💬 Comment
+              </button>
+              <button 
+                className="photo-interact-btn caption-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Handle add caption
+                }}
+              >
+                ✏️ Caption
               </button>
             </div>
           </div>
@@ -266,7 +349,7 @@ function PhotoLightbox({
   );
 }
 
-// Edit Modal Component
+// Professional Edit Modal Component with Clean Layout
 function EditPostModal({ 
   post, 
   currentMedia,
@@ -282,6 +365,8 @@ function EditPostModal({
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showCoCreators, setShowCoCreators] = useState(false);
+  const [coCreators, setCoCreators] = useState<string[]>(post.co_creators || []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -320,57 +405,73 @@ function EditPostModal({
 
   return (
     <div className="edit-modal-overlay" onClick={onClose}>
-      <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="edit-modal-content professional" onClick={(e) => e.stopPropagation()}>
         <div className="edit-modal-header">
           <h2>Edit Post</h2>
           <button onClick={onClose} className="close-button">×</button>
         </div>
         
         <div className="edit-modal-body">
-          <textarea
-            value={editBody}
-            onChange={(e) => setEditBody(e.target.value)}
-            placeholder="What's on your mind?"
-            rows={6}
-            className="edit-textarea"
-          />
+          <div className="edit-section">
+            <label className="edit-label">Edit Caption</label>
+            <textarea
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              placeholder="What's on your mind?"
+              rows={4}
+              className="edit-textarea-clean"
+            />
+          </div>
 
-          {currentMedia.length > 0 && (
-            <div className="current-media">
-              <h3>Current Media ({currentMedia.length})</h3>
-              <div className="media-grid">
-                {currentMedia.map((media, idx) => (
-                  <div key={idx} className="media-item">
-                    {media.type === 'image' ? (
-                      <img src={media.url} alt="" />
-                    ) : (
-                      <video src={media.url} />
-                    )}
-                  </div>
-                ))}
-              </div>
+          <div className="edit-actions-grid">
+            <div className="action-card">
+              <h3>📸 Add Photos & Videos</h3>
+              <p>Add more memories to this post</p>
+              <label className="action-button primary">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+                Choose Files
+              </label>
+              {newFiles.length > 0 && (
+                <div className="file-preview">
+                  {newFiles.length} file{newFiles.length > 1 ? 's' : ''} selected
+                </div>
+              )}
+            </div>
+
+            <div className="action-card">
+              <h3>👥 Co-Creators</h3>
+              <p>Tag friends who can add photos</p>
+              <button 
+                className="action-button secondary"
+                onClick={() => setShowCoCreators(!showCoCreators)}
+              >
+                {coCreators.length > 0 ? `${coCreators.length} Tagged` : 'Tag Friends'}
+              </button>
+            </div>
+
+            <div className="action-card">
+              <h3>🔒 Privacy</h3>
+              <p>Who can see this post</p>
+              <select className="privacy-select">
+                <option value="friends">Friends</option>
+                <option value="public">Everyone</option>
+                <option value="private">Only Me</option>
+              </select>
+            </div>
+          </div>
+
+          {showCoCreators && (
+            <div className="co-creators-section">
+              {/* SimpleFriendDropdown would go here */}
+              <p>Friend selector component would be integrated here</p>
             </div>
           )}
-
-          <div className="file-upload">
-            <label className="upload-button">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-              <span>📸</span>
-              <span>Add More Photos/Videos</span>
-            </label>
-            {newFiles.length > 0 && (
-              <p className="file-count">
-                <span>{newFiles.length}</span>
-                new file{newFiles.length > 1 ? 's' : ''} selected
-              </p>
-            )}
-          </div>
         </div>
 
         <div className="edit-modal-footer">
@@ -380,16 +481,9 @@ function EditPostModal({
           <button 
             onClick={handleSave}
             disabled={isSaving || uploadingFiles}
-            className="save-button"
+            className="save-button primary"
           >
-            {isSaving ? (
-              <>
-                <span className="spinner">⏳</span>
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
+            {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -926,18 +1020,18 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         }
         
         .compact-header {
-          padding: 1.25rem 1.25rem 0.75rem;
+          padding: 1rem 1rem 0.5rem;
         }
         
         .compact-author {
           display: flex;
-          gap: 0.75rem;
+          gap: 0.5rem;
           align-items: center;
         }
         
         .compact-avatar {
-          width: 48px;
-          height: 48px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           object-fit: cover;
         }
@@ -967,14 +1061,14 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         }
         
         .compact-text {
-          padding: 0.75rem 1.25rem;
-          font-size: 0.9375rem;
-          line-height: 1.5;
+          padding: 0.5rem 1rem;
+          font-size: 0.875rem;
+          line-height: 1.4;
           color: #374151;
         }
         
         .compact-footer {
-          padding: 0.75rem 1.25rem 1.25rem;
+          padding: 0.5rem 1rem 1rem;
         }
         
         .compact-stats {
@@ -990,45 +1084,104 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           gap: 0.25rem;
         }
         
-        /* Compact Photo Preview - Larger like Bird Photos */
+        /* Compact Photo Grids - Facebook Style with Clean Separation */
         .photo-grid-container.compact {
-          margin: 0.75rem 1.25rem;
+          margin: 0.5rem 1rem 1rem;
           border-radius: 0.75rem;
           overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          background: white;
         }
         
-        .compact-preview-large {
+        .compact-single-photo {
           width: 100%;
-          height: 200px;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          position: relative;
+          height: 250px;
           cursor: pointer;
-          background: #f7fafc;
+          overflow: hidden;
         }
         
-        .compact-preview-large img {
+        .compact-single-photo img {
           width: 100%;
           height: 100%;
           object-fit: cover;
-          transition: transform 0.3s ease;
+          transition: transform 0.2s ease;
         }
         
-        .compact-preview-large:hover img {
-          transform: scale(1.03);
+        .compact-single-photo:hover img {
+          transform: scale(1.02);
         }
         
-        .media-count-overlay {
+        .compact-two-photos {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 3px;
+          height: 200px;
+        }
+        
+        .compact-three-photos {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 3px;
+          height: 200px;
+        }
+        
+        .compact-side-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        
+        .compact-many-photos {
+          height: 200px;
+        }
+        
+        .compact-top-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 3px;
+          height: calc(50% - 1.5px);
+          margin-bottom: 3px;
+        }
+        
+        .compact-bottom-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 3px;
+          height: calc(50% - 1.5px);
+        }
+        
+        .compact-photo-item {
+          position: relative;
+          cursor: pointer;
+          overflow: hidden;
+          background: #f7fafc;
+        }
+        
+        .compact-photo-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.2s ease;
+        }
+        
+        .compact-photo-item:hover img {
+          transform: scale(1.05);
+        }
+        
+        .compact-photo-item.main {
+          grid-row: 1 / 3;
+        }
+        
+        .more-photos-overlay {
           position: absolute;
-          bottom: 0.75rem;
-          right: 0.75rem;
-          background: rgba(0,0,0,0.75);
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          display: flex;
+          align-items: center;
+          justify-content: center;
           color: white;
-          font-size: 0.875rem;
-          padding: 0.375rem 0.75rem;
-          border-radius: 1rem;
+          font-size: 1.5rem;
           font-weight: 600;
-          backdrop-filter: blur(4px);
         }
         
         /* Expanded Mode - Individual Photos with Spacing */
@@ -1074,38 +1227,58 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           transform: scale(1.01);
         }
         
-        .photo-actions {
+        .photo-interaction-bar {
           position: absolute;
           bottom: 0;
           left: 0;
           right: 0;
-          background: linear-gradient(transparent, rgba(0,0,0,0.7));
+          background: linear-gradient(transparent, rgba(0,0,0,0.8));
           padding: 2rem 1rem 1rem;
+          display: flex;
+          gap: 0.75rem;
           opacity: 0;
           transition: opacity 0.3s ease;
         }
         
-        .individual-photo-container:hover .photo-actions {
+        .individual-photo-container:hover .photo-interaction-bar {
           opacity: 1;
         }
         
-        .photo-action-btn {
-          background: rgba(255,255,255,0.9);
+        .photo-interact-btn {
+          background: rgba(255,255,255,0.95);
           border: none;
           padding: 0.5rem 1rem;
-          border-radius: 2rem;
+          border-radius: 1.5rem;
           font-size: 0.875rem;
           cursor: pointer;
           font-weight: 500;
           color: #374151;
           backdrop-filter: blur(4px);
           transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 0.375rem;
         }
         
-        .photo-action-btn:hover {
+        .photo-interact-btn:hover {
           background: white;
           transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .like-btn:hover {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+        
+        .comment-btn:hover {
+          background: #eff6ff;
+          color: #2563eb;
+        }
+        
+        .caption-btn:hover {
+          background: #f0fdf4;
+          color: #16a34a;
         }
         
         /* Individual Photo Modal */
