@@ -1,16 +1,16 @@
-// components/PostCard/index.tsx - Main PostCard Component
+// components/PostCard.tsx - Main Component with Modular Imports
 "use client";
 
 import { useState, useEffect } from "react";
 import { Post, toggleLike, addComment, deletePost } from "@/lib/posts";
 import { supabase } from "@/lib/supabaseClient";
-import PhotoGrid from "./PhotoGrid";
-import PostLightbox from "./PostLightbox";
-import IndividualPhotoModal from "./IndividualPhotoModal";
-import EditPostModal from "./EditPostModal";
-import DeleteConfirmModal from "./DeleteConfirmModal";
-import PostInteractions from "./PostInteractions";
-import styles from "./styles.module.css";
+import PhotoGrid from "./PostCard/PhotoGrid";
+import PostLightbox from "./PostCard/PostLightbox";
+import IndividualPhotoModal from "./PostCard/IndividualPhotoModal";
+import EditPostModal from "./PostCard/EditPostModal";
+import DeleteConfirmModal from "./PostCard/DeleteConfirmModal";
+import PostInteractions from "./PostCard/PostInteractions";
+import "./PostCard/styles.module.css";
 
 interface PostCardProps {
   post: Post;
@@ -257,20 +257,20 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   // COMPACT MODE - Card preview
   if (!isExpanded) {
     return (
-      <div className={styles.postCardCompact} onClick={handleCardClick}>
-        <div className={styles.compactHeader}>
-          <div className={styles.compactAuthor}>
+      <div className="post-card-compact" onClick={handleCardClick}>
+        <div className="compact-header">
+          <div className="compact-author">
             <img 
               src={post.author?.avatar_url || '/default-avatar.png'} 
               alt=""
-              className={styles.compactAvatar}
+              className="compact-avatar"
             />
-            <div className={styles.compactAuthorInfo}>
-              <div className={styles.compactName}>{getDisplayName()}</div>
-              <div className={styles.compactMeta}>
+            <div className="compact-author-info">
+              <div className="compact-name">{getDisplayName()}</div>
+              <div className="compact-meta">
                 {new Date(post.created_at).toLocaleDateString()}
                 {post.privacy && (
-                  <span className={styles.privacyIcon}>
+                  <span className="privacy-icon">
                     {post.privacy === 'public' ? '🌍' : '🔒'}
                   </span>
                 )}
@@ -280,7 +280,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         </div>
         
         {post.body && (
-          <div className={styles.compactText}>
+          <div className="compact-text">
             {post.body.length > 150 ? `${post.body.substring(0, 150)}...` : post.body}
           </div>
         )}
@@ -293,11 +293,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           />
         )}
         
-        <div className={styles.compactFooter}>
-          <div className={styles.compactStats}>
-            {localLikeCount > 0 && <span className={styles.statItem}>❤️ {localLikeCount}</span>}
-            {post.comment_count > 0 && <span className={styles.statItem}>💬 {post.comment_count}</span>}
-            {processedMedia.length > 0 && <span className={styles.statItem}>📷 {processedMedia.length}</span>}
+        <div className="compact-footer">
+          <div className="compact-stats">
+            {localLikeCount > 0 && <span className="stat-item">❤️ {localLikeCount}</span>}
+            {post.comment_count > 0 && <span className="stat-item">💬 {post.comment_count}</span>}
+            {processedMedia.length > 0 && <span className="stat-item">📷 {processedMedia.length}</span>}
           </div>
         </div>
       </div>
@@ -307,22 +307,22 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   // EXPANDED MODE - Full post with interactions
   return (
     <>
-      <div className={styles.postCardExpanded}>
-        <div className={styles.postHeader}>
-          <div className={styles.authorInfo}>
+      <div className="post-card-expanded">
+        <div className="post-header">
+          <div className="author-info">
             <img 
               src={post.author?.avatar_url || '/default-avatar.png'} 
               alt=""
-              className={styles.authorAvatarSmall}
+              className="author-avatar-small"
             />
             <div>
-              <div className={styles.authorName}>{getDisplayName()}</div>
-              <div className={styles.postMeta}>
-                <span className={styles.postTime}>
+              <div className="author-name">{getDisplayName()}</div>
+              <div className="post-meta">
+                <span className="post-time">
                   {new Date(post.created_at).toLocaleDateString()}
                 </span>
                 {post.privacy && (
-                  <span className={styles.postPrivacy}>
+                  <span className="post-privacy">
                     {post.privacy === 'public' ? '🌍' : '🔒'}
                   </span>
                 )}
@@ -330,9 +330,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </div>
           </div>
           
-          <div className={styles.headerActions}>
+          <div className="header-actions">
             <button 
-              className={styles.closeBtn}
+              className="close-btn"
               onClick={() => setIsExpanded(false)}
               title="Close post"
             >
@@ -340,32 +340,32 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </button>
             
             {canEdit && (
-              <div className={styles.postActions}>
+              <div className="post-actions">
                 <button 
-                  className={styles.menuBtn}
+                  className="menu-btn"
                   onClick={() => setShowEditMenu(!showEditMenu)}
                   title="Post options"
                 >
                   ⋯
                 </button>
                 {showEditMenu && (
-                  <div className={styles.menuDropdown}>
+                  <div className="menu-dropdown">
                     {isCoCreator && !canDelete && (
                       <>
-                        <button className={styles.menuItem} onClick={() => {
+                        <button className="menu-item" onClick={() => {
                           setShowEditModal(true);
                           setShowEditMenu(false);
                         }}>📷 Add Photos</button>
-                        <button className={styles.menuItem}>🏷️ Remove Tag</button>
+                        <button className="menu-item">🏷️ Remove Tag</button>
                       </>
                     )}
                     {canDelete && (
                       <>
-                        <button className={styles.menuItem} onClick={() => {
+                        <button className="menu-item" onClick={() => {
                           setShowEditModal(true);
                           setShowEditMenu(false);
                         }}>✏️ Edit Post</button>
-                        <button className={`${styles.menuItem} ${styles.danger}`} onClick={() => {
+                        <button className="menu-item danger" onClick={() => {
                           setShowDeleteConfirm(true);
                           setShowEditMenu(false);
                         }}>🗑️ Delete Post</button>
@@ -378,8 +378,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           </div>
         </div>
         
-        <div className={styles.postContent}>
-          {post.body && <p className={styles.postText}>{post.body}</p>}
+        <div className="post-content">
+          {post.body && <p className="post-text">{post.body}</p>}
           
           {processedMedia && processedMedia.length > 0 && (
             <PhotoGrid 
