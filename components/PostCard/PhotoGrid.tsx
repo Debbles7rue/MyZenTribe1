@@ -1,4 +1,4 @@
-// components/PostCard/PhotoGrid.tsx - Fixed to work with existing CSS modules
+// components/PostCard/PhotoGrid.tsx - Fixed with working interactions
 "use client";
 
 import { useState } from "react";
@@ -9,13 +9,22 @@ interface PhotoGridProps {
   onPhotoClick: (index: number) => void;
   isCompact?: boolean;
   onIndividualPhotoClick?: (photo: {url: string; type: 'image' | 'video'; id?: string}) => void;
+  // Add these props to connect to parent functions
+  onLike?: () => void;
+  currentUserId?: string;
+  showCommentInput?: boolean;
+  onToggleCommentInput?: () => void;
 }
 
 export default function PhotoGrid({ 
   media, 
   onPhotoClick,
   isCompact = false,
-  onIndividualPhotoClick
+  onIndividualPhotoClick,
+  onLike,
+  currentUserId,
+  showCommentInput,
+  onToggleCommentInput
 }: PhotoGridProps) {
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
@@ -384,7 +393,7 @@ export default function PhotoGrid({
     return null;
   }
   
-  // EXPANDED MODE - Individual media with existing CSS classes
+  // EXPANDED MODE - Individual media with WORKING interaction buttons
   return (
     <div className={styles.photoGridExpanded}>
       {validMedia.map((item, idx) => (
@@ -445,10 +454,14 @@ export default function PhotoGrid({
                 className={styles.photoInteractBtn}
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Simple fallback for like functionality
-                  console.log('Like clicked for:', item.id);
-                  alert('Like functionality coming soon!');
+                  // Use the parent's like function if available
+                  if (onLike) {
+                    onLike();
+                  } else {
+                    console.log('Like clicked for:', item.id);
+                  }
                 }}
+                disabled={!currentUserId}
               >
                 🤍 Like
               </button>
@@ -456,8 +469,14 @@ export default function PhotoGrid({
                 className={styles.photoInteractBtn}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onIndividualPhotoClick?.(item);
+                  // Use the parent's comment toggle function if available
+                  if (onToggleCommentInput) {
+                    onToggleCommentInput();
+                  } else if (onIndividualPhotoClick) {
+                    onIndividualPhotoClick(item);
+                  }
                 }}
+                disabled={!currentUserId}
               >
                 💬 Comment
               </button>
@@ -465,9 +484,12 @@ export default function PhotoGrid({
                 className={styles.photoInteractBtn}
                 onClick={(e) => {
                   e.stopPropagation();
-                  console.log('Caption clicked for:', item.id);
-                  alert('Caption functionality coming soon!');
+                  // For now, just open the individual photo modal for caption editing
+                  if (onIndividualPhotoClick) {
+                    onIndividualPhotoClick(item);
+                  }
                 }}
+                disabled={!currentUserId}
               >
                 ✏️ Caption
               </button>
