@@ -1177,45 +1177,328 @@ export default function EditPostModal({
           to { transform: rotate(360deg); }
         }
 
+        /* Mobile Action Bar */
+        .mobile-action-bar {
+          display: none;
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: white;
+          border-top: 1px solid #e5e7eb;
+          padding: 16px 20px;
+          z-index: 1001;
+          box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+        }
+
+        .mobile-actions {
+          display: flex;
+          gap: 12px;
+          max-width: 400px;
+          margin: 0 auto;
+        }
+
+        .mobile-save-button {
+          flex: 2;
+          padding: 14px 20px;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-weight: 600;
+          font-size: 15px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .mobile-save-button:hover:not(:disabled) {
+          background: linear-gradient(135deg, #7c3aed, #6d28d9);
+          transform: translateY(-1px);
+        }
+
+        .mobile-save-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .mobile-cancel-button {
+          flex: 1;
+          padding: 14px 20px;
+          background: #f3f4f6;
+          color: #6b7280;
+          border: none;
+          border-radius: 12px;
+          font-weight: 500;
+          font-size: 15px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .mobile-cancel-button:hover {
+          background: #e5e7eb;
+          color: #374151;
+        }
+
+        /* Enhanced File Upload for Mobile */
+        .mobile-file-upload {
+          display: none;
+          width: 100%;
+          padding: 20px;
+          border: 2px dashed #8b5cf6;
+          border-radius: 12px;
+          background: rgba(139,92,246,0.05);
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 20px;
+        }
+
+        .mobile-file-upload:hover {
+          background: rgba(139,92,246,0.1);
+          border-color: #7c3aed;
+        }
+
+        .mobile-file-upload-icon {
+          font-size: 32px;
+          margin-bottom: 8px;
+          display: block;
+        }
+
+        .mobile-file-upload-text {
+          font-size: 16px;
+          font-weight: 600;
+          color: #8b5cf6;
+          margin-bottom: 4px;
+        }
+
+        .mobile-file-upload-hint {
+          font-size: 13px;
+          color: #6b7280;
+        }
+
+        /* Swipe Navigation Indicator */
+        .swipe-indicator {
+          display: none;
+          text-align: center;
+          padding: 8px 0;
+          font-size: 12px;
+          color: #9ca3af;
+          background: #f9fafb;
+          border-bottom: 1px solid #f3f4f6;
+        }
+
+        /* Touch Feedback */
+        .tab-button:active {
+          transform: scale(0.98);
+          background: rgba(139,92,246,0.15);
+        }
+
+        .mobile-save-button:active,
+        .mobile-cancel-button:active {
+          transform: scale(0.98);
+        }
+
         /* Mobile Responsiveness */
         @media (max-width: 768px) {
+          .edit-modal-overlay {
+            padding: 0;
+            align-items: flex-start;
+          }
+
           .edit-modal-container {
-            margin: 10px;
-            max-height: 95vh;
+            margin: 0;
+            max-height: 100vh;
+            height: 100vh;
+            border-radius: 0;
+            border-radius: 20px 20px 0 0;
+            margin-top: 40px;
+          }
+
+          .edit-modal-header {
+            padding: 20px 24px 16px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: white;
+            border-bottom: 1px solid #f3f4f6;
           }
 
           .edit-modal-body {
             flex-direction: column;
+            padding-bottom: 100px; /* Space for fixed action bar */
           }
 
           .sidebar {
             width: 100%;
             border-right: none;
             border-bottom: 1px solid #f3f4f6;
+            position: sticky;
+            top: 89px; /* Height of header */
+            z-index: 9;
+            background: white;
+          }
+
+          .swipe-indicator {
+            display: block;
           }
 
           .tab-nav {
             display: flex;
             overflow-x: auto;
             padding: 0;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            scroll-behavior: smooth;
+          }
+
+          .tab-nav::-webkit-scrollbar {
+            display: none;
           }
 
           .tab-button {
-            min-width: 120px;
-            padding: 12px 16px;
+            min-width: 140px;
+            padding: 16px 20px;
+            white-space: nowrap;
+            border-bottom: 3px solid transparent;
+          }
+
+          .tab-button.active {
+            border-bottom-color: #8b5cf6;
+          }
+
+          .tab-button.active::before {
+            display: none;
           }
 
           .sidebar-actions {
             display: none;
           }
 
+          .mobile-action-bar {
+            display: block;
+          }
+
           .tab-content {
-            padding: 20px;
+            padding: 24px 20px;
+            min-height: calc(100vh - 300px);
+          }
+
+          .content-header h3 {
+            font-size: 18px;
           }
 
           .media-grid {
             grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             gap: 12px;
+          }
+
+          /* Show mobile file upload instead of button */
+          .add-media-button {
+            display: none;
+          }
+
+          .mobile-file-upload {
+            display: block;
+          }
+
+          /* Better touch targets */
+          .remove-media-button {
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+          }
+
+          .remove-file-button {
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+          }
+
+          /* Larger checkboxes for touch */
+          .checkbox-custom {
+            width: 24px;
+            height: 24px;
+          }
+
+          .checkbox-input:checked + .checkbox-custom::after {
+            font-size: 14px;
+          }
+
+          /* Better textarea sizing */
+          .caption-textarea {
+            min-height: 140px;
+            font-size: 16px; /* Prevents zoom on iOS */
+          }
+
+          .privacy-select {
+            font-size: 16px; /* Prevents zoom on iOS */
+            padding: 14px 16px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .edit-modal-header {
+            padding: 16px 20px 12px;
+          }
+
+          .header-content h2 {
+            font-size: 20px;
+          }
+
+          .tab-button {
+            min-width: 120px;
+            padding: 14px 16px;
+            font-size: 14px;
+          }
+
+          .tab-content {
+            padding: 20px 16px;
+          }
+
+          .content-header h3 {
+            font-size: 16px;
+          }
+
+          .mobile-actions {
+            gap: 8px;
+          }
+
+          .mobile-save-button,
+          .mobile-cancel-button {
+            padding: 12px 16px;
+            font-size: 14px;
+          }
+
+          .media-grid {
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+          }
+
+          .mobile-file-upload {
+            padding: 16px;
+          }
+
+          .mobile-file-upload-icon {
+            font-size: 28px;
+          }
+
+          .mobile-file-upload-text {
+            font-size: 15px;
+          }
+        }
+
+        /* Accessibility improvements */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
           }
         }
       `}</style>
