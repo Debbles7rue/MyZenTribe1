@@ -1,10 +1,11 @@
-// components/PostCard.tsx - Single File Solution (No CSS Modules)
+// components/PostCard.tsx - Enhanced with Mobile Optimization and Fixed Post Detail View
 "use client";
 
 import { useState, useEffect } from "react";
 import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, uploadMedia } from "@/lib/posts";
 import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
+import SimpleFriendDropdown from "@/components/SimpleFriendDropdown";
 import { supabase } from "@/lib/supabaseClient";
 
 interface PostCardProps {
@@ -132,18 +133,20 @@ function PhotoGrid({
     return null;
   }
   
-  // EXPANDED MODE - Individual photos with interaction buttons
+  // EXPANDED MODE - Individual photos with clear photo boundaries
   return (
     <div className="photo-grid-expanded">
       {images.map((photo, idx) => (
         <div key={idx} className="individual-photo-container">
           <div className="photo-wrapper">
-            <img 
-              src={photo.url} 
-              alt="" 
-              className="individual-photo"
-              onClick={() => onPhotoClick(idx)}
-            />
+            <div className="photo-border">
+              <img 
+                src={photo.url} 
+                alt="" 
+                className="individual-photo"
+                onClick={() => onPhotoClick(idx)}
+              />
+            </div>
             <div className="photo-interaction-bar">
               <button 
                 className="photo-interact-btn like-btn"
@@ -270,7 +273,7 @@ function IndividualPhotoModal({
   );
 }
 
-// Professional Edit Modal Component
+// Enhanced Edit Modal with Tagging and Co-Creator Support
 function EditPostModal({ 
   post, 
   currentMedia,
@@ -287,12 +290,23 @@ function EditPostModal({
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showCoCreators, setShowCoCreators] = useState(false);
+  const [showTagging, setShowTagging] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>(post.co_creators || []);
+  const [taggedUsers, setTaggedUsers] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    setNewFiles(Array.from(files));
+    
+    const fileArray = Array.from(files);
+    setSelectedFiles(prev => [...prev, ...fileArray]);
+    setNewFiles(prev => [...prev, ...fileArray]);
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setNewFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -358,9 +372,22 @@ function EditPostModal({
                 />
                 Choose Files
               </label>
-              {newFiles.length > 0 && (
+              {selectedFiles.length > 0 && (
                 <div className="file-preview">
-                  {newFiles.length} file{newFiles.length > 1 ? 's' : ''} selected
+                  <div className="selected-files">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="file-item">
+                        <span className="file-name">{file.name}</span>
+                        <button 
+                          onClick={() => removeFile(index)}
+                          className="remove-file-btn"
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -374,6 +401,33 @@ function EditPostModal({
               >
                 {coCreators.length > 0 ? `${coCreators.length} Tagged` : 'Tag Friends'}
               </button>
+              {showCoCreators && (
+                <div className="dropdown-section">
+                  <SimpleFriendDropdown
+                    value={coCreators}
+                    onChange={setCoCreators}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="action-card">
+              <h3>🏷️ Tag People</h3>
+              <p>Tag people in this post</p>
+              <button 
+                className="action-button secondary"
+                onClick={() => setShowTagging(!showTagging)}
+              >
+                {taggedUsers.length > 0 ? `${taggedUsers.length} Tagged` : 'Tag People'}
+              </button>
+              {showTagging && (
+                <div className="dropdown-section">
+                  <SimpleFriendDropdown
+                    value={taggedUsers}
+                    onChange={setTaggedUsers}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="action-card">
@@ -386,12 +440,6 @@ function EditPostModal({
               </select>
             </div>
           </div>
-
-          {showCoCreators && (
-            <div className="co-creators-section">
-              <p>Friend selector component would be integrated here</p>
-            </div>
-          )}
         </div>
 
         <div className="edit-modal-footer">
@@ -403,7 +451,7 @@ function EditPostModal({
             disabled={isSaving || uploadingFiles}
             className="save-button primary"
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? 'Saving...' : uploadingFiles ? 'Uploading...' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -760,206 +808,204 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           </div>
         </div>
         
-        <style>
-          {`
-            .post-card.compact {
-              background: white;
-              border: 1px solid #e2e8f0;
-              border-radius: 1rem;
-              margin-bottom: 1.5rem;
-              cursor: pointer;
-              transition: all 0.3s ease;
-              overflow: hidden;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            }
-            
-            .post-card.compact:hover {
-              border-color: #cbd5e0;
-              box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-              transform: translateY(-2px);
-            }
-            
-            .compact-header {
-              padding: 1rem 1rem 0.5rem;
-            }
-            
-            .compact-author {
-              display: flex;
-              gap: 0.5rem;
-              align-items: center;
-            }
-            
-            .compact-avatar {
-              width: 32px;
-              height: 32px;
-              border-radius: 50%;
-              object-fit: cover;
-            }
-            
-            .compact-author-info {
-              flex: 1;
-            }
-            
-            .compact-name {
-              font-weight: 600;
-              font-size: 1rem;
-              color: #1a202c;
-              line-height: 1.3;
-            }
-            
-            .compact-meta {
-              display: flex;
-              align-items: center;
-              gap: 0.5rem;
-              font-size: 0.875rem;
-              color: #718096;
-              margin-top: 0.25rem;
-            }
-            
-            .privacy-icon {
-              font-size: 0.875rem;
-            }
-            
-            .compact-text {
-              padding: 0.5rem 1rem;
-              font-size: 0.875rem;
-              line-height: 1.4;
-              color: #374151;
-            }
-            
-            .compact-footer {
-              padding: 0.5rem 1rem 1rem;
-            }
-            
-            .compact-stats {
-              display: flex;
-              gap: 1.5rem;
-              font-size: 0.875rem;
-              color: #718096;
-            }
-            
-            .stat-item {
-              display: flex;
-              align-items: center;
-              gap: 0.25rem;
-            }
-            
-            .photo-grid-container.compact {
-              margin: 0.5rem 1rem 1rem;
-              border-radius: 0.75rem;
-              overflow: hidden;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              background: white;
-            }
-            
+        <style jsx>{`
+          .post-card.compact {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          }
+          
+          .post-card.compact:hover {
+            border-color: #cbd5e0;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+          }
+          
+          .compact-header {
+            padding: 1rem 1rem 0.5rem;
+          }
+          
+          .compact-author {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+          }
+          
+          .compact-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+          }
+          
+          .compact-author-info {
+            flex: 1;
+          }
+          
+          .compact-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #1a202c;
+            line-height: 1.3;
+          }
+          
+          .compact-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: #718096;
+            margin-top: 0.25rem;
+          }
+          
+          .privacy-icon {
+            font-size: 0.875rem;
+          }
+          
+          .compact-text {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            color: #374151;
+          }
+          
+          .compact-footer {
+            padding: 0.5rem 1rem 1rem;
+          }
+          
+          .compact-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.875rem;
+            color: #718096;
+          }
+          
+          .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+          }
+          
+          .photo-grid-container.compact {
+            margin: 0.5rem 1rem 1rem;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white;
+          }
+          
+          .compact-single-photo {
+            width: 100%;
+            height: 250px;
+            cursor: pointer;
+            overflow: hidden;
+          }
+          
+          .compact-single-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.2s ease;
+          }
+          
+          .compact-single-photo:hover img {
+            transform: scale(1.02);
+          }
+          
+          .compact-two-photos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: 200px;
+          }
+          
+          .compact-three-photos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: 200px;
+          }
+          
+          .compact-side-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+          }
+          
+          .compact-many-photos {
+            height: 200px;
+          }
+          
+          .compact-top-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: calc(50% - 1.5px);
+            margin-bottom: 3px;
+          }
+          
+          .compact-bottom-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: calc(50% - 1.5px);
+          }
+          
+          .compact-photo-item {
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            background: #f7fafc;
+          }
+          
+          .compact-photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.2s ease;
+          }
+          
+          .compact-photo-item:hover img {
+            transform: scale(1.05);
+          }
+          
+          .compact-photo-item.main {
+            grid-row: 1 / 3;
+          }
+          
+          .more-photos-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 600;
+          }
+          
+          @media (max-width: 768px) {
             .compact-single-photo {
-              width: 100%;
-              height: 250px;
-              cursor: pointer;
-              overflow: hidden;
+              height: 180px;
             }
             
-            .compact-single-photo img {
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-              transition: transform 0.2s ease;
-            }
-            
-            .compact-single-photo:hover img {
-              transform: scale(1.02);
-            }
-            
-            .compact-two-photos {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 3px;
-              height: 200px;
-            }
-            
-            .compact-three-photos {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 3px;
-              height: 200px;
-            }
-            
-            .compact-side-stack {
-              display: flex;
-              flex-direction: column;
-              gap: 3px;
-            }
-            
+            .compact-two-photos,
             .compact-many-photos {
-              height: 200px;
+              height: 160px;
             }
-            
-            .compact-top-row {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 3px;
-              height: calc(50% - 1.5px);
-              margin-bottom: 3px;
-            }
-            
-            .compact-bottom-row {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 3px;
-              height: calc(50% - 1.5px);
-            }
-            
-            .compact-photo-item {
-              position: relative;
-              cursor: pointer;
-              overflow: hidden;
-              background: #f7fafc;
-            }
-            
-            .compact-photo-item img {
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-              transition: transform 0.2s ease;
-            }
-            
-            .compact-photo-item:hover img {
-              transform: scale(1.05);
-            }
-            
-            .compact-photo-item.main {
-              grid-row: 1 / 3;
-            }
-            
-            .more-photos-overlay {
-              position: absolute;
-              inset: 0;
-              background: rgba(0,0,0,0.6);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: white;
-              font-size: 1.5rem;
-              font-weight: 600;
-            }
-            
-            @media (max-width: 768px) {
-              .compact-single-photo {
-                height: 180px;
-              }
-              
-              .compact-two-photos,
-              .compact-many-photos {
-                height: 160px;
-              }
-            }
-          `}
-        </style>
+          }
+        `}</style>
       </>
     );
   }
   
-  // EXPANDED MODE - Full post with individual photo interactions
+  // EXPANDED MODE - Full post with proper photo boundaries and functional buttons
   return (
     <>
       <div className="post-card expanded">
@@ -968,7 +1014,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             <img 
               src={post.author?.avatar_url || '/default-avatar.png'} 
               alt=""
-              className="author-avatar"
+              className="author-avatar-small"
             />
             <div>
               <div className="author-name">{getDisplayName()}</div>
@@ -987,11 +1033,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           
           <div className="header-actions">
             <button 
-              className="collapse-btn"
+              className="close-btn"
               onClick={() => setIsExpanded(false)}
-              title="Collapse post"
+              title="Close post"
             >
-              ▲
+              ×
             </button>
             
             {canEdit && (
@@ -1173,7 +1219,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         </div>
       )}
 
-      {/* Professional Edit Modal */}
+      {/* Enhanced Edit Modal */}
       {showEditModal && (
         <EditPostModal
           post={post}
@@ -1195,12 +1241,1086 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         />
       )}
       
-      <style>
-        {`
-          /* Expanded Mode CSS would go here - but splitting it into multiple style blocks 
-             to avoid the styled-jsx compilation issue. I'll need to continue this in parts. */
-        `}
-      </style>
-    </>
-  );
-}
+      <style jsx>{`
+        /* Expanded Mode Styles */
+        .post-card.expanded {
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 1rem;
+          margin-bottom: 1.5rem;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          max-width: 100%;
+        }
+        
+        .post-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 1rem 1.25rem 0.75rem;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .author-info {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
+          flex: 1;
+        }
+        
+        .author-avatar-small {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #f3f4f6;
+        }
+        
+        .author-name {
+          font-weight: 600;
+          font-size: 1rem;
+          color: #1a202c;
+          line-height: 1.3;
+        }
+        
+        .post-meta {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.875rem;
+          color: #718096;
+          margin-top: 0.25rem;
+        }
+        
+        .post-time {
+          color: #718096;
+        }
+        
+        .post-privacy {
+          font-size: 0.875rem;
+        }
+        
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .close-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #f7fafc;
+          border: none;
+          cursor: pointer;
+          font-size: 1.25rem;
+          color: #718096;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        
+        .close-btn:hover {
+          background: #e2e8f0;
+          color: #4a5568;
+        }
+        
+        .post-actions {
+          position: relative;
+        }
+        
+        .menu-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #f7fafc;
+          border: none;
+          cursor: pointer;
+          font-size: 1.25rem;
+          color: #718096;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        
+        .menu-btn:hover {
+          background: #e2e8f0;
+          color: #4a5568;
+        }
+        
+        .menu-dropdown {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 50;
+          min-width: 160px;
+          overflow: hidden;
+          margin-top: 0.25rem;
+        }
+        
+        .menu-item {
+          display: block;
+          width: 100%;
+          padding: 0.75rem 1rem;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+          transition: background 0.2s;
+        }
+        
+        .menu-item:hover {
+          background: #f9fafb;
+        }
+        
+        .menu-item.danger {
+          color: #dc2626;
+        }
+        
+        .menu-item.danger:hover {
+          background: #fef2f2;
+        }
+        
+        .post-content {
+          padding: 0;
+        }
+        
+        .post-text {
+          padding: 1rem 1.25rem;
+          margin: 0;
+          font-size: 1rem;
+          line-height: 1.5;
+          color: #374151;
+        }
+        
+        /* Photo Grid Expanded Styles */
+        .photo-grid-expanded {
+          padding: 0 1.25rem 1rem;
+        }
+        
+        .individual-photo-container {
+          margin-bottom: 1.5rem;
+        }
+        
+        .photo-wrapper {
+          background: white;
+          border-radius: 0.75rem;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .photo-border {
+          padding: 3px;
+          background: linear-gradient(45deg, #e2e8f0, #cbd5e0);
+          border-radius: 0.75rem;
+        }
+        
+        .individual-photo {
+          width: 100%;
+          height: auto;
+          max-height: 500px;
+          object-fit: contain;
+          cursor: pointer;
+          border-radius: 0.5rem;
+          background: white;
+          transition: transform 0.2s ease;
+        }
+        
+        .individual-photo:hover {
+          transform: scale(1.02);
+        }
+        
+        .photo-interaction-bar {
+          display: flex;
+          justify-content: space-around;
+          padding: 0.75rem;
+          background: #fafafa;
+          border-top: 1px solid #f3f4f6;
+        }
+        
+        .photo-interact-btn {
+          background: none;
+          border: 1px solid #e2e8f0;
+          border-radius: 1.5rem;
+          padding: 0.5rem 1rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #4a5568;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+        
+        .photo-interact-btn:hover {
+          background: white;
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          transform: translateY(-1px);
+        }
+        
+        .post-footer {
+          padding: 1rem 1.25rem;
+          border-top: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+        
+        .engagement-stats {
+          display: flex;
+          gap: 1rem;
+          margin-bottom: 0.75rem;
+          font-size: 0.875rem;
+          color: #718096;
+        }
+        
+        .action-buttons {
+          display: flex;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        
+        .action-btn {
+          flex: 1;
+          padding: 0.75rem 1rem;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: #4a5568;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+        
+        .action-btn:hover:not(:disabled) {
+          background: #f9fafb;
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+          transform: translateY(-1px);
+        }
+        
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        .action-btn.liked {
+          color: #dc2626;
+          border-color: #dc2626;
+          background: #fef2f2;
+        }
+        
+        .comments-section {
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid #f3f4f6;
+        }
+        
+        .comment {
+          display: flex;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+        
+        .comment-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+        }
+        
+        .comment-content {
+          flex: 1;
+        }
+        
+        .comment-author {
+          font-weight: 600;
+          font-size: 0.875rem;
+          color: #374151;
+          margin-bottom: 0.25rem;
+        }
+        
+        .comment-text {
+          font-size: 0.875rem;
+          color: #4a5568;
+          line-height: 1.4;
+          margin-bottom: 0.25rem;
+        }
+        
+        .comment-time {
+          font-size: 0.75rem;
+          color: #9ca3af;
+        }
+        
+        .show-more-comments {
+          background: none;
+          border: none;
+          color: #8b5cf6;
+          cursor: pointer;
+          font-size: 0.875rem;
+          text-decoration: underline;
+          margin-top: 0.5rem;
+        }
+        
+        .comment-input-section {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid #f3f4f6;
+        }
+        
+        .comment-input {
+          flex: 1;
+          padding: 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 1.5rem;
+          font-size: 0.875rem;
+          background: white;
+        }
+        
+        .comment-input:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+        
+        .comment-submit {
+          padding: 0.75rem 1.5rem;
+          background: #8b5cf6;
+          color: white;
+          border: none;
+          border-radius: 1.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
+          transition: all 0.2s;
+        }
+        
+        .comment-submit:hover:not(:disabled) {
+          background: #7c3aed;
+          transform: translateY(-1px);
+        }
+        
+        .comment-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.75);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 1rem;
+        }
+        
+        .modal-content {
+          background: white;
+          border-radius: 1rem;
+          max-width: 500px;
+          width: 100%;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+        
+        .confirm-modal {
+          padding: 2rem;
+          text-align: center;
+        }
+        
+        .confirm-modal h2 {
+          margin: 0 0 1rem 0;
+          color: #dc2626;
+          font-size: 1.5rem;
+        }
+        
+        .confirm-modal p {
+          margin: 0 0 2rem 0;
+          color: #4a5568;
+          line-height: 1.5;
+        }
+        
+        .modal-buttons {
+          display: flex;
+          gap: 1rem;
+          justify-content: center;
+        }
+        
+        .modal-cancel,
+        .modal-delete {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s;
+        }
+        
+        .modal-cancel {
+          background: #f3f4f6;
+          color: #4a5568;
+        }
+        
+        .modal-cancel:hover {
+          background: #e2e8f0;
+        }
+        
+        .modal-delete {
+          background: #dc2626;
+          color: white;
+        }
+        
+        .modal-delete:hover {
+          background: #b91c1c;
+        }
+        
+        /* Enhanced Edit Modal Styles */
+        .edit-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.75);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 1rem;
+        }
+        
+        .edit-modal-content.professional {
+          background: white;
+          border-radius: 1rem;
+          max-width: 700px;
+          width: 100%;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        
+        .edit-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .edit-modal-header h2 {
+          margin: 0;
+          font-size: 1.5rem;
+          font-weight: 600;
+          color: #1a202c;
+        }
+        
+        .close-button {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #f7fafc;
+          border: none;
+          cursor: pointer;
+          font-size: 1.25rem;
+          color: #718096;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        
+        .close-button:hover {
+          background: #e2e8f0;
+          color: #4a5568;
+        }
+        
+        .edit-modal-body {
+          padding: 1.5rem;
+        }
+        
+        .edit-section {
+          margin-bottom: 1.5rem;
+        }
+        
+        .edit-label {
+          display: block;
+          font-weight: 500;
+          color: #374151;
+          margin-bottom: 0.5rem;
+        }
+        
+        .edit-textarea-clean {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          font-size: 1rem;
+          resize: vertical;
+          min-height: 100px;
+        }
+        
+        .edit-textarea-clean:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+        
+        .edit-actions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 1rem;
+        }
+        
+        .action-card {
+          padding: 1.25rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.75rem;
+          background: #fafafa;
+        }
+        
+        .action-card h3 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #374151;
+        }
+        
+        .action-card p {
+          margin: 0 0 1rem 0;
+          font-size: 0.875rem;
+          color: #6b7280;
+        }
+        
+        .action-button {
+          display: inline-block;
+          padding: 0.75rem 1rem;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
+          text-decoration: none;
+          transition: all 0.2s;
+          text-align: center;
+        }
+        
+        .action-button.primary {
+          background: #8b5cf6;
+          color: white;
+        }
+        
+        .action-button.primary:hover {
+          background: #7c3aed;
+          transform: translateY(-1px);
+        }
+        
+        .action-button.secondary {
+          background: white;
+          color: #4a5568;
+          border: 1px solid #e2e8f0;
+        }
+        
+        .action-button.secondary:hover {
+          background: #f9fafb;
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+        }
+        
+        .file-preview {
+          margin-top: 1rem;
+        }
+        
+        .selected-files {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        
+        .file-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.5rem;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.375rem;
+        }
+        
+        .file-name {
+          font-size: 0.875rem;
+          color: #4a5568;
+          flex: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .remove-file-btn {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #dc2626;
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-size: 0.75rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-left: 0.5rem;
+        }
+        
+        .dropdown-section {
+          margin-top: 0.75rem;
+          padding: 0.75rem;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+        }
+        
+        .privacy-select {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          background: white;
+          cursor: pointer;
+        }
+        
+        .edit-modal-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem;
+          border-top: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+        
+        .cancel-button,
+        .save-button {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s;
+        }
+        
+        .cancel-button {
+          background: #f3f4f6;
+          color: #4a5568;
+        }
+        
+        .cancel-button:hover {
+          background: #e2e8f0;
+        }
+        
+        .save-button.primary {
+          background: #8b5cf6;
+          color: white;
+        }
+        
+        .save-button.primary:hover:not(:disabled) {
+          background: #7c3aed;
+          transform: translateY(-1px);
+        }
+        
+        .save-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        /* Photo Modal Styles */
+        .photo-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.9);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 1rem;
+        }
+        
+        .photo-modal-content {
+          background: white;
+          border-radius: 1rem;
+          max-width: 1200px;
+          width: 100%;
+          max-height: 90vh;
+          overflow: hidden;
+          position: relative;
+        }
+        
+        .photo-modal-layout {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          height: 80vh;
+        }
+        
+        .photo-side {
+          background: #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+        }
+        
+        .modal-photo {
+          max-width: 100%;
+          max-height: 100%;
+          object-fit: contain;
+        }
+        
+        .interactions-side {
+          padding: 1.5rem;
+          overflow-y: auto;
+          background: white;
+        }
+        
+        .photo-reactions h4,
+        .photo-comments h4 {
+          margin: 0 0 1rem 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #374151;
+        }
+        
+        .reaction-buttons {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 1.5rem;
+        }
+        
+        .reaction-btn {
+          padding: 0.5rem 0.75rem;
+          background: #f3f4f6;
+          border: none;
+          border-radius: 1.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #4a5568;
+          transition: all 0.2s;
+        }
+        
+        .reaction-btn:hover {
+          background: #e2e8f0;
+          transform: translateY(-1px);
+        }
+        
+        .comments-list {
+          max-height: 300px;
+          overflow-y: auto;
+          margin-bottom: 1rem;
+        }
+        
+        .photo-comment {
+          display: flex;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        
+        .photo-comment .comment-avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+        }
+        
+        .no-comments {
+          text-align: center;
+          color: #9ca3af;
+          font-style: italic;
+          padding: 2rem 0;
+        }
+        
+        .comment-input-section {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+        
+        .photo-comment-input {
+          flex: 1;
+          padding: 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 1.5rem;
+          font-size: 0.875rem;
+        }
+        
+        .photo-comment-btn {
+          padding: 0.75rem 1rem;
+          background: #8b5cf6;
+          color: white;
+          border: none;
+          border-radius: 1.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+        
+        .photo-comment-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        /* Lightbox Styles */
+        .lightbox-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.95);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+        
+        .lightbox-content {
+          position: relative;
+          max-width: 95vw;
+          max-height: 95vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .lightbox-content img {
+          max-width: 100%;
+          max-height: 100%;
+          object-fit: contain;
+          border-radius: 0.5rem;
+        }
+        
+        .lightbox-close {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.9);
+          border: none;
+          cursor: pointer;
+          font-size: 1.5rem;
+          color: #374151;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+        }
+        
+        .lightbox-prev,
+        .lightbox-next {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.9);
+          border: none;
+          cursor: pointer;
+          font-size: 1.5rem;
+          color: #374151;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+        }
+        
+        .lightbox-prev {
+          left: 1rem;
+        }
+        
+        .lightbox-next {
+          right: 1rem;
+        }
+        
+        .lightbox-counter {
+          position: absolute;
+          bottom: 1rem;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(0,0,0,0.7);
+          color: white;
+          padding: 0.5rem 1rem;
+          border-radius: 1rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+        
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+          .post-header {
+            padding: 0.75rem 1rem 0.5rem;
+          }
+          
+          .author-avatar-small {
+            width: 36px;
+            height: 36px;
+          }
+          
+          .author-name {
+            font-size: 0.9375rem;
+          }
+          
+          .post-text {
+            padding: 0.75rem 1rem;
+            font-size: 0.9375rem;
+          }
+          
+          .photo-grid-expanded {
+            padding: 0 1rem 0.75rem;
+          }
+          
+          .individual-photo {
+            max-height: 300px;
+          }
+          
+          .photo-interaction-bar {
+            padding: 0.5rem;
+            gap: 0.5rem;
+          }
+          
+          .photo-interact-btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.8125rem;
+          }
+          
+          .post-footer {
+            padding: 0.75rem 1rem;
+          }
+          
+          .action-buttons {
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+          
+          .action-btn {
+            padding: 0.625rem 1rem;
+          }
+          
+          .comment-input-section {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.5rem;
+          }
+          
+          .comment-submit {
+            align-self: flex-end;
+            width: auto;
+          }
+          
+          .edit-modal-content.professional {
+            margin: 0.5rem;
+            max-height: 95vh;
+          }
+          
+          .edit-modal-header {
+            padding: 1rem;
+          }
+          
+          .edit-modal-body {
+            padding: 1rem;
+          }
+          
+          .edit-actions-grid {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+          }
+          
+          .action-card {
+            padding: 1rem;
+          }
+          
+          .edit-modal-footer {
+            padding: 1rem;
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          
+          .cancel-button,
+          .save-button {
+            width: 100%;
+          }
+          
+          .photo-modal-layout {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr auto;
+            height: 90vh;
+          }
+          
+          .interactions-side {
+            max-height: 40vh;
+            padding: 1rem;
+          }
+          
+          .lightbox-prev,
+          .lightbox-next {
+            width: 36px;
+            height: 36px;
+            font-size: 1.25rem;
+          }
+          
+          .lightbox-close {
+            width: 36px;
+            height: 36px;
+            top: 0.75rem;
+            right: 0.75rem;
+            font-size: 1.25rem;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .compact-avatar,
+          .author-avatar-small {
+            width: 32px;
+            height: 32px;
+          }
+          
+          .post-text {
+            font-size: 0.875rem;
+          }
+          
+          .individual-photo {
+            max-height: 250px;
+          }
+          
+          .photo-interact-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+          }
+          
+          .action-btn {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8125rem;
+          }
+          
+          .comment-input {
+            font-size: 0.875rem;
+            padding: 0.625rem;
+          }
+          
+          .comment-submit {
+            padding: 0.625rem 1.25rem;
+            font-size: 0.8125rem;
+          }
+        }
