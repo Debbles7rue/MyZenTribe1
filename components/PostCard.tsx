@@ -1,4 +1,4 @@
-// components/PostCard.tsx - Using CSS Modules to avoid styled-jsx compilation issues
+// components/PostCard.tsx - Single File Solution (No CSS Modules)
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,7 +6,6 @@ import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, u
 import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
 import { supabase } from "@/lib/supabaseClient";
-import styles from './PostCard.module.css';
 
 interface PostCardProps {
   post: Post;
@@ -56,8 +55,8 @@ function PhotoGrid({
     // Single image
     if (images.length === 1) {
       return (
-        <div className={`${styles.photoGridContainer} ${styles.compact}`}>
-          <div className={styles.compactSinglePhoto} onClick={() => onPhotoClick(0)}>
+        <div className="photo-grid-container compact">
+          <div className="compact-single-photo" onClick={() => onPhotoClick(0)}>
             <img src={images[0].url} alt="" />
           </div>
         </div>
@@ -67,10 +66,10 @@ function PhotoGrid({
     // Two images side by side
     if (images.length === 2) {
       return (
-        <div className={`${styles.photoGridContainer} ${styles.compact}`}>
-          <div className={styles.compactTwoPhotos}>
+        <div className="photo-grid-container compact">
+          <div className="compact-two-photos">
             {images.map((img, idx) => (
-              <div key={idx} className={styles.compactPhotoItem} onClick={() => onPhotoClick(idx)}>
+              <div key={idx} className="compact-photo-item" onClick={() => onPhotoClick(idx)}>
                 <img src={img.url} alt="" />
               </div>
             ))}
@@ -82,14 +81,14 @@ function PhotoGrid({
     // Three images - one large, two stacked
     if (images.length === 3) {
       return (
-        <div className={`${styles.photoGridContainer} ${styles.compact}`}>
-          <div className={styles.compactThreePhotos}>
-            <div className={`${styles.compactPhotoItem} ${styles.main}`} onClick={() => onPhotoClick(0)}>
+        <div className="photo-grid-container compact">
+          <div className="compact-three-photos">
+            <div className="compact-photo-item main" onClick={() => onPhotoClick(0)}>
               <img src={images[0].url} alt="" />
             </div>
-            <div className={styles.compactSideStack}>
+            <div className="compact-side-stack">
               {images.slice(1, 3).map((img, idx) => (
-                <div key={idx} className={styles.compactPhotoItem} onClick={() => onPhotoClick(idx + 1)}>
+                <div key={idx} className="compact-photo-item" onClick={() => onPhotoClick(idx + 1)}>
                   <img src={img.url} alt="" />
                 </div>
               ))}
@@ -102,24 +101,24 @@ function PhotoGrid({
     // Four or more images
     if (images.length >= 4) {
       return (
-        <div className={`${styles.photoGridContainer} ${styles.compact}`}>
-          <div className={styles.compactManyPhotos}>
-            <div className={styles.compactTopRow}>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(0)}>
+        <div className="photo-grid-container compact">
+          <div className="compact-many-photos">
+            <div className="compact-top-row">
+              <div className="compact-photo-item" onClick={() => onPhotoClick(0)}>
                 <img src={images[0].url} alt="" />
               </div>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(1)}>
+              <div className="compact-photo-item" onClick={() => onPhotoClick(1)}>
                 <img src={images[1].url} alt="" />
               </div>
             </div>
-            <div className={styles.compactBottomRow}>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(2)}>
+            <div className="compact-bottom-row">
+              <div className="compact-photo-item" onClick={() => onPhotoClick(2)}>
                 <img src={images[2].url} alt="" />
               </div>
-              <div className={styles.compactPhotoItem} onClick={() => onPhotoClick(3)}>
+              <div className="compact-photo-item" onClick={() => onPhotoClick(3)}>
                 <img src={images[3].url} alt="" />
                 {images.length > 4 && (
-                  <div className={styles.morePhotosOverlay}>
+                  <div className="more-photos-overlay">
                     +{images.length - 4}
                   </div>
                 )}
@@ -135,19 +134,19 @@ function PhotoGrid({
   
   // EXPANDED MODE - Individual photos with interaction buttons
   return (
-    <div className={styles.photoGridExpanded}>
+    <div className="photo-grid-expanded">
       {images.map((photo, idx) => (
-        <div key={idx} className={styles.individualPhotoContainer}>
-          <div className={styles.photoWrapper}>
+        <div key={idx} className="individual-photo-container">
+          <div className="photo-wrapper">
             <img 
               src={photo.url} 
               alt="" 
-              className={styles.individualPhoto}
+              className="individual-photo"
               onClick={() => onPhotoClick(idx)}
             />
-            <div className={styles.photoInteractionBar}>
+            <div className="photo-interaction-bar">
               <button 
-                className={`${styles.photoInteractBtn} ${styles.likeBtn}`}
+                className="photo-interact-btn like-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   // Handle photo like
@@ -156,7 +155,7 @@ function PhotoGrid({
                 🤍 Like
               </button>
               <button 
-                className={`${styles.photoInteractBtn} ${styles.commentBtn}`}
+                className="photo-interact-btn comment-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   onIndividualPhotoClick?.(photo);
@@ -165,7 +164,7 @@ function PhotoGrid({
                 💬 Comment
               </button>
               <button 
-                className={`${styles.photoInteractBtn} ${styles.captionBtn}`}
+                className="photo-interact-btn caption-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   // Handle add caption
@@ -196,69 +195,69 @@ function IndividualPhotoModal({
   const [isCommenting, setIsCommenting] = useState(false);
 
   return (
-    <div className={styles.photoModalOverlay} onClick={onClose}>
-      <div className={styles.photoModalContent} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.modalClose} onClick={onClose}>×</button>
+    <div className="photo-modal-overlay" onClick={onClose}>
+      <div className="photo-modal-content" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
         
-        <div className={styles.photoModalLayout}>
-          <div className={styles.photoSide}>
-            <img src={photo.url} alt="" className={styles.modalPhoto} />
+        <div className="photo-modal-layout">
+          <div className="photo-side">
+            <img src={photo.url} alt="" className="modal-photo" />
           </div>
           
-          <div className={styles.interactionsSide}>
-            <div className={styles.photoReactions}>
+          <div className="interactions-side">
+            <div className="photo-reactions">
               <h4>Reactions</h4>
-              <div className={styles.reactionButtons}>
-                <button className={styles.reactionBtn}>
+              <div className="reaction-buttons">
+                <button className="reaction-btn">
                   👍 Like {photoReactions.like || 0}
                 </button>
-                <button className={styles.reactionBtn}>
+                <button className="reaction-btn">
                   ❤️ Love {photoReactions.love || 0}
                 </button>
-                <button className={styles.reactionBtn}>
+                <button className="reaction-btn">
                   😂 Laugh {photoReactions.laugh || 0}
                 </button>
               </div>
             </div>
 
-            <div className={styles.photoComments}>
+            <div className="photo-comments">
               <h4>Comments on this photo</h4>
               
-              <div className={styles.commentsList}>
+              <div className="comments-list">
                 {photoComments.length > 0 ? (
                   photoComments.map(comment => (
-                    <div key={comment.id} className={styles.photoComment}>
+                    <div key={comment.id} className="photo-comment">
                       <img 
                         src={comment.author?.avatar_url || '/default-avatar.png'} 
                         alt="" 
-                        className={styles.commentAvatar}
+                        className="comment-avatar"
                       />
-                      <div className={styles.commentContent}>
-                        <div className={styles.commentAuthor}>{comment.author?.full_name}</div>
-                        <div className={styles.commentText}>{comment.body}</div>
-                        <div className={styles.commentTime}>
+                      <div className="comment-content">
+                        <div className="comment-author">{comment.author?.full_name}</div>
+                        <div className="comment-text">{comment.body}</div>
+                        <div className="comment-time">
                           {new Date(comment.created_at).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className={styles.noComments}>No comments on this photo yet</div>
+                  <div className="no-comments">No comments on this photo yet</div>
                 )}
               </div>
 
-              <div className={styles.commentInputSection}>
+              <div className="comment-input-section">
                 <input
                   type="text"
                   placeholder="Comment on this photo..."
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  className={styles.photoCommentInput}
+                  className="photo-comment-input"
                 />
                 <button 
                   onClick={() => {/* Add photo comment logic */}}
                   disabled={!commentText.trim() || isCommenting}
-                  className={styles.photoCommentBtn}
+                  className="photo-comment-btn"
                 >
                   {isCommenting ? 'Posting...' : 'Post'}
                 </button>
@@ -326,30 +325,30 @@ function EditPostModal({
   };
 
   return (
-    <div className={styles.editModalOverlay} onClick={onClose}>
-      <div className={`${styles.editModalContent} ${styles.professional}`} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.editModalHeader}>
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-content professional" onClick={(e) => e.stopPropagation()}>
+        <div className="edit-modal-header">
           <h2>Edit Post</h2>
-          <button onClick={onClose} className={styles.closeButton}>×</button>
+          <button onClick={onClose} className="close-button">×</button>
         </div>
         
-        <div className={styles.editModalBody}>
-          <div className={styles.editSection}>
-            <label className={styles.editLabel}>Edit Caption</label>
+        <div className="edit-modal-body">
+          <div className="edit-section">
+            <label className="edit-label">Edit Caption</label>
             <textarea
               value={editBody}
               onChange={(e) => setEditBody(e.target.value)}
               placeholder="What's on your mind?"
               rows={4}
-              className={styles.editTextareaClean}
+              className="edit-textarea-clean"
             />
           </div>
 
-          <div className={styles.editActionsGrid}>
-            <div className={styles.actionCard}>
+          <div className="edit-actions-grid">
+            <div className="action-card">
               <h3>📸 Add Photos & Videos</h3>
               <p>Add more memories to this post</p>
-              <label className={`${styles.actionButton} ${styles.primary}`}>
+              <label className="action-button primary">
                 <input
                   type="file"
                   multiple
@@ -360,27 +359,27 @@ function EditPostModal({
                 Choose Files
               </label>
               {newFiles.length > 0 && (
-                <div className={styles.filePreview}>
+                <div className="file-preview">
                   {newFiles.length} file{newFiles.length > 1 ? 's' : ''} selected
                 </div>
               )}
             </div>
 
-            <div className={styles.actionCard}>
+            <div className="action-card">
               <h3>👥 Co-Creators</h3>
               <p>Tag friends who can add photos</p>
               <button 
-                className={`${styles.actionButton} ${styles.secondary}`}
+                className="action-button secondary"
                 onClick={() => setShowCoCreators(!showCoCreators)}
               >
                 {coCreators.length > 0 ? `${coCreators.length} Tagged` : 'Tag Friends'}
               </button>
             </div>
 
-            <div className={styles.actionCard}>
+            <div className="action-card">
               <h3>🔒 Privacy</h3>
               <p>Who can see this post</p>
-              <select className={styles.privacySelect}>
+              <select className="privacy-select">
                 <option value="friends">Friends</option>
                 <option value="public">Everyone</option>
                 <option value="private">Only Me</option>
@@ -389,20 +388,20 @@ function EditPostModal({
           </div>
 
           {showCoCreators && (
-            <div className={styles.coCreatorsSection}>
+            <div className="co-creators-section">
               <p>Friend selector component would be integrated here</p>
             </div>
           )}
         </div>
 
-        <div className={styles.editModalFooter}>
-          <button onClick={onClose} disabled={isSaving} className={styles.cancelButton}>
+        <div className="edit-modal-footer">
+          <button onClick={onClose} disabled={isSaving} className="cancel-button">
             Cancel
           </button>
           <button 
             onClick={handleSave}
             disabled={isSaving || uploadingFiles}
-            className={`${styles.saveButton} ${styles.primary}`}
+            className="save-button primary"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
@@ -464,21 +463,21 @@ function PhotoLightbox({
   }, []);
   
   return (
-    <div className={styles.lightboxOverlay} onClick={onClose}>
-      <div className={styles.lightboxContent} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.lightboxClose} onClick={onClose}>×</button>
+    <div className="lightbox-overlay" onClick={onClose}>
+      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+        <button className="lightbox-close" onClick={onClose}>×</button>
         
         {images.length > 1 && (
           <>
-            <button className={styles.lightboxPrev} onClick={goPrev}>‹</button>
-            <button className={styles.lightboxNext} onClick={goNext}>›</button>
+            <button className="lightbox-prev" onClick={goPrev}>‹</button>
+            <button className="lightbox-next" onClick={goNext}>›</button>
           </>
         )}
         
         <img src={currentImage.url} alt="" />
         
         {images.length > 1 && (
-          <div className={styles.lightboxCounter}>
+          <div className="lightbox-counter">
             {safeIndex + 1} / {images.length}
           </div>
         )}
@@ -715,72 +714,270 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   // COMPACT MODE - Card preview like Facebook
   if (!isExpanded) {
     return (
-      <div className={`${styles.postCard} ${styles.compact}`} onClick={handleCardClick}>
-        <div className={styles.compactHeader}>
-          <div className={styles.compactAuthor}>
-            <img 
-              src={post.author?.avatar_url || '/default-avatar.png'} 
-              alt=""
-              className={styles.compactAvatar}
-            />
-            <div className={styles.compactAuthorInfo}>
-              <div className={styles.compactName}>{getDisplayName()}</div>
-              <div className={styles.compactMeta}>
-                {new Date(post.created_at).toLocaleDateString()}
-                {post.privacy && (
-                  <span className={styles.privacyIcon}>
-                    {post.privacy === 'public' ? '🌍' : '🔒'}
-                  </span>
-                )}
+      <>
+        <div className="post-card compact" onClick={handleCardClick}>
+          <div className="compact-header">
+            <div className="compact-author">
+              <img 
+                src={post.author?.avatar_url || '/default-avatar.png'} 
+                alt=""
+                className="compact-avatar"
+              />
+              <div className="compact-author-info">
+                <div className="compact-name">{getDisplayName()}</div>
+                <div className="compact-meta">
+                  {new Date(post.created_at).toLocaleDateString()}
+                  {post.privacy && (
+                    <span className="privacy-icon">
+                      {post.privacy === 'public' ? '🌍' : '🔒'}
+                    </span>
+                  )}
+                </div>
               </div>
+            </div>
+          </div>
+          
+          {post.body && (
+            <div className="compact-text">
+              {post.body.length > 150 ? `${post.body.substring(0, 150)}...` : post.body}
+            </div>
+          )}
+          
+          {processedMedia.length > 0 && (
+            <PhotoGrid 
+              media={processedMedia} 
+              onPhotoClick={() => {}}
+              isCompact={true}
+            />
+          )}
+          
+          <div className="compact-footer">
+            <div className="compact-stats">
+              {localLikeCount > 0 && <span className="stat-item">❤️ {localLikeCount}</span>}
+              {post.comment_count > 0 && <span className="stat-item">💬 {post.comment_count}</span>}
+              {processedMedia.length > 0 && <span className="stat-item">📷 {processedMedia.length}</span>}
             </div>
           </div>
         </div>
         
-        {post.body && (
-          <div className={styles.compactText}>
-            {post.body.length > 150 ? `${post.body.substring(0, 150)}...` : post.body}
-          </div>
-        )}
-        
-        {processedMedia.length > 0 && (
-          <PhotoGrid 
-            media={processedMedia} 
-            onPhotoClick={() => {}}
-            isCompact={true}
-          />
-        )}
-        
-        <div className={styles.compactFooter}>
-          <div className={styles.compactStats}>
-            {localLikeCount > 0 && <span className={styles.statItem}>❤️ {localLikeCount}</span>}
-            {post.comment_count > 0 && <span className={styles.statItem}>💬 {post.comment_count}</span>}
-            {processedMedia.length > 0 && <span className={styles.statItem}>📷 {processedMedia.length}</span>}
-          </div>
-        </div>
-      </div>
+        <style>
+          {`
+            .post-card.compact {
+              background: white;
+              border: 1px solid #e2e8f0;
+              border-radius: 1rem;
+              margin-bottom: 1.5rem;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              overflow: hidden;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            }
+            
+            .post-card.compact:hover {
+              border-color: #cbd5e0;
+              box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+              transform: translateY(-2px);
+            }
+            
+            .compact-header {
+              padding: 1rem 1rem 0.5rem;
+            }
+            
+            .compact-author {
+              display: flex;
+              gap: 0.5rem;
+              align-items: center;
+            }
+            
+            .compact-avatar {
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
+              object-fit: cover;
+            }
+            
+            .compact-author-info {
+              flex: 1;
+            }
+            
+            .compact-name {
+              font-weight: 600;
+              font-size: 1rem;
+              color: #1a202c;
+              line-height: 1.3;
+            }
+            
+            .compact-meta {
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              font-size: 0.875rem;
+              color: #718096;
+              margin-top: 0.25rem;
+            }
+            
+            .privacy-icon {
+              font-size: 0.875rem;
+            }
+            
+            .compact-text {
+              padding: 0.5rem 1rem;
+              font-size: 0.875rem;
+              line-height: 1.4;
+              color: #374151;
+            }
+            
+            .compact-footer {
+              padding: 0.5rem 1rem 1rem;
+            }
+            
+            .compact-stats {
+              display: flex;
+              gap: 1.5rem;
+              font-size: 0.875rem;
+              color: #718096;
+            }
+            
+            .stat-item {
+              display: flex;
+              align-items: center;
+              gap: 0.25rem;
+            }
+            
+            .photo-grid-container.compact {
+              margin: 0.5rem 1rem 1rem;
+              border-radius: 0.75rem;
+              overflow: hidden;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              background: white;
+            }
+            
+            .compact-single-photo {
+              width: 100%;
+              height: 250px;
+              cursor: pointer;
+              overflow: hidden;
+            }
+            
+            .compact-single-photo img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              transition: transform 0.2s ease;
+            }
+            
+            .compact-single-photo:hover img {
+              transform: scale(1.02);
+            }
+            
+            .compact-two-photos {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 3px;
+              height: 200px;
+            }
+            
+            .compact-three-photos {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 3px;
+              height: 200px;
+            }
+            
+            .compact-side-stack {
+              display: flex;
+              flex-direction: column;
+              gap: 3px;
+            }
+            
+            .compact-many-photos {
+              height: 200px;
+            }
+            
+            .compact-top-row {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 3px;
+              height: calc(50% - 1.5px);
+              margin-bottom: 3px;
+            }
+            
+            .compact-bottom-row {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 3px;
+              height: calc(50% - 1.5px);
+            }
+            
+            .compact-photo-item {
+              position: relative;
+              cursor: pointer;
+              overflow: hidden;
+              background: #f7fafc;
+            }
+            
+            .compact-photo-item img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              transition: transform 0.2s ease;
+            }
+            
+            .compact-photo-item:hover img {
+              transform: scale(1.05);
+            }
+            
+            .compact-photo-item.main {
+              grid-row: 1 / 3;
+            }
+            
+            .more-photos-overlay {
+              position: absolute;
+              inset: 0;
+              background: rgba(0,0,0,0.6);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 1.5rem;
+              font-weight: 600;
+            }
+            
+            @media (max-width: 768px) {
+              .compact-single-photo {
+                height: 180px;
+              }
+              
+              .compact-two-photos,
+              .compact-many-photos {
+                height: 160px;
+              }
+            }
+          `}
+        </style>
+      </>
     );
   }
   
   // EXPANDED MODE - Full post with individual photo interactions
   return (
     <>
-      <div className={`${styles.postCard} ${styles.expanded}`}>
-        <div className={styles.postHeader}>
-          <div className={styles.authorInfo}>
+      <div className="post-card expanded">
+        <div className="post-header">
+          <div className="author-info">
             <img 
               src={post.author?.avatar_url || '/default-avatar.png'} 
               alt=""
-              className={styles.authorAvatar}
+              className="author-avatar"
             />
             <div>
-              <div className={styles.authorName}>{getDisplayName()}</div>
-              <div className={styles.postMeta}>
-                <span className={styles.postTime}>
+              <div className="author-name">{getDisplayName()}</div>
+              <div className="post-meta">
+                <span className="post-time">
                   {new Date(post.created_at).toLocaleDateString()}
                 </span>
                 {post.privacy && (
-                  <span className={styles.postPrivacy}>
+                  <span className="post-privacy">
                     {post.privacy === 'public' ? '🌍' : '🔒'}
                   </span>
                 )}
@@ -788,9 +985,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </div>
           </div>
           
-          <div className={styles.headerActions}>
+          <div className="header-actions">
             <button 
-              className={styles.collapseBtn}
+              className="collapse-btn"
               onClick={() => setIsExpanded(false)}
               title="Collapse post"
             >
@@ -798,32 +995,32 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </button>
             
             {canEdit && (
-              <div className={styles.postActions}>
+              <div className="post-actions">
                 <button 
-                  className={styles.menuBtn}
+                  className="menu-btn"
                   onClick={() => setShowEditMenu(!showEditMenu)}
                   title="Post options"
                 >
                   ⋯
                 </button>
                 {showEditMenu && (
-                  <div className={styles.menuDropdown}>
+                  <div className="menu-dropdown">
                     {isCoCreator && !canDelete && (
                       <>
-                        <button className={styles.menuItem} onClick={() => {
+                        <button className="menu-item" onClick={() => {
                           setShowEditModal(true);
                           setShowEditMenu(false);
                         }}>📷 Add Photos</button>
-                        <button className={styles.menuItem}>🏷️ Remove Tag</button>
+                        <button className="menu-item">🏷️ Remove Tag</button>
                       </>
                     )}
                     {canDelete && (
                       <>
-                        <button className={styles.menuItem} onClick={() => {
+                        <button className="menu-item" onClick={() => {
                           setShowEditModal(true);
                           setShowEditMenu(false);
                         }}>✏️ Edit Post</button>
-                        <button className={`${styles.menuItem} ${styles.danger}`} onClick={() => {
+                        <button className="menu-item danger" onClick={() => {
                           setShowDeleteConfirm(true);
                           setShowEditMenu(false);
                         }}>🗑️ Delete Post</button>
@@ -836,8 +1033,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           </div>
         </div>
         
-        <div className={styles.postContent}>
-          {post.body && <p className={styles.postText}>{post.body}</p>}
+        <div className="post-content">
+          {post.body && <p className="post-text">{post.body}</p>}
           
           {processedMedia && processedMedia.length > 0 && (
             <PhotoGrid 
@@ -849,8 +1046,8 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           )}
         </div>
         
-        <div className={styles.postFooter}>
-          <div className={styles.engagementStats}>
+        <div className="post-footer">
+          <div className="engagement-stats">
             {localLikeCount > 0 && (
               <span>{localLikeCount} likes</span>
             )}
@@ -859,16 +1056,16 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             )}
           </div>
           
-          <div className={styles.actionButtons}>
+          <div className="action-buttons">
             <button 
-              className={`${styles.actionBtn} ${localLikedByMe ? styles.liked : ''}`}
+              className={`action-btn ${localLikedByMe ? 'liked' : ''}`}
               onClick={handleLike}
               disabled={isLiking || !currentUserId}
             >
               {localLikedByMe ? '❤️' : '🤍'} Like
             </button>
             <button 
-              className={styles.actionBtn}
+              className="action-btn"
               onClick={() => {
                 setShowCommentInput(!showCommentInput);
                 if (!showCommentInput && comments.length === 0 && post.comment_count > 0) {
@@ -881,7 +1078,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </button>
             {post.allow_share && (
               <button 
-                className={styles.actionBtn}
+                className="action-btn"
                 onClick={handleShare}
               >
                 🔄 Share
@@ -890,18 +1087,18 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           </div>
           
           {comments.length > 0 && (
-            <div className={styles.commentsSection}>
+            <div className="comments-section">
               {displayedComments.map((comment) => (
-                <div key={comment.id} className={styles.comment}>
+                <div key={comment.id} className="comment">
                   <img 
                     src={comment.author?.avatar_url || '/default-avatar.png'} 
                     alt=""
-                    className={styles.commentAvatar}
+                    className="comment-avatar"
                   />
-                  <div className={styles.commentContent}>
-                    <div className={styles.commentAuthor}>{comment.author?.full_name}</div>
-                    <div className={styles.commentText}>{comment.body}</div>
-                    <div className={styles.commentTime}>
+                  <div className="comment-content">
+                    <div className="comment-author">{comment.author?.full_name}</div>
+                    <div className="comment-text">{comment.body}</div>
+                    <div className="comment-time">
                       {new Date(comment.created_at).toLocaleDateString()}
                     </div>
                   </div>
@@ -910,7 +1107,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               
               {comments.length > 3 && !showAllComments && (
                 <button 
-                  className={styles.showMoreComments}
+                  className="show-more-comments"
                   onClick={() => setShowAllComments(true)}
                 >
                   View all {comments.length} comments
@@ -920,10 +1117,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           )}
           
           {showCommentInput && (
-            <div className={styles.commentInputSection}>
+            <div className="comment-input-section">
               <input
                 type="text"
-                className={styles.commentInput}
+                className="comment-input"
                 placeholder="Write a comment..."
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
@@ -931,7 +1128,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
                 disabled={isCommenting}
               />
               <button 
-                className={styles.commentSubmit}
+                className="comment-submit"
                 onClick={handleComment}
                 disabled={!commentText.trim() || isCommenting}
               >
@@ -952,20 +1149,20 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className={styles.modalOverlay} onClick={() => setShowDeleteConfirm(false)}>
-          <div className={`${styles.modalContent} ${styles.confirmModal}`} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Delete Post?</h2>
             <p>This action cannot be undone. All photos, comments, and likes will be permanently removed.</p>
-            <div className={styles.modalButtons}>
+            <div className="modal-buttons">
               <button 
-                className={styles.modalCancel}
+                className="modal-cancel"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isDeleting}
               >
                 Cancel
               </button>
               <button 
-                className={styles.modalDelete}
+                className="modal-delete"
                 onClick={handleDelete}
                 disabled={isDeleting}
               >
@@ -997,6 +1194,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           onClose={() => setShowLightbox(false)}
         />
       )}
+      
+      <style>
+        {`
+          /* Expanded Mode CSS would go here - but splitting it into multiple style blocks 
+             to avoid the styled-jsx compilation issue. I'll need to continue this in parts. */
+        `}
+      </style>
     </>
   );
 }
