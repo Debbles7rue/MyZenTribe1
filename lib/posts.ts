@@ -1,162 +1,215 @@
-// lib/posts.ts - FIXED: Image Upload & Comments System
-import { supabase } from "./supabaseClient";
+// lib/posts.ts
+import { supabase } from "@/lib/supabaseClient";
 
-// Get current user ID
-async function me(): Promise<string | null> {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  return user.id;
-}
+export type MediaItem = {
+  url: string;
+  type: 'image' | 'video';
+};
 
-export interface Post {
+export type Post = {
   id: string;
   user_id: string;
-  body?: string;
-  image_url?: string;
-  video_url?: string;
-  privacy: 'private' | 'friends' | 'public';
+  body: string;
+  image_url: string | null;
+  video_url: string | null;
+  additional_media?: MediaItem[];
+  privacy: "public" | "friends" | "private";
   created_at: string;
-  like_count: number;
-  comment_count: number;
-  liked_by_me: boolean;
   allow_share: boolean;
-  co_creators?: string[];
-  tagged_users?: string[];
-  author?: {
-    full_name: string;
-    avatar_url: string;
+  co_creators?: string[] | null;
+  co_creators_info?: Array<{
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  }>;
+  author?: { 
+    id: string; 
+    full_name: string | null; 
+    avatar_url: string | null 
   };
-  // FIXED: Add media array for multiple files
-  media?: Array<{ url: string; type: 'image' | 'video' }>;
+  like_count?: number;
+  liked_by_me?: boolean;
+  comment_count?: number;
+};
+
+export async function me() {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
 }
 
-// FIXED: Upload media to storage
-export async function uploadMedia(file: File, type: 'image' | 'video') {
+export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
-  if (!uid) return { url: null, error: "Not signed in" };
+  if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // File validation
-  const maxSize = type === 'image' ? 10 * 1024 * 1024 : 100 * 1024 * 1024; // 10MB for images, 100MB for videos
-  if (file.size > maxSize) {
-    return { 
-      url: null, 
-      error: `File too large. Max size: ${type === 'image' ? '10MB' : '100MB'}` 
-    };
+  // Simple query first - just get posts
+  let q = supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (before) q = q.lt("created_at", before);
+
+  const { data: posts, error } = await q;
+  
+  if (error) {
+    console.error("Error fetching posts:", error);
+    return { rows: [], error: error.message };
+  }
+  
+  if (!posts || posts.length === 0) {
+    return { rows: [], error: null };
   }
 
-  // Get file extension
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
-  const allowedTypes = type === 'image' 
-    ? ['jpg', 'jpeg', 'png', 'gif', 'webp']
-    : ['mp4', 'mov', 'avi', 'mkv', 'webm'];
+  const ids = posts.map((p: any) => p.id);
+  const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
 
-  if (!allowedTypes.includes(fileExt)) {
-    return {
-      url: null,
-      error: `Invalid file type. Allowed: ${allowedTypes.join(', ')}`
-    };
+  // Get author profiles
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", authorIds);
+
+  const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
+
+  // Get co-creator info if they exist
+  const coCreatorIds = posts
+    .filter((p: any) => p.co_creators && p.co_creators.length > 0)
+    .flatMap((p: any) => p.co_creators);
+  
+  let coCreatorProfiles: any[] = [];
+  if (coCreatorIds.length > 0) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", coCreatorIds);
+    coCreatorProfiles = data || [];
   }
+  
+  const coCreatorMap = Object.fromEntries(
+    coCreatorProfiles.map((p: any) => [p.id, p])
+  );
+
+  // Try to get likes and comments
+  let likeCountBy: Record<string, number> = {};
+  let myLikeSet = new Set<string>();
+  let commentCountBy: Record<string, number> = {};
 
   try {
-    // Create unique filename with timestamp
-    const timestamp = Date.now();
-    const fileName = `${uid}/${type}s/${timestamp}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    // Get all likes for these posts
+    const { data: likeCounts } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .in("post_id", ids);
 
-    console.log(`Uploading ${type}: ${fileName}`);
+    // Get my likes
+    const { data: myLikes } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", uid)
+      .in("post_id", ids);
 
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from('post-media')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
+    // Get all comments for these posts
+    const { data: commentCounts } = await supabase
+      .from("post_comments")
+      .select("post_id")
+      .in("post_id", ids);
+
+    // Count likes per post
+    if (likeCounts) {
+      likeCounts.forEach((like: any) => {
+        likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
       });
-
-    if (error) {
-      console.error('Storage upload error:', error);
-      return { url: null, error: error.message };
     }
-
-    if (!data) {
-      return { url: null, error: 'Upload failed - no data returned' };
-    }
-
-    console.log(`Successfully uploaded to: ${data.path}`);
     
-    // Return the storage path (not the public URL) for database storage
-    return { url: data.path, error: null };
-
-  } catch (error) {
-    console.error('Upload error:', error);
-    return { url: null, error: 'Upload failed' };
-  }
-}
-
-// FIXED: Add media to existing post
-export async function addMediaToPost(
-  postId: string,
-  storagePath: string,
-  mediaType: 'image' | 'video'
-) {
-  const uid = await me();
-  if (!uid) return { ok: false, error: "Not signed in" };
-
-  try {
-    // Check if user can edit this post
-    const { data: post } = await supabase
-      .from("posts")
-      .select("user_id, co_creators")
-      .eq("id", postId)
-      .single();
-
-    if (!post) return { ok: false, error: "Post not found" };
-
-    const canEdit = post.user_id === uid || 
-      (post.co_creators && post.co_creators.includes(uid));
-
-    if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
-
-    // Get current max sort_order
-    const { data: existingMedia } = await supabase
-      .from("post_media")
-      .select("sort_order")
-      .eq("post_id", postId)
-      .order("sort_order", { ascending: false })
-      .limit(1);
-
-    const nextSortOrder = existingMedia && existingMedia.length > 0 
-      ? (existingMedia[0].sort_order || 0) + 1 
-      : 0;
-
-    // Insert into post_media table
-    const { error } = await supabase
-      .from("post_media")
-      .insert({
-        post_id: postId,
-        storage_path: storagePath,  // Store the storage path
-        type: mediaType,    
-        created_by: uid,
-        uploaded_by: uid,
-        sort_order: nextSortOrder
-      });
-
-    if (error) {
-      console.error('Error adding media to post:', error);
-      return { ok: false, error: error.message };
+    if (myLikes) {
+      myLikeSet = new Set(myLikes.map((r: any) => r.post_id));
     }
-
-    console.log(`Successfully added ${mediaType} to post ${postId}`);
-    return { ok: true, error: null };
-
-  } catch (error) {
-    console.error('Error in addMediaToPost:', error);
-    return { ok: false, error: 'Failed to add media to post' };
+    
+    // Count comments per post
+    if (commentCounts) {
+      commentCounts.forEach((comment: any) => {
+        commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
+      });
+    }
+  } catch (e) {
+    console.log("Error fetching likes/comments:", e);
   }
+
+  // Get additional media from post_media table - FIXED
+  let mediaByPost: Record<string, MediaItem[]> = {};
+  
+  try {
+    // Query all post media at once (much more efficient)
+    const { data: allMediaRows, error: mediaError } = await supabase
+      .from("post_media")
+      .select("post_id, storage_path, type")
+      .in("post_id", ids)
+      .order("sort_order", { ascending: true });
+    
+    if (!mediaError && allMediaRows) {
+      // Group media by post_id
+      for (const media of allMediaRows) {
+        if (!mediaByPost[media.post_id]) {
+          mediaByPost[media.post_id] = [];
+        }
+        
+        // Get public URL from storage path
+        const { data } = supabase.storage
+          .from('post-media')
+          .getPublicUrl(media.storage_path);
+        
+        mediaByPost[media.post_id].push({
+          url: data.publicUrl,
+          type: media.type as 'image' | 'video'
+        });
+      }
+      
+      console.log(`Found media for ${Object.keys(mediaByPost).length} posts`);
+    }
+  } catch (e) {
+    console.log("Error fetching media:", e);
+  }
+
+  // Build the rows with all the data we have
+  const rows: Post[] = posts.map((p: any) => {
+    const postMedia = mediaByPost[p.id] || [];
+    
+    // Log what we're adding to each post
+    if (postMedia.length > 0) {
+      console.log(`Post ${p.id} has ${postMedia.length} additional media items`);
+    }
+    
+    return {
+      id: p.id,
+      user_id: p.user_id,
+      body: p.body,
+      image_url: p.image_url || null,
+      video_url: p.video_url || null,
+      privacy: p.visibility || p.privacy || 'public', // Handle both field names
+      created_at: p.created_at,
+      allow_share: p.allow_share ?? true,
+      co_creators: p.co_creators || null,
+      author: profileMap[p.user_id] || null,
+      additional_media: postMedia,
+      co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
+      like_count: likeCountBy[p.id] ?? 0,
+      liked_by_me: myLikeSet.has(p.id),
+      comment_count: commentCountBy[p.id] ?? 0,
+    };
+  });
+
+  console.log('Final posts with media:', rows.map(r => ({
+    id: r.id,
+    media_count: r.additional_media?.length || 0,
+    comment_count: r.comment_count
+  })));
+
+  return { rows, error: null };
 }
 
-// FIXED: Create post with multiple media support
 export async function createPost(
-  body: string,
+  body: string, 
   privacy: Post["privacy"] = "friends",
   options?: {
     image_url?: string;
@@ -170,386 +223,333 @@ export async function createPost(
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
   
-  try {
-    const postData: any = {
-      user_id: uid,
-      body,
-      visibility: privacy,  // Database uses 'visibility' field
-      allow_share: options?.allow_share ?? true,
-      co_creators: options?.co_creators || null,
-    };
+  const postData: any = {
+    user_id: uid,
+    body,
+    visibility: privacy,  // Database expects 'visibility', not 'privacy'
+    allow_share: options?.allow_share ?? true,
+    co_creators: options?.co_creators || null,
+  };
 
-    // Handle legacy single media
-    if (options?.image_url) {
-      postData.image_url = options.image_url;
-    }
-    if (options?.video_url) {
-      postData.video_url = options.video_url;
-    }
-
-    // Create the post
-    const { data, error } = await supabase
-      .from("posts")
-      .insert(postData)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error creating post:", error);
-      return { ok: false, error: error.message };
-    }
-
-    // FIXED: Add all media to post_media table
-    if (options?.media && options.media.length > 0) {
-      console.log(`Adding ${options.media.length} media items to post ${data.id}`);
-      
-      const mediaInserts = options.media.map((m, index) => ({
-        post_id: data.id,
-        storage_path: m.url,  // This should be the storage path from uploadMedia
-        type: m.type,
-        sort_order: index,
-        created_by: uid,
-        uploaded_by: uid
-      }));
-
-      const { error: mediaError } = await supabase
-        .from("post_media")
-        .insert(mediaInserts);
-
-      if (mediaError) {
-        console.error("Error adding media to post:", mediaError);
-        // Don't fail the whole post creation, just log the error
-      } else {
-        console.log(`Successfully added ${mediaInserts.length} media items`);
-      }
-    }
-
-    return { ok: true, error: null, data };
-
-  } catch (error) {
-    console.error("Error in createPost:", error);
-    return { ok: false, error: 'Failed to create post' };
+  // Handle single media for backward compatibility
+  if (options?.image_url) {
+    postData.image_url = options.image_url;
   }
+  if (options?.video_url) {
+    postData.video_url = options.video_url;
+  }
+
+  // If we have multiple media, use the first one as the main image/video
+  if (options?.media && options.media.length > 0) {
+    const firstMedia = options.media[0];
+    
+    // Get public URL for the first media to store in main fields
+    const { data } = supabase.storage
+      .from('post-media')
+      .getPublicUrl(firstMedia.url);
+    
+    if (firstMedia.type === 'image') {
+      postData.image_url = data.publicUrl;
+    } else {
+      postData.video_url = data.publicUrl;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("posts")
+    .insert(postData)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating post:", error);
+    return { ok: false, error: error.message };
+  }
+
+  // Add ALL media to post_media table
+  if (options?.media && options.media.length > 0) {
+    const allMedia = options.media.map((m, index) => ({
+      post_id: data.id,
+      storage_path: m.url,  // This should be the storage path
+      type: m.type,
+      sort_order: index,
+      created_by: uid,
+      uploaded_by: uid
+    }));
+
+    const { error: mediaError } = await supabase
+      .from("post_media")
+      .insert(allMedia);
+
+    if (mediaError) {
+      console.error("Error adding media:", mediaError);
+      // Don't fail the whole post, just log the error
+    } else {
+      console.log(`Added ${allMedia.length} media items to post ${data.id}`);
+    }
+  }
+
+  // Send notifications to co-creators
+  if (options?.co_creators && options.co_creators.length > 0) {
+    await sendCoCreatorNotifications(data.id, uid, options.co_creators);
+  }
+
+  return { ok: true, error: null, data };
 }
 
-// FIXED: Update post
 export async function updatePost(
   postId: string,
   updates: {
     body?: string;
     privacy?: Post["privacy"];
     allow_share?: boolean;
-    co_creators?: string[];
-    tagged_users?: string[];
   }
 ) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
 
-  try {
-    // Check if user can edit
-    const { data: post } = await supabase
-      .from("posts")
-      .select("user_id, co_creators")
-      .eq("id", postId)
-      .single();
+  // Check if user is creator or co-creator
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, co_creators")
+    .eq("id", postId)
+    .single();
 
-    if (!post) return { ok: false, error: "Post not found" };
+  if (!post) return { ok: false, error: "Post not found" };
 
-    const canEdit = post.user_id === uid || 
-      (post.co_creators && post.co_creators.includes(uid));
+  const canEdit = post.user_id === uid || 
+    (post.co_creators && post.co_creators.includes(uid));
 
-    if (!canEdit) return { ok: false, error: "Not authorized to edit this post" };
+  if (!canEdit) return { ok: false, error: "Not authorized to edit this post" };
 
-    // Convert privacy to visibility for database
-    const dbUpdates: any = { ...updates };
-    if (updates.privacy) {
-      dbUpdates.visibility = updates.privacy;
-      delete dbUpdates.privacy;
-    }
-
-    const { error } = await supabase
-      .from("posts")
-      .update(dbUpdates)
-      .eq("id", postId);
-
-    if (error) {
-      console.error('Error updating post:', error);
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true, error: null };
-
-  } catch (error) {
-    console.error('Error in updatePost:', error);
-    return { ok: false, error: 'Failed to update post' };
+  // Convert privacy to visibility for database
+  const dbUpdates: any = { ...updates };
+  if (updates.privacy) {
+    dbUpdates.visibility = updates.privacy;
+    delete dbUpdates.privacy;
   }
+
+  const { error } = await supabase
+    .from("posts")
+    .update(dbUpdates)
+    .eq("id", postId);
+
+  return { ok: !error, error: error?.message || null };
 }
 
-// FIXED: Delete post and associated media
 export async function deletePost(postId: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
 
-  try {
-    // Only the original creator can delete
-    const { data: post } = await supabase
-      .from("posts")
-      .select("user_id")
-      .eq("id", postId)
-      .single();
+  // Only the original creator can delete
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id")
+    .eq("id", postId)
+    .single();
 
-    if (!post || post.user_id !== uid) {
-      return { ok: false, error: "Not authorized to delete this post" };
-    }
-
-    // Delete associated media from storage and database
-    const { data: mediaItems } = await supabase
-      .from("post_media")
-      .select("storage_path")
-      .eq("post_id", postId);
-
-    if (mediaItems && mediaItems.length > 0) {
-      // Delete from storage
-      const filePaths = mediaItems.map(item => item.storage_path);
-      await supabase.storage.from("post-media").remove(filePaths);
-      
-      // Delete from database
-      await supabase.from("post_media").delete().eq("post_id", postId);
-    }
-    
-    // Delete the post (comments and likes should cascade)
-    const { error } = await supabase
-      .from("posts")
-      .delete()
-      .eq("id", postId);
-
-    if (error) {
-      console.error('Error deleting post:', error);
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true, error: null };
-
-  } catch (error) {
-    console.error('Error in deletePost:', error);
-    return { ok: false, error: 'Failed to delete post' };
+  if (!post || post.user_id !== uid) {
+    return { ok: false, error: "Not authorized to delete this post" };
   }
+
+  // Delete associated media from storage and database
+  const { data: mediaItems } = await supabase
+    .from("post_media")
+    .select("storage_path")
+    .eq("post_id", postId);
+
+  if (mediaItems && mediaItems.length > 0) {
+    // Delete from storage
+    const filePaths = mediaItems.map(item => item.storage_path);
+    await supabase.storage.from("post-media").remove(filePaths);
+    
+    // Delete from database
+    await supabase.from("post_media").delete().eq("post_id", postId);
+  }
+  
+  // Delete the post (likes and comments should cascade delete)
+  const { error } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId);
+
+  return { ok: !error, error: error?.message || null };
 }
 
-// FIXED: Toggle like
-export async function toggleLike(postId: string) {
+export async function addMediaToPost(
+  postId: string,
+  url: string,
+  mediaType: 'image' | 'video'
+) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
 
-  try {
-    // Check if already liked
-    const { data: existingLike } = await supabase
+  // Check if user can edit
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, co_creators")
+    .eq("id", postId)
+    .single();
+
+  if (!post) return { ok: false, error: "Post not found" };
+
+  const canEdit = post.user_id === uid || 
+    (post.co_creators && post.co_creators.includes(uid));
+
+  if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
+
+  // Get current max sort_order
+  const { data: existingMedia } = await supabase
+    .from("post_media")
+    .select("sort_order")
+    .eq("post_id", postId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const nextSortOrder = existingMedia && existingMedia.length > 0 
+    ? (existingMedia[0].sort_order || 0) + 1 
+    : 0;
+
+  // Add to post_media table
+  const { error } = await supabase
+    .from("post_media")
+    .insert({
+      post_id: postId,
+      storage_path: url,  // This should be the storage path, not public URL
+      type: mediaType,    
+      created_by: uid,
+      uploaded_by: uid,
+      sort_order: nextSortOrder
+    });
+
+  if (!error) {
+    console.log(`Successfully added media to post ${postId}`);
+  }
+
+  return { ok: !error, error: error?.message || null };
+}
+
+export async function uploadMedia(file: File, type: 'image' | 'video') {
+  const uid = await me();
+  if (!uid) return { url: null, error: "Not signed in" };
+
+  // File validation
+  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 50 * 1024 * 1024; // 5MB for images, 50MB for videos
+  if (file.size > maxSize) {
+    return { 
+      url: null, 
+      error: `File too large. Max size: ${type === 'image' ? '5MB' : '50MB'}` 
+    };
+  }
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from('post-media')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (error) {
+    console.error('Upload error:', error);
+    return { url: null, error: error.message };
+  }
+
+  // Return the storage path, not the public URL
+  // This will be stored in the database
+  return { url: fileName, error: null };
+}
+
+export async function toggleLike(post_id: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+
+  const { data: existing } = await supabase
+    .from("post_likes")
+    .select("post_id")
+    .eq("post_id", post_id)
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
       .from("post_likes")
-      .select("id")
-      .eq("post_id", postId)
-      .eq("user_id", uid)
-      .single();
-
-    if (existingLike) {
-      // Unlike
-      const { error } = await supabase
-        .from("post_likes")
-        .delete()
-        .eq("post_id", postId)
-        .eq("user_id", uid);
-
-      if (error) {
-        console.error('Error removing like:', error);
-        return { ok: false, error: error.message };
-      }
-    } else {
-      // Like
-      const { error } = await supabase
-        .from("post_likes")
-        .insert({ post_id: postId, user_id: uid });
-
-      if (error) {
-        console.error('Error adding like:', error);
-        return { ok: false, error: error.message };
-      }
-    }
-
-    return { ok: true, error: null };
-
-  } catch (error) {
-    console.error('Error in toggleLike:', error);
-    return { ok: false, error: 'Failed to toggle like' };
+      .delete()
+      .eq("post_id", post_id)
+      .eq("user_id", uid);
+    return { ok: !error, liked: false, error: error?.message || null };
+  } else {
+    const { error } = await supabase
+      .from("post_likes")
+      .insert({ post_id, user_id: uid });
+    return { ok: !error, liked: true, error: error?.message || null };
   }
 }
 
-// FIXED: Add comment
-export async function addComment(postId: string, body: string) {
+export async function addComment(post_id: string, body: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
-
-  if (!body.trim()) {
-    return { ok: false, error: "Comment cannot be empty" };
+  
+  console.log(`Adding comment to post ${post_id}: "${body}"`);
+  
+  const { data, error } = await supabase
+    .from("post_comments")
+    .insert({ 
+      post_id, 
+      user_id: uid, 
+      body 
+    })
+    .select()
+    .single();
+    
+  if (!error) {
+    console.log(`Comment added successfully:`, data);
+  } else {
+    console.error(`Error adding comment:`, error);
   }
-
-  try {
-    const { error } = await supabase
-      .from("post_comments")
-      .insert({
-        post_id: postId,
-        user_id: uid,
-        body: body.trim()
-      });
-
-    if (error) {
-      console.error('Error adding comment:', error);
-      return { ok: false, error: error.message };
-    }
-
-    return { ok: true, error: null };
-
-  } catch (error) {
-    console.error('Error in addComment:', error);
-    return { ok: false, error: 'Failed to add comment' };
-  }
+    
+  return { ok: !error, error: error?.message || null };
 }
 
-// FIXED: Fetch posts with proper media loading
-export async function fetchPosts(userId?: string): Promise<Post[]> {
-  const uid = await me();
-  if (!uid) return [];
+export async function sendCoCreatorNotifications(
+  postId: string,
+  creatorId: string,
+  coCreatorIds: string[]
+) {
+  // Get creator info
+  const { data: creator } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", creatorId)
+    .single();
 
-  try {
-    let query = supabase
-      .from("posts")
-      .select(`
-        id,
-        user_id,
-        body,
-        image_url,
-        video_url,
-        visibility,
-        created_at,
-        allow_share,
-        co_creators,
-        tagged_users,
-        profiles!inner(
-          full_name,
-          avatar_url
-        )
-      `)
-      .order("created_at", { ascending: false });
+  const creatorName = creator?.full_name || "Someone";
 
-    // Filter by user if specified
-    if (userId) {
-      query = query.eq("user_id", userId);
-    } else {
-      // For feed, show posts from friends or public posts
-      query = query.or(`user_id.eq.${uid},visibility.eq.public,co_creators.cs.{${uid}}`);
-    }
+  // Send notifications to each co-creator
+  const notifications = coCreatorIds.map(userId => ({
+    user_id: userId,
+    type: 'co_creator_invite',
+    title: `${creatorName} tagged you in a post`,
+    message: `You've been tagged as a co-creator. You can now add your own photos and videos to this post!`,
+    link: `/post/${postId}`,
+    created_at: new Date().toISOString()
+  }));
 
-    const { data: posts, error } = await query;
+  await supabase.from("notifications").insert(notifications);
+}
 
-    if (error) {
-      console.error("Error fetching posts:", error);
-      return [];
-    }
-
-    if (!posts) return [];
-
-    const postIds = posts.map(p => p.id);
-
-    // FIXED: Get likes, comments, and media in parallel
-    const [likeData, commentData, mediaData] = await Promise.all([
-      // Get like counts and user's likes
-      supabase
-        .from("post_likes")
-        .select("post_id, user_id")
-        .in("post_id", postIds),
-
-      // Get comment counts
-      supabase
-        .from("post_comments")
-        .select("post_id")
-        .in("post_id", postIds),
-
-      // Get additional media
-      supabase
-        .from("post_media")
-        .select("post_id, storage_path, type, sort_order")
-        .in("post_id", postIds)
-        .order("sort_order", { ascending: true })
-    ]);
-
-    // Process likes
-    const likeCountBy: Record<string, number> = {};
-    const myLikeSet = new Set<string>();
-    
-    if (likeData.data) {
-      likeData.data.forEach((like: any) => {
-        likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
-        if (like.user_id === uid) {
-          myLikeSet.add(like.post_id);
-        }
-      });
-    }
-
-    // Process comments
-    const commentCountBy: Record<string, number> = {};
-    if (commentData.data) {
-      commentData.data.forEach((comment: any) => {
-        commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
-      });
-    }
-
-    // FIXED: Process media properly
-    const mediaByPost: Record<string, Array<{ url: string; type: 'image' | 'video' }>> = {};
-    if (mediaData.data) {
-      mediaData.data.forEach((media: any) => {
-        if (!mediaByPost[media.post_id]) {
-          mediaByPost[media.post_id] = [];
-        }
-        
-        // Get public URL from storage path
-        const { data } = supabase.storage
-          .from('post-media')
-          .getPublicUrl(media.storage_path);
-        
-        mediaByPost[media.post_id].push({
-          url: data.publicUrl,
-          type: media.type
-        });
-      });
-    }
-
-    // Build final post objects
-    const result: Post[] = posts.map((p: any) => ({
-      id: p.id,
-      user_id: p.user_id,
-      body: p.body,
-      image_url: p.image_url,
-      video_url: p.video_url,
-      privacy: p.visibility || 'friends', // Map visibility back to privacy
-      created_at: p.created_at,
-      like_count: likeCountBy[p.id] || 0,
-      comment_count: commentCountBy[p.id] || 0,
-      liked_by_me: myLikeSet.has(p.id),
-      allow_share: p.allow_share ?? true,
-      co_creators: p.co_creators || [],
-      tagged_users: p.tagged_users || [],
-      author: {
-        full_name: p.profiles.full_name || 'Unknown User',
-        avatar_url: p.profiles.avatar_url || '/default-avatar.png'
-      },
-      // FIXED: Include additional media
-      media: mediaByPost[p.id] || []
-    }));
-
-    console.log(`Fetched ${result.length} posts with media`);
-    return result;
-
-  } catch (error) {
-    console.error("Error in fetchPosts:", error);
-    return [];
-  }
+export function timeAgo(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  const w = Math.floor(d / 7);
+  if (w < 52) return `${w}w ago`;
+  return new Date(iso).toLocaleDateString();
 }
