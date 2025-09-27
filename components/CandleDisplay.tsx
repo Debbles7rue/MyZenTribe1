@@ -27,20 +27,6 @@ interface CandleDisplayProps {
 
 export default function CandleDisplay({ candle }: CandleDisplayProps) {
   const isEternal = candle.candle_type === "eternal";
-  const color = candle.color || "white";
-
-  // Main wax tone + gentle tinting for the body gradient
-  const colorMap: Record<string, { main: string; gradient: string[]; rim?: string }> = {
-    white:  { main: "#ffffff", gradient: ["#ffffff", "#F6F4FB", "#EEEAF7"], rim: "#e9e4f4" },
-    gold:   { main: "#f8e3b1", gradient: ["#fff7de", "#f8e3b1", "#e6c56e"], rim: "#e7cf98" },
-    rose:   { main: "#f7c4c9", gradient: ["#ffe3e6", "#f7c4c9", "#e8a5ab"], rim: "#eab0b7" },
-    azure:  { main: "#c5e3ff", gradient: ["#e9f4ff", "#cfe7ff", "#a9d2fb"], rim: "#b4d3f0" },
-    violet: { main: "#d8c7ff", gradient: ["#eee7ff", "#d8c7ff", "#c0a8f7"], rim: "#cdbbfa" },
-    emerald:{ main: "#cdebd3", gradient: ["#e8f7ec", "#cdebd3", "#a8d6b3"], rim: "#bfe1c6" }
-  };
-
-  const palette = colorMap[color] || colorMap.white;
-
   const createdDate = new Date(candle.created_at);
   const formattedDate = createdDate.toLocaleDateString("en-US", {
     month: "short",
@@ -48,170 +34,144 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
     year: "numeric",
   });
 
-  // Desync multiple flames so they don’t flicker in unison
+  // desync multiple flames
   const beginOffset = (Math.random() * 1.2).toFixed(2) + "s";
 
   return (
     <>
       <div className="candle-display">
         <div className="candle-visual">
-          <svg viewBox="0 0 120 180" className="candle-svg" aria-hidden>
+          <svg viewBox="0 0 160 220" className="candle-svg" aria-hidden>
             <defs>
-              {/* ====== Wax body + rim gradients (tinted by palette) ====== */}
-              <linearGradient id={`wax-body-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
-                <stop offset="0%"  stopColor={palette.gradient[0]} />
-                <stop offset="20%" stopColor="#ffffff" />
-                <stop offset="58%" stopColor={palette.gradient[1]} />
-                <stop offset="100%" stopColor={palette.gradient[2]} />
+              {/* Pillar wax (warm amber, darker edges) */}
+              <linearGradient id={`waxSide-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stopColor="#c26826" />
+                <stop offset="14%" stopColor="#e28c3c" />
+                <stop offset="50%" stopColor="#ffd096" />
+                <stop offset="86%" stopColor="#e28c3c" />
+                <stop offset="100%" stopColor="#b85c20" />
               </linearGradient>
-
-              <radialGradient id={`wax-top-${candle.id}`} cx="50%" cy="45%" r="62%">
-                <stop offset="0%" stopColor="#ffffff" />
-                <stop offset="70%" stopColor={palette.rim || "#f2effa"} />
-                <stop offset="100%" stopColor="#e8e3f4" />
+              {/* front glow to fake subsurface scattering */}
+              <radialGradient id={`waxFront-${candle.id}`} cx="50%" cy="35%" r="70%">
+                <stop offset="0%" stopColor="#ffe4b8" stopOpacity="0.95" />
+                <stop offset="45%" stopColor="#ffd9a1" stopOpacity="0.85" />
+                <stop offset="85%" stopColor="#f1a555" stopOpacity="0.5" />
+                <stop offset="100%" stopColor="#a44d1a" stopOpacity="0.35" />
               </radialGradient>
 
-              {/* Subtle vertical gloss strips */}
-              <linearGradient id={`wax-gloss-${candle.id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.6" />
-                <stop offset="50%" stopColor="#ffffff" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
-              </linearGradient>
+              {/* Melted top rim + inner pool */}
+              <radialGradient id={`waxTop-${candle.id}`} cx="50%" cy="40%" r="65%">
+                <stop offset="0%" stopColor="#ffe9c7" />
+                <stop offset="55%" stopColor="#ffd299" />
+                <stop offset="100%" stopColor="#eaa25c" />
+              </radialGradient>
+              <radialGradient id={`pool-${candle.id}`} cx="50%" cy="55%" r="70%">
+                <stop offset="0%" stopColor="#fff4dd" />
+                <stop offset="60%" stopColor="#ffd69f" />
+                <stop offset="100%" stopColor="#ffb764" />
+              </radialGradient>
 
-              {/* Plate / ground shadow */}
+              {/* plate + vignette */}
               <radialGradient id={`plate-${candle.id}`} cx="50%" cy="50%" r="55%">
-                <stop offset="0%"   stopColor="rgba(0,0,0,0.22)"/>
-                <stop offset="70%"  stopColor="rgba(0,0,0,0.12)"/>
-                <stop offset="100%" stopColor="rgba(0,0,0,0.00)"/>
+                <stop offset="0%" stopColor="rgba(0,0,0,0.22)" />
+                <stop offset="70%" stopColor="rgba(0,0,0,0.12)" />
+                <stop offset="100%" stopColor="rgba(0,0,0,0.0)" />
+              </radialGradient>
+              <radialGradient id={`bgGlow-${candle.id}`} cx="50%" cy="10%" r="85%">
+                <stop offset="0%" stopColor="rgba(255,220,150,0.9)" />
+                <stop offset="60%" stopColor="rgba(255,195,110,0.35)" />
+                <stop offset="100%" stopColor="rgba(255,165,60,0.0)" />
               </radialGradient>
 
-              {/* Warm global glow */}
-              <radialGradient id={`global-glow-${candle.id}`} cx="50%" cy="18%" r="68%">
-                <stop offset="0%"   stopColor="rgba(255, 234, 180, 0.95)"/>
-                <stop offset="55%"  stopColor="rgba(255, 205, 120, 0.35)"/>
-                <stop offset="100%" stopColor="rgba(255, 165, 60, 0.0)"/>
-              </radialGradient>
-
-              {/* ========= Flame shading ========= */}
-              <linearGradient id={`flame-grad-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%"   stopColor="#fff8de"/>
-                <stop offset="35%"  stopColor="#ffd27a"/>
-                <stop offset="80%"  stopColor="#ff9b3f"/>
-                <stop offset="100%" stopColor="#ff7a1a"/>
+              {/* Flame */}
+              <linearGradient id={`flame-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="35%" stopColor="#ffe7b3" />
+                <stop offset="75%" stopColor="#ff9b3f" />
+                <stop offset="100%" stopColor="#ff7a1a" />
               </linearGradient>
-              <radialGradient id={`flame-core-${candle.id}`} cx="50%" cy="42%" r="62%">
-                <stop offset="0%"   stopColor="#ffffff"/>
-                <stop offset="60%"  stopColor="#ffe39b"/>
-                <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+              <radialGradient id={`flameCore-${candle.id}`} cx="50%" cy="40%" r="60%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="65%" stopColor="#ffe7b3" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
               </radialGradient>
-
-              {/* Flame blur + heat shimmer */}
-              <filter id={`flame-soft-${candle.id}`} x="-70%" y="-70%" width="240%" height="240%">
-                <feGaussianBlur stdDeviation="0.55">
+              <filter id={`flameBlur-${candle.id}`} x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="0.6">
                   <animate
                     attributeName="stdDeviation"
-                    values="0.45;0.9;0.5;0.75;0.55"
+                    values="0.45;0.95;0.55;0.8;0.6"
                     dur="1.6s"
                     begin={beginOffset}
                     repeatCount="indefinite"
                   />
                 </feGaussianBlur>
               </filter>
-
-              {/* Heat shimmer using turbulence + displacement */}
+              {/* heat shimmer */}
               <filter id={`heat-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.8"
-                  numOctaves="2"
-                  seed="2"
-                  result="noise"
-                >
-                  <animate
-                    attributeName="seed"
-                    values="1;2;3;4;3;2;1"
-                    dur="2.4s"
-                    begin={beginOffset}
-                    repeatCount="indefinite"
-                  />
-                </feTurbulence>
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.6" xChannelSelector="R" yChannelSelector="G">
-                  <animate
-                    attributeName="scale"
-                    values="0.8;1.6;1.1;1.9;1.2"
-                    dur="1.8s"
-                    begin={beginOffset}
-                    repeatCount="indefinite"
-                  />
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="2" result="t" />
+                <feDisplacementMap in="SourceGraphic" in2="t" scale="1.8" xChannelSelector="R" yChannelSelector="G">
+                  <animate attributeName="scale" values="1;2;1.4;2.2;1.2" dur="1.8s" begin={beginOffset} repeatCount="indefinite" />
                 </feDisplacementMap>
               </filter>
 
-              {/* Soft drop shadow for the candle body */}
-              <filter id={`soft-shadow-${candle.id}`} x="-40%" y="-40%" width="180%" height="200%">
+              {/* soft shadow */}
+              <filter id={`softShadow-${candle.id}`} x="-35%" y="-35%" width="170%" height="190%">
                 <feDropShadow dx="0" dy="2.5" stdDeviation="3" floodOpacity="0.18" />
               </filter>
 
-              {/* Plaque */}
-              <linearGradient id={`plaque-base-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%"   stopColor="#caa85a" />
+              {/* gold tag for name */}
+              <linearGradient id={`tagBase-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#caa85a" />
                 <stop offset="100%" stopColor="#a27d2c" />
               </linearGradient>
-              <linearGradient id={`plaque-face-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%"   stopColor="#fff2c9" />
-                <stop offset="55%"  stopColor="#f6d784" />
+              <linearGradient id={`tagFace-${candle.id}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#fff2c9" />
+                <stop offset="55%" stopColor="#f6d784" />
                 <stop offset="100%" stopColor="#e9c15a" />
               </linearGradient>
-
-              {/* Small vignette for social-media pop */}
-              <radialGradient id={`vignette-${candle.id}`} cx="50%" cy="50%" r="80%">
-                <stop offset="70%" stopColor="rgba(0,0,0,0)"/>
-                <stop offset="100%" stopColor="rgba(0,0,0,0.24)"/>
-              </radialGradient>
             </defs>
 
-            {/* Background warmth / photo-ready vignette */}
-            <rect x="0" y="0" width="120" height="180" fill="url(#vignette) " opacity="0" />
-            <ellipse cx="60" cy="95" rx="60" ry="70" fill={`url(#global-glow-${candle.id})`}>
-              <animate attributeName="opacity" values="0.5;0.85;0.6;0.9;0.5" dur="2.3s" begin={beginOffset} repeatCount="indefinite" />
+            {/* ambience */}
+            <ellipse cx="80" cy="100" rx="72" ry="78" fill={`url(#bgGlow-${candle.id})`}>
+              <animate attributeName="opacity" values="0.55;0.88;0.62;0.84;0.55" dur="2.2s" begin={beginOffset} repeatCount="indefinite" />
             </ellipse>
 
-            {/* Ground shadow */}
-            <ellipse cx="60" cy="166" rx="40" ry="9" fill={`url(#plate-${candle.id})`}>
-              <animate attributeName="rx" values="36;41;38;40;36" dur="2.1s" begin={beginOffset} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.22;0.18;0.2;0.16;0.22" dur="2.1s" begin={beginOffset} repeatCount="indefinite" />
+            {/* ground shadow */}
+            <ellipse cx="80" cy="204" rx="46" ry="10" fill={`url(#plate-${candle.id})`}>
+              <animate attributeName="opacity" values="0.22;0.18;0.21;0.16;0.22" dur="2.0s" begin={beginOffset} repeatCount="indefinite" />
             </ellipse>
 
-            {/* ====== Candle body (rounded glass jar look) ====== */}
-            <g filter={`url(#soft-shadow-${candle.id})`}>
-              {/* Body */}
-              <rect x="33" y="56" width="54" height="94" rx="12" fill={`url(#wax-body-${candle.id})`} />
+            {/* ===== pillar body ===== */}
+            <g filter={`url(#softShadow-${candle.id})`}>
+              {/* rounded pillar */}
+              <rect x="42" y="62" width="76" height="124" rx="18" fill={`url(#waxSide-${candle.id})`} />
+              {/* warm front glow overlay */}
+              <rect x="42" y="62" width="76" height="124" rx="18" fill={`url(#waxFront-${candle.id})`} opacity="0.9" />
 
-              {/* Melted rim: a slightly wavy ellipse contour for realism */}
+              {/* melted top with concave pocket */}
               <path
-                d="M36 56c6 -4 42 -4 48 0c2 1 2 3 0 4c-16 6 -32 6 -48 0c-2 -1 -2 -3 0 -4z"
-                fill={`url(#wax-top-${candle.id})`}
-                opacity="0.98"
+                d="M50 62
+                   Q80 48 110 62
+                   C112 65 110 68 106 69
+                   C94 73 66 73 54 69
+                   C50 68 48 65 50 62 Z"
+                fill={`url(#waxTop-${candle.id})`}
               />
-
-              {/* Inner wax pool reflection */}
-              <ellipse cx="60" cy="60.8" rx="21.5" ry="6.8" fill="#ffffff" opacity="0.25" />
-
-              {/* Vertical glossy bands */}
-              <rect x="44" y="60" width="6.5" height="86" rx="3.2" fill={`url(#wax-gloss-${candle.id})`} opacity="0.55" />
-              <rect x="70.2" y="60" width="3.2" height="84" rx="1.6" fill={`url(#wax-gloss-${candle.id})`} opacity="0.35" />
+              {/* inner wax pool reflection */}
+              <ellipse cx="80" cy="72" rx="24" ry="7.2" fill={`url(#pool-${candle.id})`} opacity="0.85" />
             </g>
 
-            {/* Wick */}
-            <rect x="59" y="46" width="2" height="12.5" rx="1" fill="#1e1e1e" />
+            {/* wick (slightly warm highlight) */}
+            <rect x="79" y="64" width="2" height="16" rx="1" fill="#2a2a2a" />
+            <rect x="79.3" y="64" width="1.4" height="7" rx="0.7" fill="#5a4630" opacity="0.6" />
 
-            {/* ====== Flame (multi-layer, realistic) ====== */}
+            {/* ===== flame ===== */}
             <g transform="translate(0,0)">
-              {/* Sway + breathe */}
-              <g transform="rotate(0 60 52)">
+              <g transform="rotate(0 80 60)">
                 <animateTransform
                   attributeName="transform"
                   type="rotate"
-                  values="-2 60 52; 1.2 60 52; 0 60 52; -1.4 60 52; -2 60 52"
+                  values="-2 80 60; 1.2 80 60; 0 80 60; -1.4 80 60; -2 80 60"
                   dur="1.6s"
                   begin={beginOffset}
                   repeatCount="indefinite"
@@ -227,78 +187,48 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
                 />
                 <animate attributeName="opacity" values="0.93;1;0.88;0.99;0.93" dur="1.6s" begin={beginOffset} repeatCount="indefinite" />
 
-                {/* Outer flame shape with heat shimmer */}
+                {/* outer flame */}
                 <path
-                  d="M60 27 C55.4 36 55 42 60 51 C65 42 64.6 36 60 27 Z"
-                  fill={`url(#flame-grad-${candle.id})`}
-                  filter={`url(#flame-soft-${candle.id})`}
+                  d="M80 34 C74.5 45 74 52 80 62 C86 52 85.5 45 80 34 Z"
+                  fill={`url(#flame-${candle.id})`}
+                  filter={`url(#flameBlur-${candle.id})`}
                 >
-                  {/* Subtle shape morphing for life-like motion */}
                   <animate
                     attributeName="d"
                     dur="1.8s"
                     begin={beginOffset}
                     repeatCount="indefinite"
                     values="
-                      M60 27 C55.4 36 55 42 60 51 C65 42 64.6 36 60 27 Z;
-                      M60 27 C55.2 35.5 55 42 60 51 C65 43 64.8 36.2 60 27 Z;
-                      M60 27 C55.6 36.2 55 42.2 60 50.8 C65 42 64.4 36 60 27 Z;
-                      M60 27 C55.4 36 55 42 60 51 C65 42 64.6 36 60 27 Z
+                      M80 34 C74.5 45 74 52 80 62 C86 52 85.5 45 80 34 Z;
+                      M80 34 C74.2 44.5 74 52 80 62 C86 53 85.8 45.5 80 34 Z;
+                      M80 34 C74.8 45.5 74.2 52 80 61.6 C85.8 52 85.2 45 80 34 Z;
+                      M80 34 C74.5 45 74 52 80 62 C86 52 85.5 45 80 34 Z
                     "
                   />
                 </path>
 
-                {/* Hot core */}
+                {/* inner hot core with heat shimmer */}
                 <path
-                  d="M60 30 C57.3 37 56.8 40.8 60 47 C63.2 41 62.7 37 60 30 Z"
-                  fill={`url(#flame-core-${candle.id})`}
+                  d="M80 37 C77 45 76.5 49 80 56 C83.5 49 83 45 80 37 Z"
+                  fill={`url(#flameCore-${candle.id})`}
                   filter={`url(#heat-${candle.id})`}
                 />
-
-                {/* Tip sparkle */}
-                <circle cx="60" cy="28.8" r="0.95" fill="#fff7d2" opacity="0.98">
-                  <animate attributeName="r" values="0.8;1;0.85;1;0.8" dur="1.8s" begin={beginOffset} repeatCount="indefinite" />
+                <circle cx="80" cy="36" r="1" fill="#fff7d2">
+                  <animate attributeName="r" values="0.8;1.05;0.85;1.05;0.8" dur="1.8s" begin={beginOffset} repeatCount="indefinite" />
                 </circle>
               </g>
             </g>
 
-            {/* Light halo */}
-            <ellipse cx="60" cy="43" rx="34" ry="23" fill={`url(#global-glow-${candle.id})`}>
-              <animate attributeName="opacity" values="0.55;0.88;0.62;0.84;0.55" dur="2.2s" begin={beginOffset} repeatCount="indefinite" />
-            </ellipse>
-
-            {/* Eternal marker */}
-            {isEternal && <text x="60" y="20" textAnchor="middle" fontSize="14" fill="#f3e4b0">✨</text>}
-
-            {/* ====== Plaque with name (unchanged API) ====== */}
-            <g>
-              {/* Rim/back */}
-              <path
-                d="M34 132 h52 a9 9 0 0 1 9 9 v3 a9 9 0 0 1 -9 9 h-52 a9 9 0 0 1 -9 -9 v-3 a9 9 0 0 1 9 -9 z"
-                fill={`url(#plaque-base-${candle.id})`}
-                opacity="0.92"
-                filter={`url(#soft-shadow-${candle.id})`}
-              />
-              {/* Face */}
-              <rect x="38" y="135" width="44" height="16" rx="8" fill={`url(#plaque-face-${candle.id})`} stroke="rgba(0,0,0,0.1)" />
-              {/* Highlight */}
-              <rect x="40" y="137" width="40" height="12" rx="6" fill="rgba(255,255,255,0.45)" opacity="0.5" />
-              {/* Name */}
-              <text
-                x="60"
-                y="146"
-                textAnchor="middle"
-                fontSize="6.4"
-                fontWeight={700}
-                fill="#3e2e16"
-                letterSpacing="0.3"
-                style={{ userSelect: "none" }}
-                textLength={40}
-                lengthAdjust="spacingAndGlyphs"
-              >
+            {/* name tag button under candle */}
+            <g transform="translate(0,0)">
+              <path d="M58 148 h44 a10 10 0 0 1 10 10 v2 a10 10 0 0 1 -10 10 h-44 a10 10 0 0 1 -10 -10 v-2 a10 10 0 0 1 10 -10 z" fill={`url(#tagBase-${candle.id})`} opacity="0.92" filter={`url(#softShadow-${candle.id})`} />
+              <rect x="60" y="150" width="40" height="16" rx="8" fill={`url(#tagFace-${candle.id})`} />
+              <text x="80" y="161" textAnchor="middle" fontSize="7" fontWeight={700} fill="#3e2e16" style={{ userSelect: "none" }} textLength={34} lengthAdjust="spacingAndGlyphs">
                 {candle.name}
               </text>
             </g>
+
+            {isEternal && <text x="80" y="24" textAnchor="middle" fontSize="14" fill="#f3e4b0">✨</text>}
           </svg>
 
           {isEternal && <div className="eternal-badge">Eternal Flame</div>}
@@ -306,23 +236,17 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
 
         <div className="candle-info">
           <h3 className="candle-name">{candle.name}</h3>
-
           {candle.message && <p className="candle-message">"{candle.message}"</p>}
-
           <div className="candle-meta">
             <span className="candle-date">Lit on {formattedDate}</span>
-            {candle.amount_paid && (
-              <span className="candle-amount">
-                ${(candle.amount_paid / 100).toFixed(2)}
-              </span>
-            )}
+            {candle.amount_paid && <span className="candle-amount">${(candle.amount_paid / 100).toFixed(2)}</span>}
           </div>
         </div>
       </div>
 
       <style jsx>{`
         .candle-display {
-          background: rgba(255,255,255,0.03);
+          background: radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
           backdrop-filter: blur(12px);
           border: 1px solid rgba(251,191,36,0.15);
           border-radius: 1rem;
@@ -335,139 +259,40 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
           position: relative;
           overflow: hidden;
         }
-
-        .candle-display::before {
-          content: '';
-          position: absolute;
-          top: -50%;
-          left: -50%;
-          width: 200%;
-          height: 200%;
-          background: linear-gradient(45deg, transparent, rgba(251,191,36,0.12), transparent);
-          transform: rotate(45deg);
-          transition: all 0.5s;
-          opacity: 0;
-        }
-
-        .candle-display:hover::before {
-          opacity: 1;
-          animation: shimmer 0.5s;
-        }
-
-        @keyframes shimmer {
-          0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-          100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
-        }
-
         .candle-display:hover {
           transform: translateY(-4px);
           background: rgba(255,255,255,0.06);
           box-shadow: 0 12px 32px rgba(251,191,36,0.22);
           border-color: rgba(251,191,36,0.32);
         }
-
-        .candle-visual { 
-          position: relative; 
-          width: 120px; 
-          height: 180px; 
-        }
-        
-        .candle-svg { 
-          width: 100%; 
-          height: 100%; 
-          display: block;
-        }
+        .candle-visual { position: relative; width: 160px; height: 220px; }
+        .candle-svg { width: 100%; height: 100%; display: block; }
 
         .eternal-badge {
           position: absolute;
-          bottom: -0.5rem;
-          left: 50%;
-          transform: translateX(-50%);
+          bottom: -0.5rem; left: 50%; transform: translateX(-50%);
           background: linear-gradient(135deg, #fbbf24, #f59e0b);
-          color: white;
-          padding: 0.25rem 0.75rem;
-          border-radius: 1rem;
-          font-size: 0.625rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          box-shadow: 0 4px 12px rgba(251,191,36,0.3);
+          color: white; padding: 0.25rem 0.75rem; border-radius: 1rem;
+          font-size: 0.625rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.05em; box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
+        .candle-info { text-align: center; width: 100%; }
+        .candle-name { font-size: 1.125rem; font-weight: 600; color: #fbbf24; margin: 0 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .candle-message { font-size: 0.875rem; color: #fde68a; font-style: italic; margin: 0 0 0.75rem 0; opacity: 0.9; line-height: 1.4; }
+        .candle-meta { display: flex; justify-content: center; gap: 1rem; font-size: 0.75rem; color: #fde68a; opacity: 0.75; }
 
-        .candle-info { 
-          text-align: center; 
-          width: 100%; 
-        }
-
-        .candle-name {
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #fbbf24;
-          margin: 0 0 0.5rem 0;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .candle-message {
-          font-size: 0.875rem;
-          color: #fde68a;
-          font-style: italic;
-          margin: 0 0 0.75rem 0;
-          opacity: 0.9;
-          line-height: 1.4;
-        }
-
-        .candle-meta {
-          display: flex;
-          justify-content: center;
-          gap: 1rem;
-          font-size: 0.75rem;
-          color: #fde68a;
-          opacity: 0.7;
-        }
-
-        /* Mobile Optimizations */
+        /* Mobile */
         @media (max-width: 640px) {
-          .candle-display { 
-            padding: 1.25rem; 
-          }
-          
-          .candle-visual { 
-            width: 110px; 
-            height: 165px; 
-          }
-          
-          .candle-name { 
-            font-size: 1rem; 
-          }
-          
-          .candle-message { 
-            font-size: 0.8125rem; 
-          }
+          .candle-visual { width: 140px; height: 200px; }
+          .candle-name { font-size: 1rem; }
+          .candle-message { font-size: 0.8125rem; }
         }
-
         @media (max-width: 375px) {
-          .candle-display { 
-            padding: 1rem; 
-          }
-          
-          .candle-visual { 
-            width: 100px; 
-            height: 150px; 
-          }
-          
-          .candle-name { 
-            font-size: 0.9375rem; 
-          }
-          
-          .candle-message { 
-            font-size: 0.75rem; 
-          }
-          
-          .candle-meta {
-            flex-direction: column;
-            gap: 0.25rem;
-            font-size: 0.6875rem;
-          }
+          .candle-display { padding: 1rem; }
+          .candle-visual { width: 120px; height: 180px; }
+          .candle-name { font-size: 0.95rem; }
+          .candle-message { font-size: 0.75rem; }
+          .candle-meta { flex-direction: column; gap: 0.25rem; font-size: 0.6875rem; }
         }
       `}</style>
     </>
