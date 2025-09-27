@@ -1,7 +1,7 @@
 // components/CoCreatorEditModal.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadMedia } from "@/lib/posts";
 
@@ -37,7 +37,7 @@ export default function CoCreatorEditModal({
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Load existing media on mount
-  useState(() => {
+  useEffect(() => {
     async function loadPostMedia() {
       const { data, error } = await supabase
         .from('post_media')
@@ -50,7 +50,25 @@ export default function CoCreatorEditModal({
       }
     }
     loadPostMedia();
-  });
+  }, [postId]);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') {
     const files = e.target.files;
@@ -60,6 +78,14 @@ export default function CoCreatorEditModal({
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      
+      // Validate file size
+      const maxSize = type === 'image' ? 10 * 1024 * 1024 : 100 * 1024 * 1024; // 10MB images, 100MB videos
+      if (file.size > maxSize) {
+        alert(`File "${file.name}" is too large. Max size: ${type === 'image' ? '10MB' : '100MB'}`);
+        continue;
+      }
+      
       const previewUrl = URL.createObjectURL(file);
       
       tempMedia.push({
@@ -107,11 +133,14 @@ export default function CoCreatorEditModal({
           if (!error && url) {
             uploadedMedia.push({
               post_id: postId,
-              media_url: url,
-              media_type: media.type,
+              storage_path: url, // Store storage path, not public URL
+              type: media.type,
               uploaded_by: currentUserId,
-              is_collaborative: true
+              created_by: currentUserId,
+              sort_order: existingMedia.length + uploadedMedia.length
             });
+          } else {
+            throw new Error(`Failed to upload ${media.type}: ${error}`);
           }
         }
       }
@@ -129,14 +158,30 @@ export default function CoCreatorEditModal({
 
       // Remove media if user is creator or uploaded by them
       if (mediaToRemove.length > 0) {
-        // For co-creators: only remove media they uploaded
-        // For creators: can remove any media
         if (isCreator) {
+          // Creators can remove any media, but delete from storage too
+          const mediaToDelete = existingMedia.filter(m => mediaToRemove.includes(m.id));
+          const storagePaths = mediaToDelete.map(m => m.storage_path).filter(Boolean);
+          
+          if (storagePaths.length > 0) {
+            await supabase.storage.from('post-media').remove(storagePaths);
+          }
+          
           await supabase
             .from('post_media')
             .delete()
             .in('id', mediaToRemove);
         } else {
+          // Co-creators can only remove media they uploaded
+          const userMedia = existingMedia.filter(m => 
+            mediaToRemove.includes(m.id) && m.uploaded_by === currentUserId
+          );
+          const storagePaths = userMedia.map(m => m.storage_path).filter(Boolean);
+          
+          if (storagePaths.length > 0) {
+            await supabase.storage.from('post-media').remove(storagePaths);
+          }
+          
           await supabase
             .from('post_media')
             .delete()
@@ -228,39 +273,55 @@ export default function CoCreatorEditModal({
     }
   }
 
+  const hasChanges = newMedia.length > 0 || mediaToRemove.length > 0 || additionalComment.trim();
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{isCreator ? 'Edit Post' : 'Add to Post'}</h2>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button 
+            className="close-btn" 
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            ×
+          </button>
         </div>
 
         <div className="modal-body">
           {/* Existing Media */}
           {existingMedia.length > 0 && (
             <div className="existing-media-section">
-              <h3>Current Media</h3>
+              <h3>Current Media ({existingMedia.length})</h3>
               <div className="media-grid">
                 {existingMedia.map((media) => {
                   const canRemove = isCreator || media.uploaded_by === currentUserId;
                   const isMarkedForRemoval = mediaToRemove.includes(media.id);
+                  
+                  // Get public URL from storage path
+                  const { data } = supabase.storage
+                    .from('post-media')
+                    .getPublicUrl(media.storage_path || media.media_url);
+                  
+                  const mediaUrl = data.publicUrl;
                   
                   return (
                     <div 
                       key={media.id} 
                       className={`media-item ${isMarkedForRemoval ? 'marked-remove' : ''}`}
                     >
-                      {media.media_type === 'image' ? (
-                        <img src={media.media_url} alt="" />
+                      {media.type === 'image' || media.media_type === 'image' ? (
+                        <img src={mediaUrl} alt="" loading="lazy" />
                       ) : (
-                        <video src={media.media_url} />
+                        <video src={mediaUrl} preload="metadata" />
                       )}
                       
                       {canRemove && (
                         <button
                           className="remove-btn"
                           onClick={() => toggleRemoveExisting(media.id)}
+                          title={isMarkedForRemoval ? 'Undo remove' : 'Mark for removal'}
                         >
                           {isMarkedForRemoval ? '↩️' : '×'}
                         </button>
@@ -268,7 +329,7 @@ export default function CoCreatorEditModal({
                       
                       {media.uploaded_by !== currentUserId && (
                         <div className="media-badge">
-                          {media.is_collaborative ? '👥' : '👤'}
+                          {isCreator ? '👑' : '👥'}
                         </div>
                       )}
                     </div>
@@ -315,23 +376,38 @@ export default function CoCreatorEditModal({
               onChange={(e) => handleMediaSelect(e, 'video')}
             />
 
+            {/* Upload Progress */}
+            {uploadingMedia && (
+              <div className="upload-progress">
+                <div className="progress-bar">
+                  <div className="progress-fill"></div>
+                </div>
+                <p>Uploading media...</p>
+              </div>
+            )}
+
             {/* Preview New Media */}
             {newMedia.length > 0 && (
               <div className="new-media-preview">
+                <h4>New Media to Add ({newMedia.length})</h4>
                 <div className="media-grid">
                   {newMedia.map((media, index) => (
                     <div key={index} className="media-item">
                       {media.type === 'image' ? (
                         <img src={media.preview} alt="" />
                       ) : (
-                        <video src={media.preview} />
+                        <video src={media.preview} preload="metadata" />
                       )}
                       <button
                         onClick={() => removeNewMedia(index)}
                         className="remove-btn"
+                        title="Remove from upload"
                       >
                         ×
                       </button>
+                      <div className="media-badge new">
+                        NEW
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -347,7 +423,11 @@ export default function CoCreatorEditModal({
               onChange={(e) => setAdditionalComment(e.target.value)}
               placeholder="Say something about your additions..."
               rows={3}
+              maxLength={500}
             />
+            <div className="char-count">
+              {additionalComment.length}/500
+            </div>
           </div>
 
           {/* Co-Creator Actions */}
@@ -358,22 +438,36 @@ export default function CoCreatorEditModal({
                 onClick={handleRemoveTag}
                 disabled={loading}
               >
-                Remove My Tag
+                🚪 Remove My Tag
               </button>
+              <p className="remove-tag-info">
+                This will remove you from the post completely
+              </p>
             </div>
           )}
         </div>
 
         <div className="modal-footer">
-          <button className="cancel-btn" onClick={onClose} disabled={loading}>
+          <button 
+            className="cancel-btn" 
+            onClick={onClose} 
+            disabled={loading}
+          >
             Cancel
           </button>
           <button 
             className="save-btn" 
             onClick={handleSave} 
-            disabled={loading || (newMedia.length === 0 && mediaToRemove.length === 0 && !additionalComment.trim())}
+            disabled={loading || !hasChanges}
           >
-            {loading ? 'Saving...' : 'Save Changes'}
+            {loading ? (
+              <>
+                <span className="spinner"></span>
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
       </div>
@@ -383,21 +477,26 @@ export default function CoCreatorEditModal({
           position: fixed;
           inset: 0;
           background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
           z-index: 9998;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 1rem;
+          overflow-y: auto;
         }
 
         .modal-content {
           background: white;
-          border-radius: 0.75rem;
-          max-width: 800px;
+          border-radius: 1rem;
+          max-width: 900px;
           width: 100%;
-          max-height: 90vh;
+          max-height: calc(100vh - 2rem);
+          max-height: calc(100dvh - 2rem);
           display: flex;
           flex-direction: column;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+          border: 1px solid #e2e8f0;
         }
 
         .modal-header {
@@ -406,52 +505,97 @@ export default function CoCreatorEditModal({
           align-items: center;
           padding: 1.5rem;
           border-bottom: 1px solid #e2e8f0;
+          background: #f8fafc;
+          border-radius: 1rem 1rem 0 0;
         }
 
         .modal-header h2 {
           font-size: 1.5rem;
           font-weight: 600;
           margin: 0;
+          color: #1a202c;
         }
 
         .close-btn {
-          background: none;
-          border: none;
-          font-size: 2rem;
+          background: #f7fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          font-size: 1.5rem;
           cursor: pointer;
-          color: #718096;
+          color: #4a5568;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+          background: #edf2f7;
+          border-color: #cbd5e0;
         }
 
         .modal-body {
           padding: 1.5rem;
           overflow-y: auto;
           flex: 1;
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e0 #f7fafc;
+        }
+
+        .modal-body::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .modal-body::-webkit-scrollbar-track {
+          background: #f7fafc;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb {
+          background: #cbd5e0;
+          border-radius: 3px;
         }
 
         .existing-media-section,
         .upload-section,
         .comment-section {
-          margin-bottom: 1.5rem;
+          margin-bottom: 2rem;
         }
 
         h3 {
-          font-size: 1.125rem;
+          font-size: 1.25rem;
           font-weight: 600;
-          margin: 0 0 0.75rem 0;
+          margin: 0 0 1rem 0;
+          color: #2d3748;
+        }
+
+        h4 {
+          font-size: 1rem;
+          font-weight: 500;
+          margin: 1rem 0 0.5rem 0;
+          color: #4a5568;
         }
 
         .media-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-          gap: 0.5rem;
+          gap: 0.75rem;
         }
 
         .media-item {
           position: relative;
           aspect-ratio: 1;
-          border-radius: 0.5rem;
+          border-radius: 0.75rem;
           overflow: hidden;
           background: #f7fafc;
+          border: 2px solid #e2e8f0;
+          transition: all 0.2s;
+        }
+
+        .media-item:hover {
+          border-color: #cbd5e0;
+          transform: translateY(-1px);
         }
 
         .media-item img,
@@ -462,50 +606,120 @@ export default function CoCreatorEditModal({
         }
 
         .media-item.marked-remove {
-          opacity: 0.3;
+          opacity: 0.4;
+          border-color: #fc8181;
+          background: #fed7d7;
         }
 
         .remove-btn {
           position: absolute;
-          top: 0.25rem;
-          right: 0.25rem;
+          top: 0.5rem;
+          right: 0.5rem;
           background: rgba(239, 68, 68, 0.9);
           color: white;
           border: none;
           border-radius: 50%;
-          width: 24px;
-          height: 24px;
+          width: 28px;
+          height: 28px;
           cursor: pointer;
           font-size: 1rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+          backdrop-filter: blur(4px);
+        }
+
+        .remove-btn:hover {
+          background: rgba(239, 68, 68, 1);
+          transform: scale(1.1);
         }
 
         .media-badge {
           position: absolute;
-          bottom: 0.25rem;
-          left: 0.25rem;
-          background: rgba(0, 0, 0, 0.5);
-          padding: 0.125rem 0.25rem;
-          border-radius: 0.25rem;
+          bottom: 0.5rem;
+          left: 0.5rem;
+          background: rgba(0, 0, 0, 0.7);
+          color: white;
+          padding: 0.25rem 0.5rem;
+          border-radius: 0.375rem;
           font-size: 0.75rem;
+          font-weight: 500;
+          backdrop-filter: blur(4px);
+        }
+
+        .media-badge.new {
+          background: rgba(59, 130, 246, 0.9);
         }
 
         .upload-buttons {
           display: flex;
-          gap: 0.5rem;
+          gap: 0.75rem;
           margin-bottom: 1rem;
+          flex-wrap: wrap;
         }
 
         .upload-btn {
-          padding: 0.5rem 1rem;
-          background: #f7fafc;
-          border: 1px solid #e2e8f0;
+          padding: 0.75rem 1.25rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
           border-radius: 0.5rem;
           cursor: pointer;
           font-size: 0.875rem;
+          font-weight: 500;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
         }
 
-        .upload-btn:hover {
-          background: #edf2f7;
+        .upload-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .upload-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .upload-progress {
+          margin: 1rem 0;
+          padding: 1rem;
+          background: #f7fafc;
+          border-radius: 0.5rem;
+          border: 1px solid #e2e8f0;
+        }
+
+        .progress-bar {
+          width: 100%;
+          height: 4px;
+          background: #e2e8f0;
+          border-radius: 2px;
+          overflow: hidden;
+          margin-bottom: 0.5rem;
+        }
+
+        .progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #667eea, #764ba2);
+          border-radius: 2px;
+          animation: progress-animation 2s infinite;
+        }
+
+        @keyframes progress-animation {
+          0% { width: 0%; }
+          50% { width: 70%; }
+          100% { width: 100%; }
+        }
+
+        .upload-progress p {
+          margin: 0;
+          font-size: 0.875rem;
+          color: #4a5568;
+          text-align: center;
         }
 
         .comment-section textarea {
@@ -515,38 +729,82 @@ export default function CoCreatorEditModal({
           border-radius: 0.5rem;
           font-size: 0.875rem;
           resize: vertical;
+          font-family: inherit;
+          transition: border-color 0.2s;
+        }
+
+        .comment-section textarea:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .char-count {
+          text-align: right;
+          font-size: 0.75rem;
+          color: #718096;
+          margin-top: 0.25rem;
         }
 
         .cocreator-actions {
           text-align: center;
-          padding-top: 1rem;
+          padding: 1.5rem;
           border-top: 1px solid #e2e8f0;
+          background: #fef5e7;
+          border-radius: 0.5rem;
+          margin-top: 1rem;
         }
 
         .remove-tag-btn {
-          padding: 0.5rem 1rem;
-          background: #fef2f2;
-          color: #dc2626;
-          border: 1px solid #fecaca;
+          padding: 0.75rem 1.5rem;
+          background: #fed7d7;
+          color: #c53030;
+          border: 1px solid #feb2b2;
           border-radius: 0.5rem;
           cursor: pointer;
           font-size: 0.875rem;
+          font-weight: 500;
+          transition: all 0.2s;
+        }
+
+        .remove-tag-btn:hover:not(:disabled) {
+          background: #fbb6ce;
+          border-color: #f687b3;
+        }
+
+        .remove-tag-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .remove-tag-info {
+          margin: 0.5rem 0 0 0;
+          font-size: 0.75rem;
+          color: #d69e2e;
         }
 
         .modal-footer {
           display: flex;
           justify-content: flex-end;
-          gap: 0.5rem;
+          gap: 0.75rem;
           padding: 1.5rem;
           border-top: 1px solid #e2e8f0;
+          background: #f8fafc;
+          border-radius: 0 0 1rem 1rem;
         }
 
         .cancel-btn,
         .save-btn {
-          padding: 0.5rem 1rem;
+          padding: 0.75rem 1.5rem;
           border-radius: 0.5rem;
           font-weight: 500;
           cursor: pointer;
+          font-size: 0.875rem;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          min-height: 44px;
         }
 
         .cancel-btn {
@@ -555,15 +813,100 @@ export default function CoCreatorEditModal({
           border: 1px solid #e2e8f0;
         }
 
+        .cancel-btn:hover:not(:disabled) {
+          background: #f7fafc;
+          border-color: #cbd5e0;
+        }
+
         .save-btn {
-          background: linear-gradient(135deg, #805ad5, #6b46c1);
+          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
           color: white;
           border: none;
+          box-shadow: 0 2px 4px rgba(72, 187, 120, 0.2);
+        }
+
+        .save-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
         }
 
         .save-btn:disabled {
-          opacity: 0.5;
+          opacity: 0.6;
           cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .spinner {
+          display: inline-block;
+          width: 1rem;
+          height: 1rem;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-top: 2px solid white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .modal-overlay {
+            align-items: flex-end;
+            padding: 0;
+          }
+          
+          .modal-content {
+            max-height: 100vh;
+            max-height: 100dvh;
+            border-radius: 1rem 1rem 0 0;
+            margin: 0;
+          }
+          
+          .modal-header,
+          .modal-body,
+          .modal-footer {
+            padding: 1rem;
+          }
+          
+          .media-grid {
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.5rem;
+          }
+          
+          .upload-buttons {
+            flex-direction: column;
+          }
+          
+          .upload-btn {
+            width: 100%;
+            justify-content: center;
+          }
+          
+          .modal-footer {
+            flex-direction: column;
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+          }
+          
+          .cancel-btn,
+          .save-btn {
+            width: 100%;
+            justify-content: center;
+            min-height: 48px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .modal-header h2 {
+            font-size: 1.25rem;
+          }
+          
+          .media-grid {
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+          }
         }
       `}</style>
     </div>
