@@ -6,7 +6,6 @@ import { Post, toggleLike, addComment, deletePost, updatePost, addMediaToPost, u
 import Link from "next/link";
 import CoCreatorEditModal from "@/components/CoCreatorEditModal";
 import { supabase } from "@/lib/supabaseClient";
-import { EnhancedPhotoGrid } from "@/components/EnhancedPhotoGrid";
 
 interface PostCardProps {
   post: Post;
@@ -25,7 +24,7 @@ interface Comment {
   };
 }
 
-// Photo Grid Component - Enhanced with proper spacing and individual interactions
+// Facebook-Style Photo Grid Component with Individual Interactions
 function PhotoGrid({ 
   media, 
   onPhotoClick,
@@ -49,7 +48,7 @@ function PhotoGrid({
   
   const images = validMedia.filter(m => m.type === 'image');
   
-  // In compact mode, show Facebook-style grid with clean separation
+  // COMPACT MODE - Facebook-style grid with clean separation
   if (isCompact) {
     if (images.length === 0) return null;
     
@@ -133,7 +132,7 @@ function PhotoGrid({
     return null;
   }
   
-  // Expanded mode - individual photos with spacing and interaction buttons
+  // EXPANDED MODE - Individual photos with interaction buttons
   return (
     <div className="photo-grid-expanded">
       {images.map((photo, idx) => (
@@ -194,9 +193,6 @@ function IndividualPhotoModal({
   const [myReaction, setMyReaction] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isCommenting, setIsCommenting] = useState(false);
-
-  // This would integrate with your existing individual photo functions
-  // from the documents you provided earlier
 
   return (
     <div className="photo-modal-overlay" onClick={onClose}>
@@ -274,82 +270,7 @@ function IndividualPhotoModal({
   );
 }
 
-// Lightbox Component
-function PhotoLightbox({ 
-  media, 
-  startIndex, 
-  onClose 
-}: { 
-  media: Array<{url: string; type: 'image' | 'video'}>;
-  startIndex: number;
-  onClose: () => void;
-}) {
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
-  
-  const images = media.filter(m => m && m.type === 'image' && m.url);
-  
-  if (!images || images.length === 0) {
-    onClose();
-    return null;
-  }
-  
-  const safeIndex = Math.max(0, Math.min(currentIndex, images.length - 1));
-  const currentImage = images[safeIndex];
-  
-  if (!currentImage || !currentImage.url) {
-    onClose();
-    return null;
-  }
-  
-  const goNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % images.length);
-  };
-  
-  const goPrev = () => {
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
-  
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') goNext();
-      if (e.key === 'ArrowLeft') goPrev();
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
-    
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, []);
-  
-  return (
-    <div className="lightbox-overlay" onClick={onClose}>
-      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-        <button className="lightbox-close" onClick={onClose}>×</button>
-        
-        {images.length > 1 && (
-          <>
-            <button className="lightbox-prev" onClick={goPrev}>‹</button>
-            <button className="lightbox-next" onClick={goNext}>›</button>
-          </>
-        )}
-        
-        <img src={currentImage.url} alt="" />
-        
-        {images.length > 1 && (
-          <div className="lightbox-counter">
-            {safeIndex + 1} / {images.length}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Professional Edit Modal Component with Clean Layout
+// Professional Edit Modal Component
 function EditPostModal({ 
   post, 
   currentMedia,
@@ -468,7 +389,6 @@ function EditPostModal({
 
           {showCoCreators && (
             <div className="co-creators-section">
-              {/* SimpleFriendDropdown would go here */}
               <p>Friend selector component would be integrated here</p>
             </div>
           )}
@@ -486,6 +406,81 @@ function EditPostModal({
             {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Lightbox Component
+function PhotoLightbox({ 
+  media, 
+  startIndex, 
+  onClose 
+}: { 
+  media: Array<{url: string; type: 'image' | 'video'}>;
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  
+  const images = media.filter(m => m && m.type === 'image' && m.url);
+  
+  if (!images || images.length === 0) {
+    onClose();
+    return null;
+  }
+  
+  const safeIndex = Math.max(0, Math.min(currentIndex, images.length - 1));
+  const currentImage = images[safeIndex];
+  
+  if (!currentImage || !currentImage.url) {
+    onClose();
+    return null;
+  }
+  
+  const goNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % images.length);
+  };
+  
+  const goPrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'ArrowLeft') goPrev();
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, []);
+  
+  return (
+    <div className="lightbox-overlay" onClick={onClose}>
+      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+        <button className="lightbox-close" onClick={onClose}>×</button>
+        
+        {images.length > 1 && (
+          <>
+            <button className="lightbox-prev" onClick={goPrev}>‹</button>
+            <button className="lightbox-next" onClick={goNext}>›</button>
+          </>
+        )}
+        
+        <img src={currentImage.url} alt="" />
+        
+        {images.length > 1 && (
+          <div className="lightbox-counter">
+            {safeIndex + 1} / {images.length}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -690,7 +685,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, a, .menu-btn, .action-btn, .photo-action-btn')) {
+    if ((e.target as HTMLElement).closest('button, a, .menu-btn, .action-btn, .photo-interact-btn')) {
       return;
     }
     setIsExpanded(!isExpanded);
@@ -716,7 +711,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   
   const displayedComments = showAllComments ? comments : comments.slice(0, 3);
 
-  // Compact preview mode - larger, card-style like bird photos
+  // COMPACT MODE - Card preview like Facebook
   if (!isExpanded) {
     return (
       <div className="post-card compact" onClick={handleCardClick}>
@@ -766,7 +761,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     );
   }
   
-  // Expanded mode - full post with individual photo interactions
+  // EXPANDED MODE - Full post with individual photo interactions
   return (
     <>
       <div className="post-card expanded">
@@ -954,7 +949,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         />
       )}
       
-      {/* All other modals remain the same */}
+      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
           <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
@@ -980,6 +975,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         </div>
       )}
 
+      {/* Professional Edit Modal */}
       {showEditModal && (
         <EditPostModal
           post={post}
@@ -992,6 +988,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         />
       )}
       
+      {/* Photo Lightbox */}
       {showLightbox && processedMedia && processedMedia.length > 0 && (
         <PhotoLightbox
           media={processedMedia}
@@ -1001,7 +998,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       )}
       
       <style jsx>{`
-        /* Compact Card Style - Like Bird Photos */
+        /* COMPACT CARD STYLING - Facebook Style */
         .post-card.compact {
           background: white;
           border: 1px solid #e2e8f0;
@@ -1084,7 +1081,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           gap: 0.25rem;
         }
         
-        /* Compact Photo Grids - Facebook Style with Clean Separation */
+        /* COMPACT PHOTO GRIDS - Facebook Style with Clean Separation */
         .photo-grid-container.compact {
           margin: 0.5rem 1rem 1rem;
           border-radius: 0.75rem;
@@ -1184,7 +1181,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           font-weight: 600;
         }
         
-        /* Expanded Mode - Individual Photos with Spacing */
+        /* EXPANDED MODE STYLING */
         .post-card.expanded {
           background: white;
           border: 2px solid #f1f5f9;
@@ -1281,7 +1278,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: #16a34a;
         }
         
-        /* Individual Photo Modal */
+        /* INDIVIDUAL PHOTO MODAL */
         .photo-modal-overlay {
           position: fixed;
           inset: 0;
@@ -1467,7 +1464,278 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: not-allowed;
         }
         
-        /* All other styles remain exactly the same as original */
+        /* PROFESSIONAL EDIT MODAL */
+        .edit-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(4px);
+          z-index: 9998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1rem;
+          overflow-y: auto;
+        }
+
+        .edit-modal-content {
+          background: white;
+          border-radius: 1rem;
+          width: 100%;
+          max-width: 600px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+          margin: auto;
+          position: relative;
+        }
+        
+        .edit-modal-content.professional {
+          max-width: 650px;
+          width: 95%;
+          max-height: 85vh;
+        }
+
+        .edit-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .edit-modal-header h2 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #1a202c;
+          margin: 0;
+        }
+
+        .close-button {
+          background: none;
+          border: none;
+          font-size: 2rem;
+          color: #718096;
+          cursor: pointer;
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          transition: all 0.2s;
+        }
+
+        .close-button:hover {
+          background: #f7fafc;
+          color: #2d3748;
+        }
+
+        .edit-modal-body {
+          padding: 1.5rem;
+          overflow-y: auto;
+          flex: 1;
+        }
+        
+        .edit-section {
+          margin-bottom: 2rem;
+        }
+        
+        .edit-label {
+          display: block;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 0.75rem;
+          font-size: 0.9375rem;
+        }
+        
+        .edit-textarea-clean {
+          width: 100%;
+          padding: 1rem;
+          border: 2px solid #e5e7eb;
+          border-radius: 0.75rem;
+          resize: vertical;
+          font-size: 1rem;
+          line-height: 1.5;
+          font-family: inherit;
+          outline: none;
+          transition: border-color 0.2s ease;
+        }
+        
+        .edit-textarea-clean:focus {
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+        
+        .edit-actions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1.5rem;
+          margin-bottom: 2rem;
+        }
+        
+        .action-card {
+          background: #f8fafc;
+          border: 2px solid #e2e8f0;
+          border-radius: 1rem;
+          padding: 1.5rem;
+          text-align: center;
+          transition: all 0.2s ease;
+        }
+        
+        .action-card:hover {
+          border-color: #cbd5e0;
+          background: #f1f5f9;
+        }
+        
+        .action-card h3 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1.125rem;
+          color: #1f2937;
+        }
+        
+        .action-card p {
+          margin: 0 0 1rem 0;
+          color: #6b7280;
+          font-size: 0.875rem;
+        }
+        
+        .action-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.75rem 1.5rem;
+          border-radius: 0.75rem;
+          font-weight: 600;
+          font-size: 0.9375rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+          min-width: 120px;
+        }
+        
+        .action-button.primary {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+        }
+        
+        .action-button.primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 16px rgba(139,92,246,0.3);
+        }
+        
+        .action-button.secondary {
+          background: white;
+          color: #374151;
+          border: 2px solid #e5e7eb;
+        }
+        
+        .action-button.secondary:hover {
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+        }
+        
+        .privacy-select {
+          width: 100%;
+          padding: 0.75rem;
+          border: 2px solid #e5e7eb;
+          border-radius: 0.5rem;
+          font-size: 0.9375rem;
+          background: white;
+          cursor: pointer;
+        }
+        
+        .privacy-select:focus {
+          outline: none;
+          border-color: #8b5cf6;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+        }
+        
+        .file-preview {
+          margin-top: 0.75rem;
+          padding: 0.5rem;
+          background: rgba(139,92,246,0.1);
+          color: #7c3aed;
+          border-radius: 0.5rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+        
+        .co-creators-section {
+          background: #fefce8;
+          border: 2px solid #fde047;
+          border-radius: 1rem;
+          padding: 1.5rem;
+          margin-top: 1rem;
+        }
+
+        .edit-modal-footer {
+          display: flex;
+          gap: 1rem;
+          justify-content: flex-end;
+          padding: 1.25rem 1.5rem;
+          border-top: 1px solid #e2e8f0;
+          background: #f8fafc;
+        }
+
+        .cancel-button,
+        .save-button {
+          padding: 0.75rem 1.5rem;
+          border-radius: 0.5rem;
+          font-size: 1rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .cancel-button {
+          background: white;
+          color: #4a5568;
+          border: 2px solid #e2e8f0;
+        }
+
+        .cancel-button:hover {
+          background: #f7fafc;
+          border-color: #cbd5e0;
+        }
+
+        .save-button {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .save-button.primary {
+          background: linear-gradient(135deg, #10b981, #059669);
+          color: white;
+          border: none;
+        }
+        
+        .save-button.primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 16px rgba(16,185,129,0.3);
+        }
+
+        .save-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .save-button:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+        
+        /* REST OF EXPANDED MODE STYLING - KEEPING ORIGINAL LAYOUT */
         .post-header {
           display: flex;
           justify-content: space-between;
@@ -1716,7 +1984,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           background: #fef2f2;
         }
         
-        /* Lightbox styling - exactly the same */
+        /* Lightbox styling */
         .lightbox-overlay {
           position: fixed;
           inset: 0;
@@ -1781,7 +2049,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: white;
         }
         
-        /* Modal styling - exactly the same */
+        /* Modal styling */
         .modal-overlay {
           position: fixed;
           inset: 0;
@@ -1855,238 +2123,15 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: not-allowed;
         }
 
-        /* Edit modal styling - exactly the same */
-        .edit-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.6);
-          backdrop-filter: blur(4px);
-          z-index: 9998;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-          overflow-y: auto;
-        }
-
-        .edit-modal-content {
-          background: white;
-          border-radius: 1rem;
-          width: 100%;
-          max-width: 600px;
-          max-height: 90vh;
-          display: flex;
-          flex-direction: column;
-          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-          margin: auto;
-          position: relative;
-        }
-
-        .edit-modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.5rem;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .edit-modal-header h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a202c;
-          margin: 0;
-        }
-
-        .close-button {
-          background: none;
-          border: none;
-          font-size: 2rem;
-          color: #718096;
-          cursor: pointer;
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          transition: all 0.2s;
-        }
-
-        .close-button:hover {
-          background: #f7fafc;
-          color: #2d3748;
-        }
-
-        .edit-modal-body {
-          padding: 1.5rem;
-          overflow-y: auto;
-          flex: 1;
-        }
-
-        .edit-textarea {
-          width: 100%;
-          padding: 1rem;
-          border: 2px solid #e2e8f0;
-          border-radius: 0.75rem;
-          resize: vertical;
-          margin-bottom: 1.5rem;
-          font-size: 1rem;
-          line-height: 1.5;
-          font-family: inherit;
-          outline: none;
-          min-height: 150px;
-        }
-
-        .edit-textarea:focus {
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-
-        .current-media {
-          margin-bottom: 1.5rem;
-          padding: 1.25rem;
-          background: #f8fafc;
-          border-radius: 0.75rem;
-        }
-
-        .current-media h3 {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #4a5568;
-          margin: 0 0 0.75rem 0;
-        }
-
-        .media-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-          gap: 0.75rem;
-        }
-
-        .media-item {
-          aspect-ratio: 1;
-          overflow: hidden;
-          border-radius: 0.5rem;
-          background: white;
-          border: 2px solid white;
-        }
-
-        .media-item img,
-        .media-item video {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .file-upload {
-          margin-bottom: 1rem;
-        }
-
-        .upload-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.25rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border-radius: 0.75rem;
-          cursor: pointer;
-          font-weight: 500;
-          font-size: 1rem;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .upload-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .file-count {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #4a5568;
-          margin-top: 0.75rem;
-          margin-bottom: 0;
-        }
-
-        .file-count span:first-child {
-          background: #667eea;
-          color: white;
-          padding: 0.125rem 0.625rem;
-          border-radius: 9999px;
-          font-weight: 600;
-          font-size: 0.875rem;
-        }
-
-        .edit-modal-footer {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          padding: 1.25rem 1.5rem;
-          border-top: 1px solid #e2e8f0;
-          background: #f8fafc;
-        }
-
-        .cancel-button,
-        .save-button {
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.5rem;
-          font-size: 1rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .cancel-button {
-          background: white;
-          color: #4a5568;
-          border: 2px solid #e2e8f0;
-        }
-
-        .cancel-button:hover {
-          background: #f7fafc;
-          border-color: #cbd5e0;
-        }
-
-        .save-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .save-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .save-button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
-        }
-
-        .spinner {
-          display: inline-block;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
         /* Mobile responsiveness */
         @media (max-width: 768px) {
-          .compact-preview-large {
+          .compact-single-photo {
             height: 180px;
+          }
+          
+          .compact-two-photos,
+          .compact-many-photos {
+            height: 160px;
           }
           
           .photo-modal-layout {
@@ -2107,6 +2152,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             max-height: 300px;
           }
           
+          .edit-actions-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+          
           .lightbox-prev,
           .lightbox-next {
             font-size: 2rem;
@@ -2121,7 +2171,4 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             right: 10px;
           }
         }
-      `}</style>
-    </>
-  );
-}
+      `}
