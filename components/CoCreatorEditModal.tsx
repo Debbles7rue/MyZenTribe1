@@ -36,21 +36,55 @@ export default function CoCreatorEditModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing media on mount
+  // Load existing media and validate permissions on mount
   useEffect(() => {
-    async function loadPostMedia() {
-      const { data, error } = await supabase
+    async function loadPostData() {
+      console.log('🔍 Loading post data for user:', currentUserId);
+      
+      // First, get the post to verify co-creator status
+      const { data: post, error: postError } = await supabase
+        .from('posts')
+        .select('user_id, co_creators, visibility')
+        .eq('id', postId)
+        .single();
+      
+      if (postError) {
+        console.error('❌ Error loading post:', postError);
+        return;
+      }
+      
+      console.log('📋 Post data:', {
+        originalCreator: post.user_id,
+        coCreators: post.co_creators,
+        isUserCreator: post.user_id === currentUserId,
+        isUserCoCreator: post.co_creators?.includes(currentUserId),
+        passedIsCreator: isCreator
+      });
+      
+      // Load existing media
+      const { data: media, error: mediaError } = await supabase
         .from('post_media')
         .select('*')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
       
-      if (data) {
-        setExistingMedia(data);
+      if (mediaError) {
+        console.error('❌ Error loading media:', mediaError);
+      } else {
+        console.log('📸 Media loaded:', media?.length || 0, 'items');
+        media?.forEach((m, i) => {
+          console.log(`Media ${i}:`, {
+            id: m.id,
+            uploadedBy: m.uploaded_by,
+            canCurrentUserRemove: isCreator || m.uploaded_by === currentUserId,
+            type: m.type || m.media_type
+          });
+        });
+        setExistingMedia(media || []);
       }
     }
-    loadPostMedia();
-  }, [postId]);
+    loadPostData();
+  }, [postId, currentUserId, isCreator]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -121,6 +155,15 @@ export default function CoCreatorEditModal({
   }
 
   async function handleSave() {
+    console.log('💾 Starting save process...');
+    console.log('📊 Save data:', {
+      newMediaCount: newMedia.length,
+      mediaToRemoveCount: mediaToRemove.length,
+      hasComment: !!additionalComment.trim(),
+      isCreator,
+      currentUserId
+    });
+
     setLoading(true);
     setUploadingMedia(true);
 
@@ -129,17 +172,21 @@ export default function CoCreatorEditModal({
       const uploadedMedia = [];
       for (const media of newMedia) {
         if (media.file) {
+          console.log(`⬆️ Uploading ${media.type}:`, media.file.name);
           const { url, error } = await uploadMedia(media.file, media.type);
           if (!error && url) {
-            uploadedMedia.push({
+            const mediaRecord = {
               post_id: postId,
               storage_path: url, // Store storage path, not public URL
               type: media.type,
               uploaded_by: currentUserId,
               created_by: currentUserId,
               sort_order: existingMedia.length + uploadedMedia.length
-            });
+            };
+            console.log('✅ Upload successful, will insert:', mediaRecord);
+            uploadedMedia.push(mediaRecord);
           } else {
+            console.error('❌ Upload failed:', error);
             throw new Error(`Failed to upload ${media.type}: ${error}`);
           }
         }
@@ -147,52 +194,87 @@ export default function CoCreatorEditModal({
 
       // Insert new media records
       if (uploadedMedia.length > 0) {
+        console.log('📝 Inserting media records:', uploadedMedia.length);
         const { error: insertError } = await supabase
           .from('post_media')
           .insert(uploadedMedia);
         
         if (insertError) {
+          console.error('❌ Media insert error:', insertError);
           throw insertError;
         }
+        console.log('✅ Media records inserted successfully');
       }
 
-      // Remove media if user is creator or uploaded by them
+      // Remove media if user has permission
       if (mediaToRemove.length > 0) {
+        console.log('🗑️ Attempting to remove media:', mediaToRemove);
+        
         if (isCreator) {
+          console.log('👑 User is creator, can remove any media');
           // Creators can remove any media, but delete from storage too
           const mediaToDelete = existingMedia.filter(m => mediaToRemove.includes(m.id));
           const storagePaths = mediaToDelete.map(m => m.storage_path).filter(Boolean);
           
           if (storagePaths.length > 0) {
-            await supabase.storage.from('post-media').remove(storagePaths);
+            console.log('🗄️ Deleting from storage:', storagePaths);
+            const { error: storageError } = await supabase.storage.from('post-media').remove(storagePaths);
+            if (storageError) console.error('⚠️ Storage deletion warning:', storageError);
           }
           
-          await supabase
+          const { error: deleteError } = await supabase
             .from('post_media')
             .delete()
             .in('id', mediaToRemove);
+            
+          if (deleteError) {
+            console.error('❌ Media deletion error:', deleteError);
+            throw deleteError;
+          }
+          console.log('✅ Media deleted successfully');
         } else {
+          console.log('👥 User is co-creator, can only remove own media');
           // Co-creators can only remove media they uploaded
           const userMedia = existingMedia.filter(m => 
             mediaToRemove.includes(m.id) && m.uploaded_by === currentUserId
           );
-          const storagePaths = userMedia.map(m => m.storage_path).filter(Boolean);
           
-          if (storagePaths.length > 0) {
-            await supabase.storage.from('post-media').remove(storagePaths);
+          console.log('🔍 User media to remove:', userMedia.map(m => ({
+            id: m.id,
+            uploadedBy: m.uploaded_by,
+            isUsers: m.uploaded_by === currentUserId
+          })));
+          
+          if (userMedia.length > 0) {
+            const storagePaths = userMedia.map(m => m.storage_path).filter(Boolean);
+            
+            if (storagePaths.length > 0) {
+              console.log('🗄️ Deleting user media from storage:', storagePaths);
+              const { error: storageError } = await supabase.storage.from('post-media').remove(storagePaths);
+              if (storageError) console.error('⚠️ Storage deletion warning:', storageError);
+            }
+            
+            const { error: deleteError } = await supabase
+              .from('post_media')
+              .delete()
+              .in('id', mediaToRemove)
+              .eq('uploaded_by', currentUserId);
+              
+            if (deleteError) {
+              console.error('❌ User media deletion error:', deleteError);
+              throw deleteError;
+            }
+            console.log('✅ User media deleted successfully');
+          } else {
+            console.warn('⚠️ No user media found to delete');
           }
-          
-          await supabase
-            .from('post_media')
-            .delete()
-            .in('id', mediaToRemove)
-            .eq('uploaded_by', currentUserId);
         }
       }
 
       // Add collaboration comment if provided
       if (additionalComment.trim()) {
-        await supabase
+        console.log('💬 Adding collaboration comment');
+        const { error: commentError } = await supabase
           .from('post_collaborations')
           .insert({
             post_id: postId,
@@ -201,16 +283,31 @@ export default function CoCreatorEditModal({
             comment: additionalComment.trim(),
             media_count: uploadedMedia.length
           });
+          
+        if (commentError) {
+          console.error('❌ Comment insert error:', commentError);
+          // Don't throw - comments are not critical
+        } else {
+          console.log('✅ Comment added successfully');
+        }
       }
 
       // Update post's updated_at timestamp
-      await supabase
+      console.log('🕒 Updating post timestamp');
+      const { error: updateError } = await supabase
         .from('posts')
         .update({ 
           updated_at: new Date().toISOString(),
           last_edited_by: currentUserId
         })
         .eq('id', postId);
+        
+      if (updateError) {
+        console.error('❌ Post update error:', updateError);
+        // Don't throw - timestamp update is not critical
+      } else {
+        console.log('✅ Post timestamp updated');
+      }
 
       // Clean up preview URLs
       newMedia.forEach(m => {
@@ -219,11 +316,13 @@ export default function CoCreatorEditModal({
         }
       });
 
+      console.log('🎉 Save completed successfully!');
       onUpdate();
       onClose();
     } catch (error) {
-      console.error('Error updating post:', error);
-      alert('Failed to update post. Please try again.');
+      console.error('💥 Save failed with error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to update post: ${errorMessage}\n\nCheck console for details.`);
     } finally {
       setLoading(false);
       setUploadingMedia(false);
