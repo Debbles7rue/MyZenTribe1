@@ -1,4 +1,4 @@
-// components/PostCard.tsx
+// components/PostCard.tsx - Compact Preview with Click-to-Expand
 "use client";
 
 import { useState, useEffect } from "react";
@@ -27,10 +27,12 @@ interface Comment {
 // Photo Grid Component - FIXED for proper Facebook-style collage layout
 function PhotoGrid({ 
   media, 
-  onPhotoClick 
+  onPhotoClick,
+  isCompact = false
 }: { 
   media: Array<{url: string; type: 'image' | 'video'}>;
   onPhotoClick: (index: number) => void;
+  isCompact?: boolean;
 }) {
   if (!media || !Array.isArray(media) || media.length === 0) {
     return null;
@@ -44,6 +46,25 @@ function PhotoGrid({
   
   const images = validMedia.filter(m => m.type === 'image');
   const videos = validMedia.filter(m => m.type === 'video');
+  
+  // In compact mode, show only first image as small preview
+  if (isCompact) {
+    const firstImage = images[0];
+    if (!firstImage) return null;
+    
+    return (
+      <div className="photo-grid-container compact">
+        <div className="compact-preview" onClick={() => onPhotoClick(0)}>
+          <img src={firstImage.url} alt="" />
+          {images.length > 1 && (
+            <div className="media-count-overlay">
+              +{images.length - 1}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   
   // Single image layout
   if (images.length === 1 && videos.length === 0) {
@@ -392,6 +413,7 @@ function EditPostModal({
 }
 
 export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
   const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
   const [showEditMenu, setShowEditMenu] = useState(false);
@@ -497,10 +519,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   
   // Load comments when comment count > 0 and we haven't loaded them yet
   useEffect(() => {
-    if (post.comment_count > 0 && comments.length === 0 && !loadingComments) {
+    if (isExpanded && post.comment_count > 0 && comments.length === 0 && !loadingComments) {
       loadComments();
     }
-  }, [post.comment_count]);
+  }, [isExpanded, post.comment_count]);
   
   const handleLike = async () => {
     if (isLiking || !currentUserId) return;
@@ -575,10 +597,19 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   };
   
   const handlePhotoClick = (index: number) => {
-    if (processedMedia && processedMedia.length > 0) {
+    if (isExpanded && processedMedia && processedMedia.length > 0) {
       setLightboxStartIndex(index);
       setShowLightbox(true);
     }
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't expand if clicking on buttons, links, or already expanded
+    if ((e.target as HTMLElement).closest('button, a, .menu-btn, .action-btn')) {
+      return;
+    }
+    
+    setIsExpanded(!isExpanded);
   };
   
   const canEdit = currentUserId === post.user_id || isCoCreator;
@@ -597,10 +628,178 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   
   // Show first 3 comments by default, with option to see more
   const displayedComments = showAllComments ? comments : comments.slice(0, 3);
+
+  // Compact preview mode
+  if (!isExpanded) {
+    return (
+      <div className="post-card compact" onClick={handleCardClick}>
+        <div className="compact-layout">
+          <div className="compact-content">
+            <div className="compact-header">
+              <img 
+                src={post.author?.avatar_url || '/default-avatar.png'} 
+                alt=""
+                className="compact-avatar"
+              />
+              <div className="compact-info">
+                <div className="compact-name">{getDisplayName()}</div>
+                <div className="compact-meta">
+                  <span>{new Date(post.created_at).toLocaleDateString()}</span>
+                  {post.privacy && (
+                    <span className="privacy-icon">
+                      {post.privacy === 'public' ? '🌍' : '🔒'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {post.body && (
+              <div className="compact-text">
+                {post.body.length > 100 ? `${post.body.substring(0, 100)}...` : post.body}
+              </div>
+            )}
+            
+            <div className="compact-stats">
+              {localLikeCount > 0 && <span>❤️ {localLikeCount}</span>}
+              {post.comment_count > 0 && <span>💬 {post.comment_count}</span>}
+              {processedMedia.length > 0 && <span>📷 {processedMedia.length}</span>}
+            </div>
+          </div>
+          
+          {processedMedia.length > 0 && (
+            <div className="compact-media">
+              <PhotoGrid 
+                media={processedMedia} 
+                onPhotoClick={() => {}} // Don't open lightbox in compact mode
+                isCompact={true}
+              />
+            </div>
+          )}
+        </div>
+        
+        <style jsx>{`
+          .post-card.compact {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+          }
+          
+          .post-card.compact:hover {
+            border-color: #cbd5e0;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+          }
+          
+          .compact-layout {
+            display: flex;
+            padding: 1rem;
+            gap: 1rem;
+          }
+          
+          .compact-content {
+            flex: 1;
+          }
+          
+          .compact-header {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+          
+          .compact-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+          }
+          
+          .compact-info {
+            flex: 1;
+          }
+          
+          .compact-name {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #1a202c;
+            line-height: 1.2;
+          }
+          
+          .compact-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: #718096;
+            margin-top: 0.125rem;
+          }
+          
+          .privacy-icon {
+            font-size: 0.75rem;
+          }
+          
+          .compact-text {
+            font-size: 0.875rem;
+            line-height: 1.4;
+            color: #374151;
+            margin-bottom: 0.75rem;
+          }
+          
+          .compact-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+            color: #718096;
+          }
+          
+          .compact-media {
+            width: 80px;
+            flex-shrink: 0;
+          }
+          
+          .photo-grid-container.compact {
+            margin: 0;
+          }
+          
+          .compact-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+          }
+          
+          .compact-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+          
+          .media-count-overlay {
+            position: absolute;
+            bottom: 0.25rem;
+            right: 0.25rem;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            font-size: 0.6875rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+            font-weight: 600;
+          }
+        `}</style>
+      </div>
+    );
+  }
   
+  // Expanded mode - full post display
   return (
     <>
-      <div className="post-card">
+      <div className="post-card expanded">
         <div className="post-header">
           <div className="author-info">
             <img 
@@ -623,42 +822,52 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </div>
           </div>
           
-          {canEdit && (
-            <div className="post-actions">
-              <button 
-                className="menu-btn"
-                onClick={() => setShowEditMenu(!showEditMenu)}
-                title="Post options"
-              >
-                ⋯
-              </button>
-              {showEditMenu && (
-                <div className="menu-dropdown">
-                  {isCoCreator && !canDelete && (
-                    <>
-                      <button className="menu-item" onClick={() => {
-                        setShowEditModal(true);
-                        setShowEditMenu(false);
-                      }}>📷 Add Photos</button>
-                      <button className="menu-item">🏷️ Remove Tag</button>
-                    </>
-                  )}
-                  {canDelete && (
-                    <>
-                      <button className="menu-item" onClick={() => {
-                        setShowEditModal(true);
-                        setShowEditMenu(false);
-                      }}>✏️ Edit Post</button>
-                      <button className="menu-item danger" onClick={() => {
-                        setShowDeleteConfirm(true);
-                        setShowEditMenu(false);
-                      }}>🗑️ Delete Post</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="header-actions">
+            <button 
+              className="collapse-btn"
+              onClick={() => setIsExpanded(false)}
+              title="Collapse post"
+            >
+              ▲
+            </button>
+            
+            {canEdit && (
+              <div className="post-actions">
+                <button 
+                  className="menu-btn"
+                  onClick={() => setShowEditMenu(!showEditMenu)}
+                  title="Post options"
+                >
+                  ⋯
+                </button>
+                {showEditMenu && (
+                  <div className="menu-dropdown">
+                    {isCoCreator && !canDelete && (
+                      <>
+                        <button className="menu-item" onClick={() => {
+                          setShowEditModal(true);
+                          setShowEditMenu(false);
+                        }}>📷 Add Photos</button>
+                        <button className="menu-item">🏷️ Remove Tag</button>
+                      </>
+                    )}
+                    {canDelete && (
+                      <>
+                        <button className="menu-item" onClick={() => {
+                          setShowEditModal(true);
+                          setShowEditMenu(false);
+                        }}>✏️ Edit Post</button>
+                        <button className="menu-item danger" onClick={() => {
+                          setShowDeleteConfirm(true);
+                          setShowEditMenu(false);
+                        }}>🗑️ Delete Post</button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         
         <div className="post-content">
@@ -668,6 +877,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             <PhotoGrid 
               media={processedMedia} 
               onPhotoClick={handlePhotoClick}
+              isCompact={false}
             />
           )}
         </div>
@@ -766,7 +976,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         </div>
       </div>
       
-      {/* Delete Confirmation Modal */}
+      {/* All modals and popups remain the same */}
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
           <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
@@ -792,7 +1002,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         </div>
       )}
 
-      {/* Edit Post Modal */}
       {showEditModal && (
         <EditPostModal
           post={post}
@@ -814,7 +1023,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       )}
       
       <style jsx>{`
-        .post-card {
+        /* Compact mode styling is above in the compact return */
+        
+        /* Expanded mode styling */
+        .post-card.expanded {
           background: white;
           border: 2px solid #f1f5f9;
           border-radius: 1rem;
@@ -826,10 +1038,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           transition: all 0.2s ease-in-out;
         }
         
-        .post-card:hover {
+        .post-card.expanded:hover {
           border-color: #e2e8f0;
           box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-          transform: translateY(-2px);
         }
         
         .post-header {
@@ -864,6 +1075,33 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: #718096;
         }
         
+        .header-actions {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+        
+        .collapse-btn {
+          background: rgba(0,0,0,0.05);
+          border: none;
+          font-size: 1rem;
+          cursor: pointer;
+          padding: 0.5rem;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #718096;
+          transition: all 0.2s;
+        }
+        
+        .collapse-btn:hover {
+          background: rgba(0,0,0,0.1);
+          color: #4a5568;
+        }
+        
         .post-content {
           padding: 0 1rem;
         }
@@ -873,7 +1111,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           line-height: 1.5;
         }
         
-        /* FIXED: Facebook-style photo grid layouts */
+        /* Facebook-style photo grid layouts */
         .photo-grid-container {
           margin: 0.5rem 0;
           border-radius: 0.5rem;
@@ -1027,7 +1265,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: not-allowed;
         }
         
-        /* NEW: Comments styling */
+        /* Comments styling */
         .comments-section {
           margin-top: 0.75rem;
           padding-top: 0.75rem;
@@ -1182,7 +1420,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           background: #fef2f2;
         }
         
-        /* Lightbox styling */
+        /* All lightbox, modal, and edit modal styles remain exactly the same as original */
         .lightbox-overlay {
           position: fixed;
           inset: 0;
@@ -1578,6 +1816,22 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
 
         /* Mobile responsiveness */
         @media (max-width: 768px) {
+          .compact-layout {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          
+          .compact-media {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+          }
+          
+          .compact-preview {
+            width: 120px;
+            height: 120px;
+          }
+          
           .single-photo {
             height: 250px;
           }
