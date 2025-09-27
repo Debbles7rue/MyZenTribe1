@@ -26,8 +26,8 @@ interface CandleDisplayProps {
 }
 
 export default function CandleDisplay({ candle }: CandleDisplayProps) {
-  const isEternal = candle.candle_type === "eternal";
-  const color = candle.color || "white";
+  const isEternal = candle?.candle_type === "eternal";
+  const color = candle?.color || "white";
 
   const colorMap: Record<string, { main: string; wax: string; shadow: string; glow: string }> = {
     white: { 
@@ -196,13 +196,14 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
         /* Ambient glow effect */
         .ambient-glow {
           position: absolute;
-          top: -20px;
-          left: -40px;
-          right: -40px;
-          bottom: -20px;
+          top: -10px;
+          left: -15px;
+          right: -15px;
+          bottom: -10px;
           border-radius: 50%;
           animation: gentleGlow 4s ease-in-out infinite;
           z-index: 0;
+          opacity: 0.4;
         }
 
         @keyframes gentleGlow {
