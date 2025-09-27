@@ -1,4 +1,4 @@
-// components/PostCard.tsx - Compact Cards with Individual Photo Interactions
+// components/PostCard.tsx - Compact Cards with Individual Photo Interactions - SYNTAX FIXED
 "use client";
 
 import { useState, useEffect } from "react";
@@ -757,6 +757,200 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             {processedMedia.length > 0 && <span className="stat-item">📷 {processedMedia.length}</span>}
           </div>
         </div>
+        
+        <style jsx>{`
+          .post-card.compact {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          }
+          
+          .post-card.compact:hover {
+            border-color: #cbd5e0;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+          }
+          
+          .compact-header {
+            padding: 1rem 1rem 0.5rem;
+          }
+          
+          .compact-author {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+          }
+          
+          .compact-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+          }
+          
+          .compact-author-info {
+            flex: 1;
+          }
+          
+          .compact-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #1a202c;
+            line-height: 1.3;
+          }
+          
+          .compact-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: #718096;
+            margin-top: 0.25rem;
+          }
+          
+          .privacy-icon {
+            font-size: 0.875rem;
+          }
+          
+          .compact-text {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            color: #374151;
+          }
+          
+          .compact-footer {
+            padding: 0.5rem 1rem 1rem;
+          }
+          
+          .compact-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.875rem;
+            color: #718096;
+          }
+          
+          .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+          }
+          
+          .photo-grid-container.compact {
+            margin: 0.5rem 1rem 1rem;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white;
+          }
+          
+          .compact-single-photo {
+            width: 100%;
+            height: 250px;
+            cursor: pointer;
+            overflow: hidden;
+          }
+          
+          .compact-single-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.2s ease;
+          }
+          
+          .compact-single-photo:hover img {
+            transform: scale(1.02);
+          }
+          
+          .compact-two-photos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: 200px;
+          }
+          
+          .compact-three-photos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: 200px;
+          }
+          
+          .compact-side-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+          }
+          
+          .compact-many-photos {
+            height: 200px;
+          }
+          
+          .compact-top-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: calc(50% - 1.5px);
+            margin-bottom: 3px;
+          }
+          
+          .compact-bottom-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            height: calc(50% - 1.5px);
+          }
+          
+          .compact-photo-item {
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            background: #f7fafc;
+          }
+          
+          .compact-photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.2s ease;
+          }
+          
+          .compact-photo-item:hover img {
+            transform: scale(1.05);
+          }
+          
+          .compact-photo-item.main {
+            grid-row: 1 / 3;
+          }
+          
+          .more-photos-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 600;
+          }
+          
+          @media (max-width: 768px) {
+            .compact-single-photo {
+              height: 180px;
+            }
+            
+            .compact-two-photos,
+            .compact-many-photos {
+              height: 160px;
+            }
+          }
+        `}</style>
       </div>
     );
   }
@@ -939,6 +1133,368 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
             </div>
           )}
         </div>
+        
+        <style jsx>{`
+          .post-card.expanded {
+            background: white;
+            border: 2px solid #f1f5f9;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            margin-bottom: 2rem;
+            position: relative;
+            max-width: 100%;
+            overflow: hidden;
+            transition: all 0.2s ease-in-out;
+          }
+          
+          .photo-grid-expanded {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin: 1rem 0;
+          }
+          
+          .individual-photo-container {
+            border-radius: 0.75rem;
+            overflow: hidden;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+          }
+          
+          .photo-wrapper {
+            position: relative;
+          }
+          
+          .individual-photo {
+            width: 100%;
+            max-height: 400px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+          }
+          
+          .individual-photo:hover {
+            transform: scale(1.01);
+          }
+          
+          .photo-interaction-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 2rem 1rem 1rem;
+            display: flex;
+            gap: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+          }
+          
+          .individual-photo-container:hover .photo-interaction-bar {
+            opacity: 1;
+          }
+          
+          .photo-interact-btn {
+            background: rgba(255,255,255,0.95);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 1.5rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: #374151;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+          }
+          
+          .photo-interact-btn:hover {
+            background: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          }
+          
+          .like-btn:hover {
+            background: #fef2f2;
+            color: #dc2626;
+          }
+          
+          .comment-btn:hover {
+            background: #eff6ff;
+            color: #2563eb;
+          }
+          
+          .caption-btn:hover {
+            background: #f0fdf4;
+            color: #16a34a;
+          }
+          
+          .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 1rem;
+            position: relative;
+          }
+          
+          .author-info {
+            display: flex;
+            gap: 0.75rem;
+          }
+          
+          .author-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+          }
+          
+          .author-name {
+            font-weight: 600;
+            color: #1a202c;
+          }
+          
+          .post-meta {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: #718096;
+          }
+          
+          .header-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+          }
+          
+          .collapse-btn {
+            background: rgba(0,0,0,0.05);
+            border: none;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #718096;
+            transition: all 0.2s;
+          }
+          
+          .collapse-btn:hover {
+            background: rgba(0,0,0,0.1);
+            color: #4a5568;
+          }
+          
+          .post-content {
+            padding: 0 1rem;
+          }
+          
+          .post-text {
+            margin-bottom: 0.75rem;
+            line-height: 1.5;
+          }
+          
+          .post-footer {
+            padding: 0.75rem 1rem;
+            border-top: 1px solid #e2e8f0;
+          }
+          
+          .engagement-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: #718096;
+            margin-bottom: 0.5rem;
+          }
+          
+          .action-buttons {
+            display: flex;
+            gap: 1rem;
+          }
+          
+          .action-btn {
+            flex: 1;
+            padding: 0.5rem;
+            background: none;
+            border: none;
+            color: #4a5568;
+            cursor: pointer;
+            border-radius: 0.375rem;
+            transition: background 0.2s;
+          }
+          
+          .action-btn:hover {
+            background: #f7fafc;
+          }
+          
+          .action-btn.liked {
+            color: #e53e3e;
+          }
+          
+          .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          
+          .comments-section {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #f1f5f9;
+          }
+          
+          .comment {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+          }
+          
+          .comment-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+          }
+          
+          .comment-content {
+            flex: 1;
+          }
+          
+          .comment-author {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #1a202c;
+          }
+          
+          .comment-text {
+            font-size: 0.875rem;
+            color: #374151;
+            margin: 0.25rem 0;
+          }
+          
+          .comment-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+          }
+          
+          .show-more-comments {
+            background: none;
+            border: none;
+            color: #4a5568;
+            font-size: 0.875rem;
+            cursor: pointer;
+            padding: 0.25rem 0;
+            text-decoration: underline;
+          }
+          
+          .comment-input-section {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.75rem 0;
+            margin-top: 0.75rem;
+            border-top: 1px solid #f1f5f9;
+          }
+          
+          .comment-input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s;
+          }
+          
+          .comment-input:focus {
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+          }
+          
+          .comment-submit {
+            padding: 0.5rem 1rem;
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+          }
+          
+          .comment-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          
+          .post-actions {
+            position: relative;
+          }
+          
+          .menu-btn {
+            background: rgba(0,0,0,0.05);
+            border: none;
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #718096;
+            transition: all 0.2s;
+          }
+          
+          .menu-btn:hover {
+            background: rgba(0,0,0,0.1);
+            color: #4a5568;
+          }
+          
+          .menu-dropdown {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            min-width: 180px;
+            z-index: 100;
+            overflow: hidden;
+          }
+          
+          .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: none;
+            border: none;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: #374151;
+            transition: background 0.2s;
+          }
+          
+          .menu-item:hover {
+            background: #f8fafc;
+          }
+          
+          .menu-item.danger {
+            color: #dc2626;
+          }
+          
+          .menu-item.danger:hover {
+            background: #fef2f2;
+          }
+        `}</style>
       </div>
       
       {/* Individual Photo Modal */}
@@ -972,6 +1528,81 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               </button>
             </div>
           </div>
+          
+          <style jsx>{`
+            .modal-overlay {
+              position: fixed;
+              inset: 0;
+              background: rgba(0,0,0,0.5);
+              z-index: 9998;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .modal-content {
+              background: white;
+              border-radius: 0.75rem;
+              padding: 1.5rem;
+              max-width: 500px;
+              width: 90%;
+              max-height: 80vh;
+              overflow-y: auto;
+            }
+
+            .confirm-modal {
+              max-width: 400px;
+            }
+
+            .modal-content h2 {
+              font-size: 1.25rem;
+              font-weight: 600;
+              margin-bottom: 0.75rem;
+            }
+
+            .modal-content p {
+              color: #4a5568;
+              margin-bottom: 1.5rem;
+            }
+
+            .modal-buttons {
+              display: flex;
+              gap: 0.75rem;
+              justify-content: flex-end;
+            }
+
+            .modal-cancel, .modal-delete {
+              padding: 0.5rem 1.25rem;
+              border-radius: 0.375rem;
+              border: none;
+              font-weight: 500;
+              cursor: pointer;
+            }
+
+            .modal-cancel {
+              background: #e2e8f0;
+              color: #4a5568;
+            }
+
+            .modal-delete {
+              background: #e53e3e;
+              color: white;
+            }
+
+            .modal-cancel:hover {
+              background: #cbd5e0;
+            }
+
+            .modal-delete:hover {
+              background: #c53030;
+            }
+
+            .modal-cancel:disabled,
+            .modal-delete:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
+            }
+          `}</style>
         </div>
       )}
 
@@ -998,287 +1629,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       )}
       
       <style jsx>{`
-        /* COMPACT CARD STYLING - Facebook Style */
-        .post-card.compact {
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 1rem;
-          margin-bottom: 1.5rem;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        
-        .post-card.compact:hover {
-          border-color: #cbd5e0;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-          transform: translateY(-2px);
-        }
-        
-        .compact-header {
-          padding: 1rem 1rem 0.5rem;
-        }
-        
-        .compact-author {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-        }
-        
-        .compact-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-        
-        .compact-author-info {
-          flex: 1;
-        }
-        
-        .compact-name {
-          font-weight: 600;
-          font-size: 1rem;
-          color: #1a202c;
-          line-height: 1.3;
-        }
-        
-        .compact-meta {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #718096;
-          margin-top: 0.25rem;
-        }
-        
-        .privacy-icon {
-          font-size: 0.875rem;
-        }
-        
-        .compact-text {
-          padding: 0.5rem 1rem;
-          font-size: 0.875rem;
-          line-height: 1.4;
-          color: #374151;
-        }
-        
-        .compact-footer {
-          padding: 0.5rem 1rem 1rem;
-        }
-        
-        .compact-stats {
-          display: flex;
-          gap: 1.5rem;
-          font-size: 0.875rem;
-          color: #718096;
-        }
-        
-        .stat-item {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-        }
-        
-        /* COMPACT PHOTO GRIDS - Facebook Style with Clean Separation */
-        .photo-grid-container.compact {
-          margin: 0.5rem 1rem 1rem;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          background: white;
-        }
-        
-        .compact-single-photo {
-          width: 100%;
-          height: 250px;
-          cursor: pointer;
-          overflow: hidden;
-        }
-        
-        .compact-single-photo img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.2s ease;
-        }
-        
-        .compact-single-photo:hover img {
-          transform: scale(1.02);
-        }
-        
-        .compact-two-photos {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 3px;
-          height: 200px;
-        }
-        
-        .compact-three-photos {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 3px;
-          height: 200px;
-        }
-        
-        .compact-side-stack {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-        
-        .compact-many-photos {
-          height: 200px;
-        }
-        
-        .compact-top-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 3px;
-          height: calc(50% - 1.5px);
-          margin-bottom: 3px;
-        }
-        
-        .compact-bottom-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 3px;
-          height: calc(50% - 1.5px);
-        }
-        
-        .compact-photo-item {
-          position: relative;
-          cursor: pointer;
-          overflow: hidden;
-          background: #f7fafc;
-        }
-        
-        .compact-photo-item img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.2s ease;
-        }
-        
-        .compact-photo-item:hover img {
-          transform: scale(1.05);
-        }
-        
-        .compact-photo-item.main {
-          grid-row: 1 / 3;
-        }
-        
-        .more-photos-overlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(0,0,0,0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 1.5rem;
-          font-weight: 600;
-        }
-        
-        /* EXPANDED MODE STYLING */
-        .post-card.expanded {
-          background: white;
-          border: 2px solid #f1f5f9;
-          border-radius: 1rem;
-          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-          margin-bottom: 2rem;
-          position: relative;
-          max-width: 100%;
-          overflow: hidden;
-          transition: all 0.2s ease-in-out;
-        }
-        
-        .photo-grid-expanded {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-          margin: 1rem 0;
-        }
-        
-        .individual-photo-container {
-          border-radius: 0.75rem;
-          overflow: hidden;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-        }
-        
-        .photo-wrapper {
-          position: relative;
-        }
-        
-        .individual-photo {
-          width: 100%;
-          max-height: 400px;
-          object-fit: cover;
-          cursor: pointer;
-          transition: transform 0.2s ease;
-        }
-        
-        .individual-photo:hover {
-          transform: scale(1.01);
-        }
-        
-        .photo-interaction-bar {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: linear-gradient(transparent, rgba(0,0,0,0.8));
-          padding: 2rem 1rem 1rem;
-          display: flex;
-          gap: 0.75rem;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-        
-        .individual-photo-container:hover .photo-interaction-bar {
-          opacity: 1;
-        }
-        
-        .photo-interact-btn {
-          background: rgba(255,255,255,0.95);
-          border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 1.5rem;
-          font-size: 0.875rem;
-          cursor: pointer;
-          font-weight: 500;
-          color: #374151;
-          backdrop-filter: blur(4px);
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          gap: 0.375rem;
-        }
-        
-        .photo-interact-btn:hover {
-          background: white;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        .like-btn:hover {
-          background: #fef2f2;
-          color: #dc2626;
-        }
-        
-        .comment-btn:hover {
-          background: #eff6ff;
-          color: #2563eb;
-        }
-        
-        .caption-btn:hover {
-          background: #f0fdf4;
-          color: #16a34a;
-        }
-        
-        /* INDIVIDUAL PHOTO MODAL */
         .photo-modal-overlay {
           position: fixed;
           inset: 0;
@@ -1426,14 +1776,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           font-style: italic;
         }
         
-        .comment-input-section {
-          display: flex;
-          gap: 0.5rem;
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e2e8f0;
-        }
-        
         .photo-comment-input {
           flex: 1;
           padding: 0.75rem;
@@ -1464,7 +1806,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           cursor: not-allowed;
         }
         
-        /* PROFESSIONAL EDIT MODAL */
         .edit-modal-overlay {
           position: fixed;
           top: 0;
@@ -1735,256 +2076,6 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           box-shadow: none;
         }
         
-        /* REST OF EXPANDED MODE STYLING - KEEPING ORIGINAL LAYOUT */
-        .post-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          padding: 1rem;
-          position: relative;
-        }
-        
-        .author-info {
-          display: flex;
-          gap: 0.75rem;
-        }
-        
-        .author-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-        
-        .author-name {
-          font-weight: 600;
-          color: #1a202c;
-        }
-        
-        .post-meta {
-          display: flex;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #718096;
-        }
-        
-        .header-actions {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-        }
-        
-        .collapse-btn {
-          background: rgba(0,0,0,0.05);
-          border: none;
-          font-size: 1rem;
-          cursor: pointer;
-          padding: 0.5rem;
-          border-radius: 50%;
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #718096;
-          transition: all 0.2s;
-        }
-        
-        .collapse-btn:hover {
-          background: rgba(0,0,0,0.1);
-          color: #4a5568;
-        }
-        
-        .post-content {
-          padding: 0 1rem;
-        }
-        
-        .post-text {
-          margin-bottom: 0.75rem;
-          line-height: 1.5;
-        }
-        
-        .post-footer {
-          padding: 0.75rem 1rem;
-          border-top: 1px solid #e2e8f0;
-        }
-        
-        .engagement-stats {
-          display: flex;
-          gap: 1rem;
-          font-size: 0.875rem;
-          color: #718096;
-          margin-bottom: 0.5rem;
-        }
-        
-        .action-buttons {
-          display: flex;
-          gap: 1rem;
-        }
-        
-        .action-btn {
-          flex: 1;
-          padding: 0.5rem;
-          background: none;
-          border: none;
-          color: #4a5568;
-          cursor: pointer;
-          border-radius: 0.375rem;
-          transition: background 0.2s;
-        }
-        
-        .action-btn:hover {
-          background: #f7fafc;
-        }
-        
-        .action-btn.liked {
-          color: #e53e3e;
-        }
-        
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .comments-section {
-          margin-top: 0.75rem;
-          padding-top: 0.75rem;
-          border-top: 1px solid #f1f5f9;
-        }
-        
-        .comment {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.75rem;
-        }
-        
-        .comment-content {
-          flex: 1;
-        }
-        
-        .comment-author {
-          font-weight: 600;
-          font-size: 0.875rem;
-          color: #1a202c;
-        }
-        
-        .comment-text {
-          font-size: 0.875rem;
-          color: #374151;
-          margin: 0.25rem 0;
-        }
-        
-        .comment-time {
-          font-size: 0.75rem;
-          color: #9ca3af;
-        }
-        
-        .show-more-comments {
-          background: none;
-          border: none;
-          color: #4a5568;
-          font-size: 0.875rem;
-          cursor: pointer;
-          padding: 0.25rem 0;
-          text-decoration: underline;
-        }
-        
-        .comment-input {
-          flex: 1;
-          padding: 0.5rem;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-        
-        .comment-input:focus {
-          border-color: #4299e1;
-          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-        
-        .comment-submit {
-          padding: 0.5rem 1rem;
-          background: #4299e1;
-          color: white;
-          border: none;
-          border-radius: 0.375rem;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        
-        .comment-submit:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .post-actions {
-          position: relative;
-        }
-        
-        .menu-btn {
-          background: rgba(0,0,0,0.05);
-          border: none;
-          font-size: 1.25rem;
-          cursor: pointer;
-          padding: 0.5rem;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #718096;
-          transition: all 0.2s;
-        }
-        
-        .menu-btn:hover {
-          background: rgba(0,0,0,0.1);
-          color: #4a5568;
-        }
-        
-        .menu-dropdown {
-          position: absolute;
-          right: 0;
-          top: calc(100% + 8px);
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
-          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-          min-width: 180px;
-          z-index: 100;
-          overflow: hidden;
-        }
-        
-        .menu-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          width: 100%;
-          padding: 0.75rem 1rem;
-          background: none;
-          border: none;
-          text-align: left;
-          cursor: pointer;
-          font-size: 0.875rem;
-          color: #374151;
-          transition: background 0.2s;
-        }
-        
-        .menu-item:hover {
-          background: #f8fafc;
-        }
-        
-        .menu-item.danger {
-          color: #dc2626;
-        }
-        
-        .menu-item.danger:hover {
-          background: #fef2f2;
-        }
-        
-        /* Lightbox styling */
         .lightbox-overlay {
           position: fixed;
           inset: 0;
@@ -2049,91 +2140,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
           color: white;
         }
         
-        /* Modal styling */
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.5);
-          z-index: 9998;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .modal-content {
-          background: white;
-          border-radius: 0.75rem;
-          padding: 1.5rem;
-          max-width: 500px;
-          width: 90%;
-          max-height: 80vh;
-          overflow-y: auto;
-        }
-
-        .confirm-modal {
-          max-width: 400px;
-        }
-
-        .modal-content h2 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin-bottom: 0.75rem;
-        }
-
-        .modal-content p {
-          color: #4a5568;
-          margin-bottom: 1.5rem;
-        }
-
-        .modal-buttons {
-          display: flex;
-          gap: 0.75rem;
-          justify-content: flex-end;
-        }
-
-        .modal-cancel, .modal-delete {
-          padding: 0.5rem 1.25rem;
-          border-radius: 0.375rem;
-          border: none;
-          font-weight: 500;
-          cursor: pointer;
-        }
-
-        .modal-cancel {
-          background: #e2e8f0;
-          color: #4a5568;
-        }
-
-        .modal-delete {
-          background: #e53e3e;
-          color: white;
-        }
-
-        .modal-cancel:hover {
-          background: #cbd5e0;
-        }
-
-        .modal-delete:hover {
-          background: #c53030;
-        }
-
-        .modal-cancel:disabled,
-        .modal-delete:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        /* Mobile responsiveness */
         @media (max-width: 768px) {
-          .compact-single-photo {
-            height: 180px;
-          }
-          
-          .compact-two-photos,
-          .compact-many-photos {
-            height: 160px;
-          }
-          
           .photo-modal-layout {
             grid-template-columns: 1fr;
             grid-template-rows: 1fr auto;
