@@ -417,9 +417,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // Mobile-optimized full-screen modal
   if (isMobile) {
     return (
-      <div className={`fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col transform transition-transform duration-300 ${
-        isOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}>
+      <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
         {/* Mobile Header */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
           <div className="flex items-center justify-between">
@@ -835,7 +833,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         )}
 
-        {/* New Carpool Confirmation Modal */}
+        {/* Modals */}
         {showNewCarpoolConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 px-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
@@ -846,26 +844,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowNewCarpoolConfirm(false)}
-                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={startNewCarpool}
-                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
-                >
-                  Start New
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default EventCarpoolModal;-gray-700 dark:text-gray-300 rounded-lg font-medium active:scale-98"
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium active:scale-98"
                 >
                   Cancel
                 </button>
@@ -880,7 +859,6 @@ export default EventCarpoolModal;-gray-700 dark:text-gray-300 rounded-lg font-me
           </div>
         )}
 
-        {/* Poll Modal */}
         {showPoll && (
           <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-60">
             <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg safe-area-bottom animate-slide-up">
@@ -911,7 +889,6 @@ export default EventCarpoolModal;-gray-700 dark:text-gray-300 rounded-lg font-me
           </div>
         )}
 
-        {/* Info Modal */}
         {showInfo && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 px-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
@@ -947,7 +924,7 @@ export default EventCarpoolModal;-gray-700 dark:text-gray-300 rounded-lg font-me
     );
   }
 
-  // COMPLETE DESKTOP VERSION
+  // Desktop version
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
@@ -1323,4 +1300,23 @@ export default EventCarpoolModal;-gray-700 dark:text-gray-300 rounded-lg font-me
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowNewCarpoolConfirm(false)}
-                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={startNewCarpool}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Start New
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EventCarpoolModal;
