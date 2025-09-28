@@ -747,10 +747,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     );
   }
 
-  // Desktop version (unchanged from before, but with dark mode support)
+  // COMPLETE DESKTOP VERSION
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         {/* Desktop Header */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6">
           <div className="flex items-center justify-between">
@@ -773,12 +773,322 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         </div>
 
-        {/* Rest of desktop content similar to before but with dark mode classes */}
-        <div className="p-6">
-          <p className="text-center text-gray-500 dark:text-gray-400">
-            Full desktop interface here...
-          </p>
+        {/* Desktop Content */}
+        <div className="flex h-[70vh]">
+          {/* Left Sidebar - Stats & Actions */}
+          <div className="w-80 bg-gray-50 dark:bg-gray-800 p-6 border-r dark:border-gray-700">
+            {/* Stats */}
+            <div className="space-y-4 mb-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Trip Overview</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <Users className="mx-auto text-blue-500 mb-1" size={24} />
+                  <p className="text-xl font-bold">{carpoolStats.needingRides}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Need Rides</p>
+                </div>
+                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <Car className="mx-auto text-green-500 mb-1" size={24} />
+                  <p className="text-xl font-bold">{carpoolStats.driversAvailable}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Drivers</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="space-y-3 mb-6">
+              <h4 className="font-medium text-gray-900 dark:text-white">Quick Actions</h4>
+              <button
+                onClick={() => handleQuickAction('driver')}
+                className="w-full p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-left"
+              >
+                🚗 I can drive ({carDetails.seats} seats)
+              </button>
+              <button
+                onClick={() => handleQuickAction('rider')}
+                className="w-full p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-left"
+              >
+                🙋 I need a ride
+              </button>
+              <button
+                onClick={() => handleQuickAction('location')}
+                className="w-full p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-left"
+              >
+                📍 Share location
+              </button>
+            </div>
+
+            {/* AI Suggestions */}
+            <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-xl p-4">
+              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <Zap className="text-yellow-500" size={16} />
+                Smart Suggestions
+              </h4>
+              <div className="space-y-3">
+                <div className="flex items-start gap-2">
+                  <MapPin className="text-blue-500 mt-0.5" size={14} />
+                  <div>
+                    <p className="text-sm font-medium">Central Park Meetup</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Best pickup spot</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Clock className="text-orange-500 mt-0.5" size={14} />
+                  <div>
+                    <p className="text-sm font-medium">Leave at 6:15 PM</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Avoid rush hour</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <DollarSign className="text-purple-500 mt-0.5" size={14} />
+                  <div>
+                    <p className="text-sm font-medium">$3.75 per person</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Gas + parking split</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Chat Area */}
+          <div className="flex-1 flex flex-col">
+            {/* Status Banner */}
+            {driverStatus !== 'none' && (
+              <div className={`px-6 py-3 flex items-center justify-between ${
+                driverStatus === 'driver' 
+                  ? 'bg-green-100 dark:bg-green-900/30' 
+                  : 'bg-blue-100 dark:bg-blue-900/30'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {driverStatus === 'driver' ? (
+                    <>
+                      <Car className="text-green-600 dark:text-green-400" size={20} />
+                      <span className="font-medium text-green-800 dark:text-green-200">
+                        You're driving • {carDetails.seats} seats available
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="text-blue-600 dark:text-blue-400" size={20} />
+                      <span className="font-medium text-blue-800 dark:text-blue-200">
+                        Looking for a ride
+                      </span>
+                    </>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setDriverStatus('none')}
+                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            )}
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-gray-950">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex items-start gap-3 ${
+                    msg.userId === userId ? 'flex-row-reverse' : ''
+                  }`}
+                >
+                  <span className="text-3xl flex-shrink-0">{msg.avatar}</span>
+                  <div className={`max-w-[60%] ${msg.userId === userId ? 'items-end' : ''}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {msg.user}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {msg.time}
+                      </span>
+                    </div>
+                    <div className={`rounded-2xl px-4 py-3 ${
+                      msg.userId === userId
+                        ? 'bg-blue-500 text-white'
+                        : msg.isAI
+                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                    }`}>
+                      <p>{msg.message}</p>
+                    </div>
+                    {msg.reactions && msg.reactions.length > 0 && (
+                      <div className="flex gap-1 mt-1 px-2">
+                        {msg.reactions.map((reaction, idx) => (
+                          <span key={idx} className="text-sm bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded-full">
+                            {reaction}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Active Polls */}
+            {polls.length > 0 && (
+              <div className="px-6 py-4 bg-yellow-50 dark:bg-yellow-900/20 border-t dark:border-gray-700">
+                {polls.map(poll => (
+                  <div key={poll.id} className="mb-4">
+                    <p className="font-medium mb-3">{poll.question}</p>
+                    <div className="flex gap-3">
+                      {poll.options.map((option, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => votePoll(poll.id, idx)}
+                          className={`px-4 py-2 rounded-lg transition-colors ${
+                            option.votes.includes(userId || '')
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                          }`}
+                        >
+                          {option.text} ({option.votes.length})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Input Area */}
+            <div className="px-6 py-4 bg-white dark:bg-gray-900 border-t dark:border-gray-700">
+              {/* Quick Actions */}
+              <div className="flex gap-2 mb-3 overflow-x-auto">
+                <button
+                  onClick={() => setShowPoll(true)}
+                  className="px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-sm font-medium hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                >
+                  📊 Create Poll
+                </button>
+                <button
+                  onClick={() => handleQuickAction('late')}
+                  className="px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-full text-sm font-medium hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                >
+                  ⏰ Running Late
+                </button>
+              </div>
+
+              {/* Message Input */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleVoiceRecord}
+                  className={`p-2 rounded-full transition-colors ${
+                    isVoiceRecording
+                      ? 'bg-red-500 text-white animate-pulse'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <Mic size={20} />
+                </button>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  placeholder="Type a message..."
+                  className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={sendMessage}
+                  className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                  disabled={!newMessage.trim()}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar - Friends */}
+          <div className="w-80 bg-gray-50 dark:bg-gray-800 p-6 border-l dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Invite Friends</h3>
+            {carpoolData?.friends && carpoolData.friends.length > 0 ? (
+              <div className="space-y-3">
+                {carpoolData.friends.map((friend: any) => (
+                  <label
+                    key={friend.friend_id}
+                    className="flex items-center gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFriends.includes(friend.friend_id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedFriends([...selectedFriends, friend.friend_id]);
+                        } else {
+                          setSelectedFriends(selectedFriends.filter(id => id !== friend.friend_id));
+                        }
+                      }}
+                      className="rounded text-blue-500"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{friend.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {friend.safe_to_carpool ? '✅ Verified' : 'Not verified'}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+                
+                {selectedFriends.length > 0 && (
+                  <button
+                    onClick={() => {
+                      carpoolData.createCarpoolGroup?.(event.id, selectedFriends, "Let's carpool!");
+                      setSelectedFriends([]);
+                      showToast?.({ type: 'success', message: 'Invitations sent!' });
+                    }}
+                    className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                  >
+                    Send Invites ({selectedFriends.length})
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="mx-auto mb-3 text-gray-300" size={48} />
+                <p className="text-gray-500 dark:text-gray-400 mb-4">No friends available</p>
+                <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                  Invite Friends
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Poll Modal */}
+        {showPoll && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Create Poll</h3>
+              <input
+                type="text"
+                value={newPollQuestion}
+                onChange={(e) => setNewPollQuestion(e.target.value)}
+                placeholder="What should we vote on?"
+                className="w-full p-3 border dark:border-gray-700 rounded-lg mb-4 bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPoll(false)}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={createPoll}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Create Poll
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
