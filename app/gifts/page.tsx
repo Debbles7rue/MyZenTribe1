@@ -316,15 +316,52 @@ export default function GiftsPage() {
           
           .page-title {
             font-size: 2rem;
+            flex-direction: column;
+            gap: 0.25rem;
+          }
+          
+          .title-icon {
+            font-size: 1.75rem;
+          }
+          
+          .page-subtitle {
+            font-size: 1rem;
+            padding: 0 1rem;
+          }
+          
+          .tab-navigation {
+            margin-bottom: 1.5rem;
+            max-width: 100%;
           }
           
           .tab-button {
             padding: 0.5rem 0.75rem;
             font-size: 0.875rem;
+            flex-direction: column;
+            gap: 0.25rem;
           }
           
           .tab-icon {
             font-size: 1rem;
+          }
+          
+          .notification-badge {
+            top: -0.5rem;
+            right: -0.5rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .gifts-page {
+            padding: 0.5rem 0.25rem;
+          }
+          
+          .page-header {
+            margin-bottom: 1.5rem;
+          }
+          
+          .tab-button span {
+            font-size: 0.75rem;
           }
         }
       `}</style>
