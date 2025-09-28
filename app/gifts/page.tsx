@@ -78,10 +78,23 @@ export default function GiftShop({ currentUserId, onGiftSent }: GiftShopProps) {
   }, {} as Record<string, Gift[]>);
 
   function handleGiftSelect(gift: Gift) {
+    console.log('Gift selected, currentUserId:', currentUserId); // Debug log
+    
     if (!currentUserId) {
-      alert('Please sign in to send gifts');
+      // Check if auth is still loading
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) {
+          console.log('User found after re-check:', data.user.id);
+          // User is actually signed in, proceed
+          setSelectedGift(gift);
+          setShowSendModal(true);
+        } else {
+          alert('Please sign in to send gifts');
+        }
+      });
       return;
     }
+    
     setSelectedGift(gift);
     setShowSendModal(true);
   }
@@ -558,6 +571,17 @@ function GiftCard({ gift, categoryColor, onClick }: {
           .gift-card {
             padding: 1rem;
             min-height: 200px;
+          }
+          
+          .bundle-card {
+            border-width: 2px;
+          }
+          
+          .bundle-badge {
+            top: -0.25rem;
+            right: -0.25rem;
+            padding: 0.125rem 0.375rem;
+            font-size: 0.625rem;
           }
           
           .gift-emoji {
