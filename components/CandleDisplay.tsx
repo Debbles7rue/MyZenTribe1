@@ -23,7 +23,7 @@ type Candle = {
 
 interface CandleDisplayProps { candle: Candle; }
 
-/* -------------------- Procedural WebGL flame (no assets) -------------------- */
+/* -------------------- tiny WebGL flame (no assets) -------------------- */
 function CanvasFlame({
   width = 46, height = 76, className, style,
 }: { width?: number; height?: number; className?: string; style?: React.CSSProperties }) {
@@ -39,20 +39,19 @@ function CanvasFlame({
       (canvas.getContext("experimental-webgl") as WebGLRenderingContext | null);
     if (!gl) return setOk(false);
 
-    const vsSrc = `
+    const vs = `
       attribute vec2 position; varying vec2 vUv;
       void main(){ vUv=(position+1.0)*0.5; gl_Position=vec4(position,0.0,1.0); }`;
-    const fsSrc = `
+    const fs = `
       precision mediump float; varying vec2 vUv; uniform float u_time; uniform vec2 u_res;
       float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123); }
       float n2(vec2 p){ vec2 i=floor(p),f=fract(p);
         float a=h(i), b=h(i+vec2(1.,0.)), c=h(i+vec2(0.,1.)), d=h(i+vec2(1.,1.));
-        vec2 u=f*f*(3.-2.*f);
-        return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y; }
+        vec2 u=f*f*(3.-2.*f); return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y; }
       float fbm(vec2 p){ float v=0., a=0.6; for(int i=0;i<5;i++){ v+=a*n2(p); p*=2.03; a*=0.55; } return v; }
       float mask(vec2 uv){ uv.x=(uv.x-0.5)*1.05; float y=uv.y;
         float r=length(vec2(uv.x*0.95, max(y*0.92,0.)));
-        float m=1.0-smoothstep(0.0,1.0,r+0.12*y);
+        float m=1.0 - smoothstep(0.0,1.0,r+0.12*y);
         return clamp(m*smoothstep(0.0,0.22,1.0-y),0.0,1.0); }
       vec3 ramp(float t){
         vec3 a=vec3(1.00,0.99,0.96), b=vec3(1.00,0.93,0.58),
@@ -71,39 +70,30 @@ function CanvasFlame({
         gl_FragColor=vec4(ramp(I), pow(I,1.15)*smoothstep(0.05,0.95,I));
       }`;
 
-    const compile = (t: number, src: string) => {
-      const s = gl.createShader(t)!; gl.shaderSource(s, src); gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); setOk(false); return null; }
-      return s;
-    };
-    const vs = compile(gl.VERTEX_SHADER, vsSrc);
-    const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
-    if (!vs || !fs) return;
-
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); setOk(false); return; }
+    const comp = (t:number,s:string)=>{ const sh=gl.createShader(t)!; gl.shaderSource(sh,s); gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(sh)); setOk(false); return null; } return sh; };
+    const vsh = comp(gl.VERTEX_SHADER, vs); const fsh = comp(gl.FRAGMENT_SHADER, fs); if(!vsh||!fsh) return;
+    const prog = gl.createProgram()!; gl.attachShader(prog,vsh); gl.attachShader(prog,fsh); gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(prog)); setOk(false); return; }
     gl.useProgram(prog);
 
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1,  -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(prog, "position"); gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,  -1,1,1,-1,1,1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog,"position"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
 
-    const u_time = gl.getUniformLocation(prog, "u_time");
-    const u_res  = gl.getUniformLocation(prog, "u_res");
+    const u_time = gl.getUniformLocation(prog,"u_time");
+    const u_res  = gl.getUniformLocation(prog,"u_res");
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    canvas.style.width = width + "px"; canvas.style.height = height + "px";
+    canvas.width = Math.round(width*dpr); canvas.height = Math.round(height*dpr);
+    canvas.style.width = width+"px"; canvas.style.height = height+"px";
     gl.viewport(0,0,canvas.width,canvas.height); gl.uniform2f(u_res, canvas.width, canvas.height);
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    let raf = 0; const t0 = performance.now();
-    const draw = () => { gl.uniform1f(u_time, (performance.now()-t0)/1000); gl.drawArrays(gl.TRIANGLES,0,6); raf = requestAnimationFrame(draw); };
+    let raf=0; const t0=performance.now();
+    const draw=()=>{ gl.uniform1f(u_time, (performance.now()-t0)/1000); gl.drawArrays(gl.TRIANGLES,0,6); raf=requestAnimationFrame(draw); };
     draw();
-    return () => cancelAnimationFrame(raf);
+    return ()=>cancelAnimationFrame(raf);
   }, [width, height]);
 
   if (!ok) return null;
@@ -116,12 +106,12 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
   const createdDate = new Date(candle.created_at);
   const formattedDate = createdDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-  // Refs for precise flame anchoring
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  // Refs for precise flame anchoring (relative to the candle-wrap, not the page)
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const wickRef = useRef<SVGRectElement | null>(null);
   const flameRef = useRef<HTMLDivElement | null>(null);
 
-  // Flower wreath points around an ellipse
+  // Flower wreath (ellipse around base): back half + front half
   const { frontFlowers, backFlowers } = useMemo(() => {
     const cx = 100, cy = 272; const rx = 60, ry = 16; const N = 26;
     const pts = Array.from({ length: N }, (_, i) => {
@@ -131,30 +121,30 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
     return { backFlowers: pts.filter(p => p.th <= Math.PI), frontFlowers: pts.filter(p => p.th > Math.PI) };
   }, [candle.id]);
 
-  // Pearl necklace points around the TOP rim ellipse (wrap effect)
+  // Pearl necklace around top rim ellipse
   const pearls = useMemo(() => {
-    const cx = 100, cy = 56; const rx = 60, ry = 12; const N = 36;
+    const cx = 100, cy = 56; const rx = 58, ry = 11; const N = 36; // hugs rim
     return Array.from({ length: N }, (_, i) => {
       const th = (i / N) * Math.PI * 2;
       return { x: cx + rx * Math.cos(th), y: cy + ry * Math.sin(th), th };
     });
   }, [candle.id]);
 
-  // Anchor flame to the wick in screen space (works at all sizes)
+  // Anchor flame to wick relative to the candle-wrap
   useEffect(() => {
     const place = () => {
-      if (!stageRef.current || !wickRef.current || !flameRef.current) return;
+      if (!wrapRef.current || !wickRef.current || !flameRef.current) return;
+      const wrap = wrapRef.current.getBoundingClientRect();
       const wick = wickRef.current.getBoundingClientRect();
-      const stage = stageRef.current.getBoundingClientRect();
-      const left = wick.left + wick.width / 2 - stage.left; // center x
-      const top = wick.top - stage.top;                      // top of wick
+      const left = wick.left + wick.width / 2 - wrap.left;
+      const top  = wick.top - wrap.top;
       const el = flameRef.current;
       el.style.left = `${left}px`;
-      el.style.top = `${top}px`;
+      el.style.top  = `${top}px`; // bottom of canvas gets lifted to this with translateY(-100%)
     };
     place();
     const ro = new ResizeObserver(place);
-    stageRef.current && ro.observe(stageRef.current);
+    wrapRef.current && ro.observe(wrapRef.current);
     window.addEventListener("resize", place);
     const t = setTimeout(place, 50);
     return () => { ro.disconnect(); window.removeEventListener("resize", place); clearTimeout(t); };
@@ -163,29 +153,12 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
   return (
     <>
       <div className="candle-display">
-        <div className="stage" ref={stageRef}>
+        <div className="stage">
           <div className="ambient" aria-hidden />
 
-          {/* BACK HALF of flower wreath (behind candle) */}
-          <svg className="ring-svg" viewBox="0 0 200 300" aria-hidden>
-            <g opacity="0.95">
-              {backFlowers.map((p, i) => (
-                <g key={`b-${i}`} transform={`translate(${p.x},${p.y}) scale(0.9)`}>
-                  {i % 3 === 0 && (<><ellipse cx="-6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.9" />
-                                         <ellipse cx="6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.9" /></>)}
-                  {[0,72,144,216,288].map(a => (
-                    <ellipse key={a} cx="0" cy="0" rx="8.2" ry="4.4" fill="#ffffff"
-                      transform={`rotate(${a}) translate(0,-6.2)`} />
-                  ))}
-                  <circle cx="0" cy="0" r="1.6" fill="#f0c94f" />
-                </g>
-              ))}
-            </g>
-          </svg>
-
-          {/* Candle + pearls + name tag */}
-          <div className="candle-wrap">
-            <svg className="candle-svg" viewBox="0 0 200 300" role="img" aria-label="White memorial candle">
+          <div className="candle-wrap" ref={wrapRef}>
+            {/* Single SVG: BACK wreath, candle, pearls, FRONT wreath — all aligned */}
+            <svg className="svg" viewBox="0 0 200 300" role="img" aria-label="White memorial candle">
               <defs>
                 <linearGradient id={`waxSide-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
                   <stop offset="0%"  stopColor="#d9d9d9" />
@@ -209,36 +182,51 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
                 </filter>
               </defs>
 
-              {/* body */}
+              {/* BACK half wreath (behind candle) */}
+              <g opacity="0.95">
+                {backFlowers.map((p, i) => (
+                  <g key={`b-${i}`} transform={`translate(${p.x},${p.y}) scale(0.9)`}>
+                    {i % 3 === 0 && (<>
+                      <ellipse cx="-6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.9" />
+                      <ellipse cx="6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.9" />
+                    </>)}
+                    {[0,72,144,216,288].map(a => (
+                      <ellipse key={a} cx="0" cy="0" rx="8.2" ry="4.4" fill="#ffffff"
+                        transform={`rotate(${a}) translate(0,-6.2)`} />
+                    ))}
+                    <circle cx="0" cy="0" r="1.6" fill="#f0c94f" />
+                  </g>
+                ))}
+              </g>
+
+              {/* Candle body */}
               <g filter={`url(#softShadow-${candle.id})`}>
                 <rect x="40" y="56" width="120" height="210" rx="22" fill={`url(#waxSide-${candle.id})`} />
                 <rect x="40" y="56" width="120" height="210" rx="22" fill={`url(#waxFront-${candle.id})`} opacity="0.92" />
               </g>
 
-              {/* ---- BEADS (wrap) ---- */}
-              {/* back half FIRST (darker), will be partially hidden by the rim */}
+              {/* BEADS that wrap the rim */}
+              {/* Back half first (darker), then rim/pool occlude them, then front half brighter */}
               {pearls.filter(p => p.th <= Math.PI).map((b, i) => (
-                <g key={`pb-${i}`}>
+                <g key={`pb-${i}`} opacity="0.9">
                   <circle cx={b.x} cy={b.y} r="2.4" fill="#e8dfcf" />
                   <circle cx={b.x - 0.6} cy={b.y - 0.6} r="0.9" fill="#ffffff" opacity="0.75" />
                 </g>
               ))}
 
-              {/* melted rim & pool (occludes back beads to sell depth) */}
-              <path
-                d="M50 56 Q100 42 150 56 C153 60 151 64 146 65 C129 71 71 71 54 65 C49 64 47 60 50 56 Z"
-                fill="#fff1db"
-              />
+              {/* Rim & inner pool (occludes back pearls) */}
+              <path d="M50 56 Q100 42 150 56 C153 60 151 64 146 65 C129 71 71 71 54 65 C49 64 47 60 50 56 Z"
+                fill="#fff1db" />
               <ellipse cx="100" cy="67" rx="36" ry="10" fill={`url(#pool-${candle.id})`} opacity="0.94" />
 
-              {/* front glossy bands */}
+              {/* Glossy bands */}
               <rect x="58" y="64" width="12" height="188" rx="6" fill="#ffffff" opacity="0.33" />
               <rect x="128" y="64" width="6" height="184" rx="3" fill="#ffffff" opacity="0.2" />
 
-              {/* WICK (top of wick at y=60) */}
+              {/* Wick (top of wick at y=60) */}
               <rect ref={wickRef} x="98.8" y="60" width="2.4" height="18" rx="1" fill="#2a2a2a" />
 
-              {/* front half pearls (brighter highlights) */}
+              {/* Front half pearls */}
               {pearls.filter(p => p.th > Math.PI).map((b, i) => (
                 <g key={`pf-${i}`}>
                   <circle cx={b.x} cy={b.y} r="2.6" fill="#faf7f2" />
@@ -247,43 +235,43 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
                 </g>
               ))}
 
-              {/* Name tag ON candle, above flowers */}
+              {/* Name tag ON candle (just above wreath) */}
               <g>
-                <path d="M60 210 h80 a10 10 0 0 1 10 10 v3 a10 10 0 0 1 -10 10 h-80 a10 10 0 0 1 -10 -10 v-3 a10 10 0 0 1 10 -10 z"
+                <path d="M60 206 h80 a10 10 0 0 1 10 10 v3 a10 10 0 0 1 -10 10 h-80 a10 10 0 0 1 -10 -10 v-3 a10 10 0 0 1 10 -10 z"
                   fill="#b88d35" opacity="0.95" />
-                <rect x="64" y="212.5" width="72" height="16" rx="8" fill="#f1d27a" />
-                <text x="100" y="224" textAnchor="middle" fontSize="8" fontWeight={800} fill="#3e2e16" letterSpacing="0.3"
+                <rect x="64" y="208.5" width="72" height="16" rx="8" fill="#f1d27a" />
+                <text x="100" y="220" textAnchor="middle" fontSize="8" fontWeight={800} fill="#3e2e16" letterSpacing="0.3"
                   style={{ userSelect: "none" }}>{candle.name}</text>
+              </g>
+
+              {/* FRONT half wreath (in front of candle) */}
+              <g opacity="0.98">
+                {frontFlowers.map((p, i) => (
+                  <g key={`f-${i}`} transform={`translate(${p.x},${p.y}) scale(0.95)`}>
+                    {i % 3 === 1 && (<>
+                      <ellipse cx="-6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.95" />
+                      <ellipse cx="6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.95" />
+                    </>)}
+                    {[0,72,144,216,288].map(a => (
+                      <ellipse key={a} cx="0" cy="0" rx="8.8" ry="4.6" fill="#ffffff"
+                        transform={`rotate(${a}) translate(0,-6.6)`} />
+                    ))}
+                    <circle cx="0" cy="0" r="1.7" fill="#f0c94f" />
+                  </g>
+                ))}
               </g>
             </svg>
 
-            {/* Flame: positioned at wick using screen coords, bottom aligned */}
-            <div ref={flameRef} className="flame-anchor">
+            {/* Flame anchored to wick (relative to wrap) */}
+            <div ref={flameRef} className="flame">
               <CanvasFlame width={46} height={76} />
             </div>
           </div>
 
-          {/* FRONT HALF of wreath (in front of candle) */}
-          <svg className="ring-svg" viewBox="0 0 200 300" aria-hidden>
-            <g opacity="0.98">
-              {frontFlowers.map((p, i) => (
-                <g key={`f-${i}`} transform={`translate(${p.x},${p.y}) scale(0.95)`}>
-                  {i % 3 === 1 && (<><ellipse cx="-6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.95" />
-                                         <ellipse cx="6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.95" /></>)}
-                  {[0,72,144,216,288].map(a => (
-                    <ellipse key={a} cx="0" cy="0" rx="8.8" ry="4.6" fill="#ffffff"
-                      transform={`rotate(${a}) translate(0,-6.6)`} />
-                  ))}
-                  <circle cx="0" cy="0" r="1.7" fill="#f0c94f" />
-                </g>
-              ))}
-            </g>
-          </svg>
-
           {isEternal && <div className="eternal-badge">Eternal Flame</div>}
         </div>
 
-        {/* Info block */}
+        {/* Info */}
         <div className="info">
           <h3 className="title">{candle.name}</h3>
           {candle.message && <p className="message">"{candle.message}"</p>}
@@ -310,26 +298,29 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
           filter: blur(2px); animation: breathe 3.2s ease-in-out infinite; pointer-events: none;
         }
         @keyframes breathe { 0%,100%{opacity:0.55; transform:scale(1);} 50%{opacity:0.85; transform:scale(1.03);} }
-        .candle-wrap { position: relative; width: 200px; height: 300px; display: grid; place-items: center; }
-        .candle-svg, .ring-svg { width: 200px; height: 300px; display: block; pointer-events: none; user-select: none; }
-        /* flame anchors to wick: we set left/top via JS then raise the canvas so its bottom sits on the wick */
-        .flame-anchor { position: absolute; transform: translate(-50%, -100%); pointer-events: none;
-          width: 46px; height: 76px; mix-blend-mode: screen; filter: drop-shadow(0 0 12px rgba(255,170,60,0.6)); }
+
+        .candle-wrap { position: relative; width: 200px; height: 300px; }
+        .svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+        /* Flame left/top set in JS relative to .candle-wrap; raise bottom onto the wick */
+        .flame { position: absolute; transform: translate(-50%, -100%); width: 46px; height: 76px;
+          mix-blend-mode: screen; filter: drop-shadow(0 0 12px rgba(255,170,60,0.6)); pointer-events: none; }
+
         .eternal-badge {
           position: absolute; top: 6px; right: 8px; background: linear-gradient(135deg,#fbbf24,#f59e0b);
           color: #fff; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 800;
           letter-spacing: 0.04em; box-shadow: 0 4px 12px rgba(251,191,36,0.3);
         }
+
         .info { text-align: center; max-width: 420px; }
         .title { margin: 8px 0 6px 0; font-size: 1.12rem; color: #fbbf24; font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,0.25); }
         .message { margin: 0 0 10px 0; font-size: 0.9rem; color: #fde68a; font-style: italic; opacity: 0.95; }
         .meta { display: inline-flex; gap: 12px; font-size: 0.78rem; color: #fde68a; opacity: 0.8; }
 
-        /* Mobile */
         @media (max-width: 480px) {
           .stage { width: 220px; }
-          .candle-wrap, .candle-svg, .ring-svg { width: 180px; height: 270px; }
-          .flame-anchor { width: 42px; height: 70px; }
+          .candle-wrap { width: 180px; height: 270px; }
+          .flame { width: 42px; height: 70px; }
           .title { font-size: 1rem; } .message { font-size: 0.85rem; }
         }
       `}</style>
