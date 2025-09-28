@@ -100,6 +100,9 @@ export default function TodosPage() {
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
+  // FIXED: Add drag and drop state
+  const [draggedTodo, setDraggedTodo] = useState<Todo | null>(null)
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -234,7 +237,7 @@ export default function TodosPage() {
                   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
                   animation: celebration-bounce 0.5s ease-out;">
         <h2 style="font-size: 2rem; font-weight: bold; color: #10b981; margin: 0;">🎉 All Done! 🎉</h2>
-        <p style="color: #6b7280; margin-top: 0.5rem;">You've completed all your ${currentConfig.title.toLowerCase()}!</p>
+        <p style="color: #6b7280; margin-top: 0.5rem;">You've completed all your todos!</p>
       </div>
     `
     document.body.appendChild(celebrationDiv)
@@ -285,23 +288,36 @@ export default function TodosPage() {
     await supabase.from('todos').insert(newRecurringTodo)
   }
 
+  // FIXED: Improve checkbox click handler with better event handling
   const toggleTodo = async (todo: Todo, e?: React.MouseEvent) => {
-    // Prevent event bubbling to parent div
+    // CRITICAL: Stop all event propagation immediately
     if (e) {
+      e.preventDefault()
       e.stopPropagation()
+      e.stopImmediatePropagation()
     }
     
+    console.log('Toggling todo:', todo.title, 'Current completed:', todo.completed)
+    
     const wasCompleted = todo.completed
-    const { error } = await supabase
-      .from('todos')
-      .update({ 
-        completed: !wasCompleted,
-        completed_at: !wasCompleted ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', todo.id)
+    
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({ 
+          completed: !wasCompleted,
+          completed_at: !wasCompleted ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', todo.id)
 
-    if (!error) {
+      if (error) {
+        console.error('Error updating todo:', error)
+        return
+      }
+
+      console.log('Todo updated successfully')
+
       // If completing a recurring todo, create the next occurrence
       if (!wasCompleted && todo.recurring && todo.recurring !== 'none') {
         await createRecurringTodo(todo)
@@ -328,6 +344,8 @@ export default function TodosPage() {
           detail: { id: todo.id, title: todo.title }
         }))
       }
+    } catch (error) {
+      console.error('Error in toggleTodo:', error)
     }
   }
 
@@ -465,6 +483,41 @@ export default function TodosPage() {
     }
   }
 
+  // FIXED: Add drag and drop handlers for calendar integration
+  const handleDragStart = (e: React.DragEvent, todo: Todo) => {
+    console.log('Dragging todo:', todo.title)
+    setDraggedTodo(todo)
+    
+    // Set drag data for calendar integration
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+      type: 'todo',
+      id: todo.id,
+      title: todo.title,
+      description: todo.description,
+      priority: todo.priority,
+      category: todo.category,
+      notes: todo.notes
+    }))
+    
+    // Set drag effect
+    e.dataTransfer.effectAllowed = 'copy'
+    
+    // Add visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.classList.add('opacity-50')
+    }
+  }
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    console.log('Drag ended')
+    setDraggedTodo(null)
+    
+    // Remove visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.classList.remove('opacity-50')
+    }
+  }
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent': return 'text-red-600 bg-red-50 border-red-200'
@@ -478,27 +531,6 @@ export default function TodosPage() {
   const getRecurringIcon = (recurring?: string) => {
     if (!recurring || recurring === 'none') return null
     return '🔄'
-  }
-
-  const getListColor = () => {
-    switch (currentListType) {
-      case 'reminder': return 'from-blue-600 to-cyan-600'
-      default: return 'from-green-600 to-emerald-600'
-    }
-  }
-
-  const getAccentColor = () => {
-    switch (currentListType) {
-      case 'reminder': return 'bg-blue-500 hover:bg-blue-600'
-      default: return 'bg-green-500 hover:bg-green-600'
-    }
-  }
-
-  const getCheckboxColor = () => {
-    switch (currentListType) {
-      case 'reminder': return 'bg-blue-500 border-blue-500'
-      default: return 'bg-green-500 border-green-500'
-    }
   }
 
   const filteredTodos = todos.filter(todo => {
@@ -708,7 +740,7 @@ export default function TodosPage() {
               <button
                 onClick={saveEdit}
                 disabled={!editForm.title}
-                className={`px-4 py-2 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 ${getAccentColor()}`}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
               >
                 Save Changes
               </button>
@@ -876,6 +908,9 @@ export default function TodosPage() {
                 className="relative"
                 onTouchStart={(e) => handleTouchStart(e, todo.id)}
                 onTouchEnd={(e) => handleTouchEnd(e, todo.id)}
+                draggable={!todo.completed}
+                onDragStart={(e) => handleDragStart(e, todo)}
+                onDragEnd={handleDragEnd}
               >
                 {/* Delete Button - Revealed on Swipe */}
                 {swipeDelete === todo.id && (
@@ -888,23 +923,43 @@ export default function TodosPage() {
                 )}
 
                 <div
-                  className={`bg-white rounded-xl shadow-sm p-4 transition-all hover:shadow-md ${
+                  className={`bg-white rounded-xl shadow-sm p-4 transition-all hover:shadow-md cursor-pointer ${
                     todo.completed ? 'opacity-60' : ''
-                  } ${swipeDelete === todo.id ? 'transform -translate-x-24' : ''}`}
-                  onClick={() => setSelectedTodo(selectedTodo?.id === todo.id ? null : todo)}
+                  } ${swipeDelete === todo.id ? 'transform -translate-x-24' : ''} ${
+                    draggedTodo?.id === todo.id ? 'opacity-50' : ''
+                  }`}
+                  onClick={(e) => {
+                    // Only allow expansion if not clicking on interactive elements
+                    const target = e.target as HTMLElement
+                    if (!target.closest('button') && !target.closest('input')) {
+                      setSelectedTodo(selectedTodo?.id === todo.id ? null : todo)
+                    }
+                  }}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Fixed Checkbox - Prevent propagation properly */}
-                    <button
-                      onClick={(e) => toggleTodo(todo, e)}
-                      className={`mt-0.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all transform hover:scale-110 ${
+                    {/* FIXED: Improved Checkbox with better click handling */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleTodo(todo, e)
+                      }}
+                      className={`mt-0.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all transform hover:scale-110 cursor-pointer select-none ${
                         todo.completed
                           ? 'bg-green-500 border-green-500 text-white'
                           : 'border-gray-300 hover:border-green-400 active:scale-95'
                       }`}
+                      role="checkbox"
+                      aria-checked={todo.completed}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleTodo(todo)
+                        }
+                      }}
                     >
-                      {todo.completed && <span className="text-sm">✓</span>}
-                    </button>
+                      {todo.completed && <span className="text-sm font-bold">✓</span>}
+                    </div>
                     
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
@@ -957,6 +1012,13 @@ export default function TodosPage() {
                           {todo.description || todo.notes}
                         </p>
                       )}
+
+                      {/* Drag Hint */}
+                      {!todo.completed && (
+                        <div className="text-xs text-gray-400 mt-2">
+                          Drag to calendar to schedule
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -985,12 +1047,12 @@ export default function TodosPage() {
             {/* Mobile Handle */}
             <div className="md:hidden w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             
-            <h2 className="text-xl font-semibold mb-4">Add New {currentListType === 'reminder' ? 'Reminder' : 'Todo'}</h2>
+            <h2 className="text-xl font-semibold mb-4">Add New Todo</h2>
             
             <div className="space-y-4">
               <input
                 type="text"
-                placeholder={currentConfig.placeholder}
+                placeholder="What needs to be done?"
                 value={newTodo.title}
                 onChange={(e) => setNewTodo({...newTodo, title: e.target.value})}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-base"
@@ -1084,9 +1146,9 @@ export default function TodosPage() {
                 <button
                   onClick={addTodo}
                   disabled={!newTodo.title}
-                  className={`flex-1 px-4 py-3 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform ${getAccentColor()}`}
+                  className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
                 >
-                  Add {currentListType === 'reminder' ? 'Reminder' : 'Todo'}
+                  Add Todo
                 </button>
               </div>
             </div>
