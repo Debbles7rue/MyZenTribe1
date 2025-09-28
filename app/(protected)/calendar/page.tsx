@@ -29,6 +29,7 @@ import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import HolidayReminders from "./components/HolidayReminders";
 import CalendarDebugger from "./components/CalendarDebugger"; // ADD THIS IMPORT
+import CarpoolSettings from "./components/CarpoolSettings"; // NEW IMPORT
 import { Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -88,6 +89,7 @@ export default function CalendarPage() {
   const [showMeetingCoordinator, setShowMeetingCoordinator] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
+  const [showCarpoolSettings, setShowCarpoolSettings] = useState(false); // NEW STATE
   const [quickModalOpen, setQuickModalOpen] = useState(false);
   const [quickModalType, setQuickModalType] = useState<'reminder' | 'todo' | 'shopping'>('reminder');
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
@@ -754,6 +756,14 @@ export default function CalendarPage() {
           />
         )}
 
+        {/* Carpool Settings Modal - NEW ADDITION */}
+        <CarpoolSettings
+          isOpen={showCarpoolSettings}
+          onClose={() => setShowCarpoolSettings(false)}
+          userId={me || ''}
+          showToast={showToast}
+        />
+
         {/* All Other Modals */}
         <CalendarModals
           openCreate={openCreate}
@@ -833,6 +843,8 @@ export default function CalendarPage() {
           }}
           resetForm={resetForm}
           showToast={showToast}
+          // NEW PROPS TO PASS SETTINGS HANDLER TO CARPOOL MODAL
+          onOpenCarpoolSettings={() => setShowCarpoolSettings(true)}
         />
       </div>
     </div>
