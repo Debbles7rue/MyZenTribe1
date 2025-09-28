@@ -1,865 +1,1297 @@
-// app/profile/[id]/page.tsx - UNIFIED FEED VERSION (NO TABS)
+// app/albums/[id]/edit/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
-import ProfileViewer from "../components/ProfileViewer";
-import PostsFeed from "@/components/PostsFeed";
-import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import FriendSelector from '@/components/FriendSelector';
 
-type PublicProfile = {
+// Types
+type AlbumElement = {
   id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  location_text: string | null;
-  location_is_public: boolean | null;
-  username: string | null;
-  cover_url: string | null;
-  tagline: string | null;
-  interests: string[] | null;
-  website_url: string | null;
-  social_links: any | null;
-  languages: string[] | null;
-  visibility: 'public' | 'friends_only' | 'private' | null;
-  allow_messages: 'everyone' | 'friends' | 'no_one' | null;
-  show_online_status: boolean | null;
-  show_mutuals: boolean | null;
-  verified: boolean | null;
-  memories_visibility: 'public' | 'friends' | 'private' | null;
-  friends_count?: number | null;
-  posts_count?: number | null;
+  type: 'photo' | 'video' | 'text' | 'sticker';
+  content: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  zIndex: number;
+  fontSize?: number;
+  fontColor?: string;
+  fontFamily?: string;
 };
 
-type RelationshipType = 'friend' | 'acquaintance' | 'restricted' | 'none';
-
-type Memory = {
+type AlbumPage = {
   id: string;
-  user_id: string;
-  date: string;
-  photo_url: string;
-  caption: string;
-  event_title?: string;
-  visibility: 'public' | 'friends' | 'private';
-  created_at: string;
+  pageId?: string; // Database ID for existing pages
+  elements: AlbumElement[];
+  backgroundColor: string;
+  backgroundImage?: string;
+  template: string;
 };
 
-type Event = {
-  id: string;
-  host_id: string;
-  title: string;
-  description?: string;
-  start_date: string;
-  location?: string;
-  image_url?: string;
-  attendees_count: number;
-  max_attendees?: number;
-  visibility: 'public' | 'friends' | 'private';
-  created_at: string;
-  type: 'event';
+// Expanded sticker library
+const STICKER_LIBRARY = {
+  emotions: ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😜', '🤪', '😝', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'],
+  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️'],
+  celebration: ['🎉', '🎊', '🎈', '🎁', '🎂', '🎄', '🎃', '🎆', '🎇', '🧨', '✨', '🎐', '🎀', '🎗️', '🎟️', '🎫', '🎖️', '🏆', '🏅', '🥇', '🥈', '🥉'],
+  nature: ['🌸', '💮', '🏵️', '🌺', '🌻', '🌷', '🌹', '🥀', '🌼', '🌵', '🌲', '🌳', '🌴', '🌱', '🌿', '☘️', '🍀', '🍁', '🍂', '🍃', '🌾', '🌙', '☀️', '⭐', '🌟', '✨', '⚡', '🔥', '💫', '🌈'],
+  animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄', '🐴', '🐝', '🦋', '🐌', '🐞', '🐢', '🐙', '🦀', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈'],
+  food: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑', '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🍿', '🍩', '🍪', '🎂', '🍰', '🧁', '🍫', '🍬', '🍭', '🍮'],
+  activities: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🎮', '🎯', '🎲', '🎰', '🎳', '🎸', '🎵', '🎶', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎻', '🎬', '🎨', '🎭', '🎪', '🎟️', '🎫'],
+  travel: ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🚚', '🚛', '🚜', '🛵', '🏍️', '🚲', '🛴', '✈️', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛳️', '⛴️', '🚢', '🗺️', '🗿', '🗽', '🗼', '🏰', '🏯', '🎡', '🎢', '🎠'],
+  objects: ['💌', '📌', '📍', '📎', '🔗', '📏', '📐', '✂️', '🗃️', '🗄️', '🗑️', '🔒', '🔓', '🔏', '🔐', '🔑', '🗝️', '🔨', '🪓', '⛏️', '⚒️', '🛠️', '🗡️', '⚔️', '💣', '🪃', '🏹', '🛡️', '🪚', '🔧', '🪛', '🔩', '⚙️', '🗜️', '⚖️', '🔗', '⛓️', '🪝', '🧰', '🧲', '🪜', '⚗️', '🧪', '🧫', '🧬', '🔬', '🔭', '📡'],
+  symbols: ['💋', '💯', '💢', '💥', '💫', '💦', '💨', '🕳️', '💤', '👋', '✋', '🖐️', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤝', '🙏']
 };
 
-export default function PublicProfilePage() {
-  const params = useParams();
+export default function EditAlbumPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const profileId = params?.id as string;
-  
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [relationshipType, setRelationshipType] = useState<RelationshipType>('none');
-  const [friendStatus, setFriendStatus] = useState<"none" | "pending" | "friends">("none");
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [friendsCount, setFriendsCount] = useState(0);
-  const [followersCount, setFollowersCount] = useState(0);
-  const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
   
-  // Enhanced features
-  const [showMemories, setShowMemories] = useState(false);
-  const [todayMemories, setTodayMemories] = useState<Memory[]>([]);
-  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
-  const [memoriesLoading, setMemoriesLoading] = useState(false);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  // Album data
+  const [albumId, setAlbumId] = useState<string>('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [privacy, setPrivacy] = useState<'private' | 'public'>('private');
+  const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [existingCollaborators, setExistingCollaborators] = useState<any[]>([]);
+  
+  // Pages
+  const [pages, setPages] = useState<AlbumPage[]>([]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [deletedPageIds, setDeletedPageIds] = useState<string[]>([]);
+  const [deletedElementIds, setDeletedElementIds] = useState<string[]>([]);
+  
+  // UI states
+  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [draggedElement, setDraggedElement] = useState<string | null>(null);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [showTextEditor, setShowTextEditor] = useState(false);
+  const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
+  const [editingText, setEditingText] = useState('');
+  const [textStyle, setTextStyle] = useState({
+    fontSize: 24,
+    fontColor: '#000000',
+    fontFamily: 'Arial'
+  });
 
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // Refs
+  const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Get current user and check if viewing own profile
+  // Helper function to add debug messages that appear in UI
+  const addDebug = (message: string) => {
+    console.log(message);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
+  // Get user on mount
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const userId = data.user?.id ?? null;
-      setCurrentUserId(userId);
+    let mounted = true;
+    
+    async function getUser() {
+      // Add mobile detection
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      addDebug(`Device: ${isMobile ? 'Mobile' : 'Desktop'}, Online: ${navigator.onLine}`);
       
-      if (userId && userId === profileId) {
-        router.push("/profile");
+      // Force refresh session on mobile
+      if (isMobile) {
+        addDebug('Mobile detected, refreshing session...');
+        await supabase.auth.refreshSession();
       }
-    });
-  }, [profileId, router]);
-
-  // Load all data when profileId or currentUserId changes
-  useEffect(() => {
-    if (profileId) {
-      loadProfile();
-      loadStats();
-      loadEvents();
+      
+      const { data, error } = await supabase.auth.getUser();
+      if (mounted && data.user) {
+        addDebug(`User loaded: ${data.user.id}`);
+        setUserId(data.user.id);
+      } else if (mounted && !data.user) {
+        addDebug('No user found, redirecting to login');
+        router.push('/login');
+      }
+      
+      if (error) {
+        addDebug(`Auth error: ${error.message}`);
+      }
     }
     
-    if (currentUserId && profileId) {
-      checkRelationshipStatus();
-      checkFollowStatus();
-      loadMutualFriends();
-      loadTodayMemories();
-    }
-  }, [profileId, currentUserId]);
+    getUser();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  async function loadProfile() {
+  // Load album data - only when we have userId
+  useEffect(() => {
+    if (userId && params.id) {
+      addDebug(`Loading album with userId: ${userId}`);
+      loadAlbum();
+    }
+  }, [userId, params.id]);
+
+  async function loadAlbum() {
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", profileId)
+      setLoading(true);
+
+      // Make sure we have a userId before continuing
+      if (!userId) {
+        addDebug('No userId yet, waiting...');
+        return;
+      }
+
+      // Load album details
+      addDebug('Loading album details...');
+      const { data: albumData, error: albumError } = await supabase
+        .from('albums')
+        .select('*')
+        .eq('id', params.id)
         .single();
 
-      if (error) throw error;
+      if (albumError || !albumData) {
+        addDebug(`Error loading album: ${albumError?.message || 'Album not found'}`);
+        alert('Album not found');
+        router.push('/albums');
+        return;
+      }
 
-      setProfile({
-        ...data,
-        memories_visibility: data.memories_visibility || 'private'
-      });
-    } catch (err) {
-      console.error("Error loading profile:", err);
+      addDebug(`Album loaded: ${albumData.title} by ${albumData.creator_id}`);
+      setAlbumId(albumData.id);
+      setTitle(albumData.title);
+      setDescription(albumData.description || '');
+      setPrivacy(albumData.privacy);
+
+      // Check if user can edit
+      const userIsCreator = albumData.creator_id === userId;
+      addDebug(`Permission check - User: ${userId}, Creator: ${albumData.creator_id}, Is creator: ${userIsCreator}`);
+      setIsCreator(userIsCreator);
+      setCanEdit(userIsCreator);
+
+      // Check collaborator permissions
+      if (!userIsCreator) {
+        addDebug('Not creator, checking collaborator permissions...');
+        
+        // First, let's check if any collaborator records exist at all
+        const { data: allCollabs, error: allCollabsError } = await supabase
+          .from('album_collaborators')
+          .select('*')
+          .eq('album_id', params.id);
+        
+        addDebug(`All collaborators found: ${allCollabs?.length || 0}`);
+        
+        // Now check specifically for this user - handle multiple records
+        const { data: collabDataArray, error: collabError } = await supabase
+          .from('album_collaborators')
+          .select('*')
+          .eq('album_id', params.id)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }); // Get most recent first
+
+        addDebug(`Collaborator query - Error: ${collabError?.message || 'none'}, Records found: ${collabDataArray?.length || 0}`);
+
+        if (collabError) {
+          addDebug(`Collaborator query error: ${collabError.message} (Code: ${collabError.code})`);
+          alert(`Database error: ${collabError.message}\n\nCheck debug info for details.`);
+          return;
+        }
+
+        if (!collabDataArray || collabDataArray.length === 0) {
+          addDebug('No collaborator record found for this user');
+          alert('You do not have permission to edit this album\n\nCheck debug info for details.');
+          router.push(`/albums/${params.id}`);
+          return;
+        }
+
+        // Take the first (most recent) collaborator record
+        const collabData = collabDataArray[0];
+        addDebug(`Using collaborator record: Status=${collabData.status}, CanEdit=${collabData.can_edit}, Created=${collabData.created_at}`);
+
+        if (collabDataArray.length > 1) {
+          addDebug(`WARNING: Found ${collabDataArray.length} duplicate collaborator records - using most recent`);
+        }
+
+        if (collabData.status !== 'accepted' || !collabData.can_edit) {
+          addDebug(`Collaborator exists but cannot edit - Status: ${collabData.status}, Can edit: ${collabData.can_edit}`);
+          alert('You do not have permission to edit this album\n\nCheck debug info for details.');
+          router.push(`/albums/${params.id}`);
+          return;
+        }
+
+        addDebug('Collaborator can edit!');
+        setCanEdit(true);
+      }
+
+      // Load existing collaborators - split query to avoid foreign key issue
+      const { data: collabs } = await supabase
+        .from('album_collaborators')
+        .select('*')
+        .eq('album_id', params.id);
+
+      if (collabs) {
+        addDebug(`Loading ${collabs.length} collaborator profiles...`);
+        // Fetch user profiles separately
+        const collabsWithProfiles = await Promise.all(
+          collabs.map(async (collab) => {
+            const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('full_name, avatar_url')
+              .eq('id', collab.user_id)
+              .single();
+            
+            return {
+              ...collab,
+              user: userProfile
+            };
+          })
+        );
+        
+        setExistingCollaborators(collabsWithProfiles);
+        setCollaborators(collabs.map(c => c.user_id));
+        addDebug('Collaborator profiles loaded');
+      }
+
+      // Load pages and elements
+      addDebug('Loading pages and elements...');
+      const { data: pagesData } = await supabase
+        .from('album_pages')
+        .select(`
+          *,
+          elements:album_elements(*)
+        `)
+        .eq('album_id', params.id)
+        .order('page_number');
+
+      if (pagesData && pagesData.length > 0) {
+        const loadedPages: AlbumPage[] = pagesData.map(page => ({
+          id: `page-${page.id}`,
+          pageId: page.id,
+          elements: page.elements.map((el: any) => ({
+            id: el.id,
+            type: el.type,
+            content: el.content,
+            x: el.position_x,
+            y: el.position_y,
+            width: el.width,
+            height: el.height,
+            rotation: el.rotation || 0,
+            zIndex: el.z_index,
+            fontSize: el.font_size,
+            fontColor: el.font_color,
+            fontFamily: el.font_family
+          })),
+          backgroundColor: page.background_color || '#ffffff',
+          template: page.template || 'freeform'
+        }));
+        setPages(loadedPages);
+        addDebug(`Loaded ${loadedPages.length} pages`);
+      } else {
+        // Create a default page if none exist
+        setPages([{
+          id: 'page-new-1',
+          elements: [],
+          backgroundColor: '#ffffff',
+          template: 'freeform'
+        }]);
+        addDebug('Created default page');
+      }
+      
+      addDebug('Album loading completed successfully');
+    } catch (error) {
+      addDebug(`Fatal error loading album: ${error}`);
+      console.error('Error loading album:', error);
+      alert('Failed to load album\n\nCheck debug info for details.');
+      router.push('/albums');
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadStats() {
-    try {
-      // Get friends count
-      const { count: friends } = await supabase
-        .from("friendships")
-        .select("*", { count: "exact", head: true })
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
-        .eq('status', 'accepted');
-      
-      setFriendsCount(friends || 0);
-
-      // Get followers count
-      const { count: followers } = await supabase
-        .from("followers")
-        .select("*", { count: "exact", head: true })
-        .eq("following_id", profileId);
-      
-      setFollowersCount(followers || 0);
-    } catch (err) {
-      console.error("Error loading stats:", err);
-    }
-  }
-
-  async function loadEvents() {
-    setEventsLoading(true);
+  // Handle photo/video upload
+  async function handleMediaUpload(files: FileList) {
+    if (!userId || files.length === 0) return;
     
-    try {
-      const { data, error } = await supabase
-        .from("events")
-        .select(`
-          id, host_id, title, description, start_date, location, 
-          image_url, max_attendees, visibility, created_at,
-          event_attendees(count)
-        `)
-        .eq("host_id", profileId)
-        .gte("start_date", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      if (error) {
-        console.log("Events query error:", error);
-        setEvents([]);
-        return;
-      }
-
-      // Filter based on visibility and relationship
-      const visibleEvents = (data || []).filter(event => {
-        if (event.visibility === 'public') return true;
-        if (event.visibility === 'friends' && relationshipType === 'friend') return true;
-        if (currentUserId === profileId) return true;
-        return false;
-      });
-
-      setEvents(visibleEvents.map(event => ({
-        ...event,
-        attendees_count: event.event_attendees?.[0]?.count || 0,
-        type: 'event' as const
-      })));
-    } catch (err) {
-      console.error("Error loading events:", err);
-      setEvents([]);
-    } finally {
-      setEventsLoading(false);
-    }
-  }
-
-  // Check relationship status with correct database query
-  async function checkRelationshipStatus() {
-    if (!currentUserId || !profileId) return;
+    setUploading(true);
+    const currentPage = pages[currentPageIndex];
+    const newElements: AlbumElement[] = [];
 
     try {
-      // Check if friends - using friendships table with status = 'accepted'
-      const { data: friendships } = await supabase
-        .from("friendships")
-        .select("status, relationship_type")
-        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${currentUserId})`)
-        .eq('status', 'accepted');
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${userId}/album-${Date.now()}-${i}.${fileExt}`;
+        
+        // Upload to storage
+        const { data, error } = await supabase.storage
+          .from('post-media')
+          .upload(fileName, file);
 
-      if (friendships && friendships.length > 0) {
-        setFriendStatus("friends");
-        setRelationshipType(friendships[0].relationship_type || 'friend');
-      } else {
-        // Check for pending request
-        const { data: pending } = await supabase
-          .from("friend_requests")
-          .select("*")
-          .or(`and(from_user.eq.${currentUserId},to_user.eq.${profileId}),and(from_user.eq.${profileId},to_user.eq.${currentUserId})`);
+        if (!error && data) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('post-media')
+            .getPublicUrl(fileName);
 
-        if (pending && pending.length > 0) {
-          setFriendStatus("pending");
-        } else {
-          setFriendStatus("none");
+          const element: AlbumElement = {
+            id: `element-new-${Date.now()}-${i}`,
+            type: file.type.startsWith('video') ? 'video' : 'photo',
+            content: publicUrl,
+            x: 10 + (i * 15) % 60,
+            y: 10 + Math.floor(i / 4) * 25,
+            width: 25,
+            height: 25,
+            rotation: 0,
+            zIndex: currentPage.elements.length + i
+          };
+          
+          newElements.push(element);
         }
-        setRelationshipType('none');
-      }
-    } catch (err) {
-      console.error("Error checking relationship:", err);
-    }
-  }
-
-  // Check follow status
-  async function checkFollowStatus() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      const { data } = await supabase
-        .from("followers")
-        .select("id")
-        .eq("follower_id", currentUserId)
-        .eq("following_id", profileId)
-        .single();
-
-      setIsFollowing(!!data);
-    } catch (err) {
-      // Not following or error - default to false
-      setIsFollowing(false);
-    }
-  }
-
-  async function loadMutualFriends() {
-    if (!currentUserId || !profileId) return;
-
-    try {
-      const { data: myFriends } = await supabase
-        .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`)
-        .eq('status', 'accepted');
-
-      const { data: theirFriends } = await supabase
-        .from("friendships")
-        .select("user_id, friend_id")
-        .or(`user_id.eq.${profileId},friend_id.eq.${profileId}`)
-        .eq('status', 'accepted');
-
-      if (myFriends && theirFriends) {
-        const myFriendIds = myFriends.map(f => 
-          f.user_id === currentUserId ? f.friend_id : f.user_id
-        );
-        const theirFriendIds = theirFriends.map(f => 
-          f.user_id === profileId ? f.friend_id : f.user_id
-        );
-
-        const mutuals = myFriendIds.filter(id => theirFriendIds.includes(id));
-        setMutualFriendsCount(mutuals.length);
-      }
-    } catch (err) {
-      console.error("Error loading mutual friends:", err);
-    }
-  }
-
-  async function loadTodayMemories() {
-    if (!profileId) return;
-    
-    setMemoriesLoading(true);
-    try {
-      const today = new Date();
-      const dayMonth = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      
-      const { data, error } = await supabase
-        .from("memories")
-        .select("*")
-        .eq("user_id", profileId)
-        .like("date", `%${dayMonth}`)
-        .order("date", { ascending: false });
-
-      if (error && error.code !== 'PGRST116') {
-        console.log("Memories query error:", error);
-        setTodayMemories([]);
-        return;
       }
 
-      // Filter based on visibility and relationship
-      const canViewFriendContent = relationshipType === 'friend';
-      const visibleMemories = (data || []).filter(memory => {
-        if (memory.visibility === 'public') return true;
-        if (memory.visibility === 'friends' && canViewFriendContent) return true;
-        if (currentUserId === profileId) return true;
-        return false;
-      });
-
-      setTodayMemories(visibleMemories);
-      if (visibleMemories.length > 0) {
-        setShowMemories(true);
+      // Add elements to current page
+      if (newElements.length > 0) {
+        const updatedPages = [...pages];
+        updatedPages[currentPageIndex] = {
+          ...currentPage,
+          elements: [...currentPage.elements, ...newElements]
+        };
+        setPages(updatedPages);
       }
-    } catch (err) {
-      console.error("Error loading memories:", err);
-      setTodayMemories([]);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload media. Please try again.');
     } finally {
-      setMemoriesLoading(false);
+      setUploading(false);
     }
   }
 
-  async function sendFriendRequest() {
-    if (!currentUserId || !profileId) return;
+  // Add text element
+  function addTextElement() {
+    if (!editingText.trim()) return;
 
-    try {
-      const { error } = await supabase
-        .from("friend_requests")
-        .insert({
-          from_user: currentUserId,
-          to_user: profileId,
-        });
+    const element: AlbumElement = {
+      id: `text-new-${Date.now()}`,
+      type: 'text',
+      content: editingText,
+      x: 30,
+      y: 40,
+      width: 30,
+      height: 10,
+      rotation: 0,
+      zIndex: pages[currentPageIndex].elements.length,
+      ...textStyle
+    };
 
-      if (!error) {
-        setFriendStatus("pending");
+    const updatedPages = [...pages];
+    updatedPages[currentPageIndex].elements.push(element);
+    setPages(updatedPages);
+    setShowTextEditor(false);
+    setEditingText('');
+  }
+
+  // Add sticker
+  function addSticker(emoji: string) {
+    const element: AlbumElement = {
+      id: `sticker-new-${Date.now()}`,
+      type: 'sticker',
+      content: emoji,
+      x: 40 + Math.random() * 20,
+      y: 40 + Math.random() * 20,
+      width: 10,
+      height: 10,
+      rotation: 0,
+      zIndex: pages[currentPageIndex].elements.length,
+      fontSize: 48
+    };
+
+    const updatedPages = [...pages];
+    updatedPages[currentPageIndex].elements.push(element);
+    setPages(updatedPages);
+    setShowStickerPicker(false);
+  }
+
+  // Delete element
+  function deleteElement(elementId: string) {
+    // Track deleted elements for database cleanup
+    if (!elementId.includes('new')) {
+      setDeletedElementIds([...deletedElementIds, elementId]);
+    }
+    
+    const updatedPages = [...pages];
+    updatedPages[currentPageIndex].elements = updatedPages[currentPageIndex].elements
+      .filter(el => el.id !== elementId);
+    setPages(updatedPages);
+    setSelectedElement(null);
+  }
+
+  // Delete page
+  function deletePage(pageIndex: number) {
+    if (pages.length <= 1) {
+      alert("You can't delete the last page");
+      return;
+    }
+
+    const pageToDelete = pages[pageIndex];
+    if (pageToDelete.pageId) {
+      setDeletedPageIds([...deletedPageIds, pageToDelete.pageId]);
+    }
+
+    const updatedPages = pages.filter((_, i) => i !== pageIndex);
+    setPages(updatedPages);
+    
+    // Adjust current page index if needed
+    if (currentPageIndex >= updatedPages.length) {
+      setCurrentPageIndex(updatedPages.length - 1);
+    } else if (currentPageIndex > pageIndex) {
+      setCurrentPageIndex(currentPageIndex - 1);
+    }
+  }
+
+  // Handle element drag
+  function handleElementMouseDown(elementId: string, e: React.MouseEvent) {
+    e.preventDefault();
+    setSelectedElement(elementId);
+    setDraggedElement(elementId);
+
+    const element = pages[currentPageIndex].elements.find(el => el.id === elementId);
+    if (!element || !canvasRef.current) return;
+
+    const canvas = canvasRef.current.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialX = element.x;
+    const initialY = element.y;
+
+    function handleMouseMove(e: MouseEvent) {
+      const deltaX = ((e.clientX - startX) / canvas.width) * 100;
+      const deltaY = ((e.clientY - startY) / canvas.height) * 100;
+
+      const updatedPages = [...pages];
+      const element = updatedPages[currentPageIndex].elements.find(el => el.id === elementId);
+      if (element) {
+        element.x = Math.max(0, Math.min(90, initialX + deltaX));
+        element.y = Math.max(0, Math.min(90, initialY + deltaY));
+        setPages([...updatedPages]);
       }
-    } catch (err) {
-      console.error("Error sending friend request:", err);
     }
+
+    function handleMouseUp() {
+      setDraggedElement(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    }
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   }
 
-  async function sendMessage() {
-    if (!currentUserId || !profileId) return;
-    router.push(`/messages?user=${profileId}`);
+  // Apply template
+  function applyTemplate(template: string) {
+    const updatedPages = [...pages];
+    const currentPage = updatedPages[currentPageIndex];
+    currentPage.template = template;
+
+    // Rearrange existing photos based on template
+    if (template === 'grid' && currentPage.elements.length > 0) {
+      const photos = currentPage.elements.filter(el => el.type === 'photo');
+      photos.forEach((photo, i) => {
+        if (i < 4) {
+          photo.x = (i % 2) * 48 + 2;
+          photo.y = Math.floor(i / 2) * 48 + 2;
+          photo.width = 46;
+          photo.height = 46;
+        }
+      });
+    } else if (template === 'feature' && currentPage.elements.length > 0) {
+      const photos = currentPage.elements.filter(el => el.type === 'photo');
+      if (photos[0]) {
+        photos[0].x = 10;
+        photos[0].y = 10;
+        photos[0].width = 80;
+        photos[0].height = 50;
+      }
+      photos.slice(1, 3).forEach((photo, i) => {
+        photo.x = 10 + i * 40;
+        photo.y = 65;
+        photo.width = 35;
+        photo.height = 25;
+      });
+    } else if (template === 'mosaic' && currentPage.elements.length > 0) {
+      const photos = currentPage.elements.filter(el => el.type === 'photo');
+      const positions = [
+        { x: 2, y: 2, w: 30, h: 45 },
+        { x: 34, y: 2, w: 30, h: 30 },
+        { x: 66, y: 2, w: 32, h: 60 },
+        { x: 2, y: 49, w: 30, h: 45 },
+        { x: 34, y: 34, w: 30, h: 30 },
+        { x: 34, y: 66, w: 30, h: 30 }
+      ];
+      photos.forEach((photo, i) => {
+        if (i < positions.length) {
+          photo.x = positions[i].x;
+          photo.y = positions[i].y;
+          photo.width = positions[i].w;
+          photo.height = positions[i].h;
+        }
+      });
+    }
+
+    setPages(updatedPages);
   }
 
-  // Follow/unfollow functionality
-  async function handleFollow() {
-    if (!currentUserId || !profileId) return;
+  // Change background
+  function changeBackground(color: string) {
+    const updatedPages = [...pages];
+    updatedPages[currentPageIndex].backgroundColor = color;
+    setPages(updatedPages);
+    setShowBackgroundPicker(false);
+  }
+
+  // Add new page
+  function addNewPage() {
+    if (pages.length >= 100) {
+      alert('Maximum 100 pages allowed');
+      return;
+    }
+    
+    setPages([...pages, {
+      id: `page-new-${Date.now()}`,
+      elements: [],
+      backgroundColor: '#ffffff',
+      template: 'freeform'
+    }]);
+    setCurrentPageIndex(pages.length);
+  }
+
+  // Update album
+  async function updateAlbum() {
+    if (!userId || !canEdit) {
+      alert('You do not have permission to save changes');
+      return;
+    }
+
+    if (!title.trim()) {
+      alert('Please add a title');
+      return;
+    }
+
+    setSaving(true);
+    addDebug('Starting update process...');
 
     try {
-      if (isFollowing) {
-        // Unfollow
-        const { error } = await supabase
-          .from("followers")
+      // Find first photo for cover image
+      let coverImage = null;
+      for (const page of pages) {
+        const photo = page.elements.find(el => el.type === 'photo');
+        if (photo) {
+          coverImage = photo.content;
+          break;
+        }
+      }
+
+      // Update album metadata
+      const { error: albumError } = await supabase
+        .from('albums')
+        .update({
+          title: title.trim(),
+          description: description?.trim() || null,
+          privacy,
+          cover_image: coverImage,
+          page_count: pages.length,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', albumId);
+
+      if (albumError) {
+        throw new Error(`Failed to update album: ${albumError.message}`);
+      }
+
+      addDebug('Album metadata updated');
+
+      // Delete removed pages
+      if (deletedPageIds.length > 0) {
+        addDebug(`Deleting pages: ${deletedPageIds.join(', ')}`);
+        await supabase
+          .from('album_pages')
           .delete()
-          .eq("follower_id", currentUserId)
-          .eq("following_id", profileId);
+          .in('id', deletedPageIds);
+      }
 
-        if (!error) {
-          setIsFollowing(false);
-          setFollowersCount(prev => Math.max(0, prev - 1));
+      // Delete removed elements
+      if (deletedElementIds.length > 0) {
+        addDebug(`Deleting elements: ${deletedElementIds.join(', ')}`);
+        await supabase
+          .from('album_elements')
+          .delete()
+          .in('id', deletedElementIds);
+      }
+
+      // Update or create pages
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        let pageId = page.pageId;
+
+        if (pageId) {
+          // Update existing page
+          const { error: pageUpdateError } = await supabase
+            .from('album_pages')
+            .update({
+              page_number: i + 1,
+              background_color: page.backgroundColor || '#ffffff',
+              template: page.template || 'freeform'
+            })
+            .eq('id', pageId);
+
+          if (pageUpdateError) throw pageUpdateError;
+
+          // Delete all existing elements for this page (simpler than tracking individual changes)
+          await supabase
+            .from('album_elements')
+            .delete()
+            .eq('page_id', pageId);
+        } else {
+          // Create new page
+          const { data: newPage, error: pageError } = await supabase
+            .from('album_pages')
+            .insert({
+              album_id: albumId,
+              page_number: i + 1,
+              background_color: page.backgroundColor || '#ffffff',
+              template: page.template || 'freeform'
+            })
+            .select()
+            .single();
+
+          if (pageError) throw pageError;
+          pageId = newPage.id;
         }
-      } else {
-        // Follow
-        const { error } = await supabase
-          .from("followers")
-          .insert({
-            follower_id: currentUserId,
-            following_id: profileId,
-          });
 
-        if (!error) {
-          setIsFollowing(true);
-          setFollowersCount(prev => prev + 1);
+        // Insert all elements for this page
+        if (page.elements.length > 0 && pageId) {
+          const elements = page.elements.map((el, index) => ({
+            page_id: pageId,
+            type: el.type,
+            content: el.content,
+            position_x: el.x || 0,
+            position_y: el.y || 0,
+            width: el.width || 25,
+            height: el.height || 25,
+            rotation: el.rotation || 0,
+            z_index: index,
+            font_size: el.fontSize || null,
+            font_color: el.fontColor || null,
+            font_family: el.fontFamily || null
+          }));
+
+          const { error: elementsError } = await supabase
+            .from('album_elements')
+            .insert(elements);
+
+          if (elementsError) throw elementsError;
         }
       }
-    } catch (err) {
-      console.error("Error following/unfollowing user:", err);
+
+      // Update collaborators (only if user is creator)
+      if (isCreator) {
+        // Remove collaborators who were removed
+        const removedCollabs = existingCollaborators
+          .filter(ec => !collaborators.includes(ec.user_id))
+          .map(ec => ec.user_id);
+
+        if (removedCollabs.length > 0) {
+          await supabase
+            .from('album_collaborators')
+            .delete()
+            .eq('album_id', albumId)
+            .in('user_id', removedCollabs);
+        }
+
+        // Add new collaborators
+        const newCollabs = collaborators.filter(
+          c => !existingCollaborators.some(ec => ec.user_id === c)
+        );
+
+        if (newCollabs.length > 0) {
+          const collabData = newCollabs.map(friendId => ({
+            album_id: albumId,
+            user_id: friendId,
+            can_edit: true,
+            status: 'pending'
+          }));
+
+          await supabase.from('album_collaborators').insert(collabData);
+
+          // Create notifications for new collaborators
+          const notifications = newCollabs.map(friendId => ({
+            user_id: friendId,
+            type: 'album.invited',
+            title: 'Album invitation',
+            body: `You've been invited to collaborate on "${title}"`,
+            target_url: `/albums/${albumId}`,
+            entity_id: albumId,
+            actor_id: userId
+          }));
+
+          await supabase.from('notifications').insert(notifications);
+          addDebug('Notifications sent to new collaborators');
+        }
+      }
+
+      alert('Album updated successfully!');
+      router.push(`/albums/${albumId}`);
+      
+    } catch (error: any) {
+      addDebug(`Update failed: ${error.message}`);
+      console.error('Update failed:', error);
+      alert(`Failed to update album: ${error.message}\n\nCheck debug info for details.`);
+    } finally {
+      setSaving(false);
     }
   }
 
-  // Loading state
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <span>Loading profile...</span>
-        <style jsx>{`
-          .loading-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            gap: 1rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
-          }
-          .loading-spinner {
-            width: 3rem;
-            height: 3rem;
-            border: 3px solid #e5e7eb;
-            border-top: 3px solid #8b5cf6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  // Error state - profile not found
-  if (!profile) {
-    return (
-      <div className="error-container">
-        <h2>Profile Not Found</h2>
-        <p>This profile doesn't exist or has been removed.</p>
-        <button onClick={() => router.push("/")} className="btn btn-primary">
-          Go Home
-        </button>
-        <style jsx>{`
-          .error-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            gap: 1rem;
-            text-align: center;
-            padding: 2rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
-          }
-          .btn {
-            padding: 0.75rem 1.5rem;
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            color: white;
-            border: none;
-            border-radius: 0.5rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  // Determine what content viewer can see
-  const canViewFriendContent = relationshipType === 'friend';
-  const canViewMemories = 
-    profile?.memories_visibility === 'public' ||
-    (profile?.memories_visibility === 'friends' && canViewFriendContent) ||
-    currentUserId === profileId;
-
-  return (
-    <div className="profile-page">
-      {/* Main Profile Display */}
-      <ProfileViewer
-        profile={profile}
-        currentUserId={currentUserId}
-        relationshipType={relationshipType}
-        mutualFriendsCount={mutualFriendsCount}
-        onAddFriend={sendFriendRequest}
-        onMessage={sendMessage}
-        onFollow={handleFollow}
-        isPending={friendStatus === "pending"}
-        isFollowing={isFollowing}
-      />
-
-      {/* Today's Memories Section (if available) */}
-      {canViewMemories && todayMemories.length > 0 && (
-        <div className="memories-section">
-          <div className="section-header">
-            <h3 className="section-title">✨ Today in Past Years</h3>
-          </div>
-          <div className="memories-grid">
-            {todayMemories.slice(0, 4).map(memory => (
-              <div 
-                key={memory.id} 
-                className="memory-item"
-                onClick={() => setSelectedMemory(memory)}
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="loading-spinner mb-4"></div>
+          <p>Loading album...</p>
+          {debugInfo.length > 0 && (
+            <div className="mt-4">
+              <button 
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-sm text-blue-600 underline"
               >
-                <img src={memory.photo_url} alt={memory.caption} />
-                <div className="memory-overlay">
-                  <p className="memory-caption">{memory.caption}</p>
-                  <span className="memory-date">
-                    {new Date(memory.date).getFullYear()}
-                  </span>
+                {showDebug ? 'Hide' : 'Show'} Debug Info ({debugInfo.length})
+              </button>
+              {showDebug && (
+                <div className="mt-2 max-w-md mx-auto text-left bg-gray-100 p-3 rounded text-xs max-h-40 overflow-y-auto">
+                  {debugInfo.map((info, index) => (
+                    <div key={index} className="font-mono">{info}</div>
+                  ))}
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (!canEdit) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-xl mb-4">You don't have permission to edit this album</p>
+          <button 
+            onClick={() => router.push(`/albums/${params.id}`)}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 mb-4"
+          >
+            Back to Album
+          </button>
+          
+          <div className="mt-4">
+            <button 
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-sm text-blue-600 underline"
+            >
+              {showDebug ? 'Hide' : 'Show'} Debug Info ({debugInfo.length})
+            </button>
+            {showDebug && (
+              <div className="mt-2 max-w-lg mx-auto text-left bg-gray-100 p-3 rounded text-xs max-h-60 overflow-y-auto">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="font-mono mb-1">{info}</div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Unified Posts and Events Feed */}
-      {(canViewFriendContent || profile.visibility === 'public') && (
-        <div className="unified-feed">
-          {/* Posts Feed - Displayed as continuous feed */}
-          <div className="posts-feed-section">
-            <PostsFeed 
-              userId={profileId}
-              viewerUserId={currentUserId}
-              maxPosts={20}
+  const currentPage = pages[currentPageIndex];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Debug Panel */}
+        {debugInfo.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <button 
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-sm text-blue-600 font-medium"
+            >
+              {showDebug ? 'Hide' : 'Show'} Debug Info ({debugInfo.length})
+            </button>
+            {showDebug && (
+              <div className="mt-2 bg-white p-3 rounded text-xs max-h-40 overflow-y-auto font-mono">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="mb-1">{info}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+            Edit Album
+          </h1>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Album Title *
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                placeholder="Summer Memories 2024"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Privacy
+              </label>
+              <select
+                value={privacy}
+                onChange={(e) => setPrivacy(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                disabled={!isCreator}
+              >
+                <option value="private">Private (Only me & collaborators)</option>
+                <option value="public">Public (Friends can see)</option>
+              </select>
+              {!isCreator && (
+                <p className="text-xs text-gray-500 mt-1">Only the album creator can change privacy settings</p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              rows={2}
+              placeholder="Our amazing trip to the mountains..."
             />
           </div>
 
-          {/* Events interspersed (if you want them mixed in later) */}
-          {events.length > 0 && (
-            <div className="events-feed-section">
-              <div className="section-header">
-                <h3 className="section-title">🎉 Upcoming Events</h3>
-              </div>
-              {events.map(event => (
-                <div key={event.id} className="event-feed-item">
-                  {event.image_url && (
-                    <img src={event.image_url} alt={event.title} className="event-image" />
-                  )}
-                  <div className="event-content">
-                    <h4 className="event-title">{event.title}</h4>
-                    {event.description && (
-                      <p className="event-description">{event.description}</p>
-                    )}
-                    <div className="event-details">
-                      <span className="event-date">
-                        📅 {new Date(event.start_date).toLocaleDateString()}
+          {isCreator && (
+            <div className="mt-4">
+              <FriendSelector
+                value={collaborators}
+                onChange={setCollaborators}
+                multiple={true}
+                label="Invite Friends to Collaborate"
+                placeholder="Search friends to add as co-creators..."
+              />
+              {existingCollaborators.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-600 mb-1">Current collaborators:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {existingCollaborators.map(collab => (
+                      <span key={collab.id} className="text-xs px-2 py-1 bg-gray-100 rounded-full">
+                        {collab.user?.full_name || 'Unknown'} 
+                        {collab.status === 'pending' && ' (Pending)'}
                       </span>
-                      {event.location && (
-                        <span className="event-location">
-                          📍 {event.location}
-                        </span>
-                      )}
-                      <span className="event-attendees">
-                        👥 {event.attendees_count} attending
-                      </span>
-                    </div>
-                    <div className="event-actions">
-                      <button className="btn btn-primary btn-sm">RSVP</button>
-                      <button className="btn btn-secondary btn-sm">Interested</button>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Empty state if no events (PostsFeed handles its own empty state) */}
-          {events.length === 0 && (
-            <div className="empty-events-message">
-              <p className="text-gray-500 text-sm text-center py-4">
-                No upcoming events
-              </p>
+              )}
             </div>
           )}
         </div>
+
+        {/* Toolbar */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
+          <div className="flex flex-wrap gap-2">
+            <label className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg cursor-pointer hover:opacity-90">
+              {uploading ? 'Uploading...' : '📷 Add Photos/Videos'}
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={(e) => e.target.files && handleMediaUpload(e.target.files)}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
+            
+            <button
+              onClick={() => setShowTextEditor(true)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              📝 Add Text
+            </button>
+            
+            <button
+              onClick={() => setShowStickerPicker(true)}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+            >
+              ✨ Stickers
+            </button>
+            
+            <button
+              onClick={() => setShowBackgroundPicker(true)}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+            >
+              🎨 Background
+            </button>
+
+            <select
+              value={currentPage?.template || 'freeform'}
+              onChange={(e) => applyTemplate(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="freeform">🎨 Freeform</option>
+              <option value="grid">⊞ Grid (2x2)</option>
+              <option value="feature">⭐ Feature</option>
+              <option value="mosaic">🎭 Mosaic</option>
+            </select>
+
+            {pages.length > 1 && (
+              <button
+                onClick={() => deletePage(currentPageIndex)}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 ml-auto"
+              >
+                🗑️ Delete Page
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Canvas */}
+        {currentPage && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Page {currentPageIndex + 1} of {pages.length}</h2>
+              {selectedElement && (
+                <button
+                  onClick={() => deleteElement(selectedElement)}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                >
+                  🗑️ Delete Selected
+                </button>
+              )}
+            </div>
+
+            <div
+              ref={canvasRef}
+              className="relative border-2 border-dashed border-gray-300 rounded-lg"
+              style={{
+                minHeight: '500px',
+                backgroundColor: currentPage.backgroundColor,
+                cursor: draggedElement ? 'grabbing' : 'default'
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setSelectedElement(null);
+                }
+              }}
+            >
+              {currentPage.elements.length === 0 ? (
+                <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                  <div className="text-center">
+                    <p className="text-3xl mb-2">📸</p>
+                    <p className="text-lg">Add photos or videos to this page</p>
+                    <p className="text-sm mt-2">Click the buttons above to get started</p>
+                  </div>
+                </div>
+              ) : (
+                currentPage.elements.map((element) => (
+                  <div
+                    key={element.id}
+                    className={`absolute transition-all ${
+                      selectedElement === element.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                    }`}
+                    style={{
+                      left: `${element.x}%`,
+                      top: `${element.y}%`,
+                      width: `${element.width}%`,
+                      height: `${element.height}%`,
+                      transform: `rotate(${element.rotation}deg)`,
+                      zIndex: element.zIndex,
+                      cursor: draggedElement === element.id ? 'grabbing' : 'move'
+                    }}
+                    onMouseDown={(e) => handleElementMouseDown(element.id, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedElement(element.id);
+                    }}
+                  >
+                    {element.type === 'photo' && (
+                      <img 
+                        src={element.content} 
+                        alt="" 
+                        className="w-full h-full object-cover rounded-lg shadow-lg"
+                        draggable={false}
+                      />
+                    )}
+                    {element.type === 'video' && (
+                      <video 
+                        src={element.content}
+                        controls
+                        className="w-full h-full object-cover rounded-lg shadow-lg"
+                      />
+                    )}
+                    {element.type === 'text' && (
+                      <div 
+                        className="p-2"
+                        style={{
+                          fontSize: `${element.fontSize}px`,
+                          color: element.fontColor,
+                          fontFamily: element.fontFamily,
+                          textShadow: '2px 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        {element.content}
+                      </div>
+                    )}
+                    {element.type === 'sticker' && (
+                      <div 
+                        className="flex items-center justify-center w-full h-full"
+                        style={{ fontSize: `${element.fontSize}px` }}
+                      >
+                        {element.content}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Page Navigation */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
+              disabled={currentPageIndex === 0}
+              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+            >
+              ← Previous
+            </button>
+
+            <div className="flex gap-2 overflow-x-auto">
+              {pages.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentPageIndex(index)}
+                  className={`w-10 h-10 rounded-lg flex-shrink-0 ${
+                    index === currentPageIndex 
+                      ? 'bg-purple-500 text-white' 
+                      : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+              
+              {pages.length < 100 && (
+                <button
+                  onClick={addNewPage}
+                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 flex-shrink-0"
+                >
+                  + Add Page
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
+              disabled={currentPageIndex === pages.length - 1}
+              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-between">
+          <button
+            onClick={() => router.push(`/albums/${albumId}`)}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+          
+          <button
+            onClick={updateAlbum}
+            disabled={saving || !title.trim()}
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+
+      {/* Sticker Picker Modal */}
+      {showStickerPicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6">
+            <h3 className="text-xl font-bold mb-4">Choose a Sticker</h3>
+            
+            {Object.entries(STICKER_LIBRARY).map(([category, stickers]) => (
+              <div key={category} className="mb-6">
+                <h4 className="text-lg font-semibold mb-2 capitalize">{category}</h4>
+                <div className="grid grid-cols-8 md:grid-cols-12 gap-2">
+                  {stickers.map((sticker, i) => (
+                    <button
+                      key={`${category}-${i}`}
+                      onClick={() => addSticker(sticker)}
+                      className="text-2xl hover:scale-125 transition-transform p-2"
+                    >
+                      {sticker}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            
+            <button
+              onClick={() => setShowStickerPicker(false)}
+              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg w-full md:w-auto"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Memory Modal */}
-      {selectedMemory && (
-        <PhotoMemories
-          memories={[selectedMemory]}
-          onClose={() => setSelectedMemory(null)}
-          isMobile={isMobile}
-        />
+      {/* Text Editor Modal */}
+      {showTextEditor && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Add Text</h3>
+            
+            <textarea
+              value={editingText}
+              onChange={(e) => setEditingText(e.target.value)}
+              placeholder="Enter your text..."
+              className="w-full p-3 border border-gray-300 rounded-lg mb-4"
+              rows={3}
+            />
+            
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div>
+                <label className="block text-sm mb-1">Size</label>
+                <input
+                  type="number"
+                  value={textStyle.fontSize}
+                  onChange={(e) => setTextStyle({...textStyle, fontSize: parseInt(e.target.value)})}
+                  min="12"
+                  max="96"
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm mb-1">Color</label>
+                <input
+                  type="color"
+                  value={textStyle.fontColor}
+                  onChange={(e) => setTextStyle({...textStyle, fontColor: e.target.value})}
+                  className="w-full h-10"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm mb-1">Font</label>
+                <select
+                  value={textStyle.fontFamily}
+                  onChange={(e) => setTextStyle({...textStyle, fontFamily: e.target.value})}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="Arial">Arial</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times</option>
+                  <option value="Comic Sans MS">Comic Sans</option>
+                  <option value="Courier New">Courier</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTextEditor(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addTextElement}
+                disabled={!editingText.trim()}
+                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50"
+              >
+                Add Text
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Background Picker Modal */}
+      {showBackgroundPicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Choose Background</h3>
+            
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {['#ffffff', '#f3f4f6', '#fef3c7', '#dbeafe', '#fce7f3', '#d1fae5', '#fee2e2', '#e0e7ff'].map(color => (
+                <button
+                  key={color}
+                  onClick={() => changeBackground(color)}
+                  className="h-16 rounded-lg border-2 border-gray-300 hover:scale-105 transition-transform"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            
+            <input
+              type="color"
+              value={currentPage?.backgroundColor || '#ffffff'}
+              onChange={(e) => changeBackground(e.target.value)}
+              className="w-full h-10 mb-4"
+            />
+            
+            <button
+              onClick={() => setShowBackgroundPicker(false)}
+              className="w-full px-4 py-2 bg-gray-200 rounded-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
       <style jsx>{`
-        .profile-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
-          padding: 2rem 1rem;
-          position: relative;
+        .loading-spinner {
+          width: 2rem;
+          height: 2rem;
+          border: 3px solid #e5e7eb;
+          border-top: 3px solid #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
         }
 
-        .profile-page::before {
-          content: '';
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: 
-            radial-gradient(circle at 20% 30%, rgba(139,92,246,0.08) 0%, transparent 50%),
-            radial-gradient(circle at 80% 70%, rgba(245,158,11,0.06) 0%, transparent 50%);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .profile-page > * {
-          position: relative;
-          z-index: 1;
-        }
-
-        @media (max-width: 640px) {
-          .profile-page {
-            padding: 1rem 0.5rem;
-          }
-        }
-
-        /* Memories Section */
-        .memories-section {
-          max-width: 800px;
-          margin: 2rem auto 0;
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .section-header {
-          margin-bottom: 1rem;
-        }
-
-        .section-title {
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0;
-        }
-
-        .memories-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          gap: 1rem;
-        }
-
-        .memory-item {
-          position: relative;
-          aspect-ratio: 1;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          cursor: pointer;
-          transition: transform 0.2s;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .memory-item:hover {
-          transform: scale(1.02);
-        }
-
-        .memory-item img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .memory-overlay {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: linear-gradient(transparent, rgba(0,0,0,0.8));
-          color: white;
-          padding: 1rem 0.75rem 0.75rem;
-        }
-
-        .memory-caption {
-          font-size: 0.875rem;
-          margin: 0 0 0.25rem 0;
-          font-weight: 500;
-          line-height: 1.2;
-        }
-
-        .memory-date {
-          font-size: 0.75rem;
-          opacity: 0.9;
-        }
-
-        /* Unified Feed Section */
-        .unified-feed {
-          max-width: 800px;
-          margin: 2rem auto 0;
-        }
-
-        .posts-feed-section {
-          /* PostsFeed component will handle its own styling */
-        }
-
-        .events-feed-section {
-          margin-top: 2rem;
-          background: white;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .event-feed-item {
-          border: 1px solid #e5e7eb;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          margin-bottom: 1.5rem;
-          transition: transform 0.2s, box-shadow 0.2s;
-          background: white;
-        }
-
-        .event-feed-item:last-child {
-          margin-bottom: 0;
-        }
-
-        .event-feed-item:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .event-image {
-          width: 100%;
-          height: 200px;
-          object-fit: cover;
-        }
-
-        .event-content {
-          padding: 1.25rem;
-        }
-
-        .event-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0 0 0.75rem 0;
-          line-height: 1.3;
-        }
-
-        .event-description {
-          color: #6b7280;
-          font-size: 0.875rem;
-          margin: 0 0 1rem 0;
-          line-height: 1.5;
-        }
-
-        .event-details {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 1rem;
-          margin-bottom: 1.25rem;
-          font-size: 0.875rem;
-          color: #4b5563;
-        }
-
-        @media (max-width: 640px) {
-          .event-details {
-            flex-direction: column;
-            gap: 0.5rem;
-          }
-        }
-
-        .event-actions {
-          display: flex;
-          gap: 0.75rem;
-        }
-
-        @media (max-width: 640px) {
-          .event-actions {
-            flex-direction: column;
-          }
-        }
-
-        .btn {
-          padding: 0.625rem 1.25rem;
-          border-radius: 0.5rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          border: none;
-          font-size: 0.875rem;
-          min-height: 44px;
-          touch-action: manipulation;
-        }
-
-        .btn-sm {
-          padding: 0.5rem 1rem;
-          font-size: 0.8rem;
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-          color: white;
-        }
-
-        .btn-primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-        }
-
-        .btn-secondary {
-          background: white;
-          color: #8b5cf6;
-          border: 1px solid #8b5cf6;
-        }
-
-        .btn-secondary:hover {
-          background: #8b5cf6;
-          color: white;
-        }
-
-        /* Empty States */
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 3rem 1rem;
-          text-align: center;
-          background: white;
-          border-radius: 1rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .empty-icon {
-          font-size: 3rem;
-          margin-bottom: 1rem;
-          opacity: 0.5;
-        }
-
-        .empty-text {
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #4b5563;
-          margin: 0 0 0.5rem 0;
-        }
-
-        .empty-subtext {
-          color: #9ca3af;
-          margin: 0;
-        }
-
-        /* Mobile optimizations */
-        @media (max-width: 640px) {
-          .memories-section,
-          .events-feed-section {
-            padding: 1rem;
-          }
-
-          .event-content {
-            padding: 1rem;
-          }
-
-          .btn {
-            -webkit-tap-highlight-color: transparent;
-          }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>
