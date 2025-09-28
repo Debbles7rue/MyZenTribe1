@@ -501,36 +501,36 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         )}
 
         {/* Mobile Tabs */}
-        <div className="flex border-b dark:border-gray-700 bg-white dark:bg-gray-900">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 sticky top-0 z-10">
           <button
             onClick={() => setActiveSection('chat')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
               activeSection === 'chat'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-600 dark:text-gray-400'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            Chat
+            💬 Chat
           </button>
           <button
             onClick={() => setActiveSection('plan')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
               activeSection === 'plan'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-600 dark:text-gray-400'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            Plan
+            📋 Plan
           </button>
           <button
             onClick={() => setActiveSection('friends')}
-            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors relative ${
               activeSection === 'friends'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-600 dark:text-gray-400'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            Friends
+            👥 Friends
             {carpoolData?.friends && carpoolData.friends.length > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                 {carpoolData.friends.length}
