@@ -25,6 +25,7 @@ interface EventCarpoolModalProps {
   };
   showToast?: (toast: { type: string; message: string }) => void;
   isMobile?: boolean;
+  onOpenSettings?: () => void; // NEW PROP
 }
 
 interface Message {
@@ -60,7 +61,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   userId,
   carpoolData,
   showToast,
-  isMobile = false
+  isMobile = false,
+  onOpenSettings // NEW PROP
 }) => {
   const [activeSection, setActiveSection] = useState('chat');
   const [isNewCarpool, setIsNewCarpool] = useState(false);
@@ -439,6 +441,18 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               >
                 <RefreshCw size={20} />
               </button>
+              {onOpenSettings && (
+                <button
+                  onClick={() => {
+                    onOpenSettings();
+                    vibrate();
+                  }}
+                  className="p-2 active:scale-95"
+                  title="Carpool Settings"
+                >
+                  <Settings size={20} />
+                </button>
+              )}
               <button
                 onClick={() => setShowInfo(true)}
                 className="p-2 -mr-2 active:scale-95"
@@ -960,6 +974,15 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 <RefreshCw size={20} />
                 <span className="text-sm">New Carpool</span>
               </button>
+              {onOpenSettings && (
+                <button
+                  onClick={onOpenSettings}
+                  className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
+                  title="Carpool Settings"
+                >
+                  <Settings size={20} />
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
