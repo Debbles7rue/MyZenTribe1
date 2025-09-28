@@ -72,6 +72,7 @@ interface CalendarModalsProps {
   carpoolMatches?: any[];
   gamificationEnabled?: boolean;
   setGamificationEnabled?: (enabled: boolean) => void;
+  onOpenCarpoolSettings?: () => void; // NEW PROP
 }
 
 export default function CalendarModals({
@@ -124,7 +125,8 @@ export default function CalendarModals({
   showToast,
   carpoolMatches,
   gamificationEnabled,
-  setGamificationEnabled
+  setGamificationEnabled,
+  onOpenCarpoolSettings // NEW PROP
 }: CalendarModalsProps) {
   
   // State for time blocking
@@ -775,7 +777,7 @@ export default function CalendarModals({
         </div>
       </Modal>
 
-      {/* Carpool Chat Modal - Using Full EventCarpoolModal Component */}
+      {/* Carpool Chat Modal - Using Full EventCarpoolModal Component with Settings Button */}
       <EventCarpoolModal
         isOpen={showCarpoolChat}
         onClose={() => setShowCarpoolChat(false)}
@@ -799,6 +801,7 @@ export default function CalendarModals({
         }}
         showToast={showToast}
         isMobile={isMobile}
+        onOpenSettings={onOpenCarpoolSettings} // NEW PROP - Connects to settings modal
       />
 
       {/* Keyboard Shortcuts Help - Desktop only */}
