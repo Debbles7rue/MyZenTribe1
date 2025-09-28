@@ -21,307 +21,612 @@ type Candle = {
   created_by?: string;
 };
 
-interface CandleDisplayProps { candle: Candle; }
-
-/* -------------------- tiny WebGL flame (no assets) -------------------- */
-function CanvasFlame({
-  width = 46, height = 76, className, style,
-}: { width?: number; height?: number; className?: string; style?: React.CSSProperties }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [ok, setOk] = useState(true);
-
-  useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const canvas = canvasRef.current; if (!canvas) return;
-
-    const gl =
-      canvas.getContext("webgl", { premultipliedAlpha: false, alpha: true }) ||
-      (canvas.getContext("experimental-webgl") as WebGLRenderingContext | null);
-    if (!gl) return setOk(false);
-
-    const vs = `
-      attribute vec2 position; varying vec2 vUv;
-      void main(){ vUv=(position+1.0)*0.5; gl_Position=vec4(position,0.0,1.0); }`;
-    const fs = `
-      precision mediump float; varying vec2 vUv; uniform float u_time; uniform vec2 u_res;
-      float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123); }
-      float n2(vec2 p){ vec2 i=floor(p),f=fract(p);
-        float a=h(i), b=h(i+vec2(1.,0.)), c=h(i+vec2(0.,1.)), d=h(i+vec2(1.,1.));
-        vec2 u=f*f*(3.-2.*f); return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y; }
-      float fbm(vec2 p){ float v=0., a=0.6; for(int i=0;i<5;i++){ v+=a*n2(p); p*=2.03; a*=0.55; } return v; }
-      float mask(vec2 uv){ uv.x=(uv.x-0.5)*1.05; float y=uv.y;
-        float r=length(vec2(uv.x*0.95, max(y*0.92,0.)));
-        float m=1.0 - smoothstep(0.0,1.0,r+0.12*y);
-        return clamp(m*smoothstep(0.0,0.22,1.0-y),0.0,1.0); }
-      vec3 ramp(float t){
-        vec3 a=vec3(1.00,0.99,0.96), b=vec3(1.00,0.93,0.58),
-             c=vec3(1.00,0.68,0.28), d=vec3(0.95,0.42,0.12);
-        if(t<0.35) return mix(a,b,smoothstep(0.0,0.35,t));
-        if(t<0.70) return mix(b,c,smoothstep(0.35,0.70,t));
-        return mix(c,d,smoothstep(0.70,1.0,t));
-      }
-      void main(){
-        vec2 uv=vUv; uv.x=(uv.x-0.5)*(u_res.x/u_res.y)+0.5;
-        float t=u_time;
-        vec2 p=vec2(uv.x*2.2, uv.y*3.4 - t*1.7);
-        float f=mask(uv)*smoothstep(0.02,0.9,0.7*fbm(p+vec2(0.,t*0.9))+0.3*fbm(p*1.37+vec2(2.1,-t*1.2))+0.25);
-        float sh=(n2(uv*13.0+t*2.1)-0.5)*0.02;
-        float I=clamp(f+sh+(1.0-uv.y)*0.35,0.0,1.0);
-        gl_FragColor=vec4(ramp(I), pow(I,1.15)*smoothstep(0.05,0.95,I));
-      }`;
-
-    const comp = (t:number,s:string)=>{ const sh=gl.createShader(t)!; gl.shaderSource(sh,s); gl.compileShader(sh);
-      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(sh)); setOk(false); return null; } return sh; };
-    const vsh = comp(gl.VERTEX_SHADER, vs); const fsh = comp(gl.FRAGMENT_SHADER, fs); if(!vsh||!fsh) return;
-    const prog = gl.createProgram()!; gl.attachShader(prog,vsh); gl.attachShader(prog,fsh); gl.linkProgram(prog);
-    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(prog)); setOk(false); return; }
-    gl.useProgram(prog);
-
-    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,  -1,1,1,-1,1,1]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(prog,"position"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-
-    const u_time = gl.getUniformLocation(prog,"u_time");
-    const u_res  = gl.getUniformLocation(prog,"u_res");
-
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.round(width*dpr); canvas.height = Math.round(height*dpr);
-    canvas.style.width = width+"px"; canvas.style.height = height+"px";
-    gl.viewport(0,0,canvas.width,canvas.height); gl.uniform2f(u_res, canvas.width, canvas.height);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    let raf=0; const t0=performance.now();
-    const draw=()=>{ gl.uniform1f(u_time, (performance.now()-t0)/1000); gl.drawArrays(gl.TRIANGLES,0,6); raf=requestAnimationFrame(draw); };
-    draw();
-    return ()=>cancelAnimationFrame(raf);
-  }, [width, height]);
-
-  if (!ok) return null;
-  return <canvas ref={canvasRef} className={className} style={style} />;
+interface CandleDisplayProps { 
+  candle: Candle; 
 }
 
-/* -------------------------------- Component ------------------------------- */
 export default function CandleDisplay({ candle }: CandleDisplayProps) {
   const isEternal = candle.candle_type === "eternal";
   const createdDate = new Date(candle.created_at);
-  const formattedDate = createdDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const formattedDate = createdDate.toLocaleDateString("en-US", { 
+    month: "short", 
+    day: "numeric", 
+    year: "numeric" 
+  });
 
-  // Refs for precise flame anchoring (relative to the candle-wrap, not the page)
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const wickRef = useRef<SVGRectElement | null>(null);
-  const flameRef = useRef<HTMLDivElement | null>(null);
+  // Random delays for natural flame movement
+  const flameDelay = useMemo(() => Math.random() * 2, [candle.id]);
+  const glowDelay = useMemo(() => Math.random() * 3, [candle.id]);
 
-  // Flower wreath (ellipse around base): back half + front half
-  const { frontFlowers, backFlowers } = useMemo(() => {
-    const cx = 100, cy = 272; const rx = 60, ry = 16; const N = 26;
-    const pts = Array.from({ length: N }, (_, i) => {
-      const th = (i / N) * Math.PI * 2;
-      return { x: cx + rx * Math.cos(th), y: cy + ry * Math.sin(th), th };
-    });
-    return { backFlowers: pts.filter(p => p.th <= Math.PI), frontFlowers: pts.filter(p => p.th > Math.PI) };
-  }, [candle.id]);
-
-  // Pearl necklace around top rim ellipse
-  const pearls = useMemo(() => {
-    const cx = 100, cy = 56; const rx = 58, ry = 11; const N = 36; // hugs rim
-    return Array.from({ length: N }, (_, i) => {
-      const th = (i / N) * Math.PI * 2;
-      return { x: cx + rx * Math.cos(th), y: cy + ry * Math.sin(th), th };
-    });
-  }, [candle.id]);
-
-  // Anchor flame to wick relative to the candle-wrap
-  useEffect(() => {
-    const place = () => {
-      if (!wrapRef.current || !wickRef.current || !flameRef.current) return;
-      const wrap = wrapRef.current.getBoundingClientRect();
-      const wick = wickRef.current.getBoundingClientRect();
-      const left = wick.left + wick.width / 2 - wrap.left;
-      const top  = wick.top - wrap.top;
-      const el = flameRef.current;
-      el.style.left = `${left}px`;
-      el.style.top  = `${top}px`; // bottom of canvas gets lifted to this with translateY(-100%)
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    wrapRef.current && ro.observe(wrapRef.current);
-    window.addEventListener("resize", place);
-    const t = setTimeout(place, 50);
-    return () => { ro.disconnect(); window.removeEventListener("resize", place); clearTimeout(t); };
+  // Small flower arrangement at base
+  const flowers = useMemo(() => {
+    const arrangements = [
+      // White roses and baby's breath
+      [
+        { type: 'rose', x: 85, y: 285, rotation: -15, color: '#ffffff' },
+        { type: 'rose', x: 105, y: 290, rotation: 25, color: '#f8f8f8' },
+        { type: 'rose', x: 120, y: 285, rotation: 5, color: '#ffffff' },
+        { type: 'breath', x: 90, y: 295, size: 0.8 },
+        { type: 'breath', x: 115, y: 295, size: 0.6 },
+        { type: 'breath', x: 125, y: 290, size: 0.7 },
+      ],
+      // Lilies arrangement
+      [
+        { type: 'lily', x: 88, y: 287, rotation: -10, color: '#ffffff' },
+        { type: 'lily', x: 112, y: 292, rotation: 20, color: '#fff5f5' },
+        { type: 'rose', x: 125, y: 285, rotation: 0, color: '#ffffff' },
+        { type: 'breath', x: 95, y: 296, size: 0.9 },
+        { type: 'breath', x: 120, y: 295, size: 0.5 },
+      ],
+      // Mixed arrangement
+      [
+        { type: 'rose', x: 90, y: 288, rotation: -20, color: '#ffffff' },
+        { type: 'lily', x: 110, y: 290, rotation: 15, color: '#fefefe' },
+        { type: 'rose', x: 125, y: 287, rotation: 10, color: '#f9f9f9' },
+        { type: 'breath', x: 92, y: 297, size: 0.7 },
+        { type: 'breath', x: 117, y: 296, size: 0.8 },
+        { type: 'breath', x: 128, y: 292, size: 0.6 },
+      ]
+    ];
+    
+    const hash = candle.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    return arrangements[hash % arrangements.length];
   }, [candle.id]);
 
   return (
     <>
       <div className="candle-display">
         <div className="stage">
-          <div className="ambient" aria-hidden />
-
-          <div className="candle-wrap" ref={wrapRef}>
-            {/* Single SVG: BACK wreath, candle, pearls, FRONT wreath — all aligned */}
-            <svg className="svg" viewBox="0 0 200 300" role="img" aria-label="White memorial candle">
+          {/* Soft ambient glow */}
+          <div className="ambient-glow" />
+          
+          <div className="candle-container">
+            <svg 
+              className="candle-svg" 
+              viewBox="0 0 200 300" 
+              role="img" 
+              aria-label={`Memorial candle for ${candle.name}`}
+            >
               <defs>
-                <linearGradient id={`waxSide-${candle.id}`} x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%"  stopColor="#d9d9d9" />
-                  <stop offset="16%" stopColor="#f7f7f7" />
-                  <stop offset="50%" stopColor="#ffffff" />
-                  <stop offset="84%" stopColor="#f2f2f2" />
-                  <stop offset="100%" stopColor="#d4d4d4" />
+                {/* Realistic wax gradients */}
+                <linearGradient id={`wax-main-${candle.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#e8e4f0" />
+                  <stop offset="15%" stopColor="#f5f3f8" />
+                  <stop offset="35%" stopColor="#ffffff" />
+                  <stop offset="65%" stopColor="#fdfcfe" />
+                  <stop offset="85%" stopColor="#f0eef4" />
+                  <stop offset="100%" stopColor="#e2dde8" />
                 </linearGradient>
-                <radialGradient id={`waxFront-${candle.id}`} cx="50%" cy="35%" r="65%">
+                
+                <radialGradient id={`wax-top-${candle.id}`} cx="50%" cy="30%" r="70%">
                   <stop offset="0%" stopColor="#ffffff" />
-                  <stop offset="55%" stopColor="#fff6ea" />
-                  <stop offset="100%" stopColor="#efeae3" />
+                  <stop offset="40%" stopColor="#faf9fc" />
+                  <stop offset="100%" stopColor="#f0edf5" />
                 </radialGradient>
-                <radialGradient id={`pool-${candle.id}`} cx="50%" cy="55%" r="70%">
-                  <stop offset="0%" stopColor="#fff8e6" />
-                  <stop offset="60%" stopColor="#ffe0b6" />
-                  <stop offset="100%" stopColor="#ffd094" />
+
+                {/* Melted wax pool */}
+                <radialGradient id={`wax-pool-${candle.id}`} cx="50%" cy="40%" r="60%">
+                  <stop offset="0%" stopColor="#fff8f0" />
+                  <stop offset="50%" stopColor="#f5f0e8" />
+                  <stop offset="100%" stopColor="#ede5db" />
                 </radialGradient>
-                <filter id={`softShadow-${candle.id}`} x="-35%" y="-35%" width="170%" height="190%">
-                  <feDropShadow dx="0" dy="2.5" stdDeviation="3" floodOpacity="0.18" />
+
+                {/* Realistic flame */}
+                <linearGradient id={`flame-outer-${candle.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="20%" stopColor="#fff8e1" />
+                  <stop offset="50%" stopColor="#ffd54f" />
+                  <stop offset="80%" stopColor="#ff8f00" />
+                  <stop offset="100%" stopColor="#e65100" />
+                </linearGradient>
+
+                <radialGradient id={`flame-inner-${candle.id}`} cx="50%" cy="60%" r="40%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="30%" stopColor="#fff9c4" />
+                  <stop offset="70%" stopColor="#ffeb3b" />
+                  <stop offset="100%" stopColor="transparent" />
+                </radialGradient>
+
+                {/* Soft shadow */}
+                <filter id={`shadow-${candle.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000000" floodOpacity="0.15"/>
+                </filter>
+
+                {/* Flame glow */}
+                <filter id={`flame-glow-${candle.id}`} x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                  <feMerge> 
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
                 </filter>
               </defs>
 
-              {/* BACK half wreath (behind candle) */}
-              <g opacity="0.95">
-                {backFlowers.map((p, i) => (
-                  <g key={`b-${i}`} transform={`translate(${p.x},${p.y}) scale(0.9)`}>
-                    {i % 3 === 0 && (<>
-                      <ellipse cx="-6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.9" />
-                      <ellipse cx="6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.9" />
-                    </>)}
-                    {[0,72,144,216,288].map(a => (
-                      <ellipse key={a} cx="0" cy="0" rx="8.2" ry="4.4" fill="#ffffff"
-                        transform={`rotate(${a}) translate(0,-6.2)`} />
-                    ))}
-                    <circle cx="0" cy="0" r="1.6" fill="#f0c94f" />
+              {/* Ground shadow */}
+              <ellipse cx="100" cy="295" rx="45" ry="8" fill="#000000" opacity="0.08" />
+
+              {/* Main candle body */}
+              <g filter={`url(#shadow-${candle.id})`}>
+                {/* Candle cylinder */}
+                <rect 
+                  x="45" 
+                  y="80" 
+                  width="110" 
+                  height="200" 
+                  rx="8" 
+                  fill={`url(#wax-main-${candle.id})`} 
+                />
+                
+                {/* Top rim */}
+                <ellipse 
+                  cx="100" 
+                  cy="80" 
+                  rx="55" 
+                  ry="12" 
+                  fill={`url(#wax-top-${candle.id})`} 
+                />
+
+                {/* Melted wax pool */}
+                <ellipse 
+                  cx="100" 
+                  cy="85" 
+                  rx="40" 
+                  ry="8" 
+                  fill={`url(#wax-pool-${candle.id})`} 
+                />
+
+                {/* Subtle wax drips */}
+                <path 
+                  d="M 75 85 Q 73 120 75 155 Q 74 180 76 200" 
+                  stroke="#f0edf5" 
+                  strokeWidth="1.5" 
+                  fill="none" 
+                  opacity="0.6"
+                />
+                <path 
+                  d="M 125 88 Q 127 110 125 140 Q 126 170 124 190" 
+                  stroke="#f0edf5" 
+                  strokeWidth="1" 
+                  fill="none" 
+                  opacity="0.4"
+                />
+
+                {/* Highlight on left side */}
+                <rect 
+                  x="50" 
+                  y="85" 
+                  width="8" 
+                  height="190" 
+                  rx="4" 
+                  fill="#ffffff" 
+                  opacity="0.3" 
+                />
+              </g>
+
+              {/* Wick */}
+              <rect 
+                x="98" 
+                y="75" 
+                width="4" 
+                height="15" 
+                rx="2" 
+                fill="#2c2c2c" 
+              />
+
+              {/* Realistic flame */}
+              <g 
+                className="flame-group" 
+                style={{ 
+                  transformOrigin: '100px 75px',
+                  animationDelay: `${flameDelay}s`
+                }}
+                filter={`url(#flame-glow-${candle.id})`}
+              >
+                {/* Outer flame */}
+                <path 
+                  d="M 100 75 
+                     C 92 65, 90 55, 95 45
+                     C 98 40, 102 40, 105 45
+                     C 110 55, 108 65, 100 75 Z" 
+                  fill={`url(#flame-outer-${candle.id})`}
+                  className="flame-outer"
+                />
+                
+                {/* Inner flame */}
+                <path 
+                  d="M 100 72
+                     C 95 63, 94 56, 98 50
+                     C 100 48, 102 48, 102 50
+                     C 106 56, 105 63, 100 72 Z" 
+                  fill={`url(#flame-inner-${candle.id})`}
+                  className="flame-inner"
+                />
+
+                {/* Bright core */}
+                <ellipse 
+                  cx="100" 
+                  cy="65" 
+                  rx="2" 
+                  ry="3" 
+                  fill="#ffffff" 
+                  opacity="0.8"
+                  className="flame-core"
+                />
+              </g>
+
+              {/* Name plaque - elegant and simple */}
+              <g transform="translate(100, 240)">
+                {/* Base shadow */}
+                <rect 
+                  x="-35" 
+                  y="-8" 
+                  width="70" 
+                  height="16" 
+                  rx="8" 
+                  fill="#000000" 
+                  opacity="0.1" 
+                />
+                
+                {/* Gold plaque */}
+                <rect 
+                  x="-35" 
+                  y="-10" 
+                  width="70" 
+                  height="16" 
+                  rx="8" 
+                  fill="#d4af37" 
+                />
+                
+                {/* Plaque highlight */}
+                <rect 
+                  x="-33" 
+                  y="-8" 
+                  width="66" 
+                  height="12" 
+                  rx="6" 
+                  fill="#f4e4a7" 
+                />
+
+                {/* Name text */}
+                <text 
+                  x="0" 
+                  y="2" 
+                  textAnchor="middle" 
+                  fontSize="9" 
+                  fontWeight="600" 
+                  fill="#8b4513"
+                  style={{ userSelect: 'none' }}
+                >
+                  {candle.name}
+                </text>
+              </g>
+
+              {/* Small flower arrangement at base */}
+              <g className="flowers" opacity="0.95">
+                {flowers.map((flower, index) => (
+                  <g 
+                    key={index} 
+                    transform={`translate(${flower.x}, ${flower.y}) rotate(${flower.rotation})`}
+                  >
+                    {flower.type === 'rose' && (
+                      <>
+                        {/* Rose petals */}
+                        <circle cx="0" cy="0" r="3.5" fill={flower.color} opacity="0.9" />
+                        <circle cx="-1" cy="-1" r="2.5" fill={flower.color} opacity="0.8" />
+                        <circle cx="1" cy="1" r="2" fill="#f0f0f0" opacity="0.7" />
+                        <circle cx="0" cy="0" r="1" fill="#f8f8f8" />
+                        
+                        {/* Stem */}
+                        <line x1="0" y1="3" x2="0" y2="8" stroke="#4a5d4a" strokeWidth="0.8" />
+                        
+                        {/* Small leaves */}
+                        <ellipse cx="-1.5" cy="5" rx="1.2" ry="0.8" fill="#5a6b5a" />
+                        <ellipse cx="1.5" cy="6" rx="1" ry="0.7" fill="#5a6b5a" />
+                      </>
+                    )}
+                    
+                    {flower.type === 'lily' && (
+                      <>
+                        {/* Lily petals */}
+                        {[0, 60, 120, 180, 240, 300].map(angle => (
+                          <ellipse 
+                            key={angle}
+                            cx="0" 
+                            cy="-2.5" 
+                            rx="1.5" 
+                            ry="4" 
+                            fill={flower.color}
+                            transform={`rotate(${angle})`}
+                            opacity="0.85"
+                          />
+                        ))}
+                        
+                        {/* Center */}
+                        <circle cx="0" cy="0" r="1" fill="#fff5e6" />
+                        
+                        {/* Stem */}
+                        <line x1="0" y1="2" x2="0" y2="7" stroke="#4a5d4a" strokeWidth="0.8" />
+                      </>
+                    )}
+                    
+                    {flower.type === 'breath' && (
+                      <>
+                        {/* Baby's breath clusters */}
+                        <g transform={`scale(${flower.size})`}>
+                          <circle cx="0" cy="0" r="0.8" fill="#ffffff" opacity="0.9" />
+                          <circle cx="2" cy="1" r="0.6" fill="#ffffff" opacity="0.8" />
+                          <circle cx="-1" cy="2" r="0.7" fill="#ffffff" opacity="0.85" />
+                          <circle cx="1" cy="-1.5" r="0.5" fill="#ffffff" opacity="0.7" />
+                        </g>
+                      </>
+                    )}
                   </g>
                 ))}
               </g>
 
-              {/* Candle body */}
-              <g filter={`url(#softShadow-${candle.id})`}>
-                <rect x="40" y="56" width="120" height="210" rx="22" fill={`url(#waxSide-${candle.id})`} />
-                <rect x="40" y="56" width="120" height="210" rx="22" fill={`url(#waxFront-${candle.id})`} opacity="0.92" />
-              </g>
-
-              {/* BEADS that wrap the rim */}
-              {/* Back half first (darker), then rim/pool occlude them, then front half brighter */}
-              {pearls.filter(p => p.th <= Math.PI).map((b, i) => (
-                <g key={`pb-${i}`} opacity="0.9">
-                  <circle cx={b.x} cy={b.y} r="2.4" fill="#e8dfcf" />
-                  <circle cx={b.x - 0.6} cy={b.y - 0.6} r="0.9" fill="#ffffff" opacity="0.75" />
+              {/* Eternal badge if applicable */}
+              {isEternal && (
+                <g transform="translate(160, 100)">
+                  <circle cx="0" cy="0" r="12" fill="#ffd700" opacity="0.9" />
+                  <text 
+                    x="0" 
+                    y="0" 
+                    textAnchor="middle" 
+                    dominantBaseline="central" 
+                    fontSize="14" 
+                    fill="#ffffff"
+                  >
+                    ∞
+                  </text>
                 </g>
-              ))}
-
-              {/* Rim & inner pool (occludes back pearls) */}
-              <path d="M50 56 Q100 42 150 56 C153 60 151 64 146 65 C129 71 71 71 54 65 C49 64 47 60 50 56 Z"
-                fill="#fff1db" />
-              <ellipse cx="100" cy="67" rx="36" ry="10" fill={`url(#pool-${candle.id})`} opacity="0.94" />
-
-              {/* Glossy bands */}
-              <rect x="58" y="64" width="12" height="188" rx="6" fill="#ffffff" opacity="0.33" />
-              <rect x="128" y="64" width="6" height="184" rx="3" fill="#ffffff" opacity="0.2" />
-
-              {/* Wick (top of wick at y=60) */}
-              <rect ref={wickRef} x="98.8" y="60" width="2.4" height="18" rx="1" fill="#2a2a2a" />
-
-              {/* Front half pearls */}
-              {pearls.filter(p => p.th > Math.PI).map((b, i) => (
-                <g key={`pf-${i}`}>
-                  <circle cx={b.x} cy={b.y} r="2.6" fill="#faf7f2" />
-                  <circle cx={b.x - 0.7} cy={b.y - 0.8} r="1.05" fill="#ffffff" opacity="0.9" />
-                  <circle cx={b.x + 0.7} cy={b.y + 0.5} r="0.8" fill="#d6c9b0" opacity="0.6" />
-                </g>
-              ))}
-
-              {/* Name tag ON candle (just above wreath) */}
-              <g>
-                <path d="M60 206 h80 a10 10 0 0 1 10 10 v3 a10 10 0 0 1 -10 10 h-80 a10 10 0 0 1 -10 -10 v-3 a10 10 0 0 1 10 -10 z"
-                  fill="#b88d35" opacity="0.95" />
-                <rect x="64" y="208.5" width="72" height="16" rx="8" fill="#f1d27a" />
-                <text x="100" y="220" textAnchor="middle" fontSize="8" fontWeight={800} fill="#3e2e16" letterSpacing="0.3"
-                  style={{ userSelect: "none" }}>{candle.name}</text>
-              </g>
-
-              {/* FRONT half wreath (in front of candle) */}
-              <g opacity="0.98">
-                {frontFlowers.map((p, i) => (
-                  <g key={`f-${i}`} transform={`translate(${p.x},${p.y}) scale(0.95)`}>
-                    {i % 3 === 1 && (<>
-                      <ellipse cx="-6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.95" />
-                      <ellipse cx="6" cy="2" rx="7" ry="3.5" fill="#7caf5a" opacity="0.95" />
-                    </>)}
-                    {[0,72,144,216,288].map(a => (
-                      <ellipse key={a} cx="0" cy="0" rx="8.8" ry="4.6" fill="#ffffff"
-                        transform={`rotate(${a}) translate(0,-6.6)`} />
-                    ))}
-                    <circle cx="0" cy="0" r="1.7" fill="#f0c94f" />
-                  </g>
-                ))}
-              </g>
+              )}
             </svg>
-
-            {/* Flame anchored to wick (relative to wrap) */}
-            <div ref={flameRef} className="flame">
-              <CanvasFlame width={46} height={76} />
-            </div>
           </div>
-
-          {isEternal && <div className="eternal-badge">Eternal Flame</div>}
         </div>
 
-        {/* Info */}
-        <div className="info">
-          <h3 className="title">{candle.name}</h3>
-          {candle.message && <p className="message">"{candle.message}"</p>}
-          <div className="meta">
-            <span>Lit on {formattedDate}</span>
-            {candle.amount_paid && <span>${(candle.amount_paid / 100).toFixed(2)}</span>}
+        {/* Candle information */}
+        <div className="candle-info">
+          <h3 className="candle-name">{candle.name}</h3>
+          {candle.message && (
+            <p className="candle-message">"{candle.message}"</p>
+          )}
+          <div className="candle-meta">
+            <span className="lit-date">Lit on {formattedDate}</span>
+            {candle.amount_paid && (
+              <span className="amount">${(candle.amount_paid / 100).toFixed(2)}</span>
+            )}
           </div>
         </div>
       </div>
 
       <style jsx>{`
         .candle-display {
-          background: radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-          border: 1px solid rgba(251,191,36,0.15);
-          backdrop-filter: blur(10px);
-          border-radius: 16px;
-          padding: 20px 18px;
-          display: flex; flex-direction: column; align-items: center; gap: 16px; overflow: hidden;
-        }
-        .stage { position: relative; width: 260px; max-width: 90vw; display: grid; place-items: center; }
-        .ambient {
-          position: absolute; inset: -40px -40px auto -40px; height: 260px;
-          background: radial-gradient(180px 120px at 50% 35%, rgba(255,222,170,0.5), rgba(255,180,80,0.14) 60%, transparent 70%);
-          filter: blur(2px); animation: breathe 3.2s ease-in-out infinite; pointer-events: none;
-        }
-        @keyframes breathe { 0%,100%{opacity:0.55; transform:scale(1);} 50%{opacity:0.85; transform:scale(1.03);} }
-
-        .candle-wrap { position: relative; width: 200px; height: 300px; }
-        .svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-
-        /* Flame left/top set in JS relative to .candle-wrap; raise bottom onto the wick */
-        .flame { position: absolute; transform: translate(-50%, -100%); width: 46px; height: 76px;
-          mix-blend-mode: screen; filter: drop-shadow(0 0 12px rgba(255,170,60,0.6)); pointer-events: none; }
-
-        .eternal-badge {
-          position: absolute; top: 6px; right: 8px; background: linear-gradient(135deg,#fbbf24,#f59e0b);
-          color: #fff; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 800;
-          letter-spacing: 0.04em; box-shadow: 0 4px 12px rgba(251,191,36,0.3);
+          background: linear-gradient(145deg, 
+            rgba(255,255,255,0.08) 0%, 
+            rgba(251,191,36,0.05) 50%, 
+            rgba(255,255,255,0.03) 100%);
+          border: 1px solid rgba(251,191,36,0.2);
+          backdrop-filter: blur(15px);
+          border-radius: 20px;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
+          transition: all 0.4s ease;
+          overflow: hidden;
+          position: relative;
         }
 
-        .info { text-align: center; max-width: 420px; }
-        .title { margin: 8px 0 6px 0; font-size: 1.12rem; color: #fbbf24; font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,0.25); }
-        .message { margin: 0 0 10px 0; font-size: 0.9rem; color: #fde68a; font-style: italic; opacity: 0.95; }
-        .meta { display: inline-flex; gap: 12px; font-size: 0.78rem; color: #fde68a; opacity: 0.8; }
+        .candle-display::before {
+          content: '';
+          position: absolute;
+          top: -2px;
+          left: -2px;
+          right: -2px;
+          bottom: -2px;
+          background: linear-gradient(45deg, 
+            transparent, 
+            rgba(251,191,36,0.3), 
+            transparent, 
+            rgba(251,191,36,0.1), 
+            transparent);
+          border-radius: 22px;
+          opacity: 0;
+          transition: opacity 0.4s ease;
+          z-index: -1;
+        }
 
+        .candle-display:hover::before {
+          opacity: 1;
+        }
+
+        .candle-display:hover {
+          transform: translateY(-6px);
+          background: linear-gradient(145deg, 
+            rgba(255,255,255,0.12) 0%, 
+            rgba(251,191,36,0.08) 50%, 
+            rgba(255,255,255,0.06) 100%);
+          border-color: rgba(251,191,36,0.4);
+          box-shadow: 
+            0 20px 40px rgba(251,191,36,0.15),
+            0 8px 16px rgba(0,0,0,0.1);
+        }
+
+        .stage {
+          position: relative;
+          width: 220px;
+          height: 320px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .ambient-glow {
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 120px;
+          height: 120px;
+          background: radial-gradient(
+            ellipse at center,
+            rgba(255, 193, 94, 0.4) 0%,
+            rgba(255, 165, 50, 0.2) 40%,
+            rgba(255, 140, 30, 0.1) 70%,
+            transparent 100%
+          );
+          border-radius: 50%;
+          filter: blur(4px);
+          animation: ambient-pulse 4s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        @keyframes ambient-pulse {
+          0%, 100% { 
+            opacity: 0.6; 
+            transform: translateX(-50%) scale(1);
+          }
+          50% { 
+            opacity: 0.9; 
+            transform: translateX(-50%) scale(1.1);
+          }
+        }
+
+        .candle-container {
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+
+        .candle-svg {
+          width: 100%;
+          height: 100%;
+          filter: drop-shadow(0 8px 16px rgba(0,0,0,0.1));
+        }
+
+        /* Realistic flame animations */
+        .flame-group {
+          animation: 
+            flame-sway 3.2s ease-in-out infinite,
+            flame-flicker 1.8s ease-in-out infinite;
+        }
+
+        @keyframes flame-sway {
+          0%, 100% { 
+            transform: translateX(-0.5px) rotate(-1deg) scaleY(1);
+          }
+          25% { 
+            transform: translateX(0.8px) rotate(1.5deg) scaleY(1.05);
+          }
+          50% { 
+            transform: translateX(0px) rotate(0deg) scaleY(0.98);
+          }
+          75% { 
+            transform: translateX(-0.3px) rotate(-0.8deg) scaleY(1.02);
+          }
+        }
+
+        @keyframes flame-flicker {
+          0%, 100% { opacity: 0.95; }
+          10% { opacity: 1; }
+          20% { opacity: 0.92; }
+          30% { opacity: 0.98; }
+          40% { opacity: 0.94; }
+          50% { opacity: 1; }
+          60% { opacity: 0.96; }
+          70% { opacity: 0.93; }
+          80% { opacity: 0.99; }
+          90% { opacity: 0.97; }
+        }
+
+        .flame-outer {
+          filter: blur(0.3px);
+        }
+
+        .flame-inner {
+          opacity: 0.8;
+        }
+
+        .flame-core {
+          animation: core-pulse 2.1s ease-in-out infinite;
+        }
+
+        @keyframes core-pulse {
+          0%, 100% { opacity: 0.8; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        /* Flower animations */
+        .flowers {
+          animation: gentle-sway 6s ease-in-out infinite;
+        }
+
+        @keyframes gentle-sway {
+          0%, 100% { transform: translateX(0px); }
+          50% { transform: translateX(1px); }
+        }
+
+        /* Information styling */
+        .candle-info {
+          text-align: center;
+          max-width: 300px;
+        }
+
+        .candle-name {
+          margin: 0 0 8px 0;
+          font-size: 1.2rem;
+          font-weight: 600;
+          color: #fbbf24;
+          text-shadow: 0 2px 8px rgba(251,191,36,0.3);
+          letter-spacing: 0.02em;
+        }
+
+        .candle-message {
+          margin: 0 0 12px 0;
+          font-size: 0.95rem;
+          color: #fde68a;
+          font-style: italic;
+          opacity: 0.95;
+          line-height: 1.4;
+        }
+
+        .candle-meta {
+          display: flex;
+          justify-content: center;
+          gap: 16px;
+          font-size: 0.85rem;
+          color: #fde68a;
+          opacity: 0.85;
+        }
+
+        .lit-date {
+          font-weight: 500;
+        }
+
+        .amount {
+          font-weight: 600;
+          color: #fbbf24;
+        }
+
+        /* Responsive design */
         @media (max-width: 480px) {
-          .stage { width: 220px; }
-          .candle-wrap { width: 180px; height: 270px; }
-          .flame { width: 42px; height: 70px; }
-          .title { font-size: 1rem; } .message { font-size: 0.85rem; }
+          .stage {
+            width: 180px;
+            height: 280px;
+          }
+          
+          .candle-name {
+            font-size: 1.1rem;
+          }
+          
+          .candle-message {
+            font-size: 0.9rem;
+          }
+          
+          .candle-meta {
+            font-size: 0.8rem;
+          }
         }
       `}</style>
     </>
