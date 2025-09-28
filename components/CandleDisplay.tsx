@@ -38,55 +38,62 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
   const flameDelay = useMemo(() => Math.random() * 2, [candle.id]);
   const glowDelay = useMemo(() => Math.random() * 3, [candle.id]);
 
-  // Lush memorial flower arrangement around base
+  // Lush memorial flower arrangement around base - repositioned to be visible
   const flowers = useMemo(() => {
     const cx = 100; // center x
-    const cy = 285; // center y (base of candle)
+    const baseY = 260; // move up significantly so flowers are visible
     
     const arrangement = [];
     
-    // Create a full, lush arrangement with multiple layers
-    // Back layer - larger flowers
+    // Create a full, lush arrangement with multiple layers - much more visible
+    // Back layer - larger flowers positioned around the candle
     const backFlowers = [
-      { type: 'lily', x: 70, y: 275, rotation: -15, color: '#ffffff', size: 1.3 },
-      { type: 'lily', x: 130, y: 275, rotation: 15, color: '#ffffff', size: 1.3 },
-      { type: 'rose', x: 85, y: 280, rotation: -25, color: '#ffffff', size: 1.2 },
-      { type: 'rose', x: 115, y: 280, rotation: 25, color: '#ffffff', size: 1.2 },
+      { type: 'lily', x: 50, y: 240, rotation: -15, color: '#ffffff', size: 1.8 },
+      { type: 'lily', x: 150, y: 240, rotation: 15, color: '#ffffff', size: 1.8 },
+      { type: 'rose', x: 65, y: 250, rotation: -25, color: '#ffffff', size: 1.6 },
+      { type: 'rose', x: 135, y: 250, rotation: 25, color: '#ffffff', size: 1.6 },
+      { type: 'lily', x: 100, y: 235, rotation: 0, color: '#ffffff', size: 1.7 },
     ];
     
     // Middle layer - medium flowers
     const middleFlowers = [
-      { type: 'carnation', x: 60, y: 285, rotation: -30, color: '#ffffff', size: 1.1 },
-      { type: 'carnation', x: 140, y: 285, rotation: 30, color: '#ffffff', size: 1.1 },
-      { type: 'rose', x: 75, y: 290, rotation: -10, color: '#f8f8f8', size: 1.0 },
-      { type: 'rose', x: 125, y: 290, rotation: 10, color: '#f8f8f8', size: 1.0 },
-      { type: 'lily', x: 100, y: 275, rotation: 0, color: '#ffffff', size: 1.2 },
+      { type: 'carnation', x: 40, y: 260, rotation: -30, color: '#ffffff', size: 1.4 },
+      { type: 'carnation', x: 160, y: 260, rotation: 30, color: '#ffffff', size: 1.4 },
+      { type: 'rose', x: 55, y: 265, rotation: -10, color: '#f8f8f8', size: 1.3 },
+      { type: 'rose', x: 145, y: 265, rotation: 10, color: '#f8f8f8', size: 1.3 },
+      { type: 'carnation', x: 75, y: 270, rotation: -20, color: '#ffffff', size: 1.2 },
+      { type: 'carnation', x: 125, y: 270, rotation: 20, color: '#ffffff', size: 1.2 },
     ];
     
     // Front layer - smaller flowers and details
     const frontFlowers = [
-      { type: 'carnation', x: 90, y: 292, rotation: -5, color: '#ffffff', size: 0.9 },
-      { type: 'carnation', x: 110, y: 292, rotation: 5, color: '#ffffff', size: 0.9 },
-      { type: 'rose', x: 100, y: 288, rotation: 0, color: '#ffffff', size: 0.8 },
+      { type: 'rose', x: 70, y: 275, rotation: -5, color: '#ffffff', size: 1.1 },
+      { type: 'rose', x: 130, y: 275, rotation: 5, color: '#ffffff', size: 1.1 },
+      { type: 'carnation', x: 85, y: 280, rotation: -15, color: '#ffffff', size: 1.0 },
+      { type: 'carnation', x: 115, y: 280, rotation: 15, color: '#ffffff', size: 1.0 },
     ];
     
-    // Add lots of greenery and baby's breath
+    // Add lots of greenery and baby's breath throughout
     const greenery = [
-      // Leaves scattered throughout
-      { type: 'leaf', x: 65, y: 288, rotation: -20, size: 1.0 },
-      { type: 'leaf', x: 135, y: 288, rotation: 20, size: 1.0 },
-      { type: 'leaf', x: 80, y: 295, rotation: -45, size: 0.8 },
-      { type: 'leaf', x: 120, y: 295, rotation: 45, size: 0.8 },
-      { type: 'leaf', x: 95, y: 295, rotation: -10, size: 0.9 },
-      { type: 'leaf', x: 105, y: 295, rotation: 10, size: 0.9 },
+      // Large leaves scattered throughout - more visible
+      { type: 'leaf', x: 45, y: 255, rotation: -20, size: 1.3 },
+      { type: 'leaf', x: 155, y: 255, rotation: 20, size: 1.3 },
+      { type: 'leaf', x: 30, y: 270, rotation: -45, size: 1.1 },
+      { type: 'leaf', x: 170, y: 270, rotation: 45, size: 1.1 },
+      { type: 'leaf', x: 60, y: 285, rotation: -30, size: 1.0 },
+      { type: 'leaf', x: 140, y: 285, rotation: 30, size: 1.0 },
+      { type: 'leaf', x: 90, y: 285, rotation: -10, size: 0.9 },
+      { type: 'leaf', x: 110, y: 285, rotation: 10, size: 0.9 },
       
-      // Baby's breath clusters
-      { type: 'breath', x: 72, y: 282, size: 1.2 },
-      { type: 'breath', x: 128, y: 282, size: 1.2 },
-      { type: 'breath', x: 88, y: 287, size: 1.0 },
-      { type: 'breath', x: 112, y: 287, size: 1.0 },
-      { type: 'breath', x: 77, y: 293, size: 0.9 },
-      { type: 'breath', x: 123, y: 293, size: 0.9 },
+      // Baby's breath clusters - larger and more visible
+      { type: 'breath', x: 52, y: 245, size: 1.4 },
+      { type: 'breath', x: 148, y: 245, size: 1.4 },
+      { type: 'breath', x: 68, y: 258, size: 1.2 },
+      { type: 'breath', x: 132, y: 258, size: 1.2 },
+      { type: 'breath', x: 47, y: 275, size: 1.1 },
+      { type: 'breath', x: 153, y: 275, size: 1.1 },
+      { type: 'breath', x: 80, y: 287, size: 1.0 },
+      { type: 'breath', x: 120, y: 287, size: 1.0 },
     ];
     
     return [...backFlowers, ...middleFlowers, ...frontFlowers, ...greenery];
