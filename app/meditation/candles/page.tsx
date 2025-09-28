@@ -1067,7 +1067,6 @@ function AddEternalCandleModal({
 
     setSaving(true);
 
-    // Get current user - THIS FIX WAS ADDED!
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error } = await supabase
@@ -1076,110 +1075,11 @@ function AddEternalCandleModal({
         name: nm, 
         color, 
         message: msg || null, 
-        candle_type: 'renewable',
-        payment_status: 'pending',
-        amount_paid: 99,
-        fade_stage: 1,
-        user_id: user?.id  // Track who lit this candle
-      }])
-      .select("*")
-      .single();
-
-    if (error) {
-      alert(error.message);
-      setSaving(false);
-      return;
-    }
-
-    const returnUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/meditation/candles?success=true&candle_id=${data.id}`;
-    const stripeUrl = `https://buy.stripe.com/14AdR8amRbEocd267c6wE05?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
-    
-    if (typeof window !== 'undefined') {
-      window.location.href = stripeUrl;
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
-      <div className="bg-slate-800 border border-blue-600/30 rounded-t-3xl md:rounded-2xl p-6 w-full md:max-w-lg md:mx-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-        <div className="w-12 h-1 bg-blue-600/30 rounded-full mx-auto mb-4 md:hidden" />
-        
-        <div className="flex justify-between items-center mb-4 md:mb-6">
-          <div>
-            <h3 className="text-lg md:text-xl font-bold text-blue-200">Light a Renewable Candle</h3>
-            <p className="text-xs md:text-sm text-blue-200/70 mt-1">For prayers, healing, and intentions</p>
-          </div>
-          <button onClick={onClose} className="p-2 -mr-2 text-blue-200 hover:text-blue-400 text-xl md:text-2xl">×</button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-blue-200 mb-2">Light this candle for</label>
-            <input
-              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-blue-600/30 text-blue-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Healing for Mom"
-              maxLength={60}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-blue-200 mb-2">Your prayer or intention (optional)</label>
-            <textarea
-              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-blue-600/30 text-blue-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              rows={3}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Sending healing light..."
-              maxLength={240}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-blue-200 mb-2">Candle color</label>
-            <div className="grid grid-cols-6 gap-2">
-              {COLOR_PRESETS.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  title={c.label}
-                  className={`h-12 md:h-10 rounded-lg border-2 transition-all ${
-                    color === c.key ? "border-blue-500 ring-2 ring-blue-400/50" : "border-blue-600/30 hover:border-blue-600/50"
-                  }`}
-                  style={{ background: c.wax }}
-                  onClick={() => setColor(c.key)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-3 mt-6">
-          <button 
-            onClick={onClose} 
-            disabled={saving}
-            className="flex-1 px-4 py-3 bg-slate-700/50 text-blue-200 rounded-lg hover:bg-slate-700/70 transition-colors font-medium border border-blue-600/30"
-          >
-            Cancel
-          </button>
-          <button 
-            onClick={proceedToPayment} 
-            disabled={saving || !name}
-            className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-lg disabled:opacity-50"
-          >
-            {saving ? "Processing..." : "Pay $0.99"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-} null, 
         expires_at: null,
         candle_type: 'eternal',
         payment_status: 'pending',
         amount_paid: 500,
-        user_id: user?.id  // NOW TRACKING WHO LIT THIS ETERNAL CANDLE!
+        user_id: user?.id
       }])
       .select("*")
       .single();
@@ -1299,7 +1199,6 @@ function AddRenewableCandleModal({
 
     setSaving(true);
 
-    // Get current user
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error } = await supabase
@@ -1307,4 +1206,103 @@ function AddRenewableCandleModal({
       .insert([{ 
         name: nm, 
         color, 
-        message: msg ||
+        message: msg || null, 
+        candle_type: 'renewable',
+        payment_status: 'pending',
+        amount_paid: 99,
+        fade_stage: 1,
+        user_id: user?.id
+      }])
+      .select("*")
+      .single();
+
+    if (error) {
+      alert(error.message);
+      setSaving(false);
+      return;
+    }
+
+    const returnUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/meditation/candles?success=true&candle_id=${data.id}`;
+    const stripeUrl = `https://buy.stripe.com/14AdR8amRbEocd267c6wE05?prefilled_email=${encodeURIComponent('')}&client_reference_id=${data.id}&success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
+    
+    if (typeof window !== 'undefined') {
+      window.location.href = stripeUrl;
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
+      <div className="bg-slate-800 border border-blue-600/30 rounded-t-3xl md:rounded-2xl p-6 w-full md:max-w-lg md:mx-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+        <div className="w-12 h-1 bg-blue-600/30 rounded-full mx-auto mb-4 md:hidden" />
+        
+        <div className="flex justify-between items-center mb-4 md:mb-6">
+          <div>
+            <h3 className="text-lg md:text-xl font-bold text-blue-200">Light a Renewable Candle</h3>
+            <p className="text-xs md:text-sm text-blue-200/70 mt-1">For prayers, healing, and intentions</p>
+          </div>
+          <button onClick={onClose} className="p-2 -mr-2 text-blue-200 hover:text-blue-400 text-xl md:text-2xl">×</button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Light this candle for</label>
+            <input
+              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-blue-600/30 text-blue-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Healing for Mom"
+              maxLength={60}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Your prayer or intention (optional)</label>
+            <textarea
+              className="w-full px-3 md:px-4 py-3 text-base md:text-sm bg-slate-700/50 border border-blue-600/30 text-blue-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              rows={3}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Sending healing light..."
+              maxLength={240}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Candle color</label>
+            <div className="grid grid-cols-6 gap-2">
+              {COLOR_PRESETS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  title={c.label}
+                  className={`h-12 md:h-10 rounded-lg border-2 transition-all ${
+                    color === c.key ? "border-blue-500 ring-2 ring-blue-400/50" : "border-blue-600/30 hover:border-blue-600/50"
+                  }`}
+                  style={{ background: c.wax }}
+                  onClick={() => setColor(c.key)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button 
+            onClick={onClose} 
+            disabled={saving}
+            className="flex-1 px-4 py-3 bg-slate-700/50 text-blue-200 rounded-lg hover:bg-slate-700/70 transition-colors font-medium border border-blue-600/30"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={proceedToPayment} 
+            disabled={saving || !name}
+            className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-lg disabled:opacity-50"
+          >
+            {saving ? "Processing..." : "Pay $0.99"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
