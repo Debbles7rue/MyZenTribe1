@@ -424,8 +424,11 @@ export default function CalendarPage() {
     }
   }, [view, batchMode, isMobile, setForm, vibrate]);
 
+  // FIXED: onSelectEvent function to prevent r.includes error
   const onSelectEvent = useCallback((evt: any) => {
     const r = evt.resource as any;
+    
+    // Handle moon phase events
     if (r?.moonPhase) {
       showToast({ 
         type: 'info', 
@@ -439,18 +442,21 @@ export default function CalendarPage() {
     
     if (batchMode) {
       const eventId = r?.id || evt.id;
-      setSelectedBatchEvents(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(eventId)) {
-          newSet.delete(eventId);
-        } else {
-          newSet.add(eventId);
-        }
-        return newSet;
-      });
+      if (eventId) {
+        setSelectedBatchEvents(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(eventId)) {
+            newSet.delete(eventId);
+          } else {
+            newSet.add(eventId);
+          }
+          return newSet;
+        });
+      }
       return;
     }
     
+    // Regular event selection
     if (r?.id) {
       setSelected(r);
       setDetailsOpen(true);
