@@ -1,44 +1,45 @@
 // app/(protected)/calendar/components/CalendarHeader.tsx
-import React, { useState } from 'react';
-import type { Mode } from '../types';
+"use client";
+
+import React from "react";
+
+// Define the type for user stats (for gamification)
+interface UserStats {
+  level: number;
+  points: number;
+  streak: number;
+  achievements: string[];
+}
 
 interface CalendarHeaderProps {
-  mode: Mode;
-  setMode: (mode: Mode) => void;
+  mode: "my" | "whats";
+  setMode: (mode: "my" | "whats") => void;
   showMoon: boolean;
   setShowMoon: (show: boolean) => void;
   isMobile: boolean;
   setOpenCreate: (open: boolean) => void;
   setMobileMenuOpen: (open: boolean) => void;
-  darkMode: boolean;
-  setDarkMode: (dark: boolean) => void;
-  batchMode: boolean;
-  setBatchMode: (batch: boolean) => void;
-  userStats: any;
-  isListening: boolean;
-  startListening: () => void;
-  activeHeaderTab: 'calendar' | 'reminders' | 'todos' | 'templates';
-  setActiveHeaderTab: (tab: 'calendar' | 'reminders' | 'todos' | 'templates') => void;
-  gamificationEnabled: boolean;
-  setGamificationEnabled: (enabled: boolean) => void;
-  
-  // Carpool props
-  setShowCarpoolChat: (show: boolean) => void;
-  setSelectedCarpoolEvent: (event: any) => void;
-  
-  // Modal props
   setShowTemplates: (show: boolean) => void;
   setShowAnalytics: (show: boolean) => void;
   setShowMeetingCoordinator: (show: boolean) => void;
   setShowShortcutsHelp: (show: boolean) => void;
-  
-  // Lists button props
-  showListsSidebar?: boolean;
-  setShowListsSidebar?: (show: boolean) => void;
-  onListsClick?: () => void;
-  
-  // Time blocking prop for mobile
-  setShowTimeBlocking?: (show: boolean) => void;
+  darkMode: boolean;
+  setDarkMode: (dark: boolean) => void;
+  batchMode: boolean;
+  setBatchMode: (batch: boolean) => void;
+  userStats?: UserStats | null;
+  isListening: boolean;
+  startListening: () => void;
+  activeHeaderTab: string;
+  setActiveHeaderTab: (tab: string) => void;
+  gamificationEnabled: boolean;
+  setGamificationEnabled: (enabled: boolean) => void;
+  setShowCarpoolChat: (show: boolean) => void;
+  setSelectedCarpoolEvent: (event: any) => void;
+  showListsSidebar: boolean;
+  setShowListsSidebar: (show: boolean) => void;
+  onListsClick: () => void;
+  setShowTimeBlocking: (show: boolean) => void;
 }
 
 export default function CalendarHeader({
