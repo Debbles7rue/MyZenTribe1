@@ -38,61 +38,58 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
   const flameDelay = useMemo(() => Math.random() * 2, [candle.id]);
   const glowDelay = useMemo(() => Math.random() * 3, [candle.id]);
 
-  // Small memorial flower arrangement
+  // Lush memorial flower arrangement around base
   const flowers = useMemo(() => {
     const cx = 100; // center x
     const cy = 285; // center y (base of candle)
-    const rx = 35;  // smaller horizontal radius
-    const ry = 10;  // smaller vertical radius
     
-    const wreathFlowers = [];
+    const arrangement = [];
     
-    // Create a gentle arrangement with 6 main flowers - traditional memorial types
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const x = cx + rx * Math.cos(angle);
-      const y = cy + ry * Math.sin(angle);
+    // Create a full, lush arrangement with multiple layers
+    // Back layer - larger flowers
+    const backFlowers = [
+      { type: 'lily', x: 70, y: 275, rotation: -15, color: '#ffffff', size: 1.3 },
+      { type: 'lily', x: 130, y: 275, rotation: 15, color: '#ffffff', size: 1.3 },
+      { type: 'rose', x: 85, y: 280, rotation: -25, color: '#ffffff', size: 1.2 },
+      { type: 'rose', x: 115, y: 280, rotation: 25, color: '#ffffff', size: 1.2 },
+    ];
+    
+    // Middle layer - medium flowers
+    const middleFlowers = [
+      { type: 'carnation', x: 60, y: 285, rotation: -30, color: '#ffffff', size: 1.1 },
+      { type: 'carnation', x: 140, y: 285, rotation: 30, color: '#ffffff', size: 1.1 },
+      { type: 'rose', x: 75, y: 290, rotation: -10, color: '#f8f8f8', size: 1.0 },
+      { type: 'rose', x: 125, y: 290, rotation: 10, color: '#f8f8f8', size: 1.0 },
+      { type: 'lily', x: 100, y: 275, rotation: 0, color: '#ffffff', size: 1.2 },
+    ];
+    
+    // Front layer - smaller flowers and details
+    const frontFlowers = [
+      { type: 'carnation', x: 90, y: 292, rotation: -5, color: '#ffffff', size: 0.9 },
+      { type: 'carnation', x: 110, y: 292, rotation: 5, color: '#ffffff', size: 0.9 },
+      { type: 'rose', x: 100, y: 288, rotation: 0, color: '#ffffff', size: 0.8 },
+    ];
+    
+    // Add lots of greenery and baby's breath
+    const greenery = [
+      // Leaves scattered throughout
+      { type: 'leaf', x: 65, y: 288, rotation: -20, size: 1.0 },
+      { type: 'leaf', x: 135, y: 288, rotation: 20, size: 1.0 },
+      { type: 'leaf', x: 80, y: 295, rotation: -45, size: 0.8 },
+      { type: 'leaf', x: 120, y: 295, rotation: 45, size: 0.8 },
+      { type: 'leaf', x: 95, y: 295, rotation: -10, size: 0.9 },
+      { type: 'leaf', x: 105, y: 295, rotation: 10, size: 0.9 },
       
-      // Use traditional memorial flowers
-      let flowerType, color;
-      if (i % 3 === 0) {
-        flowerType = 'lily';      // White lilies - most traditional
-        color = '#ffffff';
-      } else if (i % 3 === 1) {
-        flowerType = 'rose';      // White roses - purity & love
-        color = '#ffffff';
-      } else {
-        flowerType = 'carnation'; // White carnations - remembrance
-        color = '#fefefe';
-      }
-      
-      wreathFlowers.push({
-        type: flowerType,
-        x: x,
-        y: y,
-        rotation: (angle * 180 / Math.PI) + 90,
-        color: color,
-        size: 0.9 // Smaller, more delicate
-      });
-    }
+      // Baby's breath clusters
+      { type: 'breath', x: 72, y: 282, size: 1.2 },
+      { type: 'breath', x: 128, y: 282, size: 1.2 },
+      { type: 'breath', x: 88, y: 287, size: 1.0 },
+      { type: 'breath', x: 112, y: 287, size: 1.0 },
+      { type: 'breath', x: 77, y: 293, size: 0.9 },
+      { type: 'breath', x: 123, y: 293, size: 0.9 },
+    ];
     
-    // Add just a few baby's breath for softness
-    for (let i = 0; i < 4; i++) {
-      const angle = (i / 4) * Math.PI * 2 + (Math.PI / 4);
-      const x = cx + (rx - 6) * Math.cos(angle);
-      const y = cy + (ry - 2) * Math.sin(angle);
-      
-      wreathFlowers.push({
-        type: 'breath',
-        x: x,
-        y: y,
-        rotation: 0,
-        color: '#ffffff',
-        size: 0.8 // Smaller baby's breath
-      });
-    }
-    
-    return wreathFlowers;
+    return [...backFlowers, ...middleFlowers, ...frontFlowers, ...greenery];
   }, [candle.id]);
 
   return (
@@ -323,75 +320,75 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
                 </text>
               </g>
 
-              {/* Small memorial flower arrangement */}
-              <g className="flowers" opacity="0.92">
+              {/* Lush memorial flower arrangement */}
+              <g className="flowers" opacity="0.94">
                 {flowers.map((flower, index) => (
                   <g 
                     key={index} 
-                    transform={`translate(${flower.x}, ${flower.y}) rotate(${flower.rotation}) scale(${flower.size || 1})`}
+                    transform={`translate(${flower.x}, ${flower.y}) rotate(${flower.rotation || 0}) scale(${flower.size || 1})`}
                   >
                     {flower.type === 'lily' && (
                       <>
-                        {/* White lily - traditional memorial flower */}
+                        {/* Large white lily - traditional memorial flower */}
                         {[0, 60, 120, 180, 240, 300].map(angle => (
                           <ellipse 
                             key={angle}
                             cx="0" 
-                            cy="-3" 
-                            rx="1.8" 
-                            ry="4.5" 
+                            cy="-4" 
+                            rx="2.5" 
+                            ry="6" 
                             fill={flower.color}
                             transform={`rotate(${angle})`}
                             opacity="0.9"
                           />
                         ))}
-                        {/* Center with subtle golden stamens */}
-                        <circle cx="0" cy="0" r="1.2" fill="#fff8f0" />
-                        <circle cx="0" cy="-0.3" r="0.6" fill="#ffeaa7" opacity="0.8" />
+                        {/* Center with golden stamens */}
+                        <circle cx="0" cy="0" r="2" fill="#fff8f0" />
+                        <circle cx="0" cy="-0.5" r="1" fill="#ffd700" opacity="0.7" />
                         
-                        {/* Simple stem */}
-                        <line x1="0" y1="2.5" x2="0" y2="6" stroke="#4a5d4a" strokeWidth="0.8" />
+                        {/* Visible stem */}
+                        <line x1="0" y1="4" x2="0" y2="12" stroke="#4a5d4a" strokeWidth="1.2" />
                       </>
                     )}
                     
                     {flower.type === 'rose' && (
                       <>
-                        {/* White rose - classic memorial flower */}
-                        <circle cx="0" cy="0" r="3.8" fill={flower.color} opacity="0.9" />
-                        <circle cx="-1" cy="-1" r="2.8" fill={flower.color} opacity="0.8" />
-                        <circle cx="1" cy="1" r="2.2" fill="#f8f8f8" opacity="0.7" />
-                        <circle cx="0" cy="0" r="1.3" fill="#ffffff" />
+                        {/* Full white rose */}
+                        <circle cx="0" cy="0" r="5" fill={flower.color} opacity="0.9" />
+                        <circle cx="-1.5" cy="-1.5" r="3.8" fill={flower.color} opacity="0.85" />
+                        <circle cx="1.5" cy="1.5" r="3" fill="#f8f8f8" opacity="0.8" />
+                        <circle cx="0" cy="0" r="2" fill="#ffffff" />
                         
-                        {/* Delicate outer petals */}
-                        {[0, 72, 144, 216, 288].map(angle => (
+                        {/* Multiple petal layers */}
+                        {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => (
                           <ellipse 
                             key={angle}
                             cx="0" 
-                            cy="-2.5" 
-                            rx="1.5" 
-                            ry="2.5" 
+                            cy="-3.5" 
+                            rx="2.2" 
+                            ry="3.8" 
                             fill={flower.color}
-                            opacity="0.6"
+                            opacity="0.7"
                             transform={`rotate(${angle})`}
                           />
                         ))}
                         
-                        {/* Simple stem */}
-                        <line x1="0" y1="3" x2="0" y2="6.5" stroke="#4a5d4a" strokeWidth="0.8" />
+                        {/* Stem */}
+                        <line x1="0" y1="5" x2="0" y2="13" stroke="#4a5d4a" strokeWidth="1.5" />
                         
-                        {/* Small leaves */}
-                        <ellipse cx="-1.8" cy="4.5" rx="1.5" ry="0.9" fill="#5a6b5a" opacity="0.8" />
-                        <ellipse cx="1.8" cy="5" rx="1.3" ry="0.8" fill="#5a6b5a" opacity="0.8" />
+                        {/* Rose leaves */}
+                        <ellipse cx="-3" cy="8" rx="2.5" ry="1.5" fill="#5a6b5a" opacity="0.8" />
+                        <ellipse cx="3" cy="9" rx="2.2" ry="1.3" fill="#5a6b5a" opacity="0.8" />
                       </>
                     )}
                     
                     {flower.type === 'carnation' && (
                       <>
-                        {/* White carnation - remembrance */}
-                        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(angle => (
+                        {/* Ruffled carnation */}
+                        {[0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340].map(angle => (
                           <path 
                             key={angle}
-                            d="M 0 0 Q -1.2 -2.5 0 -3.5 Q 1.2 -2.5 0 0"
+                            d="M 0 0 Q -1.8 -3.5 0 -5 Q 1.8 -3.5 0 0"
                             fill={flower.color}
                             opacity="0.85"
                             transform={`rotate(${angle})`}
@@ -399,21 +396,34 @@ export default function CandleDisplay({ candle }: CandleDisplayProps) {
                         ))}
                         
                         {/* Center */}
-                        <circle cx="0" cy="0" r="1" fill="#f8f8f8" />
+                        <circle cx="0" cy="0" r="1.5" fill="#f8f8f8" />
                         
-                        {/* Simple stem */}
-                        <line x1="0" y1="2" x2="0" y2="5.5" stroke="#4a5d4a" strokeWidth="0.7" />
+                        {/* Stem */}
+                        <line x1="0" y1="3" x2="0" y2="10" stroke="#4a5d4a" strokeWidth="1" />
+                      </>
+                    )}
+                    
+                    {flower.type === 'leaf' && (
+                      <>
+                        {/* Large decorative leaves */}
+                        <ellipse cx="0" cy="0" rx="3.5" ry="1.8" fill="#5a6b5a" opacity="0.85" />
+                        <ellipse cx="0" cy="0" rx="3" ry="1.3" fill="#6b7c6b" opacity="0.7" />
+                        {/* Leaf vein */}
+                        <line x1="-3" y1="0" x2="3" y2="0" stroke="#4a5d4a" strokeWidth="0.5" opacity="0.6" />
                       </>
                     )}
                     
                     {flower.type === 'breath' && (
                       <>
-                        {/* Baby's breath - delicate filler */}
+                        {/* Abundant baby's breath clusters */}
                         <g transform={`scale(${flower.size})`}>
-                          <circle cx="0" cy="0" r="0.9" fill="#ffffff" opacity="0.9" />
-                          <circle cx="1.8" cy="1" r="0.7" fill="#ffffff" opacity="0.8" />
-                          <circle cx="-1.2" cy="1.5" r="0.8" fill="#ffffff" opacity="0.85" />
-                          <circle cx="1" cy="-1.3" r="0.6" fill="#ffffff" opacity="0.75" />
+                          <circle cx="0" cy="0" r="1.2" fill="#ffffff" opacity="0.9" />
+                          <circle cx="3" cy="1.5" r="1" fill="#ffffff" opacity="0.85" />
+                          <circle cx="-2.5" cy="2" r="1.1" fill="#ffffff" opacity="0.8" />
+                          <circle cx="2" cy="-2.5" r="0.9" fill="#ffffff" opacity="0.75" />
+                          <circle cx="-3" cy="-1.5" r="1" fill="#ffffff" opacity="0.8" />
+                          <circle cx="1.5" cy="3" r="0.8" fill="#ffffff" opacity="0.7" />
+                          <circle cx="-1" cy="-3" r="0.9" fill="#ffffff" opacity="0.75" />
                         </g>
                       </>
                     )}
