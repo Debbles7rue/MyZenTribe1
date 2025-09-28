@@ -26,61 +26,137 @@ export default function AvatarUploader({
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const src = useMemo(() => preview || value || "/default-avatar.png", [preview, value]);
 
   function pickFile() {
-    setShowInstructions(true); // Show instructions when user initiates upload
+    setShowInstructions(true);
+    setErr(null); // Clear any previous errors
+    setSuccessMessage(null); // Clear any previous success message
     inputRef.current?.click();
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) {
-      setShowInstructions(false); // Hide if cancelled
+      setShowInstructions(false);
       return;
     }
     
-    setErr(null);
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setErr("File too large. Please choose an image under 10MB.");
+      setShowInstructions(false);
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setErr("Please select an image file (JPG, PNG, WebP, etc.)");
+      setShowInstructions(false);
+      return;
+    }
+    
     setBusy(true);
+    setUploadProgress(0);
+    setErr(null);
+    setSuccessMessage(null);
 
     try {
+      // Show progress during processing
+      setUploadProgress(20);
+      
       // Resize to max 1024px on the long edge, encode JPEG
       const processed = await tryResizeToJpeg(file, 1024);
       const blob = processed?.blob ?? file;
       const ext = processed?.ext ?? guessExt(file.type) ?? "bin";
       const contentType = processed?.type ?? (file.type || "application/octet-stream");
 
-      const path = `${userId}/avatar_${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
+      setUploadProgress(40);
+
+      // Use timestamp to avoid conflicts
+      const timestamp = Date.now();
+      const path = `${userId}/avatar_${timestamp}.${ext}`;
+      
+      // Upload with timeout handling
+      const uploadPromise = supabase.storage
         .from(bucket)
         .upload(path, blob, {
           cacheControl: "3600",
-          upsert: true,
+          upsert: false, // Changed to false to avoid conflicts
           contentType,
         });
-      if (upErr) throw upErr;
 
-      // Public URL
+      // Add timeout (30 seconds)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Upload timeout - please check your connection and try again")), 30000)
+      );
+
+      const { error: upErr } = await Promise.race([uploadPromise, timeoutPromise]) as any;
+      if (upErr) {
+        // Provide more specific error messages
+        if (upErr.message?.includes('duplicate')) {
+          throw new Error("Upload conflict - please try again");
+        } else if (upErr.message?.includes('size')) {
+          throw new Error("File too large - please use a smaller image");
+        } else {
+          throw new Error(upErr.message || "Upload failed - please try again");
+        }
+      }
+
+      setUploadProgress(70);
+
+      // Get public URL with cache busting
       const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-      const publicUrl = pub.publicUrl;
+      const publicUrl = `${pub.publicUrl}?t=${timestamp}`;
 
-      // Persist immediately
-      const { error: dbErr } = await supabase
-        .from("profiles")
-        .update({ avatar_url: publicUrl })
-        .eq("id", userId);
-      if (dbErr) throw dbErr;
+      setUploadProgress(90);
+
+      // Update database with retry logic
+      let dbUpdateSuccess = false;
+      let retryCount = 0;
+      
+      while (!dbUpdateSuccess && retryCount < 3) {
+        try {
+          const { error: dbErr } = await supabase
+            .from("profiles")
+            .update({ 
+              avatar_url: publicUrl,
+              updated_at: new Date().toISOString() 
+            })
+            .eq("id", userId);
+          
+          if (dbErr) throw dbErr;
+          dbUpdateSuccess = true;
+        } catch (dbError: any) {
+          retryCount++;
+          if (retryCount >= 3) {
+            throw new Error("Failed to save profile - please try again");
+          }
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
+      }
+
+      setUploadProgress(100);
 
       // Update UI
       setPreview(publicUrl);
       onChange?.(publicUrl);
       
-      // Hide instructions after successful upload
+      // Show success message
+      setSuccessMessage("Profile photo updated successfully!");
       setShowInstructions(false);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
     } catch (e: any) {
-      setErr(e?.message || "Upload failed");
-      // Keep instructions visible if there's an error
+      console.error('Avatar upload error:', e);
+      setErr(e?.message || "Upload failed - please check your connection and try again");
+      setUploadProgress(0);
     } finally {
       if (inputRef.current) inputRef.current.value = "";
       setBusy(false);
@@ -93,26 +169,54 @@ export default function AvatarUploader({
 
       <div className="avatar-container">
         {/* Avatar Image */}
-        <img
-          src={src}
-          alt="Avatar"
-          width={size}
-          height={size}
-          className="avatar-image"
-          style={{
-            width: size,
-            height: size,
-            borderRadius: "50%",
-            objectFit: "cover",
-            border: "2px solid rgba(139,92,246,0.2)",
-            background: "#fafafa",
-            transition: "all 0.2s ease",
-            cursor: userId ? "pointer" : "default",
-          }}
-          onClick={userId ? pickFile : undefined}
-          onMouseEnter={() => setShowInstructions(true)}
-          onMouseLeave={() => !busy && !err && setShowInstructions(false)}
-        />
+        <div className="avatar-wrapper" style={{ position: 'relative' }}>
+          <img
+            src={src}
+            alt="Avatar"
+            width={size}
+            height={size}
+            className="avatar-image"
+            style={{
+              width: size,
+              height: size,
+              borderRadius: "50%",
+              objectFit: "cover",
+              border: "2px solid rgba(139,92,246,0.2)",
+              background: "#fafafa",
+              transition: "all 0.2s ease",
+              cursor: userId ? "pointer" : "default",
+            }}
+            onClick={userId ? pickFile : undefined}
+            onMouseEnter={() => setShowInstructions(true)}
+            onMouseLeave={() => !busy && !err && setShowInstructions(false)}
+          />
+          
+          {/* Progress Ring */}
+          {busy && uploadProgress > 0 && (
+            <div 
+              className="progress-ring"
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: size + 10,
+                height: size + 10,
+                borderRadius: '50%',
+                background: `conic-gradient(#8b5cf6 ${uploadProgress * 3.6}deg, rgba(139,92,246,0.2) 0deg)`,
+                padding: '3px',
+                pointerEvents: 'none'
+              }}
+            >
+              <div style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: '50%',
+                background: 'white'
+              }} />
+            </div>
+          )}
+        </div>
         
         {/* Upload Button */}
         <div className="upload-controls">
@@ -131,9 +235,10 @@ export default function AvatarUploader({
               cursor: busy || !userId ? "not-allowed" : "pointer",
               transition: "all 0.2s ease",
               boxShadow: "0 2px 4px rgba(139,92,246,0.2)",
+              minWidth: "120px", // Prevent button size jumping
             }}
           >
-            {busy ? "Uploading…" : "Change photo"}
+            {busy ? `Uploading... ${uploadProgress}%` : "Change photo"}
           </button>
           
           <input
@@ -147,7 +252,7 @@ export default function AvatarUploader({
       </div>
 
       {/* Instructions - Only when needed */}
-      {(showInstructions || busy) && (
+      {(showInstructions || busy) && !err && !successMessage && (
         <div className="upload-instructions" style={{
           marginTop: "0.5rem",
           padding: "0.5rem 0.75rem",
@@ -158,7 +263,23 @@ export default function AvatarUploader({
           color: "#6b7280",
           animation: "fadeIn 0.2s ease-in-out",
         }}>
-          📸 JPG/PNG/WebP supported. Large photos are auto-resized.
+          📸 JPG/PNG/WebP supported. Max 10MB. Large photos are auto-resized.
+        </div>
+      )}
+      
+      {/* Success Message */}
+      {successMessage && (
+        <div className="success-message" style={{
+          marginTop: "0.5rem",
+          padding: "0.5rem 0.75rem",
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          borderRadius: "0.5rem",
+          fontSize: "0.75rem",
+          color: "#15803d",
+          animation: "fadeIn 0.2s ease-in-out",
+        }}>
+          ✅ {successMessage}
         </div>
       )}
       
@@ -175,6 +296,21 @@ export default function AvatarUploader({
           animation: "fadeIn 0.2s ease-in-out",
         }}>
           ❌ {err}
+          <button 
+            onClick={() => setErr(null)}
+            style={{
+              marginLeft: "0.5rem",
+              background: "none",
+              border: "none",
+              color: "#dc2626",
+              cursor: "pointer",
+              fontSize: "0.75rem",
+              padding: "0",
+              textDecoration: "underline"
+            }}
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -190,6 +326,10 @@ export default function AvatarUploader({
           flex-direction: column;
           align-items: center;
           gap: 1rem;
+        }
+
+        .avatar-wrapper {
+          display: inline-block;
         }
 
         .avatar-image:hover {
@@ -220,6 +360,20 @@ export default function AvatarUploader({
           font-weight: 500;
           color: #374151;
           margin-bottom: 0.25rem;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+          .upload-button {
+            -webkit-tap-highlight-color: transparent;
+            font-size: 0.8rem !important;
+            padding: 0.75rem 1rem !important;
+            min-height: 44px; /* Touch target size */
+          }
+          
+          .avatar-image {
+            -webkit-tap-highlight-color: transparent;
+          }
         }
       `}</style>
     </div>
