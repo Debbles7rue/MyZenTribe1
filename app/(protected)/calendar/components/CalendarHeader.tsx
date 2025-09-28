@@ -50,6 +50,10 @@ export default function CalendarHeader({
   isMobile,
   setOpenCreate,
   setMobileMenuOpen,
+  setShowTemplates,
+  setShowAnalytics,
+  setShowMeetingCoordinator,
+  setShowShortcutsHelp,
   darkMode,
   setDarkMode,
   batchMode,
@@ -63,17 +67,13 @@ export default function CalendarHeader({
   setGamificationEnabled,
   setShowCarpoolChat,
   setSelectedCarpoolEvent,
-  setShowTemplates,
-  setShowAnalytics,
-  setShowMeetingCoordinator,
-  setShowShortcutsHelp,
   showListsSidebar,
   setShowListsSidebar,
   onListsClick,
   setShowTimeBlocking
 }: CalendarHeaderProps) {
-  
-  // FIXED: Carpool button with debugging
+
+  // Enhanced handler functions with better error handling and debugging
   const handleCarpoolClick = () => {
     console.log('Carpool button clicked');
     try {
@@ -92,7 +92,6 @@ export default function CalendarHeader({
     }
   };
 
-  // FIXED: Coordinate button with debugging
   const handleCoordinateClick = () => {
     console.log('Coordinate button clicked');
     try {
@@ -107,7 +106,6 @@ export default function CalendarHeader({
     }
   };
 
-  // FIXED: Voice command with debugging
   const handleVoiceClick = () => {
     console.log('Voice button clicked, isListening:', isListening);
     try {
@@ -122,7 +120,6 @@ export default function CalendarHeader({
     }
   };
 
-  // FIXED: Lists click with debugging
   const handleListsClick = () => {
     console.log('Lists button clicked');
     try {
@@ -138,267 +135,378 @@ export default function CalendarHeader({
   };
 
   return (
-    <div className="mb-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-lg p-4">
-      <div className="flex flex-col gap-3">
-        {/* Top Row - Title and Mode Toggle */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              Calendar Hub
-            </h1>
-            
-            {/* User Stats Badge - Desktop only */}
-            {!isMobile && gamificationEnabled && userStats && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full text-white text-sm font-medium shadow-md">
-                <span>Lvl {userStats.level}</span>
-                <span className="text-xs opacity-75">•</span>
-                <span>{userStats.points} pts</span>
-              </div>
-            )}
-          </div>
+    <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-30 transition-all duration-300">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6">
+        
+        {/* Mobile Header - Enhanced for better UX */}
+        {isMobile ? (
+          <div className="flex items-center justify-between py-3">
+            {/* Left: Menu Button with haptic feedback hint */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2.5 rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-200 active:scale-95"
+              aria-label="Open menu"
+            >
+              <svg className="w-6 h-6 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
 
-          {/* Mode Toggle */}
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg bg-white/50 dark:bg-gray-700/50 shadow-md p-0.5">
+            {/* Center: Enhanced Title & Mode Switcher */}
+            <div className="flex-1 mx-4">
+              <div className="text-center mb-2">
+                <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Calendar
+                </h1>
+                {/* Mobile Gamification Stats */}
+                {gamificationEnabled && userStats && (
+                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2">
+                    <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded-full">
+                      Lvl {userStats.level}
+                    </span>
+                    <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      {userStats.streak}d streak
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Enhanced Mode Switcher - Mobile */}
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 max-w-xs mx-auto shadow-inner">
+                <button
+                  onClick={() => setMode("my")}
+                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
+                    mode === "my"
+                      ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                >
+                  My Events
+                </button>
+                <button
+                  onClick={() => setMode("whats")}
+                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
+                    mode === "whats"
+                      ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                >
+                  What's Happening
+                </button>
+              </div>
+            </div>
+
+            {/* Right: Enhanced Create Button with quick actions hint */}
+            <div className="flex items-center gap-2">
+              {/* Voice Button - Mobile only when needed */}
               <button
-                onClick={() => setMode('my')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  mode === 'my'
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                onClick={handleVoiceClick}
+                className={`p-2 rounded-lg transition-all duration-200 active:scale-95 ${
+                  isListening
+                    ? "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 animate-pulse shadow-lg"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                 }`}
+                title="Voice commands"
               >
-                My Calendar
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
               </button>
+
               <button
-                onClick={() => setMode('whats')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  mode === 'whats'
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
+                onClick={() => setOpenCreate(true)}
+                className="p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
+                aria-label="Create event"
               >
-                What's Happening
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
               </button>
             </div>
           </div>
-        </div>
+        ) : (
+          /* Desktop Header - Enhanced with better organization */
+          <div className="flex items-center justify-between py-4">
+            
+            {/* Left: Title & Mode Switcher */}
+            <div className="flex items-center gap-6">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Calendar
+                </h1>
+                {gamificationEnabled && userStats && (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Level {userStats.level} • {userStats.points} points • {userStats.streak} day streak
+                  </div>
+                )}
+              </div>
 
-        {/* Features Row - All buttons in one row */}
-        <div className="flex flex-wrap items-center gap-2">
-          
-          {/* MOBILE-SPECIFIC BUTTONS */}
-          {isMobile && (
-            <>
-              {/* Voice Command Button - Mobile (FIXED: Now with debugging) */}
-              <button
-                onClick={handleVoiceClick}
-                className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
-                  isListening
-                    ? 'bg-red-500 text-white animate-pulse'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
-                }`}
-              >
-                {isListening ? '🎤 Listening...' : '🎙️ Voice'}
-              </button>
-              
-              {/* Lists Button - Mobile (FIXED: Now with debugging) */}
-              {onListsClick && mode === 'my' && (
+              {/* Enhanced Mode Switcher - Desktop */}
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 shadow-inner">
                 <button
-                  onClick={handleListsClick}
-                  className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
-                  title="My lists"
+                  onClick={() => setMode("my")}
+                  className={`px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    mode === "my"
+                      ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
                 >
-                  📋 Lists
+                  My Calendar
                 </button>
-              )}
-            </>
-          )}
+                <button
+                  onClick={() => setMode("whats")}
+                  className={`px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    mode === "whats"
+                      ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                >
+                  What's Happening
+                </button>
+              </div>
+            </div>
 
-          {/* DESKTOP LISTS BUTTON (FIXED: Now with debugging) */}
-          {!isMobile && mode === 'my' && onListsClick && (
+            {/* Center: Enhanced Action Buttons with better grouping */}
+            <div className="flex items-center gap-1">
+              
+              {/* Primary Actions Group */}
+              <div className="flex items-center gap-1 mr-3">
+                {/* Lists Sidebar Toggle */}
+                {mode === "my" && (
+                  <button
+                    onClick={handleListsClick}
+                    className={`p-2.5 rounded-lg transition-all duration-200 ${
+                      showListsSidebar 
+                        ? "bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400" 
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                    }`}
+                    title="Toggle lists sidebar"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Enhanced Voice Command with better visual feedback */}
+                <button
+                  onClick={handleVoiceClick}
+                  className={`p-2.5 rounded-lg transition-all duration-200 ${
+                    isListening 
+                      ? "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 animate-pulse shadow-lg" 
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                  title="Voice commands"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </button>
+
+                {/* Enhanced Batch Mode Toggle */}
+                <button
+                  onClick={() => setBatchMode(!batchMode)}
+                  className={`p-2.5 rounded-lg transition-all duration-200 ${
+                    batchMode 
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 shadow-md" 
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                  title="Batch select mode"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Feature Buttons Group */}
+              <div className="flex items-center gap-1 mr-3">
+                {/* Templates */}
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Event templates"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </button>
+
+                {/* Analytics */}
+                <button
+                  onClick={() => setShowAnalytics(true)}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Calendar analytics"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </button>
+
+                {/* Enhanced Meeting Coordinator Button */}
+                <button
+                  onClick={handleCoordinateClick}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Smart meeting coordinator"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </button>
+
+                {/* Time Blocking */}
+                <button
+                  onClick={() => setShowTimeBlocking(true)}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Time blocking"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+
+                {/* Enhanced Carpool Chat Button */}
+                <button
+                  onClick={handleCarpoolClick}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Carpool chat"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Settings Group */}
+              <div className="flex items-center gap-1">
+                {/* Moon Toggle */}
+                <button
+                  onClick={() => setShowMoon(!showMoon)}
+                  className={`p-2.5 rounded-lg transition-all duration-200 ${
+                    showMoon 
+                      ? "bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400" 
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                  title="Toggle moon phases"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                </button>
+
+                {/* Dark Mode Toggle */}
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Toggle dark mode"
+                >
+                  {darkMode ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Gamification Toggle */}
+                <button
+                  onClick={() => setGamificationEnabled(!gamificationEnabled)}
+                  className={`p-2.5 rounded-lg transition-all duration-200 ${
+                    gamificationEnabled 
+                      ? "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400" 
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                  title="Toggle gamification"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </button>
+
+                {/* Help/Shortcuts */}
+                <button
+                  onClick={() => setShowShortcutsHelp(true)}
+                  className="p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
+                  title="Keyboard shortcuts help"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Right: Enhanced Create Button */}
             <button
-              onClick={handleListsClick}
-              className={`px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-all flex items-center gap-2 ${
-                showListsSidebar
-                  ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
-              }`}
-              title="Toggle lists sidebar"
+              onClick={() => setOpenCreate(true)}
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2"
             >
-              <span>📋</span>
-              <span>Lists</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Event
             </button>
-          )}
+          </div>
+        )}
 
-          {/* MOON TOGGLE (Keep this exactly as is) */}
-          <button
-            onClick={() => setShowMoon(!showMoon)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
-              showMoon
-                ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
-            }`}
-            title="Toggle moon phases"
-          >
-            {showMoon ? '🌙' : '🌑'}
-          </button>
-
-          {/* DARK MODE TOGGLE (Keep this exactly as is) */}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
-              darkMode
-                ? 'bg-gray-800 text-white'
-                : 'bg-white text-gray-700 hover:shadow-lg'
-            }`}
-            title="Toggle dark mode"
-          >
-            {darkMode ? '🌜' : '☀️'}
-          </button>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-
-          {/* CARPOOL BUTTON (FIXED: Now with debugging) */}
-          <button
-            onClick={handleCarpoolClick}
-            className="px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-green-600 hover:to-blue-600 hover:shadow-lg transition-all flex items-center gap-2"
-            title="Coordinate carpools"
-          >
-            <span>🚗</span>
-            <span className={isMobile ? 'hidden' : ''}>Carpool</span>
-          </button>
-
-          {/* COORDINATE BUTTON (FIXED: Now with debugging) */}
-          <button
-            onClick={handleCoordinateClick}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-indigo-600 hover:to-purple-600 hover:shadow-lg transition-all flex items-center gap-2"
-            title="AI meeting scheduler"
-          >
-            <span>🤝</span>
-            <span className={isMobile ? 'hidden' : ''}>Coordinate</span>
-          </button>
-
-          {/* Templates Button */}
-          <button
-            onClick={() => setShowTemplates(true)}
-            className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
-            title="Event templates"
-          >
-            {isMobile ? '✨' : '✨ Templates'}
-          </button>
-
-          {/* Analytics Button */}
-          <button
-            onClick={() => setShowAnalytics(true)}
-            className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all"
-            title="View analytics"
-          >
-            {isMobile ? '📊' : '📊 Analytics'}
-          </button>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-
-          {/* New Event Button */}
-          <button
-            onClick={() => setOpenCreate(true)}
-            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium shadow-md hover:from-purple-600 hover:to-pink-600 hover:shadow-lg transition-all flex items-center gap-2"
-          >
-            <span>+</span>
-            <span>New Event</span>
-          </button>
-
-          {/* Keyboard Shortcuts Help - Desktop */}
-          {!isMobile && (
-            <button
-              onClick={() => setShowShortcutsHelp(true)}
-              className="px-3 py-2 bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg text-sm font-medium hover:shadow-md transition-all"
-              title="Keyboard shortcuts"
-            >
-              ⌘
-            </button>
-          )}
-
-          {/* Voice Command Button - Desktop (FIXED: Now with debugging) */}
-          {!isMobile && (
-            <button
-              onClick={handleVoiceClick}
-              className={`px-3 py-2 rounded-lg text-sm font-medium shadow-md transition-all ${
-                isListening
-                  ? 'bg-red-500 text-white animate-pulse'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:shadow-lg'
-              }`}
-              title="Voice commands"
-            >
-              {isListening ? '🎤' : '🎙️'}
-            </button>
-          )}
-        </div>
-
-        {/* Tabs Row - Desktop only (Keep this exactly as is) */}
+        {/* Enhanced Desktop Tabs Row with better tab management */}
         {!isMobile && (
-          <div className="flex items-center gap-2 border-t dark:border-gray-700 pt-3">
-            <button
-              onClick={() => setActiveHeaderTab('calendar')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeHeaderTab === 'calendar'
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Calendar
-            </button>
-            <button
-              onClick={() => setActiveHeaderTab('reminders')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeHeaderTab === 'reminders'
-                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Reminders
-            </button>
-            <button
-              onClick={() => setActiveHeaderTab('todos')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeHeaderTab === 'todos'
-                  ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              To-Dos
-            </button>
-            <button
-              onClick={() => setActiveHeaderTab('templates')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                activeHeaderTab === 'templates'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Templates & Goals
-            </button>
-
-            {/* Batch Mode Toggle - Far right */}
-            <div className="ml-auto flex items-center gap-2">
-              {gamificationEnabled && userStats && (
-                <div className="text-xs text-gray-600 dark:text-gray-400">
-                  🔥 {userStats.streak} day streak
-                </div>
-              )}
+          <div className="flex items-center justify-between border-t dark:border-gray-700 pt-3 pb-1">
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setBatchMode(!batchMode)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  batchMode
-                    ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                onClick={() => setActiveHeaderTab('calendar')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeHeaderTab === 'calendar'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
-                title="Select multiple events"
               >
-                {batchMode ? '✓ Batch' : 'Batch'}
+                Calendar
               </button>
+              <button
+                onClick={() => setActiveHeaderTab('reminders')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeHeaderTab === 'reminders'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                Reminders
+              </button>
+              <button
+                onClick={() => setActiveHeaderTab('todos')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeHeaderTab === 'todos'
+                    ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                To-Dos
+              </button>
+              <button
+                onClick={() => setActiveHeaderTab('templates')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeHeaderTab === 'templates'
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                Templates & Goals
+              </button>
+            </div>
+
+            {/* Right side: Additional info and batch toggle */}
+            <div className="flex items-center gap-4">
+              {gamificationEnabled && userStats && (
+                <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                  <span className="bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-2 py-1 rounded-full">
+                    🔥 {userStats.streak} day streak
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
