@@ -171,60 +171,41 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
       const userIsCreator = albumData.creator_id === userId;
       addDebug(`Permission check - User: ${userId}, Creator: ${albumData.creator_id}, Is creator: ${userIsCreator}`);
       setIsCreator(userIsCreator);
-      setCanEdit(userIsCreator);
 
-      // Check collaborator permissions
+      // Check if user has any collaborator permissions (simplified like posts)
+      let userCanEdit = userIsCreator;
+      
       if (!userIsCreator) {
-        addDebug('Not creator, checking collaborator permissions...');
+        addDebug('Not creator, checking if user is in collaborators list...');
         
-        // First, let's check if any collaborator records exist at all
-        const { data: allCollabs, error: allCollabsError } = await supabase
+        // Check if user has any collaborator record with accepted status
+        const { data: userCollabRecord, error: userCollabError } = await supabase
           .from('album_collaborators')
-          .select('*')
-          .eq('album_id', params.id);
-        
-        addDebug(`All collaborators found: ${allCollabs?.length || 0}`);
-        
-        // Now check specifically for this user - handle multiple records
-        const { data: collabDataArray, error: collabError } = await supabase
-          .from('album_collaborators')
-          .select('*')
+          .select('status, can_edit')
           .eq('album_id', params.id)
           .eq('user_id', userId)
-          .order('created_at', { ascending: false }); // Get most recent first - this returns an array
-
-        addDebug(`Collaborator query - Error: ${collabError?.message || 'none'}, Records found: ${collabDataArray?.length || 0}`);
-
-        if (collabError) {
-          addDebug(`Collaborator query error: ${collabError.message} (Code: ${collabError.code})`);
-          alert(`Database error: ${collabError.message}\n\nCheck debug info for details.`);
-          return;
+          .eq('status', 'accepted')
+          .eq('can_edit', true)
+          .limit(1)
+          .maybeSingle();
+        
+        addDebug(`User collaborator check - Error: ${userCollabError?.message || 'none'}, Found record: ${!!userCollabRecord}`);
+        
+        if (userCollabRecord) {
+          addDebug('User has valid collaborator permissions');
+          userCanEdit = true;
+        } else {
+          addDebug('User does not have collaborator permissions');
         }
-
-        if (!collabDataArray || collabDataArray.length === 0) {
-          addDebug('No collaborator record found for this user');
-          alert('You do not have permission to edit this album\n\nCheck debug info for details.');
-          router.push(`/albums/${params.id}`);
-          return;
-        }
-
-        // Take the first (most recent) collaborator record
-        const collabData = collabDataArray[0];
-        addDebug(`Using collaborator record: Status=${collabData.status}, CanEdit=${collabData.can_edit}, Created=${collabData.created_at}`);
-
-        if (collabDataArray.length > 1) {
-          addDebug(`WARNING: Found ${collabDataArray.length} duplicate collaborator records - using most recent`);
-        }
-
-        if (collabData.status !== 'accepted' || !collabData.can_edit) {
-          addDebug(`Collaborator exists but cannot edit - Status: ${collabData.status}, Can edit: ${collabData.can_edit}`);
-          alert('You do not have permission to edit this album\n\nCheck debug info for details.');
-          router.push(`/albums/${params.id}`);
-          return;
-        }
-
-        addDebug('Collaborator can edit!');
-        setCanEdit(true);
+      }
+      
+      setCanEdit(userCanEdit);
+      
+      if (!userCanEdit) {
+        addDebug('Final permission check: User cannot edit this album');
+        alert('You do not have permission to edit this album\n\nCheck debug info for details.');
+        router.push(`/albums/${params.id}`);
+        return;
       }
 
       // Load existing collaborators - split query to avoid foreign key issue
