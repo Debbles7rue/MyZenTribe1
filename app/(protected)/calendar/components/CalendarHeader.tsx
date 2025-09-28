@@ -300,8 +300,8 @@ export default function CalendarHeader({
               {/* Description Text */}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 px-4">
                 {mode === "my" 
-                  ? "Personal, interested, and accepted events." 
-                  : "Events from businesses you follow, and invites from friends."
+                  ? "Your events, saved interests, and RSVPs." 
+                  : "Events from followed businesses and friend invites."
                 }
               </p>
             </div>
@@ -497,8 +497,8 @@ export default function CalendarHeader({
               {/* Description Text */}
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-3 max-w-md mx-auto">
                 {mode === "my" 
-                  ? "Personal, interested, and accepted events." 
-                  : "Events from businesses you follow, and invites from friends."
+                  ? "Your events, saved interests, and RSVPs." 
+                  : "Events from followed businesses and friend invites."
                 }
               </p>
             </div>
