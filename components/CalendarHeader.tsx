@@ -1,6 +1,8 @@
 // components/CalendarHeader.tsx
 // This file is deprecated - redirecting to the proper calendar header
 
+import CalendarHeader from "./components/CalendarHeader";
+
 // Export everything from the correct CalendarHeader location
 export { default } from '@/app/(protected)/calendar/components/CalendarHeader';
 
