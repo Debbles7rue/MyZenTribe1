@@ -477,6 +477,9 @@ export default function ProfilePage() {
                       <Link href="/gratitude" className="btn btn-compact">
                         🙏 Gratitude
                       </Link>
+                      <Link href="/gifts" className="btn btn-compact btn-gifts">
+                        🎁 Gifts
+                      </Link>
                       <Link href="/messages" className="btn btn-compact">
                         💬 Messages
                       </Link>
@@ -536,7 +539,7 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Album Creator Button - ONLY ADDITION TO FILE */}
+          {/* Album Creator Button */}
           <div className="card">
             <Link 
               href="/albums/create" 
@@ -717,6 +720,18 @@ export default function ProfilePage() {
           background: white;
           color: #374151;
           border: 1px solid #e5e7eb;
+        }
+
+        .btn-gifts {
+          background: linear-gradient(135deg, #f59e0b, #f97316);
+          color: white;
+          border: none;
+          box-shadow: 0 2px 4px rgba(245,158,11,0.3);
+        }
+
+        .btn-gifts:hover {
+          background: linear-gradient(135deg, #d97706, #ea580c);
+          box-shadow: 0 4px 12px rgba(245,158,11,0.4);
         }
 
         .status-message {
