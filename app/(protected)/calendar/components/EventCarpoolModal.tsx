@@ -7,7 +7,7 @@ import {
   Plus, Check, X, Send, Settings, Route, Fuel, Coffee,
   Share2, UserPlus, Timer, CloudRain, Phone, ChevronDown,
   Shield, Zap, TrendingUp, Award, Heart, ThumbsUp, ArrowLeft,
-  MoreVertical, Mic, Paperclip, Map, Info
+  MoreVertical, Mic, Paperclip, Map, Info, Trash2, RefreshCw
 } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 
@@ -36,6 +36,13 @@ interface Message {
   avatar: string;
   isAI?: boolean;
   reactions?: string[];
+  isEventPost?: boolean;
+  eventData?: {
+    title: string;
+    date: string;
+    time: string;
+    location: string;
+  };
 }
 
 interface Poll {
@@ -56,32 +63,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isMobile = false
 }) => {
   const [activeSection, setActiveSection] = useState('chat');
-  const [messages, setMessages] = useState<Message[]>([
-    { 
-      id: 1, 
-      user: 'Sarah', 
-      message: 'I can drive! My car fits 5 people', 
-      time: '2:30 PM', 
-      avatar: '👩‍🦰',
-      reactions: ['👍']
-    },
-    { 
-      id: 2, 
-      user: 'Mike', 
-      message: 'Perfect! When should we meet?', 
-      time: '2:32 PM', 
-      avatar: '👨‍💼' 
-    },
-    { 
-      id: 3, 
-      user: 'AI Assistant', 
-      message: 'Based on traffic, I suggest leaving at 6:15 PM from Central Park entrance', 
-      time: '2:35 PM', 
-      avatar: '🤖', 
-      isAI: true 
-    }
-  ]);
-  
+  const [isNewCarpool, setIsNewCarpool] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
@@ -92,14 +75,90 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [carDetails, setCarDetails] = useState({ seats: 4, make: '', color: '' });
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showNewCarpoolConfirm, setShowNewCarpoolConfirm] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize with event post when opening or starting new carpool
+  useEffect(() => {
+    if (isOpen && event) {
+      initializeCarpoolChat();
+    }
+  }, [isOpen, event, isNewCarpool]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const initializeCarpoolChat = () => {
+    if (!event) return;
+
+    const eventDate = new Date(event.start_time);
+    const eventTime = eventDate.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit' 
+    });
+    const eventDateStr = eventDate.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+
+    // Create event post message
+    const eventPostMessage: Message = {
+      id: Date.now(),
+      user: 'System',
+      message: 'Event details shared',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      avatar: '📅',
+      isEventPost: true,
+      eventData: {
+        title: event.title,
+        date: eventDateStr,
+        time: eventTime,
+        location: event.location || 'Location TBD'
+      }
+    };
+
+    if (isNewCarpool) {
+      // Start fresh for new carpool
+      setMessages([eventPostMessage]);
+      setPolls([]);
+      setDriverStatus('none');
+      setSelectedFriends([]);
+    } else {
+      // Load existing messages (for demo, we'll use sample data)
+      const existingMessages: Message[] = [
+        eventPostMessage,
+        { 
+          id: 1, 
+          user: 'Sarah', 
+          message: 'I can drive! My car fits 5 people', 
+          time: '2:30 PM', 
+          avatar: '👩‍🦰',
+          reactions: ['👍']
+        },
+        { 
+          id: 2, 
+          user: 'Mike', 
+          message: 'Perfect! When should we meet?', 
+          time: '2:32 PM', 
+          avatar: '👨‍💼' 
+        },
+        { 
+          id: 3, 
+          user: 'AI Assistant', 
+          message: 'Based on traffic, I suggest leaving at 6:15 PM from Central Park entrance', 
+          time: '2:35 PM', 
+          avatar: '🤖', 
+          isAI: true 
+        }
+      ];
+      setMessages(existingMessages);
+    }
+  };
 
   // Vibrate function for mobile haptic feedback
   const vibrate = () => {
@@ -280,6 +339,81 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }));
   };
 
+  const startNewCarpool = () => {
+    setIsNewCarpool(true);
+    setShowNewCarpoolConfirm(false);
+    showToast?.({ type: 'success', message: 'Started new carpool group!' });
+  };
+
+  const postEventDetails = () => {
+    if (!event) return;
+    
+    const eventDate = new Date(event.start_time);
+    const eventTime = eventDate.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit' 
+    });
+    const eventDateStr = eventDate.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+
+    const eventPostMessage: Message = {
+      id: Date.now(),
+      user: 'You',
+      message: 'Shared event details',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      avatar: '😊',
+      isEventPost: true,
+      eventData: {
+        title: event.title,
+        date: eventDateStr,
+        time: eventTime,
+        location: event.location || 'Location TBD'
+      }
+    };
+
+    setMessages(prev => [...prev, eventPostMessage]);
+    showToast?.({ type: 'success', message: 'Event details posted!' });
+  };
+
+  // Event Post Component
+  const EventPost = ({ eventData }: { eventData: any }) => (
+    <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4 my-2">
+      <div className="flex items-start gap-3">
+        <div className="bg-blue-500 text-white p-2 rounded-lg">
+          <Calendar size={20} />
+        </div>
+        <div className="flex-1">
+          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+            {eventData.title}
+          </h4>
+          <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-2">
+              <Clock size={14} />
+              <span>{eventData.date} • {eventData.time}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <MapPin size={14} />
+              <span>{eventData.location}</span>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
+              <Navigation className="inline mr-1" size={12} />
+              Directions
+            </button>
+            <button className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors">
+              <Share2 className="inline mr-1" size={12} />
+              Share
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Mobile-optimized full-screen modal
   if (isMobile) {
     return (
@@ -299,12 +433,21 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               <h3 className="font-semibold text-lg">Carpool</h3>
               <p className="text-xs opacity-90 truncate px-4">{event.title}</p>
             </div>
-            <button
-              onClick={() => setShowInfo(true)}
-              className="p-2 -mr-2 active:scale-95"
-            >
-              <Info size={20} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowNewCarpoolConfirm(true)}
+                className="p-2 active:scale-95"
+                title="Start New Carpool"
+              >
+                <RefreshCw size={20} />
+              </button>
+              <button
+                onClick={() => setShowInfo(true)}
+                className="p-2 -mr-2 active:scale-95"
+              >
+                <Info size={20} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -412,29 +555,35 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 >
                   <span className="text-2xl flex-shrink-0">{msg.avatar}</span>
                   <div className={`max-w-[70%] ${msg.userId === userId ? 'items-end' : ''}`}>
-                    <div className={`rounded-2xl px-3 py-2 ${
-                      msg.userId === userId
-                        ? 'bg-blue-500 text-white'
-                        : msg.isAI
-                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                    }`}>
-                      <p className="text-sm">{msg.message}</p>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 px-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {msg.time}
-                      </span>
-                      {msg.reactions && msg.reactions.length > 0 && (
-                        <div className="flex gap-1">
-                          {msg.reactions.map((reaction, idx) => (
-                            <span key={idx} className="text-xs">
-                              {reaction}
-                            </span>
-                          ))}
+                    {msg.isEventPost ? (
+                      <EventPost eventData={msg.eventData} />
+                    ) : (
+                      <>
+                        <div className={`rounded-2xl px-3 py-2 ${
+                          msg.userId === userId
+                            ? 'bg-blue-500 text-white'
+                            : msg.isAI
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
+                            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                        }`}>
+                          <p className="text-sm">{msg.message}</p>
                         </div>
-                      )}
-                    </div>
+                        <div className="flex items-center gap-2 mt-1 px-1">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {msg.time}
+                          </span>
+                          {msg.reactions && msg.reactions.length > 0 && (
+                            <div className="flex gap-1">
+                              {msg.reactions.map((reaction, idx) => (
+                                <span key={idx} className="text-xs">
+                                  {reaction}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -500,6 +649,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   className="flex-shrink-0 px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-xs font-medium active:scale-95"
                 >
                   📊 Poll
+                </button>
+                <button
+                  onClick={postEventDetails}
+                  className="flex-shrink-0 px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-full text-xs font-medium active:scale-95"
+                >
+                  📅 Post Event
                 </button>
               </div>
 
@@ -680,6 +835,51 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         )}
 
+        {/* New Carpool Confirmation Modal */}
+        {showNewCarpoolConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 px-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
+              <h3 className="text-lg font-semibold mb-3">Start New Carpool?</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                This will clear the current chat history and start fresh. Are you sure?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowNewCarpoolConfirm(false)}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={startNewCarpool}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Start New
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EventCarpoolModal;-gray-700 dark:text-gray-300 rounded-lg font-medium active:scale-98"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={startNewCarpool}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium active:scale-98"
+                >
+                  Start New
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Poll Modal */}
         {showPoll && (
           <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-60">
@@ -764,12 +964,22 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 {eventDateStr} • {eventTime} • {event.location || 'TBD'}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
-            >
-              <X size={24} />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowNewCarpoolConfirm(true)}
+                className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors flex items-center gap-2"
+                title="Start New Carpool"
+              >
+                <RefreshCw size={20} />
+                <span className="text-sm">New Carpool</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -814,6 +1024,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 className="w-full p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-left"
               >
                 📍 Share location
+              </button>
+              <button
+                onClick={postEventDetails}
+                className="w-full p-3 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-lg hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-left"
+              >
+                📅 Post event details
               </button>
             </div>
 
@@ -895,31 +1111,37 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 >
                   <span className="text-3xl flex-shrink-0">{msg.avatar}</span>
                   <div className={`max-w-[60%] ${msg.userId === userId ? 'items-end' : ''}`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {msg.user}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {msg.time}
-                      </span>
-                    </div>
-                    <div className={`rounded-2xl px-4 py-3 ${
-                      msg.userId === userId
-                        ? 'bg-blue-500 text-white'
-                        : msg.isAI
-                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                    }`}>
-                      <p>{msg.message}</p>
-                    </div>
-                    {msg.reactions && msg.reactions.length > 0 && (
-                      <div className="flex gap-1 mt-1 px-2">
-                        {msg.reactions.map((reaction, idx) => (
-                          <span key={idx} className="text-sm bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded-full">
-                            {reaction}
+                    {msg.isEventPost ? (
+                      <EventPost eventData={msg.eventData} />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            {msg.user}
                           </span>
-                        ))}
-                      </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {msg.time}
+                          </span>
+                        </div>
+                        <div className={`rounded-2xl px-4 py-3 ${
+                          msg.userId === userId
+                            ? 'bg-blue-500 text-white'
+                            : msg.isAI
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
+                            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                        }`}>
+                          <p>{msg.message}</p>
+                        </div>
+                        {msg.reactions && msg.reactions.length > 0 && (
+                          <div className="flex gap-1 mt-1 px-2">
+                            {msg.reactions.map((reaction, idx) => (
+                              <span key={idx} className="text-sm bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded-full">
+                                {reaction}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -1089,9 +1311,16 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-};
 
-export default EventCarpoolModal;
+        {/* New Carpool Confirmation Modal */}
+        {showNewCarpoolConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Start New Carpool?</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                This will clear the current chat history and start a fresh carpool group for this event. Are you sure?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowNewCarpoolConfirm(false)}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text
