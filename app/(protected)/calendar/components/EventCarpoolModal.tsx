@@ -543,7 +543,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         {activeSection === 'chat' && (
           <>
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50 dark:bg-gray-950">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50 dark:bg-gray-950" style={{ maxHeight: 'calc(100vh - 350px)' }}>
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -618,6 +618,16 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t dark:border-gray-700 safe-area-bottom">
               {/* Quick Actions Bar */}
               <div className="flex gap-2 mb-2 overflow-x-auto pb-2">
+                <button
+                  onClick={() => {
+                    // Scroll to top of messages to see event details
+                    const messagesContainer = document.querySelector('.overflow-y-auto');
+                    messagesContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex-shrink-0 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-medium active:scale-95"
+                >
+                  📅 View Event
+                </button>
                 <button
                   onClick={() => handleQuickAction('driver')}
                   className="flex-shrink-0 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium active:scale-95"
