@@ -1,10 +1,9 @@
-// app/gifts/page.tsx
+// components/GiftShop.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import GiftShop from '@/components/GiftShop';
-import ReceivedGifts from '@/components/gifts/ReceivedGifts';
+import SendGiftModal from '@/components/gifts/SendGiftModal';
 
 type Gift = {
   id: string;
@@ -17,75 +16,48 @@ type Gift = {
   sort_order: number;
 };
 
-type SentGift = {
-  id: string;
-  gift_id: string;
-  sender_id: string;
-  recipient_id: string;
-  message: string | null;
-  sender_name: string;
-  is_anonymous: boolean;
-  payment_status: string;
-  created_at: string;
-  delivered_at: string | null;
-  gift: Gift;
-};
+const CATEGORIES = [
+  { id: 'all', name: 'All Gifts', emoji: '🎁', color: '#6b7280' },
+  { id: 'celebration', name: 'Celebration', emoji: '🎉', color: '#f59e0b' },
+  { id: 'love', name: 'Love & Care', emoji: '💝', color: '#ec4899' },
+  { id: 'healing', name: 'Healing', emoji: '🌸', color: '#10b981' },
+  { id: 'gratitude', name: 'Gratitude', emoji: '🙏', color: '#8b5cf6' },
+  { id: 'zen', name: 'Zen', emoji: '🧘', color: '#06b6d4' },
+  { id: 'cards', name: 'Cards', emoji: '💌', color: '#f97316' },
+];
 
-export default function GiftsPage() {
-  const [activeTab, setActiveTab] = useState<'received' | 'shop'>('received');
+interface GiftShopProps {
+  currentUserId: string | null;
+  onGiftSent: () => void;
+}
+
+export default function GiftShop({ currentUserId, onGiftSent }: GiftShopProps) {
+  const [gifts, setGifts] = useState<Gift[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [receivedGifts, setReceivedGifts] = useState<SentGift[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
+  const [showSendModal, setShowSendModal] = useState(false);
 
-  // Get current user
+  // Load gifts from database
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
+    loadGifts();
   }, []);
 
-  // Load received gifts
-  useEffect(() => {
-    if (!userId) return;
-    loadReceivedGifts();
-  }, [userId]);
-
-  async function loadReceivedGifts() {
-    if (!userId) return;
-    
+  async function loadGifts() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('sent_gifts')
-        .select(`
-          *,
-          gift:gifts(*)
-        `)
-        .eq('recipient_id', userId)
-        .eq('payment_status', 'completed')
-        .order('created_at', { ascending: false });
+        .from('gifts')
+        .select('*')
+        .eq('active', true)
+        .order('sort_order');
 
       if (error) {
         console.error('Error loading gifts:', error);
         return;
       }
 
-      setReceivedGifts(data || []);
-      
-      // Count unread gifts (not delivered yet)
-      const unread = (data || []).filter(gift => !gift.delivered_at).length;
-      setUnreadCount(unread);
-
-      // Mark gifts as delivered now that user has viewed them
-      if (unread > 0) {
-        await supabase
-          .from('sent_gifts')
-          .update({ delivered_at: new Date().toISOString() })
-          .eq('recipient_id', userId)
-          .is('delivered_at', null);
-      }
-
+      setGifts(data || []);
     } catch (err) {
       console.error('Error:', err);
     } finally {
@@ -93,198 +65,248 @@ export default function GiftsPage() {
     }
   }
 
-  // Handle gift sent successfully
-  function handleGiftSent() {
-    // Could show a success message or confetti animation
-    console.log('Gift sent successfully!');
+  // Filter gifts by category
+  const filteredGifts = selectedCategory === 'all' 
+    ? gifts 
+    : gifts.filter(gift => gift.category === selectedCategory);
+
+  // Group gifts by category for display
+  const giftsByCategory = CATEGORIES.reduce((acc, category) => {
+    if (category.id === 'all') return acc;
+    acc[category.id] = filteredGifts.filter(gift => gift.category === category.id);
+    return acc;
+  }, {} as Record<string, Gift[]>);
+
+  function handleGiftSelect(gift: Gift) {
+    if (!currentUserId) {
+      alert('Please sign in to send gifts');
+      return;
+    }
+    setSelectedGift(gift);
+    setShowSendModal(true);
   }
 
-  if (loading && activeTab === 'received') {
+  function handleGiftSent() {
+    setShowSendModal(false);
+    setSelectedGift(null);
+    onGiftSent();
+  }
+
+  if (loading) {
     return (
-      <div className="gifts-page">
-        <div className="loading-state">
-          <div className="loading-spinner"></div>
-          <span>Loading your gifts...</span>
-        </div>
+      <div className="loading-state">
+        <div className="loading-spinner"></div>
+        <span>Loading gift shop...</span>
       </div>
     );
   }
 
   return (
-    <div className="gifts-page">
-      {/* Header */}
-      <div className="page-header">
-        <h1 className="page-title">
-          <span className="title-icon">🎁</span>
-          Gifts
-        </h1>
-        <p className="page-subtitle">
-          Spread joy and kindness in your mindful community
+    <div className="gift-shop">
+      {/* Shop Header */}
+      <div className="shop-header">
+        <h2 className="shop-title">✨ Gift Shop ✨</h2>
+        <p className="shop-subtitle">
+          Send virtual gifts for just $0.99 each • Comes with free personalized card and message • Send anonymously or let them know it's from you!
         </p>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="tab-navigation">
-        <button
-          className={`tab-button ${activeTab === 'received' ? 'active' : ''}`}
-          onClick={() => setActiveTab('received')}
-        >
-          <span className="tab-icon">📥</span>
-          <span>Received</span>
-          {unreadCount > 0 && (
-            <span className="notification-badge">{unreadCount}</span>
-          )}
-        </button>
-        
-        <button
-          className={`tab-button ${activeTab === 'shop' ? 'active' : ''}`}
-          onClick={() => setActiveTab('shop')}
-        >
-          <span className="tab-icon">🛍️</span>
-          <span>Gift Shop</span>
-        </button>
+      {/* Category Filter */}
+      <div className="category-filter">
+        {CATEGORIES.map((category) => (
+          <button
+            key={category.id}
+            className={`category-button ${selectedCategory === category.id ? 'active' : ''}`}
+            onClick={() => setSelectedCategory(category.id)}
+            style={{ '--category-color': category.color } as React.CSSProperties}
+          >
+            <span className="category-emoji">{category.emoji}</span>
+            <span className="category-name">{category.name}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Content */}
-      <div className="tab-content">
-        {activeTab === 'received' ? (
-          <ReceivedGifts 
-            gifts={receivedGifts}
-            loading={loading}
-            onRefresh={loadReceivedGifts}
-          />
-        ) : (
-          <GiftShop 
-            currentUserId={userId}
-            onGiftSent={handleGiftSent}
-          />
-        )}
-      </div>
+      {/* Gifts Display */}
+      {selectedCategory === 'all' ? (
+        // Show all categories
+        <div className="all-categories">
+          {CATEGORIES.filter(cat => cat.id !== 'all').map((category) => {
+            const categoryGifts = giftsByCategory[category.id];
+            if (!categoryGifts || categoryGifts.length === 0) return null;
+
+            return (
+              <div key={category.id} className="category-section">
+                <h3 
+                  className="category-section-title"
+                  style={{ '--category-color': category.color } as React.CSSProperties}
+                >
+                  <span className="category-emoji">{category.emoji}</span>
+                  {category.name}
+                </h3>
+                <div className="gifts-grid">
+                  {categoryGifts.map((gift) => (
+                    <GiftCard 
+                      key={gift.id} 
+                      gift={gift} 
+                      categoryColor={category.color}
+                      onClick={() => handleGiftSelect(gift)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // Show selected category
+        <div className="single-category">
+          <div className="gifts-grid">
+            {filteredGifts.map((gift) => {
+              const category = CATEGORIES.find(cat => cat.id === gift.category);
+              return (
+                <GiftCard 
+                  key={gift.id} 
+                  gift={gift} 
+                  categoryColor={category?.color || '#6b7280'}
+                  onClick={() => handleGiftSelect(gift)}
+                />
+              );
+            })}
+          </div>
+          {filteredGifts.length === 0 && (
+            <div className="empty-category">
+              <p>No gifts in this category yet. Check back soon! 🎁</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Send Gift Modal */}
+      {showSendModal && selectedGift && (
+        <SendGiftModal
+          gift={selectedGift}
+          currentUserId={currentUserId}
+          onClose={() => setShowSendModal(false)}
+          onSuccess={handleGiftSent}
+        />
+      )}
 
       <style jsx>{`
-        .gifts-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 20%, #fecaca 40%, #fde68a 60%, #f3e8ff 80%, #fdf4ff 100%);
-          padding: 2rem 1rem;
-          position: relative;
+        .gift-shop {
+          width: 100%;
         }
 
-        .gifts-page::before {
-          content: '';
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: 
-            radial-gradient(circle at 25% 25%, rgba(245,158,11,0.1) 0%, transparent 50%),
-            radial-gradient(circle at 75% 75%, rgba(236,72,153,0.08) 0%, transparent 50%),
-            radial-gradient(circle at 50% 100%, rgba(139,92,246,0.06) 0%, transparent 50%);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .gifts-page > * {
-          position: relative;
-          z-index: 1;
-        }
-
-        .page-header {
+        .shop-header {
           text-align: center;
           margin-bottom: 2rem;
+          background: white;
+          padding: 2rem;
+          border-radius: 1rem;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        .page-title {
-          font-size: 2.5rem;
+        .shop-title {
+          font-size: 2rem;
           font-weight: 700;
           background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           margin: 0 0 0.5rem 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
         }
 
-        .title-icon {
-          font-size: 2rem;
-        }
-
-        .page-subtitle {
+        .shop-subtitle {
           color: #6b7280;
           font-size: 1.125rem;
           margin: 0;
-          max-width: 28rem;
-          margin-left: auto;
-          margin-right: auto;
+          line-height: 1.6;
         }
 
-        .tab-navigation {
+        .category-filter {
           display: flex;
-          background: white;
-          border-radius: 1rem;
-          padding: 0.5rem;
+          flex-wrap: wrap;
+          gap: 0.75rem;
           margin-bottom: 2rem;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-          max-width: 24rem;
-          margin-left: auto;
-          margin-right: auto;
-          margin-bottom: 2rem;
+          justify-content: center;
         }
 
-        .tab-button {
-          flex: 1;
+        .category-button {
           display: flex;
           align-items: center;
-          justify-content: center;
           gap: 0.5rem;
           padding: 0.75rem 1rem;
-          border: none;
-          background: transparent;
-          border-radius: 0.75rem;
+          background: white;
+          border: 2px solid #e5e7eb;
+          border-radius: 2rem;
           cursor: pointer;
-          font-weight: 500;
-          color: #6b7280;
           transition: all 0.2s ease;
-          position: relative;
-        }
-
-        .tab-button:hover {
+          font-weight: 500;
           color: #374151;
-          background: rgba(0,0,0,0.02);
         }
 
-        .tab-button.active {
-          background: linear-gradient(135deg, #f59e0b, #ec4899);
+        .category-button:hover {
+          border-color: var(--category-color);
+          background: rgba(255,255,255,0.9);
+          transform: translateY(-1px);
+        }
+
+        .category-button.active {
+          background: var(--category-color);
+          border-color: var(--category-color);
           color: white;
-          box-shadow: 0 2px 4px rgba(245,158,11,0.3);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
-        .tab-icon {
+        .category-emoji {
           font-size: 1.25rem;
         }
 
-        .notification-badge {
-          position: absolute;
-          top: -0.25rem;
-          right: -0.25rem;
-          background: #ef4444;
-          color: white;
-          border-radius: 50%;
-          width: 1.25rem;
-          height: 1.25rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.75rem;
-          font-weight: 600;
-          min-width: 1.25rem;
+        .category-name {
+          font-size: 0.875rem;
         }
 
-        .tab-content {
-          max-width: 48rem;
-          margin: 0 auto;
+        .all-categories {
+          display: flex;
+          flex-direction: column;
+          gap: 3rem;
+        }
+
+        .category-section {
+          background: white;
+          border-radius: 1rem;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .category-section-title {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          font-size: 1.5rem;
+          font-weight: 600;
+          color: var(--category-color);
+          margin: 0 0 1.5rem 0;
+          padding-bottom: 0.75rem;
+          border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+
+        .single-category {
+          background: white;
+          border-radius: 1rem;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .gifts-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 1rem;
+        }
+
+        .empty-category {
+          text-align: center;
+          padding: 2rem;
+          color: #9ca3af;
+          font-style: italic;
         }
 
         .loading-state {
@@ -309,59 +331,257 @@ export default function GiftsPage() {
           to { transform: rotate(360deg); }
         }
 
-        @media (max-width: 640px) {
-          .gifts-page {
-            padding: 1rem 0.5rem;
+        @media (max-width: 768px) {
+          .shop-header {
+            padding: 1.5rem;
           }
           
-          .page-title {
-            font-size: 2rem;
-            flex-direction: column;
-            gap: 0.25rem;
-          }
-          
-          .title-icon {
+          .shop-title {
             font-size: 1.75rem;
           }
           
-          .page-subtitle {
+          .shop-subtitle {
             font-size: 1rem;
-            padding: 0 1rem;
           }
           
-          .tab-navigation {
-            margin-bottom: 1.5rem;
-            max-width: 100%;
+          .category-filter {
+            gap: 0.5rem;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
           }
           
-          .tab-button {
+          .category-filter::-webkit-scrollbar {
+            display: none;
+          }
+          
+          .category-button {
             padding: 0.5rem 0.75rem;
             font-size: 0.875rem;
-            flex-direction: column;
-            gap: 0.25rem;
+            white-space: nowrap;
+            flex-shrink: 0;
           }
           
-          .tab-icon {
+          .category-emoji {
             font-size: 1rem;
           }
           
-          .notification-badge {
-            top: -0.5rem;
-            right: -0.5rem;
+          .gifts-grid {
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 0.75rem;
+          }
+          
+          .category-section {
+            padding: 1.5rem;
+          }
+          
+          .category-section-title {
+            font-size: 1.25rem;
+          }
+          
+          .single-category {
+            padding: 1.5rem;
           }
         }
 
         @media (max-width: 480px) {
-          .gifts-page {
-            padding: 0.5rem 0.25rem;
+          .shop-header {
+            padding: 1rem;
           }
           
-          .page-header {
-            margin-bottom: 1.5rem;
+          .shop-title {
+            font-size: 1.5rem;
           }
           
-          .tab-button span {
+          .shop-subtitle {
+            font-size: 0.875rem;
+          }
+          
+          .category-button {
+            padding: 0.375rem 0.5rem;
             font-size: 0.75rem;
+          }
+          
+          .category-name {
+            display: none;
+          }
+          
+          .gifts-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.5rem;
+          }
+          
+          .category-section {
+            padding: 1rem;
+          }
+          
+          .single-category {
+            padding: 1rem;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Gift Card Component
+function GiftCard({ gift, categoryColor, onClick }: {
+  gift: Gift;
+  categoryColor: string;
+  onClick: () => void;
+}) {
+  // Format price from cents to dollars
+  const priceDisplay = `${(gift.price_cents / 100).toFixed(2)}`;
+  
+  return (
+    <div 
+      className="gift-card"
+      onClick={onClick}
+      style={{ '--category-color': categoryColor } as React.CSSProperties}
+    >
+      <div className="gift-emoji">{gift.emoji}</div>
+      <h4 className="gift-name">{gift.name}</h4>
+      <p className="gift-description">{gift.description}</p>
+      <div className="gift-price">{priceDisplay}</div>
+      <button className="send-button">
+        Send Gift ✨
+      </button>
+
+      <style jsx>{`
+        .gift-card {
+          background: white;
+          border: 2px solid #f3f4f6;
+          border-radius: 1rem;
+          padding: 1.5rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          position: relative;
+          overflow: hidden;
+          min-height: 240px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+
+        .gift-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: var(--category-color);
+          transform: scaleX(0);
+          transition: transform 0.2s ease;
+        }
+
+        .gift-card:hover {
+          border-color: var(--category-color);
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .gift-card:hover::before {
+          transform: scaleX(1);
+        }
+
+        .gift-emoji {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+        }
+
+        .gift-name {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .gift-description {
+          font-size: 0.875rem;
+          color: #6b7280;
+          margin: 0 0 1rem 0;
+          line-height: 1.4;
+          flex-grow: 1;
+        }
+
+        .gift-price {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: var(--category-color);
+          margin: 0 0 1rem 0;
+        }
+
+        .send-button {
+          width: 100%;
+          background: linear-gradient(135deg, var(--category-color), rgba(255,255,255,0.1));
+          color: white;
+          border: none;
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-top: auto;
+        }
+
+        .send-button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .bundle-card {
+          border: 3px solid var(--category-color);
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.85));
+          position: relative;
+          overflow: visible;
+        }
+
+        .bundle-badge {
+          position: absolute;
+          top: -0.5rem;
+          right: -0.5rem;
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+          color: white;
+          padding: 0.25rem 0.5rem;
+          border-radius: 1rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          box-shadow: 0 2px 4px rgba(239,68,68,0.3);
+          z-index: 10;
+        }
+
+        @media (max-width: 640px) {
+          .gift-card {
+            padding: 1rem;
+            min-height: 200px;
+          }
+          
+          .gift-emoji {
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+          }
+          
+          .gift-name {
+            font-size: 1rem;
+          }
+          
+          .gift-description {
+            font-size: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+          
+          .gift-price {
+            font-size: 1.125rem;
+            margin-bottom: 0.75rem;
+          }
+          
+          .send-button {
+            padding: 0.5rem;
+            font-size: 0.875rem;
           }
         }
       `}</style>
