@@ -191,7 +191,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
           .select('*')
           .eq('album_id', params.id)
           .eq('user_id', userId)
-          .order('created_at', { ascending: false }); // Get most recent first
+          .order('created_at', { ascending: false }); // Get most recent first - this returns an array
 
         addDebug(`Collaborator query - Error: ${collabError?.message || 'none'}, Records found: ${collabDataArray?.length || 0}`);
 
