@@ -26,10 +26,18 @@ type PublicProfile = {
   allow_messages: 'everyone' | 'friends' | 'no_one' | null;
   show_online_status: boolean | null;
   show_mutuals: boolean | null;
+  show_business_link: boolean | null;
   verified: boolean | null;
   memories_visibility: 'public' | 'friends' | 'private' | null;
   friends_count?: number | null;
   posts_count?: number | null;
+};
+
+type BusinessProfile = {
+  id: string;
+  handle: string;
+  display_name: string;
+  visibility: string;
 };
 
 type RelationshipType = 'friend' | 'acquaintance' | 'restricted' | 'none';
@@ -67,6 +75,7 @@ export default function PublicProfilePage() {
   
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [relationshipType, setRelationshipType] = useState<RelationshipType>('none');
   const [friendStatus, setFriendStatus] = useState<"none" | "pending" | "friends">("none");
@@ -110,6 +119,7 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (profileId) {
       loadProfile();
+      loadBusinessProfile();
       loadStats();
       loadEvents();
     }
@@ -134,12 +144,32 @@ export default function PublicProfilePage() {
 
       setProfile({
         ...data,
-        memories_visibility: data.memories_visibility || 'private'
+        memories_visibility: data.memories_visibility || 'private',
+        show_business_link: data.show_business_link ?? true
       });
     } catch (err) {
       console.error("Error loading profile:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadBusinessProfile() {
+    if (!profileId) return;
+    
+    try {
+      const { data } = await supabase
+        .from("business_profiles")
+        .select("id, handle, display_name, visibility")
+        .eq("user_id", profileId)
+        .eq("visibility", "public")
+        .maybeSingle();
+      
+      if (data) {
+        setBusinessProfile(data);
+      }
+    } catch (err) {
+      console.error("Error loading business profile:", err);
     }
   }
 
@@ -458,6 +488,7 @@ export default function PublicProfilePage() {
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            min-height: 44px;
           }
           .btn:hover {
             transform: translateY(-1px);
@@ -475,8 +506,24 @@ export default function PublicProfilePage() {
     (profile?.memories_visibility === 'friends' && canViewFriendContent) ||
     currentUserId === profileId;
 
+  // Check if business link should be shown
+  const showBusinessLink = businessProfile && profile.show_business_link !== false;
+
   return (
     <div className="profile-page">
+      {/* Business Page Button - Shows if user has public business and enabled the link */}
+      {showBusinessLink && (
+        <div className="business-button-container">
+          <a 
+            href={`/business/@${businessProfile.handle}`}
+            className="business-page-button"
+          >
+            <span className="business-icon">🏢</span>
+            <span>Business Page</span>
+          </a>
+        </div>
+      )}
+
       {/* Main Profile Display */}
       <ProfileViewer
         profile={profile}
@@ -614,9 +661,63 @@ export default function PublicProfilePage() {
           z-index: 1;
         }
 
+        /* Business Page Button */
+        .business-button-container {
+          max-width: 800px;
+          margin: 0 auto 1.5rem;
+        }
+
+        .business-page-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          width: 100%;
+          padding: 0.875rem 1.25rem;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border: none;
+          border-radius: 0.75rem;
+          font-weight: 600;
+          font-size: 0.95rem;
+          text-decoration: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(139,92,246,0.3);
+          min-height: 48px;
+        }
+
+        .business-page-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 16px rgba(139,92,246,0.4);
+          background: linear-gradient(135deg, #7c3aed, #6d28d9);
+        }
+
+        .business-page-button:active {
+          transform: translateY(0);
+        }
+
+        .business-icon {
+          font-size: 1.25rem;
+        }
+
         @media (max-width: 640px) {
           .profile-page {
             padding: 1rem 0.5rem;
+          }
+
+          .business-button-container {
+            margin-bottom: 1rem;
+          }
+
+          .business-page-button {
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            min-height: 44px;
+          }
+
+          .business-icon {
+            font-size: 1.1rem;
           }
         }
 
