@@ -94,6 +94,35 @@ export async function markAllRead() {
   return { ok: !error, error: error?.message || null };
 }
 
+// Create a new notification
+export async function createNotification(data: {
+  recipient_id: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  target_url?: string | null;
+  entity_table?: string | null;
+  entity_id?: string | null;
+  actor_id?: string | null;
+  due_at?: string | null;
+}) {
+  const { error } = await supabase
+    .from("notifications")
+    .insert({
+      recipient_id: data.recipient_id,
+      type: data.type,
+      title: data.title,
+      body: data.body || null,
+      target_url: data.target_url || null,
+      entity_table: data.entity_table || null,
+      entity_id: data.entity_id || null,
+      actor_id: data.actor_id || null,
+      due_at: data.due_at || null,
+    });
+
+  return { ok: !error, error: error?.message || null };
+}
+
 // Realtime subscription (INSERT/UPDATE/DELETE on your own notifications)
 export async function subscribeNotifications(
   onChange: (payload: { event: "INSERT" | "UPDATE" | "DELETE" }) => void
