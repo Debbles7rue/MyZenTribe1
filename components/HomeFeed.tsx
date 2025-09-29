@@ -44,8 +44,8 @@ export default function HomeFeed() {
 
   return (
     <>
-      {/* Main Content Area - Added padding bottom for fixed nav and SOS button */}
-      <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-32">
+      {/* Main Content Area - Added padding bottom for fixed nav */}
+      <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-24">
         {/* Community Guidelines Disclaimer */}
         <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
           <div className="flex items-start gap-3">
@@ -108,9 +108,14 @@ export default function HomeFeed() {
         )}
       </div>
 
+      {/* SOS Floating Button - Positioned above bottom nav */}
+      <div className="fixed bottom-20 right-4 sm:right-6 z-50">
+        <SOSFloatingButton />
+      </div>
+
       {/* Fixed Bottom Navigation Bar - Shows on both mobile and desktop */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
-        <div className="max-w-2xl mx-auto px-4 py-2">
+        <div className="max-w-2xl mx-auto px-2 sm:px-4 py-2">
           <div className="grid grid-cols-4 gap-1">
             <a 
               href="/notifications" 
@@ -146,8 +151,6 @@ export default function HomeFeed() {
         {/* Subtle gradient decoration */}
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
       </div>
-
-      <SOSFloatingButton />
     </>
   );
 }
