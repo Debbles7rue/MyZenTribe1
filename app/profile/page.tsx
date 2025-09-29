@@ -299,7 +299,7 @@ export default function ProfilePage() {
     }
   }, [userId]);
 
-  // Save profile
+  // Save profile - FIXED to preserve admin status
   async function handleSave() {
     if (!userId || !profile) return;
     
@@ -309,8 +309,7 @@ export default function ProfilePage() {
     try {
       const { error } = await supabase
         .from("profiles")
-        .upsert({
-          id: userId,
+        .update({
           full_name: profile.full_name,
           bio: profile.bio,
           location_text: profile.location_text,
@@ -318,7 +317,8 @@ export default function ProfilePage() {
           show_mutuals: profile.show_mutuals,
           avatar_url: profile.avatar_url,
           updated_at: new Date().toISOString()
-        });
+        })
+        .eq('id', userId);
       
       if (error) throw error;
       
