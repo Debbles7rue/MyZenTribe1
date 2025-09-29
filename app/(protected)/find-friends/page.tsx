@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { createNotification } from "@/lib/notifications";
 
 interface User {
   id: string;
@@ -219,6 +220,26 @@ export default function FindFriendsPage() {
         });
 
       if (!error) {
+        // Get sender's profile for notification
+        const { data: senderProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', currentUserId)
+          .single();
+
+        const senderName = senderProfile?.full_name || 'Someone';
+
+        // Create notification for recipient
+        await createNotification({
+          recipient_id: userId,
+          type: 'friend.request',
+          title: 'New Friend Request',
+          body: `${senderName} sent you a friend request`,
+          target_url: '/friend-requests',
+          entity_table: 'friend_requests',
+          actor_id: currentUserId,
+        });
+
         setFriendStatuses(prev => ({
           ...prev,
           [userId]: 'sent'
@@ -259,6 +280,26 @@ export default function FindFriendsPage() {
         });
 
       if (!friendshipError || friendshipError.code === '23505') {
+        // Get accepter's profile for notification
+        const { data: accepterProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', currentUserId)
+          .single();
+
+        const accepterName = accepterProfile?.full_name || 'Someone';
+
+        // Create notification for the person who sent the request
+        await createNotification({
+          recipient_id: userId,
+          type: 'friend.accepted',
+          title: 'Friend Request Accepted!',
+          body: `${accepterName} accepted your friend request`,
+          target_url: `/profile/${currentUserId}`,
+          entity_table: 'friendships',
+          actor_id: currentUserId,
+        });
+
         setFriendStatuses(prev => ({
           ...prev,
           [userId]: 'friend'
