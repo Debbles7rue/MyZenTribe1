@@ -19,7 +19,7 @@ const COMMITMENTS: Commitment[] = [
     title: "Transparent Funding",
     icon: "💎",
     body:
-      "We are funded entirely through voluntary donations and, in the future, a simple and affordable membership model. Until January 1, 2026, MyZenTribe is completely free for everyone. After that, you'll have the option to join with a membership plan — or continue supporting through donations if you wish.",
+      "We fund MyZenTribe through voluntary donations and optional extras that you can purchase in-app—but all core features remain free and fully functional. Everyone who joins before January 1, 2026, receives lifetime free membership. Starting in 2026, new members will choose from simple, affordable membership plans. Early supporters like you will always enjoy full access as our way of saying thank you.",
   },
   {
     title: "Community First",
