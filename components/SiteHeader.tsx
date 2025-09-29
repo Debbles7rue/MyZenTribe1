@@ -15,15 +15,15 @@ export default function SiteHeader() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       setUserId(data.user?.id ?? null);
-      // Check admin table instead of unreliable metadata
+      // Check is_app_admin in profiles table
       if (data.user) {
-        const { data: adminRecord } = await supabase
-          .from('admins')
-          .select('user_id')
-          .eq('user_id', data.user.id)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_app_admin')
+          .eq('id', data.user.id)
           .single();
         
-        setIsAdmin(!!adminRecord);
+        setIsAdmin(!!profile?.is_app_admin);
       }
     });
   }, []);
@@ -78,12 +78,14 @@ export default function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-container">
-        {/* Logo/Brand */}
-        <Link href="/" className="brand-logo" aria-label="MyZenTribe Home">
-          <span className="brand-my">My</span>
-          <span className="brand-zen">Zen</span>
-          <span className="brand-tribe">Tribe</span>
-        </Link>
+        {/* Row 1: Logo */}
+        <div className="header-row-top">
+          <Link href="/" className="brand-logo" aria-label="MyZenTribe Home">
+            <span className="brand-my">My</span>
+            <span className="brand-zen">Zen</span>
+            <span className="brand-tribe">Tribe</span>
+          </Link>
+        </div>
 
         {/* Loading State */}
         {userId === "loading" ? (
@@ -91,157 +93,160 @@ export default function SiteHeader() {
         ) : userId ? (
           // Logged In State
           <>
-            <nav className="icon-nav">
-              {/* Home */}
-              <NavIconButton 
-                href="/" 
-                label="Home"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-                  </svg>
-                }
-              />
-              
-              {/* Profile Dropdown */}
-              <div className="profile-dropdown">
-                <button
-                  className={`nav-icon-btn dropdown-trigger ${
-                    pathname?.startsWith("/profile") || pathname?.startsWith("/business") ? "active" : ""
-                  }`}
-                  onClick={() => setOpenProfileMenu(!openProfileMenu)}
-                  aria-expanded={openProfileMenu}
-                  aria-haspopup="true"
-                  aria-label="Profile Menu"
-                  title="Profile"
-                >
-                  <span className="nav-icon">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
-                    </svg>
-                  </span>
-                  <span className="nav-label">Profile</span>
-                  <svg className="dropdown-arrow" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
-                    <path d="M5 6L0 0h10L5 6z"/>
-                  </svg>
-                </button>
-                
-                {openProfileMenu && (
-                  <div className="profile-menu">
-                    <Link href="/profile" className="menu-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <circle cx="8" cy="4" r="3"/>
-                        <path d="M8 9c-3.3 0-6 1.3-6 3v1h12v-1c0-1.7-2.7-3-6-3z"/>
-                      </svg>
-                      Personal Profile
-                    </Link>
-                    <Link href="/business" className="menu-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M3 3h4v4H3V3zm6 0h4v4H9V3zM3 9h4v4H3V9zm6 0h4v4H9V9z"/>
-                      </svg>
-                      Business Profile
-                    </Link>
-                  </div>
-                )}
-              </div>
-              
-              {/* Calendar */}
-              <NavIconButton 
-                href="/calendar" 
-                label="Calendar"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/>
-                  </svg>
-                }
-              />
-              
-              {/* Communities */}
-              <NavIconButton 
-                href="/communities" 
-                label="Communities"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/>
-                  </svg>
-                }
-              />
-              
-              {/* Meditation */}
-              <NavIconButton 
-                href="/meditation" 
-                label="Meditation"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 3a2 2 0 110 4 2 2 0 010-4zm0 10a6 6 0 01-4.24-1.76l1.42-1.42a4 4 0 005.66 0l1.42 1.42A6 6 0 0110 15z"/>
-                  </svg>
-                }
-              />
-              
-              {/* Karma */}
-              <NavIconButton 
-                href="/karma" 
-                label="Karma"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                  </svg>
-                }
-              />
-              
-              {/* Admin - Always visible if admin */}
-              {isAdmin && (
+            {/* Row 2: Navigation */}
+            <div className="header-row-nav">
+              <nav className="icon-nav">
+                {/* Home */}
                 <NavIconButton 
-                  href="/admin" 
-                  label="Admin"
-                  className="admin-btn"
+                  href="/" 
+                  label="Home"
                   icon={
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/>
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
                     </svg>
                   }
                 />
-              )}
-            </nav>
+                
+                {/* Profile Dropdown */}
+                <div className="profile-dropdown">
+                  <button
+                    className={`nav-icon-btn dropdown-trigger ${
+                      pathname?.startsWith("/profile") || pathname?.startsWith("/business") ? "active" : ""
+                    }`}
+                    onClick={() => setOpenProfileMenu(!openProfileMenu)}
+                    aria-expanded={openProfileMenu}
+                    aria-haspopup="true"
+                    aria-label="Profile Menu"
+                    title="Profile"
+                  >
+                    <span className="nav-icon">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
+                      </svg>
+                    </span>
+                    <span className="nav-label">Profile</span>
+                    <svg className="dropdown-arrow" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+                      <path d="M5 6L0 0h10L5 6z"/>
+                    </svg>
+                  </button>
+                  
+                  {openProfileMenu && (
+                    <div className="profile-menu">
+                      <Link href="/profile" className="menu-item">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                          <circle cx="8" cy="4" r="3"/>
+                          <path d="M8 9c-3.3 0-6 1.3-6 3v1h12v-1c0-1.7-2.7-3-6-3z"/>
+                        </svg>
+                        Personal Profile
+                      </Link>
+                      <Link href="/business" className="menu-item">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M3 3h4v4H3V3zm6 0h4v4H9V3zM3 9h4v4H3V9zm6 0h4v4H9V9z"/>
+                        </svg>
+                        Business Profile
+                      </Link>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Calendar */}
+                <NavIconButton 
+                  href="/calendar" 
+                  label="Calendar"
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/>
+                    </svg>
+                  }
+                />
+                
+                {/* Communities */}
+                <NavIconButton 
+                  href="/communities" 
+                  label="Communities"
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/>
+                    </svg>
+                  }
+                />
+                
+                {/* Meditation */}
+                <NavIconButton 
+                  href="/meditation" 
+                  label="Meditation"
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 3a2 2 0 110 4 2 2 0 010-4zm0 10a6 6 0 01-4.24-1.76l1.42-1.42a4 4 0 005.66 0l1.42 1.42A6 6 0 0110 15z"/>
+                    </svg>
+                  }
+                />
+                
+                {/* Karma */}
+                <NavIconButton 
+                  href="/karma" 
+                  label="Karma"
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                  }
+                />
+                
+                {/* Admin - Visible if is_app_admin is true */}
+                {isAdmin && (
+                  <NavIconButton 
+                    href="/admin" 
+                    label="Admin"
+                    className="admin-btn"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/>
+                      </svg>
+                    }
+                  />
+                )}
+              </nav>
 
-            <div className="header-actions">
-              {/* Safety */}
-              <Link 
-                href="/safety" 
-                className={`nav-icon-btn safety-btn ${pathname?.startsWith("/safety") ? "active" : ""}`}
-                aria-label="Safety"
-                title="Safety"
-              >
-                <span className="nav-icon">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
-                  </svg>
-                </span>
-                <span className="nav-label">Safety</span>
-              </Link>
+              <div className="header-actions">
+                {/* Safety */}
+                <Link 
+                  href="/safety" 
+                  className={`nav-icon-btn safety-btn ${pathname?.startsWith("/safety") ? "active" : ""}`}
+                  aria-label="Safety"
+                  title="Safety"
+                >
+                  <span className="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                    </svg>
+                  </span>
+                  <span className="nav-label">Safety</span>
+                </Link>
 
-              {/* Commitment */}
-              <Link 
-                href="/commitment" 
-                className={`nav-icon-btn commitment-btn ${pathname?.startsWith("/commitment") ? "active" : ""}`}
-                aria-label="Our Commitment"
-                title="Our Commitment"
-              >
-                <span className="nav-icon">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
+                {/* Commitment */}
+                <Link 
+                  href="/commitment" 
+                  className={`nav-icon-btn commitment-btn ${pathname?.startsWith("/commitment") ? "active" : ""}`}
+                  aria-label="Our Commitment"
+                  title="Our Commitment"
+                >
+                  <span className="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
+                    </svg>
+                  </span>
+                  <span className="nav-label">Commitment</span>
+                </Link>
+                
+                {/* Sign Out */}
+                <button className="sign-out-btn" onClick={signOut} aria-label="Sign Out" title="Sign Out">
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"/>
                   </svg>
-                </span>
-                <span className="nav-label">Commitment</span>
-              </Link>
-              
-              {/* Sign Out */}
-              <button className="sign-out-btn" onClick={signOut} aria-label="Sign Out" title="Sign Out">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"/>
-                </svg>
-                <span className="sign-out-text">Sign Out</span>
-              </button>
+                  <span className="sign-out-text">Sign Out</span>
+                </button>
+              </div>
             </div>
           </>
         ) : (
@@ -274,14 +279,20 @@ export default function SiteHeader() {
           max-width: 1280px;
           margin: 0 auto;
           padding: 0 8px;
-          height: 60px;
           display: flex;
-          align-items: center;
-          justify-content: space-between;
+          flex-direction: column;
           gap: 8px;
+          padding-top: 8px;
+          padding-bottom: 8px;
         }
 
-        /* Brand Logo */
+        /* Row 1: Brand Logo */
+        .header-row-top {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+
         .brand-logo {
           display: flex;
           align-items: center;
@@ -290,7 +301,6 @@ export default function SiteHeader() {
           letter-spacing: -0.5px;
           transition: transform 0.2s ease;
           white-space: nowrap;
-          flex-shrink: 0;
         }
 
         .brand-logo:hover {
@@ -313,6 +323,14 @@ export default function SiteHeader() {
           color: #1f2937;
         }
 
+        /* Row 2: Navigation */
+        .header-row-nav {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px;
+        }
+
         /* Icon Navigation */
         .icon-nav {
           display: flex;
@@ -320,7 +338,7 @@ export default function SiteHeader() {
           gap: 2px;
           flex: 1;
           justify-content: center;
-          max-width: 400px;
+          flex-wrap: wrap;
         }
 
         /* Navigation Icon Buttons - ICON ONLY */
@@ -331,8 +349,8 @@ export default function SiteHeader() {
           align-items: center;
           justify-content: center;
           padding: 6px;
-          min-width: 44px;
-          height: 44px;
+          min-width: 40px;
+          height: 40px;
           background: white;
           border: 1px solid rgba(147, 51, 234, 0.15);
           border-radius: 8px;
@@ -368,13 +386,13 @@ export default function SiteHeader() {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 18px;
-          height: 18px;
+          width: 16px;
+          height: 16px;
         }
 
         .nav-icon svg {
-          width: 18px;
-          height: 18px;
+          width: 16px;
+          height: 16px;
         }
 
         /* Labels always hidden for compact design */
@@ -482,14 +500,14 @@ export default function SiteHeader() {
 
         /* Safety Button */
         .safety-btn {
-          min-width: 44px;
-          height: 44px;
+          min-width: 40px;
+          height: 40px;
         }
 
         /* Commitment Button - Purple heart theme */
         .commitment-btn {
-          min-width: 44px;
-          height: 44px;
+          min-width: 40px;
+          height: 40px;
           border-color: rgba(168, 85, 247, 0.2);
         }
 
@@ -513,8 +531,8 @@ export default function SiteHeader() {
           justify-content: center;
           gap: 4px;
           padding: 6px;
-          width: 44px;
-          height: 44px;
+          width: 40px;
+          height: 40px;
           background: white;
           border: 1px solid rgba(239, 68, 68, 0.2);
           border-radius: 8px;
@@ -565,15 +583,17 @@ export default function SiteHeader() {
         }
 
         .loading-placeholder {
-          width: 340px;
-          height: 44px;
+          width: 100%;
+          height: 80px;
         }
 
-        /* Tablet (600px+) - Still icons only */
+        /* Tablet (600px+) - Still two rows but more spacing */
         @media (min-width: 600px) {
           .header-container {
             padding: 0 12px;
-            gap: 12px;
+            gap: 10px;
+            padding-top: 10px;
+            padding-bottom: 10px;
           }
 
           .brand-logo {
@@ -581,14 +601,76 @@ export default function SiteHeader() {
           }
 
           .icon-nav {
-            max-width: 450px;
             gap: 4px;
           }
 
           .nav-icon-btn {
-            min-width: 48px;
-            height: 46px;
+            min-width: 44px;
+            height: 44px;
             padding: 8px;
+          }
+
+          .nav-icon {
+            width: 18px;
+            height: 18px;
+          }
+
+          .nav-icon svg {
+            width: 18px;
+            height: 18px;
+          }
+
+          .header-actions {
+            gap: 4px;
+          }
+
+          .admin-btn,
+          .safety-btn,
+          .commitment-btn {
+            min-width: 44px;
+            height: 44px;
+          }
+
+          .sign-out-btn {
+            width: 44px;
+            height: 44px;
+          }
+        }
+
+        /* Desktop (768px+) - Single row layout */
+        @media (min-width: 768px) {
+          .header-container {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            height: 64px;
+            gap: 12px;
+          }
+
+          .header-row-top {
+            flex: 0 0 auto;
+          }
+
+          .header-row-nav {
+            flex: 1;
+            justify-content: space-between;
+          }
+
+          .brand-logo {
+            font-size: 22px;
+          }
+
+          .icon-nav {
+            gap: 6px;
+            max-width: 500px;
+            flex-wrap: nowrap;
+          }
+
+          .nav-icon-btn {
+            padding: 10px;
+            min-width: 48px;
+            height: 48px;
           }
 
           .nav-icon {
@@ -601,38 +683,12 @@ export default function SiteHeader() {
             height: 20px;
           }
 
-          .header-actions {
-            gap: 4px;
-          }
-        }
-
-        /* Desktop (768px+) - Still icons only for space */
-        @media (min-width: 768px) {
-          .header-container {
-            padding: 0 16px;
-            height: 64px;
-          }
-
-          .brand-logo {
-            font-size: 22px;
-          }
-
-          .icon-nav {
-            gap: 6px;
-            max-width: 500px;
-          }
-
-          .nav-icon-btn {
-            padding: 10px;
-            min-width: 48px;
-            height: 48px;
-          }
-
           .admin-btn,
           .safety-btn,
           .commitment-btn {
             padding: 10px;
             height: 48px;
+            min-width: 48px;
           }
 
           .sign-out-btn {
@@ -678,79 +734,6 @@ export default function SiteHeader() {
           .sign-out-btn {
             width: 52px;
             height: 52px;
-          }
-        }
-
-        /* Very small screens (below 380px) */
-        @media (max-width: 380px) {
-          .header-container {
-            padding: 0 6px;
-            gap: 6px;
-          }
-
-          .brand-logo {
-            font-size: 16px;
-          }
-
-          .icon-nav {
-            gap: 1px;
-          }
-
-          .nav-icon-btn,
-          .admin-btn,
-          .safety-btn,
-          .commitment-btn {
-            min-width: 40px;
-            height: 40px;
-            padding: 5px;
-            border-radius: 6px;
-          }
-
-          .nav-icon {
-            width: 16px;
-            height: 16px;
-          }
-
-          .nav-icon svg {
-            width: 16px;
-            height: 16px;
-          }
-
-          .sign-out-btn {
-            width: 40px;
-            height: 40px;
-            padding: 5px;
-          }
-
-          .dropdown-arrow {
-            width: 6px;
-            height: 4px;
-          }
-
-          .login-btn {
-            padding: 8px 16px;
-            font-size: 13px;
-          }
-        }
-
-        /* Ultra small screens (below 350px) */
-        @media (max-width: 350px) {
-          .nav-icon-btn,
-          .admin-btn,
-          .safety-btn,
-          .commitment-btn {
-            min-width: 36px;
-            height: 36px;
-            padding: 4px;
-          }
-
-          .sign-out-btn {
-            width: 36px;
-            height: 36px;
-          }
-
-          .brand-logo {
-            font-size: 15px;
           }
         }
       `}</style>
