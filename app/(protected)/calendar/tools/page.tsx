@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
 // Import the actual calendar components
-import HolidayReminders from '../components/HolidayReminders';
 import CalendarAnalytics from '@/components/CalendarAnalytics';
 import SmartTemplates from '@/components/SmartTemplates';
 import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
@@ -34,7 +33,6 @@ export default function CalendarToolsPage() {
   const [showMeetingCoordinator, setShowMeetingCoordinator] = useState(false);
   const [showTimeBlocking, setShowTimeBlocking] = useState(false);
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
-  const [showHolidayReminders, setShowHolidayReminders] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   // Load user and data
@@ -125,66 +123,9 @@ export default function CalendarToolsPage() {
     setShowCarpoolChat(true);
   };
 
-  const handleHolidayRemindersClick = () => {
-    console.log('Holiday Reminders clicked');
-    setShowHolidayReminders(true);
-  };
-
   const handleSettingsClick = () => {
     console.log('Settings clicked');
     setShowSettings(true);
-  };
-
-  // Holiday add handler
-  const handleAddHolidayToCalendar = async (holiday: any) => {
-    if (!user) {
-      showToast({ type: 'error', message: 'Please log in first' });
-      return false;
-    }
-
-    try {
-      const holidayDate = new Date(holiday.date);
-      const startTime = new Date(holidayDate);
-      startTime.setHours(0, 0, 0, 0);
-      const endTime = new Date(holidayDate);
-      endTime.setHours(23, 59, 59, 999);
-
-      const { error } = await supabase.from('events').insert({
-        title: `${holiday.emoji} ${holiday.name}`,
-        description: holiday.description || '',
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        created_by: user.id,
-        visibility: 'private',
-        source: 'personal',
-        event_type: 'holiday',
-        completed: false
-      });
-
-      if (error) {
-        console.error('Failed to add holiday:', error);
-        showToast({ type: 'error', message: `Failed to add ${holiday.name}` });
-        return false;
-      }
-
-      showToast({ type: 'success', message: `Added ${holiday.name} to your calendar!` });
-      
-      // Reload events
-      const { data: eventsData } = await supabase
-        .from('events')
-        .select('*')
-        .eq('created_by', user.id);
-      
-      if (eventsData) {
-        setEvents(eventsData);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error adding holiday:', error);
-      showToast({ type: 'error', message: 'Failed to add holiday to calendar' });
-      return false;
-    }
   };
 
   // Template apply handler
@@ -248,20 +189,6 @@ export default function CalendarToolsPage() {
           description: 'Coordinate transportation',
           icon: '🚗',
           action: handleCarpoolChatClick
-        }
-      ]
-    },
-    {
-      id: 'planning',
-      title: 'Planning & Reminders',
-      description: 'Stay organized and prepared',
-      tools: [
-        {
-          id: 'holiday-reminders',
-          title: 'Holiday Reminders',
-          description: 'Plan for upcoming holidays',
-          icon: '🎉',
-          action: handleHolidayRemindersClick
         }
       ]
     },
@@ -425,16 +352,6 @@ export default function CalendarToolsPage() {
       </div>
 
       {/* REAL COMPONENT MODALS */}
-      
-      {/* Holiday Reminders - Real Component */}
-      {showHolidayReminders && (
-        <HolidayReminders
-          onClose={() => setShowHolidayReminders(false)}
-          onAddToCalendar={handleAddHolidayToCalendar}
-          existingEvents={events}
-          showToast={showToast}
-        />
-      )}
 
       {/* Calendar Analytics - Real Component */}
       {showAnalytics && user && (
