@@ -1,4 +1,5 @@
 // app/profile/page.tsx
+// app/profile/page.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, Suspense } from "react";
@@ -17,6 +18,7 @@ type Profile = {
   location_text: string | null;
   location_is_public: boolean | null;
   show_mutuals: boolean | null;
+  show_business_link: boolean | null;
 };
 
 type BusinessProfile = {
@@ -132,7 +134,8 @@ export default function ProfilePage() {
             bio: "",
             location_text: "",
             location_is_public: false,
-            show_mutuals: true
+            show_mutuals: true,
+            show_business_link: true
           });
         }
       } catch (err) {
@@ -332,7 +335,7 @@ export default function ProfilePage() {
     }
   }, [userId]);
 
-  // Save profile - FIXED to preserve admin status
+  // Save profile
   async function handleSave() {
     if (!userId || !profile) return;
     
@@ -348,6 +351,7 @@ export default function ProfilePage() {
           location_text: profile.location_text,
           location_is_public: profile.location_is_public,
           show_mutuals: profile.show_mutuals,
+          show_business_link: profile.show_business_link,
           avatar_url: profile.avatar_url,
           updated_at: new Date().toISOString()
         })
@@ -481,6 +485,17 @@ export default function ProfilePage() {
                     <span>Show mutual friends</span>
                   </label>
 
+                  {businessProfile && (
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={!!profile.show_business_link}
+                        onChange={(e) => updateProfile('show_business_link', e.target.checked)}
+                      />
+                      <span>Show business page link on my public profile</span>
+                    </label>
+                  )}
+
                   <button
                     className="btn btn-primary save-button"
                     onClick={handleSave}
@@ -529,37 +544,9 @@ export default function ProfilePage() {
                     <p className="empty-state">Add a bio using the Edit button above.</p>
                   )}
 
-                  {/* Business & Invite Section - SIDE BY SIDE */}
-                  <div className="action-cards-row">
-                    {/* Business Profile Card - NEW */}
-                    {businessProfile && (
-                      <Link 
-                        href={`/business/@${businessProfile.handle}`}
-                        className="action-card business-card"
-                      >
-                        <div className="card-icon-wrapper">
-                          {businessProfile.logo_url ? (
-                            <img 
-                              src={businessProfile.logo_url} 
-                              alt={businessProfile.display_name}
-                              className="business-logo"
-                            />
-                          ) : (
-                            <div className="business-logo-placeholder">🏢</div>
-                          )}
-                        </div>
-                        <div className="card-content">
-                          <div className="card-title">{businessProfile.display_name}</div>
-                          {businessProfile.tagline && (
-                            <div className="card-subtitle">{businessProfile.tagline}</div>
-                          )}
-                          <div className="card-link">View Business Page →</div>
-                        </div>
-                      </Link>
-                    )}
-
-                    {/* Invite Friends Section */}
-                    <div className="action-card invite-card">
+                  {/* Invite Friends Section - Single Card */}
+                  <div className="invite-card-wrapper">
+                    <div className="invite-card">
                       <button
                         onClick={() => setInviteExpanded(!inviteExpanded)}
                         className="invite-button-full"
@@ -607,18 +594,7 @@ export default function ProfilePage() {
           <div className="card">
             <Link 
               href="/albums/create" 
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'center',
-                padding: '1rem 1.5rem',
-                background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                color: 'white',
-                borderRadius: '0.5rem',
-                fontWeight: '600',
-                textDecoration: 'none',
-                transition: 'opacity 0.2s'
-              }}
+              className="album-link"
             >
               📸 Create Photo Album
             </Link>
@@ -628,27 +604,7 @@ export default function ProfilePage() {
           <div className="card">
             <Link 
               href="/albums" 
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'center',
-                padding: '1rem 1.5rem',
-                background: 'white',
-                color: '#8b5cf6',
-                border: '2px solid #8b5cf6',
-                borderRadius: '0.5rem',
-                fontWeight: '600',
-                textDecoration: 'none',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#8b5cf6';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'white';
-                e.currentTarget.style.color = '#8b5cf6';
-              }}
+              className="album-link-outline"
             >
               📚 View My Albums
             </Link>
@@ -927,21 +883,12 @@ export default function ProfilePage() {
           font-style: italic;
         }
 
-        /* NEW: Action Cards Row */
-        .action-cards-row {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1rem;
+        /* Invite Card Wrapper */
+        .invite-card-wrapper {
           margin-top: 1.5rem;
         }
 
-        @media (min-width: 768px) {
-          .action-cards-row {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        .action-card {
+        .invite-card {
           background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
           border: 1px solid rgba(139,92,246,0.2);
           border-radius: 0.75rem;
@@ -949,78 +896,10 @@ export default function ProfilePage() {
           transition: all 0.2s ease;
         }
 
-        .action-card:hover {
+        .invite-card:hover {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(139,92,246,0.2);
           border-color: rgba(139,92,246,0.4);
-        }
-
-        /* Business Card Styles */
-        .business-card {
-          display: flex;
-          gap: 0.75rem;
-          align-items: center;
-          text-decoration: none;
-          cursor: pointer;
-        }
-
-        .card-icon-wrapper {
-          flex-shrink: 0;
-        }
-
-        .business-logo {
-          width: 60px;
-          height: 60px;
-          border-radius: 0.5rem;
-          object-fit: cover;
-          border: 2px solid rgba(139,92,246,0.2);
-        }
-
-        .business-logo-placeholder {
-          width: 60px;
-          height: 60px;
-          border-radius: 0.5rem;
-          background: linear-gradient(135deg, #c084fc, #a78bfa);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.75rem;
-        }
-
-        .card-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .card-title {
-          font-weight: 600;
-          color: #1f2937;
-          font-size: 0.95rem;
-          margin-bottom: 0.25rem;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .card-subtitle {
-          font-size: 0.8rem;
-          color: #6b7280;
-          margin-bottom: 0.5rem;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .card-link {
-          font-size: 0.75rem;
-          color: var(--brand);
-          font-weight: 500;
-        }
-
-        /* Invite Card Styles */
-        .invite-card {
-          display: flex;
-          flex-direction: column;
         }
 
         .invite-button-full {
@@ -1037,6 +916,7 @@ export default function ProfilePage() {
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s ease;
+          min-height: 44px;
         }
 
         .invite-button-full:hover {
@@ -1128,6 +1008,13 @@ export default function ProfilePage() {
           cursor: pointer;
           font-size: 0.875rem;
           color: #374151;
+          min-height: 44px;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
         }
 
         .save-button {
@@ -1147,6 +1034,42 @@ export default function ProfilePage() {
 
         .composer-wrapper {
           margin-bottom: 0;
+        }
+
+        .album-link,
+        .album-link-outline {
+          display: block;
+          width: 100%;
+          text-align: center;
+          padding: 1rem 1.5rem;
+          border-radius: 0.5rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: all 0.2s;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .album-link {
+          background: linear-gradient(135deg, #8b5cf6, #ec4899);
+          color: white;
+        }
+
+        .album-link:hover {
+          opacity: 0.9;
+        }
+
+        .album-link-outline {
+          background: white;
+          color: #8b5cf6;
+          border: 2px solid #8b5cf6;
+        }
+
+        .album-link-outline:hover {
+          background: #8b5cf6;
+          color: white;
         }
 
         .posts-feed {
@@ -1199,20 +1122,39 @@ export default function ProfilePage() {
           to { transform: rotate(360deg); }
         }
 
-        /* Mobile responsive tweaks */
+        /* Mobile optimizations */
         @media (max-width: 640px) {
-          .card-title {
-            font-size: 0.875rem;
+          .profile-page {
+            padding: 1rem 0.5rem;
           }
 
-          .card-subtitle {
-            font-size: 0.75rem;
+          .page-title {
+            font-size: 1.5rem;
           }
 
-          .business-logo,
-          .business-logo-placeholder {
-            width: 50px;
-            height: 50px;
+          .header-controls {
+            width: 100%;
+          }
+
+          .btn {
+            flex: 1;
+            min-height: 44px;
+          }
+
+          .stats-grid {
+            width: 100%;
+            max-width: none;
+          }
+
+          .profile-actions {
+            width: 100%;
+          }
+
+          .btn-compact {
+            flex: 1;
+            min-height: 44px;
+            font-size: 0.8rem;
+            padding: 0.5rem 0.5rem;
           }
         }
       `}</style>
