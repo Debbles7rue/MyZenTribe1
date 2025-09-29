@@ -19,6 +19,14 @@ type Profile = {
   show_mutuals: boolean | null;
 };
 
+type BusinessProfile = {
+  id: string;
+  display_name: string;
+  handle: string;
+  logo_url: string | null;
+  tagline: string | null;
+};
+
 // Animated Counter Component
 function AnimatedCounter({ value, label }: { value: number; label: string }) {
   const [displayValue, setDisplayValue] = useState(0);
@@ -72,6 +80,7 @@ const LazyPhotosFeed = React.lazy(() =>
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -134,6 +143,30 @@ export default function ProfilePage() {
     }
     
     loadProfile();
+  }, [userId]);
+
+  // Load business profile
+  useEffect(() => {
+    async function loadBusinessProfile() {
+      if (!userId) return;
+      
+      try {
+        const { data } = await supabase
+          .from("business_profiles")
+          .select("id, display_name, handle, logo_url, tagline")
+          .eq("user_id", userId)
+          .eq("visibility", "public")
+          .maybeSingle();
+        
+        if (data) {
+          setBusinessProfile(data);
+        }
+      } catch (err) {
+        console.error("Error loading business profile:", err);
+      }
+    }
+    
+    loadBusinessProfile();
   }, [userId]);
 
   // Load friends count
@@ -496,23 +529,54 @@ export default function ProfilePage() {
                     <p className="empty-state">Add a bio using the Edit button above.</p>
                   )}
 
-                  {/* Invite Friends Section */}
-                  <div className="invite-section">
-                    <button
-                      onClick={() => setInviteExpanded(!inviteExpanded)}
-                      className="btn btn-special invite-button"
-                    >
-                      🎉 Invite Friends
-                      <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
-                    </button>
-                    
-                    {inviteExpanded && userId && componentsReady && (
-                      <div className="invite-content">
-                        <Suspense fallback={<div>Loading QR code...</div>}>
-                          <LazyProfileInviteQR userId={userId} embed qrSize={180} />
-                        </Suspense>
-                      </div>
+                  {/* Business & Invite Section - SIDE BY SIDE */}
+                  <div className="action-cards-row">
+                    {/* Business Profile Card - NEW */}
+                    {businessProfile && (
+                      <Link 
+                        href={`/business/@${businessProfile.handle}`}
+                        className="action-card business-card"
+                      >
+                        <div className="card-icon-wrapper">
+                          {businessProfile.logo_url ? (
+                            <img 
+                              src={businessProfile.logo_url} 
+                              alt={businessProfile.display_name}
+                              className="business-logo"
+                            />
+                          ) : (
+                            <div className="business-logo-placeholder">🏢</div>
+                          )}
+                        </div>
+                        <div className="card-content">
+                          <div className="card-title">{businessProfile.display_name}</div>
+                          {businessProfile.tagline && (
+                            <div className="card-subtitle">{businessProfile.tagline}</div>
+                          )}
+                          <div className="card-link">View Business Page →</div>
+                        </div>
+                      </Link>
                     )}
+
+                    {/* Invite Friends Section */}
+                    <div className="action-card invite-card">
+                      <button
+                        onClick={() => setInviteExpanded(!inviteExpanded)}
+                        className="invite-button-full"
+                      >
+                        <span className="invite-icon">🎉</span>
+                        <span className="invite-text">Invite Friends</span>
+                        <span className={`invite-arrow ${inviteExpanded ? 'expanded' : ''}`}>▼</span>
+                      </button>
+                      
+                      {inviteExpanded && userId && componentsReady && (
+                        <div className="invite-content">
+                          <Suspense fallback={<div>Loading QR code...</div>}>
+                            <LazyProfileInviteQR userId={userId} embed qrSize={180} />
+                          </Suspense>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -863,26 +927,130 @@ export default function ProfilePage() {
           font-style: italic;
         }
 
-        .invite-section {
+        /* NEW: Action Cards Row */
+        .action-cards-row {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
           margin-top: 1.5rem;
-          max-width: 20rem;
         }
 
-        .btn.btn-special {
+        @media (min-width: 768px) {
+          .action-cards-row {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
+        .action-card {
+          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
+          border: 1px solid rgba(139,92,246,0.2);
+          border-radius: 0.75rem;
+          padding: 1rem;
+          transition: all 0.2s ease;
+        }
+
+        .action-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(139,92,246,0.2);
+          border-color: rgba(139,92,246,0.4);
+        }
+
+        /* Business Card Styles */
+        .business-card {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
+          text-decoration: none;
+          cursor: pointer;
+        }
+
+        .card-icon-wrapper {
+          flex-shrink: 0;
+        }
+
+        .business-logo {
+          width: 60px;
+          height: 60px;
+          border-radius: 0.5rem;
+          object-fit: cover;
+          border: 2px solid rgba(139,92,246,0.2);
+        }
+
+        .business-logo-placeholder {
+          width: 60px;
+          height: 60px;
+          border-radius: 0.5rem;
+          background: linear-gradient(135deg, #c084fc, #a78bfa);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.75rem;
+        }
+
+        .card-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .card-title {
+          font-weight: 600;
+          color: #1f2937;
+          font-size: 0.95rem;
+          margin-bottom: 0.25rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .card-subtitle {
+          font-size: 0.8rem;
+          color: #6b7280;
+          margin-bottom: 0.5rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .card-link {
+          font-size: 0.75rem;
+          color: var(--brand);
+          font-weight: 500;
+        }
+
+        /* Invite Card Styles */
+        .invite-card {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .invite-button-full {
           background: linear-gradient(135deg, #c084fc, #a78bfa);
           color: white;
           border: none;
+          border-radius: 0.5rem;
+          padding: 0.75rem 1rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
           width: 100%;
           font-size: 0.875rem;
-          padding: 0.75rem 1rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
 
-        .btn.btn-special:hover {
+        .invite-button-full:hover {
           background: linear-gradient(135deg, #a78bfa, #9333ea);
           box-shadow: 0 4px 12px rgba(196,132,252,0.4);
+        }
+
+        .invite-icon {
+          font-size: 1.25rem;
+        }
+
+        .invite-text {
+          flex: 1;
+          text-align: center;
         }
 
         .invite-arrow {
@@ -899,7 +1067,7 @@ export default function ProfilePage() {
           padding: 1rem;
           background: rgba(255,255,255,0.6);
           border: 1px solid rgba(255,255,255,0.8);
-          border-radius: 0.75rem;
+          border-radius: 0.5rem;
         }
 
         .edit-form {
@@ -1029,6 +1197,23 @@ export default function ProfilePage() {
 
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+
+        /* Mobile responsive tweaks */
+        @media (max-width: 640px) {
+          .card-title {
+            font-size: 0.875rem;
+          }
+
+          .card-subtitle {
+            font-size: 0.75rem;
+          }
+
+          .business-logo,
+          .business-logo-placeholder {
+            width: 50px;
+            height: 50px;
+          }
         }
       `}</style>
     </div>
