@@ -859,7 +859,7 @@ export default function ProfilePage() {
         }
 
         .empty-state {
-          color: #9ca3af;
+          color: #6b7280;
           font-style: italic;
         }
 
@@ -925,6 +925,12 @@ export default function ProfilePage() {
           border: 1px solid #d1d5db;
           border-radius: 0.5rem;
           font-size: 16px;
+          color: #1f2937;
+          background: white;
+        }
+
+        .form-input::placeholder {
+          color: #9ca3af;
         }
 
         .form-input:focus {
@@ -953,6 +959,7 @@ export default function ProfilePage() {
           gap: 0.5rem;
           cursor: pointer;
           font-size: 0.875rem;
+          color: #374151;
         }
 
         .save-button {
@@ -1008,6 +1015,7 @@ export default function ProfilePage() {
           justify-content: center;
           gap: 0.75rem;
           padding: 2rem;
+          color: #374151;
         }
 
         .loading-spinner {
