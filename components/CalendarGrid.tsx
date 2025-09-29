@@ -248,7 +248,7 @@ export default function CalendarGrid({
         style: {
           backgroundColor: 'transparent',
           border: 'none',
-          color: darkMode ? '#e5e7eb' : '#1f2937',
+          color: '#1f2937',
           padding: '2px',
           display: 'flex',
           alignItems: 'center',
@@ -623,7 +623,7 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* Comprehensive styles - keeping all existing styles + fixes */}
+      {/* FIXED STYLES - Calendar cells always white, text always dark */}
       <style jsx global>{`
         /* Base calendar container */
         .calendar-wrapper {
@@ -642,13 +642,13 @@ export default function CalendarGrid({
           position: relative !important;
         }
         
-        /* Header styling */
+        /* FIXED: Header always light with dark text */
         .custom-calendar .rbc-header {
-          background: ${darkMode ? '#1f2937' : '#f8fafc'};
+          background: #f8fafc;
           border-bottom: 1px solid rgba(0,0,0,0.1);
           padding: 8px 4px;
           font-weight: 600;
-          color: ${darkMode ? '#f3f4f6' : '#374151'};
+          color: #374151;
         }
         
         /* Today highlighting */
@@ -664,14 +664,14 @@ export default function CalendarGrid({
         }
         
         .custom-calendar .rbc-toolbar-label {
-          color: ${darkMode ? '#f3f4f6' : '#1f2937'};
+          color: #1f2937;
           font-weight: 600;
         }
         
         .custom-calendar .rbc-toolbar button {
-          border: 1px solid ${darkMode ? '#4b5563' : 'rgba(0,0,0,0.1)'};
-          background: ${darkMode ? '#374151' : 'rgba(255,255,255,0.9)'};
-          color: ${darkMode ? '#f3f4f6' : '#374151'};
+          border: 1px solid rgba(0,0,0,0.1);
+          background: rgba(255,255,255,0.9);
+          color: #374151;
           border-radius: 6px;
           padding: 6px 10px;
           font-weight: 500;
@@ -697,15 +697,16 @@ export default function CalendarGrid({
           cursor: not-allowed;
         }
         
-        /* Month view cells */
+        /* FIXED: Month view cells always white */
         .custom-calendar .rbc-month-view {
-          background: ${darkMode ? '#111827' : 'white'};
+          background: white;
           border-radius: 8px;
           overflow: hidden;
         }
         
+        /* FIXED: Day cells always white */
         .custom-calendar .rbc-day-bg {
-          background: ${darkMode ? '#1f2937' : 'white'};
+          background: white;
         }
         
         /* Day cell hover effect */
@@ -721,14 +722,14 @@ export default function CalendarGrid({
           border-radius: 4px;
         }
         
-        /* Off-range days */
+        /* Off-range days - slightly gray but still readable */
         .custom-calendar .rbc-off-range-bg {
-          background: ${darkMode ? '#0f172a' : 'rgba(156, 163, 175, 0.05)'};
+          background: rgba(156, 163, 175, 0.05);
         }
         
-        /* Date cells */
+        /* FIXED: Date cells always dark text */
         .custom-calendar .rbc-date-cell {
-          color: ${darkMode ? '#d1d5db' : '#374151'};
+          color: #374151;
         }
         
         /* Event hover effects (desktop only) */
@@ -872,23 +873,23 @@ export default function CalendarGrid({
           text-decoration: underline;
         }
         
-        /* Week and Day view styles */
+        /* FIXED: Week and Day view always white with dark text */
         .custom-calendar .rbc-time-view {
-          border: 1px solid ${darkMode ? '#374151' : '#e5e7eb'};
+          border: 1px solid #e5e7eb;
           border-radius: 8px;
         }
         
         .custom-calendar .rbc-time-header {
-          background: ${darkMode ? '#1f2937' : '#f9fafb'};
+          background: #f9fafb;
         }
         
         .custom-calendar .rbc-time-content {
-          border-top: 1px solid ${darkMode ? '#374151' : '#e5e7eb'};
-          background: ${darkMode ? '#111827' : 'white'};
+          border-top: 1px solid #e5e7eb;
+          background: white;
         }
         
         .custom-calendar .rbc-time-slot {
-          border-top: 1px solid ${darkMode ? '#1f2937' : '#f3f4f6'};
+          border-top: 1px solid #f3f4f6;
         }
         
         .custom-calendar .rbc-current-time-indicator {
@@ -896,16 +897,16 @@ export default function CalendarGrid({
           height: 2px;
         }
         
-        /* Agenda view styles */
+        /* FIXED: Agenda view always dark text */
         .custom-calendar .rbc-agenda-view {
-          color: ${darkMode ? '#f3f4f6' : '#111827'};
+          color: #111827;
         }
         
         .custom-calendar .rbc-agenda-date-cell,
         .custom-calendar .rbc-agenda-time-cell {
           padding: 8px;
           white-space: nowrap;
-          color: ${darkMode ? '#d1d5db' : '#374151'};
+          color: #374151;
         }
         
         .custom-calendar .rbc-agenda-event-cell {
