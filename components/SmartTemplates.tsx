@@ -4,8 +4,12 @@ import React, { useState } from 'react';
 interface SmartTemplatesProps {
   open: boolean;
   onClose: () => void;
-  onApply: (events: any[]) => void;
+  onApply: (templateData: any) => void;
   userId: string;
+  // Optional props for prepopulating form (when used from calendar page)
+  setForm?: (form: any) => void;
+  setOpenCreate?: (open: boolean) => void;
+  isMobile?: boolean;
 }
 
 interface Template {
@@ -13,142 +17,249 @@ interface Template {
   name: string;
   description: string;
   icon: string;
-  events: any[];
+  category: string;
+  duration: number; // in minutes
+  prepopulatedData: {
+    title: string;
+    description: string;
+    duration: number;
+    event_type?: string;
+  };
 }
 
 const TEMPLATES: Template[] = [
+  {
+    id: 'gratitude-journal',
+    name: 'Gratitude Journal',
+    description: 'Daily gratitude practice & reflection',
+    icon: '📝',
+    category: 'Wellness',
+    duration: 15,
+    prepopulatedData: {
+      title: 'Gratitude Journal',
+      description: 'Write 3 things I\'m grateful for today + reflection on positive moments',
+      duration: 15,
+      event_type: 'personal'
+    }
+  },
+  {
+    id: 'meditation-session',
+    name: 'Meditation Session',
+    description: 'Mindfulness and relaxation practice',
+    icon: '🧘',
+    category: 'Wellness',
+    duration: 20,
+    prepopulatedData: {
+      title: 'Meditation Session',
+      description: 'Mindfulness practice - breathing exercises, body scan, and relaxation',
+      duration: 20,
+      event_type: 'personal'
+    }
+  },
   {
     id: 'morning-routine',
     name: 'Morning Routine',
     description: 'Start your day right with a structured morning',
     icon: '☀️',
-    events: [
-      { title: 'Wake up & Stretch', duration: 10, time: '06:00' },
-      { title: 'Morning Coffee', duration: 15, time: '06:10' },
-      { title: 'Review daily goals', duration: 15, time: '06:25' },
-      { title: 'Get ready', duration: 30, time: '06:40' }
-    ]
+    category: 'Productivity',
+    duration: 90,
+    prepopulatedData: {
+      title: 'Morning Routine',
+      description: 'Wake up & stretch (10 min) → Morning coffee (15 min) → Review daily goals (15 min) → Get ready (30 min) → Breakfast (20 min)',
+      duration: 90,
+      event_type: 'personal'
+    }
   },
   {
-    id: 'workout-week',
-    name: 'Weekly Workout',
-    description: 'Stay fit with a balanced workout schedule',
+    id: 'workout-session',
+    name: 'Workout Session',
+    description: 'Stay fit with exercise',
     icon: '💪',
-    events: [
-      { title: 'Monday: Cardio', duration: 45, dayOffset: 1, time: '07:00' },
-      { title: 'Wednesday: Strength', duration: 60, dayOffset: 3, time: '07:00' },
-      { title: 'Friday: Yoga', duration: 45, dayOffset: 5, time: '07:00' },
-      { title: 'Sunday: Rest Day Walk', duration: 30, dayOffset: 7, time: '09:00' }
-    ]
+    category: 'Health',
+    duration: 45,
+    prepopulatedData: {
+      title: 'Workout Session',
+      description: 'Cardio warm-up (10 min) → Strength training (30 min) → Cool down & stretch (5 min)',
+      duration: 45,
+      event_type: 'personal'
+    }
   },
   {
     id: 'meal-prep',
-    name: 'Meal Prep Sunday',
+    name: 'Meal Prep',
     description: 'Organize your weekly meals efficiently',
     icon: '🍱',
-    events: [
-      { title: 'Grocery Shopping', duration: 60, time: '10:00' },
-      { title: 'Meal Prep', duration: 120, time: '14:00' },
-      { title: 'Clean Kitchen', duration: 30, time: '16:00' }
-    ]
+    category: 'Health',
+    duration: 120,
+    prepopulatedData: {
+      title: 'Meal Prep Sunday',
+      description: 'Plan meals for the week, grocery list, batch cooking, and food storage',
+      duration: 120,
+      event_type: 'personal'
+    }
   },
   {
     id: 'study-session',
     name: 'Study Session',
     description: 'Productive study time with breaks',
     icon: '📚',
-    events: [
-      { title: 'Study Block 1', duration: 45, time: '14:00' },
-      { title: 'Break', duration: 15, time: '14:45' },
-      { title: 'Study Block 2', duration: 45, time: '15:00' },
-      { title: 'Review Notes', duration: 20, time: '15:45' }
-    ]
+    category: 'Productivity',
+    duration: 125,
+    prepopulatedData: {
+      title: 'Study Session',
+      description: 'Study Block 1 (45 min) → Break (15 min) → Study Block 2 (45 min) → Review notes (20 min)',
+      duration: 125,
+      event_type: 'personal'
+    }
   },
   {
     id: 'evening-wind-down',
     name: 'Evening Wind-Down',
     description: 'Relax and prepare for better sleep',
     icon: '🌙',
-    events: [
-      { title: 'Dinner', duration: 45, time: '18:30' },
-      { title: 'Evening Walk', duration: 30, time: '19:15' },
-      { title: 'Read/Journal', duration: 30, time: '20:30' },
-      { title: 'Prepare for bed', duration: 30, time: '21:00' }
-    ]
+    category: 'Wellness',
+    duration: 90,
+    prepopulatedData: {
+      title: 'Evening Wind-Down',
+      description: 'Dinner (45 min) → Evening walk (30 min) → Prepare for bed (15 min)',
+      duration: 90,
+      event_type: 'personal'
+    }
+  },
+  {
+    id: 'deep-work',
+    name: 'Deep Work Block',
+    description: 'Focused work without distractions',
+    icon: '🎯',
+    category: 'Productivity',
+    duration: 90,
+    prepopulatedData: {
+      title: 'Deep Work',
+      description: 'Uninterrupted focus time for important projects. No emails, no meetings, no distractions.',
+      duration: 90,
+      event_type: 'work'
+    }
+  },
+  {
+    id: 'family-time',
+    name: 'Family Time',
+    description: 'Quality time with loved ones',
+    icon: '👨‍👩‍👧‍👦',
+    category: 'Personal',
+    duration: 60,
+    prepopulatedData: {
+      title: 'Family Time',
+      description: 'Dedicated time for family activities, conversations, or games',
+      duration: 60,
+      event_type: 'personal'
+    }
+  },
+  {
+    id: 'daily-standup',
+    name: 'Daily Standup',
+    description: '15-minute team sync meeting',
+    icon: '📅',
+    category: 'Work',
+    duration: 15,
+    prepopulatedData: {
+      title: 'Daily Standup',
+      description: 'Team sync to discuss progress and blockers',
+      duration: 15,
+      event_type: 'work'
+    }
   }
 ];
 
-export default function SmartTemplates({ open, onClose, onApply, userId }: SmartTemplatesProps) {
+export default function SmartTemplates({ 
+  open, 
+  onClose, 
+  onApply, 
+  userId,
+  setForm,
+  setOpenCreate,
+  isMobile = false
+}: SmartTemplatesProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   
   if (!open) return null;
 
   const handleApply = () => {
-    if (!selectedTemplate || !selectedDate || !userId) {
-      console.error('Missing required data:', { selectedTemplate, selectedDate, userId });
+    if (!selectedTemplate || !userId) {
+      console.error('Missing required data:', { selectedTemplate, userId });
       return;
     }
     
-    const baseDate = new Date(selectedDate);
-    const events = selectedTemplate.events.map((event) => {
-      const eventDate = new Date(baseDate);
+    // If setForm and setOpenCreate are provided (calendar page context)
+    // Prepopulate the form instead of creating events directly
+    if (setForm && setOpenCreate) {
+      const now = new Date();
+      const endTime = new Date(now.getTime() + selectedTemplate.duration * 60000);
       
-      // Add day offset if specified
-      if (event.dayOffset) {
-        eventDate.setDate(eventDate.getDate() + event.dayOffset - 1);
-      }
+      setForm((prev: any) => ({
+        ...prev,
+        title: selectedTemplate.prepopulatedData.title,
+        description: selectedTemplate.prepopulatedData.description,
+        date: now.toISOString().split('T')[0],
+        time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+        endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`,
+        event_type: selectedTemplate.prepopulatedData.event_type || 'personal'
+      }));
       
-      // Set time
-      if (event.time) {
-        const [hours, minutes] = event.time.split(':');
-        eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      }
+      onClose();
+      setSelectedTemplate(null);
       
-      const startTime = new Date(eventDate);
-      const endTime = new Date(eventDate);
-      endTime.setMinutes(endTime.getMinutes() + (event.duration || 60));
+      // Small delay to ensure modal closes before opening create modal
+      setTimeout(() => {
+        setOpenCreate(true);
+      }, 100);
+    } else {
+      // Otherwise, pass to onApply for direct event creation (tools page context)
+      onApply({
+        template: selectedTemplate,
+        prepopulatedData: selectedTemplate.prepopulatedData
+      });
       
-      // Return a complete event object with ALL required fields
-      return {
-        title: event.title,
-        description: `From ${selectedTemplate.name} template`,
-        location: '',
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        created_by: userId,  // CRITICAL: Must have the user ID
-        visibility: 'private',
-        source: 'personal',
-        status: 'scheduled',
-        event_type: 'template',
-        rsvp_public: false,
-        community_id: null,
-        image_path: null,
-        completed: false  // Explicitly set for todos/reminders
-      };
-    });
-    
-    console.log('Applying template events:', events); // Debug log
-    
-    onApply(events);
-    onClose();
+      onClose();
+      setSelectedTemplate(null);
+    }
+  };
+
+  // Group templates by category
+  const templatesByCategory = TEMPLATES.reduce((acc, template) => {
+    if (!acc[template.category]) {
+      acc[template.category] = [];
+    }
+    acc[template.category].push(template);
+    return acc;
+  }, {} as Record<string, Template[]>);
+
+  const categoryColors: Record<string, string> = {
+    Wellness: 'from-cyan-500 to-blue-500',
+    Health: 'from-green-500 to-emerald-500',
+    Productivity: 'from-purple-500 to-pink-500',
+    Personal: 'from-amber-500 to-orange-500',
+    Work: 'from-blue-500 to-indigo-500'
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+      <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden ${
+        isMobile ? 'max-h-[90vh]' : 'max-w-5xl max-h-[85vh]'
+      }`}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white">
+        <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">✨ Smart Templates</h2>
-              <p className="text-purple-100 mt-1">Quick-start your perfect routine</p>
+              <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>✨ Smart Templates</h2>
+              <p className={`text-purple-100 mt-1 ${isMobile ? 'text-sm' : ''}`}>
+                Quick-start your perfect routine with customizable templates
+              </p>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors flex-shrink-0"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -158,83 +269,106 @@ export default function SmartTemplates({ open, onClose, onApply, userId }: Smart
         </div>
         
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
-          {/* Template Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {TEMPLATES.map((template) => (
-              <button
-                key={template.id}
-                onClick={() => setSelectedTemplate(template)}
-                className={`p-4 rounded-xl border-2 text-left transition-all hover:shadow-lg ${
-                  selectedTemplate?.id === template.id
-                    ? 'border-purple-500 bg-purple-50'
-                    : 'border-gray-200 bg-white hover:border-purple-300'
-                }`}
-              >
-                <div className="text-3xl mb-2">{template.icon}</div>
-                <h3 className="font-semibold text-gray-900">{template.name}</h3>
-                <p className="text-sm text-gray-600 mt-1">{template.description}</p>
-                <div className="mt-3 text-xs text-purple-600 font-medium">
-                  {template.events.length} events
-                </div>
-              </button>
-            ))}
-          </div>
+        <div className={`p-4 sm:p-6 overflow-y-auto ${isMobile ? 'max-h-[calc(90vh-140px)]' : 'max-h-[calc(85vh-140px)]'}`}>
+          {Object.entries(templatesByCategory).map(([category, templates]) => (
+            <div key={category} className="mb-6">
+              <h3 className={`font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2 ${
+                isMobile ? 'text-base' : 'text-lg'
+              }`}>
+                <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${categoryColors[category]}`} />
+                {category}
+              </h3>
+              
+              <div className={`grid gap-3 sm:gap-4 ${
+                isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+              }`}>
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => setSelectedTemplate(template)}
+                    className={`p-3 sm:p-4 rounded-xl border-2 text-left transition-all hover:shadow-lg ${
+                      selectedTemplate?.id === template.id
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-750 hover:border-purple-300'
+                    }`}
+                  >
+                    <div className={`mb-2 ${isMobile ? 'text-2xl' : 'text-3xl'}`}>{template.icon}</div>
+                    <h3 className={`font-semibold text-gray-900 dark:text-white ${isMobile ? 'text-base' : ''}`}>
+                      {template.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{template.description}</p>
+                    <div className="mt-2 sm:mt-3 flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400 font-medium">
+                      <span>⏰ {template.duration} min</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
           
           {/* Selected Template Details */}
           {selectedTemplate && (
-            <div className="bg-gray-50 rounded-xl p-4 mb-4">
-              <h3 className="font-semibold text-gray-700 mb-3">
-                {selectedTemplate.icon} {selectedTemplate.name} - Events Preview
+            <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 sm:p-5 border-2 border-purple-200 dark:border-purple-700">
+              <h3 className={`font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2 ${
+                isMobile ? 'text-base' : ''
+              }`}>
+                <span className={isMobile ? 'text-xl' : 'text-2xl'}>{selectedTemplate.icon}</span>
+                {selectedTemplate.name} - Preview
               </h3>
-              <div className="space-y-2">
-                {selectedTemplate.events.map((event, idx) => (
-                  <div key={idx} className="flex items-center gap-3 text-sm">
-                    <span className="text-gray-500">
-                      {event.time || 'Flexible'}
-                    </span>
-                    <span className="font-medium text-gray-700">
-                      {event.title}
-                    </span>
-                    <span className="text-gray-400">
-                      ({event.duration} min)
-                    </span>
-                  </div>
-                ))}
+              
+              <div className="space-y-2 mb-4">
+                <div className="flex items-start gap-2">
+                  <span className={`font-medium text-gray-600 dark:text-gray-400 min-w-[80px] ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>Title:</span>
+                  <span className={`text-gray-800 dark:text-gray-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                    {selectedTemplate.prepopulatedData.title}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className={`font-medium text-gray-600 dark:text-gray-400 min-w-[80px] ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>Description:</span>
+                  <span className={`text-gray-800 dark:text-gray-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                    {selectedTemplate.prepopulatedData.description}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className={`font-medium text-gray-600 dark:text-gray-400 min-w-[80px] ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>Duration:</span>
+                  <span className={`text-gray-800 dark:text-gray-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                    {selectedTemplate.duration} minutes
+                  </span>
+                </div>
+              </div>
+              
+              <div className={`flex items-start gap-2 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span>You'll be able to customize the date, time, and any details before adding to your calendar.</span>
               </div>
             </div>
           )}
           
-          {/* Date Selection */}
-          {selectedTemplate && (
-            <div className="bg-blue-50 rounded-xl p-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select starting date:
-              </label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-          )}
-          
           {/* Apply Button */}
-          {selectedTemplate && (
+          {selectedTemplate ? (
             <button
               onClick={handleApply}
-              className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white 
+              className={`mt-4 w-full px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white 
                        font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 
-                       transition-all transform hover:scale-[1.02] shadow-lg"
+                       transition-all transform hover:scale-[1.02] shadow-lg ${
+                         isMobile ? 'text-sm' : ''
+                       }`}
             >
-              Apply {selectedTemplate.name} Template
+              Customize & Add {selectedTemplate.name}
             </button>
-          )}
-          
-          {!selectedTemplate && (
-            <div className="text-center py-8 text-gray-500">
-              <p>Select a template above to get started!</p>
+          ) : (
+            <div className="mt-4 text-center py-8 text-gray-500 dark:text-gray-400">
+              <p className={isMobile ? 'text-sm' : ''}>Select a template above to get started!</p>
             </div>
           )}
         </div>
