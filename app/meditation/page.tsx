@@ -62,30 +62,8 @@ export default function MeditationEntryPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-950 via-purple-900 to-indigo-950 relative overflow-hidden">
       
-      {/* Animated cosmic background */}
+      {/* Cosmic background */}
       <div className="absolute inset-0">
-        {/* Static Stars - No pulse animation */}
-        <div className="absolute inset-0">
-          {[...Array(100)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-            >
-              <div 
-                className="w-1 h-1 bg-white rounded-full"
-                style={{
-                  opacity: 0.3 + Math.random() * 0.7,
-                  boxShadow: '0 0 6px rgba(255,255,255,0.5)'
-                }}
-              />
-            </div>
-          ))}
-        </div>
-
         {/* Ethereal glow orbs */}
         <div 
           className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-10"
