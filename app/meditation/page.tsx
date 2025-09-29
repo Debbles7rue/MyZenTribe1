@@ -64,17 +64,15 @@ export default function MeditationEntryPage() {
       
       {/* Animated cosmic background */}
       <div className="absolute inset-0">
-        {/* Stars */}
+        {/* Static Stars - No pulse animation */}
         <div className="absolute inset-0">
           {[...Array(100)].map((_, i) => (
             <div
               key={i}
-              className="absolute animate-pulse"
+              className="absolute"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 5}s`,
-                animationDuration: `${3 + Math.random() * 4}s`
               }}
             >
               <div 
