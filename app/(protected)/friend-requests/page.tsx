@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { createNotification } from "@/lib/notifications";
 import FriendQuestionnaire from "@/components/FriendQuestionnaire";
 
 interface FriendRequest {
@@ -151,6 +152,26 @@ export default function FriendRequestsPage() {
         });
 
       if (!friendshipError || friendshipError.code === '23505') {
+        // Get accepter's profile for notification
+        const { data: accepterProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', currentUserId)
+          .single();
+
+        const accepterName = accepterProfile?.full_name || 'Someone';
+
+        // Create notification for the person who sent the request
+        await createNotification({
+          recipient_id: fromUserId,
+          type: 'friend.accepted',
+          title: 'Friend Request Accepted!',
+          body: `${accepterName} accepted your friend request`,
+          target_url: `/profile/${currentUserId}`,
+          entity_table: 'friendships',
+          actor_id: currentUserId,
+        });
+
         // Success or duplicate (already friends)
         setReceivedRequests(prev => prev.filter(r => r.id !== requestId));
       }
