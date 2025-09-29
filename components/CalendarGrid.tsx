@@ -21,17 +21,11 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import type { DBEvent } from "@/lib/types";
 
-// Try to import MoonPhaseDisplay, but provide fallback if it doesn't exist
-let MoonPhaseIcon: any = null;
-let getMoonPhaseFromResource: any = null;
-
-try {
-  const MoonModule = require("@/components/MoonPhaseDisplay");
-  MoonPhaseIcon = MoonModule.MoonPhaseIcon;
-  getMoonPhaseFromResource = MoonModule.getMoonPhaseFromResource;
-} catch (e) {
-  console.log("MoonPhaseDisplay not found, using emoji fallback");
-}
+// Import MoonPhaseDisplay components
+import { 
+  MoonPhaseIcon, 
+  getMoonPhaseFromResource 
+} from "@/components/MoonPhaseDisplay";
 
 // Initialize localizer
 const localizer = momentLocalizer(moment);
