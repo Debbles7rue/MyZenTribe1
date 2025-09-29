@@ -82,7 +82,7 @@ export default function MeditationEntryPage() {
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4">
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-20">
         
         {/* Sacred Symbol */}
         <div className="relative mb-12">
