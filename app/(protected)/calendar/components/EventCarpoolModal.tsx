@@ -7,7 +7,9 @@ import {
   Plus, Check, X, Send, Settings, Route, Fuel, Coffee,
   Share2, UserPlus, Timer, CloudRain, Phone, ChevronDown,
   Shield, Zap, TrendingUp, Award, Heart, ThumbsUp, ArrowLeft,
-  MoreVertical, Mic, Paperclip, Map, Info, Trash2, RefreshCw
+  MoreVertical, Mic, Paperclip, Map, Info, Trash2, RefreshCw,
+  Activity, Target, Percent, Globe, Eye, EyeOff, Sparkles,
+  Gauge, BookOpen, Wifi, WifiOff, Bookmark, BookmarkCheck
 } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 
@@ -25,7 +27,7 @@ interface EventCarpoolModalProps {
   };
   showToast?: (toast: { type: string; message: string }) => void;
   isMobile?: boolean;
-  onOpenSettings?: () => void; // NEW PROP
+  onOpenSettings?: () => void;
 }
 
 interface Message {
@@ -54,6 +56,14 @@ interface Poll {
   active: boolean;
 }
 
+interface CarpoolStats {
+  totalFriends: number;
+  needingRides: number;
+  driversAvailable: number;
+  estimatedSavings: string;
+  distanceAway: number;
+}
+
 const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isOpen,
   onClose,
@@ -62,32 +72,65 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   carpoolData,
   showToast,
   isMobile = false,
-  onOpenSettings // NEW PROP
+  onOpenSettings
 }) => {
-  const [activeSection, setActiveSection] = useState('chat');
-  const [isNewCarpool, setIsNewCarpool] = useState(false);
+  const [activeView, setActiveView] = useState<'overview' | 'coordination' | 'chat'>('overview');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [showQuickActions, setShowQuickActions] = useState(false);
-  const [showPoll, setShowPoll] = useState(false);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [newPollQuestion, setNewPollQuestion] = useState('');
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [driverStatus, setDriverStatus] = useState<'none' | 'driver' | 'rider'>('none');
   const [carDetails, setCarDetails] = useState({ seats: 4, make: '', color: '' });
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [showPoll, setShowPoll] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showNewCarpoolConfirm, setShowNewCarpoolConfirm] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<number | null>(null);
+  const [editMessageText, setEditMessageText] = useState('');
+  const [editingPoll, setEditingPoll] = useState<string | null>(null);
+  const [editPollText, setEditPollText] = useState('');
+  const [showEditCarDetails, setShowEditCarDetails] = useState(false);
+  const [tempCarDetails, setTempCarDetails] = useState(carDetails);
+  const [showEditEventDetails, setShowEditEventDetails] = useState(false);
+  const [tempEventDetails, setTempEventDetails] = useState({
+    meetupLocation: '',
+    departureTime: '',
+    notes: ''
+  });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize with event post when opening or starting new carpool
+  // Calculate carpool stats
+  const carpoolStats: CarpoolStats = {
+    totalFriends: carpoolData?.friends?.length || 8,
+    needingRides: 5,
+    driversAvailable: 2,
+    estimatedSavings: '$45',
+    distanceAway: 23
+  };
+
+  // AI Suggestions based on event data
+  const getAISuggestions = () => {
+    if (!event) return null;
+    
+    return {
+      meetupSpot: 'Central Park (most central for everyone)',
+      departureTime: '6:30 PM (accounts for traffic)',
+      route: 'Highway 101 → Downtown → Venue',
+      parking: 'Book spot at SpotHero for $15 (split 4 ways = $3.75 each)',
+      weatherAlert: null,
+      alternativeRoute: 'Avoid I-95 construction'
+    };
+  };
+
+  // Initialize with event post when opening
   useEffect(() => {
     if (isOpen && event) {
       initializeCarpoolChat();
     }
-  }, [isOpen, event, isNewCarpool]);
+  }, [isOpen, event]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -124,42 +167,34 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       }
     };
 
-    if (isNewCarpool) {
-      // Start fresh for new carpool
-      setMessages([eventPostMessage]);
-      setPolls([]);
-      setDriverStatus('none');
-      setSelectedFriends([]);
-    } else {
-      // Load existing messages (for demo, we'll use sample data)
-      const existingMessages: Message[] = [
-        eventPostMessage,
-        { 
-          id: 1, 
-          user: 'Sarah', 
-          message: 'I can drive! My car fits 5 people', 
-          time: '2:30 PM', 
-          avatar: '👩‍🦰',
-          reactions: ['👍']
-        },
-        { 
-          id: 2, 
-          user: 'Mike', 
-          message: 'Perfect! When should we meet?', 
-          time: '2:32 PM', 
-          avatar: '👨‍💼' 
-        },
-        { 
-          id: 3, 
-          user: 'AI Assistant', 
-          message: 'Based on traffic, I suggest leaving at 6:15 PM from Central Park entrance', 
-          time: '2:35 PM', 
-          avatar: '🤖', 
-          isAI: true 
-        }
-      ];
-      setMessages(existingMessages);
-    }
+    // Sample existing messages for demo
+    const existingMessages: Message[] = [
+      eventPostMessage,
+      { 
+        id: 1, 
+        user: 'Sarah', 
+        message: 'I can drive! My Honda Civic fits 4 people', 
+        time: '2:30 PM', 
+        avatar: '👩‍🦰',
+        reactions: ['👍', '🚗']
+      },
+      { 
+        id: 2, 
+        user: 'Mike', 
+        message: 'Perfect! When should we meet up?', 
+        time: '2:32 PM', 
+        avatar: '👨‍💼' 
+      },
+      { 
+        id: 3, 
+        user: 'AI Assistant', 
+        message: 'Based on traffic patterns, I suggest meeting at Central Park at 6:15 PM. This gives you a 32-minute buffer for the drive.', 
+        time: '2:35 PM', 
+        avatar: '🤖', 
+        isAI: true 
+      }
+    ];
+    setMessages(existingMessages);
   };
 
   // Vibrate function for mobile haptic feedback
@@ -182,12 +217,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     day: 'numeric' 
   });
 
-  const carpoolStats = {
-    totalFriends: carpoolData?.friends?.length || 0,
-    needingRides: 3,
-    driversAvailable: 1,
-    estimatedSavings: '$12-18'
-  };
+  const aiSuggestions = getAISuggestions();
 
   const sendMessage = () => {
     if (!newMessage.trim()) return;
@@ -222,7 +252,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const handleQuickAction = (action: string) => {
     vibrate();
     switch (action) {
-      case 'driver':
+      case 'offer-drive':
         setDriverStatus('driver');
         setMessages(prev => [...prev, {
           id: Date.now(),
@@ -232,7 +262,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           avatar: '😊'
         }]);
         break;
-      case 'rider':
+      case 'need-ride':
         setDriverStatus('rider');
         setMessages(prev => [...prev, {
           id: Date.now(),
@@ -242,16 +272,16 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           avatar: '😊'
         }]);
         break;
-      case 'location':
+      case 'suggest-meetup':
         setMessages(prev => [...prev, {
           id: Date.now(),
           user: 'You',
-          message: '📍 Sharing my location...',
+          message: '📍 How about meeting at Central Park entrance?',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           avatar: '😊'
         }]);
         break;
-      case 'late':
+      case 'running-late':
         setMessages(prev => [...prev, {
           id: Date.now(),
           user: 'You',
@@ -260,9 +290,20 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           avatar: '😊'
         }]);
         break;
+      case 'share-location':
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          user: 'You',
+          message: '📍 Sharing my live location...',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          avatar: '😊'
+        }]);
+        break;
+      case 'quick-poll':
+        setShowPoll(true);
+        break;
     }
-    setShowQuickActions(false);
-    showToast?.({ type: 'success', message: 'Message sent!' });
+    showToast?.({ type: 'success', message: 'Action completed!' });
   };
 
   const createPoll = () => {
@@ -293,6 +334,101 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     showToast?.({ type: 'success', message: 'Poll created!' });
   };
 
+  // New editing functions
+  const startEditMessage = (messageId: number, currentText: string) => {
+    setEditingMessage(messageId);
+    setEditMessageText(currentText);
+  };
+
+  const saveEditMessage = () => {
+    if (!editMessageText.trim() || editingMessage === null) return;
+    
+    setMessages(messages.map(msg => 
+      msg.id === editingMessage 
+        ? { ...msg, message: editMessageText, edited: true }
+        : msg
+    ));
+    setEditingMessage(null);
+    setEditMessageText('');
+    showToast?.({ type: 'success', message: 'Message updated!' });
+  };
+
+  const deleteMessage = (messageId: number) => {
+    setMessages(messages.filter(msg => msg.id !== messageId));
+    showToast?.({ type: 'success', message: 'Message deleted!' });
+  };
+
+  const startEditPoll = (pollId: string, currentQuestion: string) => {
+    setEditingPoll(pollId);
+    setEditPollText(currentQuestion);
+  };
+
+  const saveEditPoll = () => {
+    if (!editPollText.trim() || !editingPoll) return;
+    
+    setPolls(polls.map(poll => 
+      poll.id === editingPoll 
+        ? { ...poll, question: editPollText }
+        : poll
+    ));
+    setEditingPoll(null);
+    setEditPollText('');
+    showToast?.({ type: 'success', message: 'Poll updated!' });
+  };
+
+  const deletePoll = (pollId: string) => {
+    setPolls(polls.filter(poll => poll.id !== pollId));
+    showToast?.({ type: 'success', message: 'Poll deleted!' });
+  };
+
+  const changeVote = (pollId: string, oldOptionIndex: number, newOptionIndex: number) => {
+    setPolls(polls.map(poll => {
+      if (poll.id === pollId) {
+        const newOptions = [...poll.options];
+        // Remove vote from old option
+        newOptions[oldOptionIndex].votes = newOptions[oldOptionIndex].votes.filter(id => id !== userId);
+        // Add vote to new option
+        if (!newOptions[newOptionIndex].votes.includes(userId || '')) {
+          newOptions[newOptionIndex].votes.push(userId || '');
+        }
+        return { ...poll, options: newOptions };
+      }
+      return poll;
+    }));
+    vibrate();
+    showToast?.({ type: 'success', message: 'Vote changed!' });
+  };
+
+  const saveCarDetails = () => {
+    setCarDetails(tempCarDetails);
+    setShowEditCarDetails(false);
+    
+    // Update driver status message if user is currently driving
+    if (driverStatus === 'driver') {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        user: 'You',
+        message: `🚗 Updated car info: ${tempCarDetails.make} ${tempCarDetails.color}, ${tempCarDetails.seats} seats available`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        avatar: '😊'
+      }]);
+    }
+    
+    showToast?.({ type: 'success', message: 'Car details updated!' });
+  };
+
+  const saveEventDetails = () => {
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      user: 'You',
+      message: `📍 Updated carpool details: Meetup at ${tempEventDetails.meetupLocation}, departing ${tempEventDetails.departureTime}${tempEventDetails.notes ? ` - ${tempEventDetails.notes}` : ''}`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      avatar: '😊'
+    }]);
+    setShowEditEventDetails(false);
+    showToast?.({ type: 'success', message: 'Carpool details updated!' });
+  };
+
   const votePoll = (pollId: string, optionIndex: number) => {
     vibrate();
     setPolls(polls.map(poll => {
@@ -312,7 +448,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setIsVoiceRecording(!isVoiceRecording);
     if (!isVoiceRecording) {
       showToast?.({ type: 'info', message: '🎤 Recording...' });
-      // Simulate recording
       setTimeout(() => {
         setIsVoiceRecording(false);
         setMessages(prev => [...prev, {
@@ -325,59 +460,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         showToast?.({ type: 'success', message: 'Voice message sent!' });
       }, 3000);
     }
-  };
-
-  const addReaction = (messageId: number, emoji: string) => {
-    vibrate();
-    setMessages(messages.map(msg => {
-      if (msg.id === messageId) {
-        const reactions = msg.reactions || [];
-        if (!reactions.includes(emoji)) {
-          reactions.push(emoji);
-        }
-        return { ...msg, reactions };
-      }
-      return msg;
-    }));
-  };
-
-  const startNewCarpool = () => {
-    setIsNewCarpool(true);
-    setShowNewCarpoolConfirm(false);
-    showToast?.({ type: 'success', message: 'Started new carpool group!' });
-  };
-
-  const postEventDetails = () => {
-    if (!event) return;
-    
-    const eventDate = new Date(event.start_time);
-    const eventTime = eventDate.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit' 
-    });
-    const eventDateStr = eventDate.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-
-    const eventPostMessage: Message = {
-      id: Date.now(),
-      user: 'You',
-      message: 'Shared event details',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      avatar: '😊',
-      isEventPost: true,
-      eventData: {
-        title: event.title,
-        date: eventDateStr,
-        time: eventTime,
-        location: event.location || 'Location TBD'
-      }
-    };
-
-    setMessages(prev => [...prev, eventPostMessage]);
-    showToast?.({ type: 'success', message: 'Event details posted!' });
   };
 
   // Event Post Component
@@ -423,141 +505,299 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         {/* Mobile Header */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
           <div className="flex items-center justify-between">
-            <button
-              onClick={onClose}
-              className="p-2 -ml-2 active:scale-95"
-            >
+            <button onClick={onClose} className="p-2 -ml-2 active:scale-95">
               <ArrowLeft size={24} />
             </button>
             <div className="flex-1 text-center">
-              <h3 className="font-semibold text-lg">Carpool</h3>
+              <h3 className="font-semibold text-lg">Event Carpool Feature Page</h3>
               <p className="text-xs opacity-90 truncate px-4">{event.title}</p>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => setShowNewCarpoolConfirm(true)}
-                className="p-2 active:scale-95"
-                title="Start New Carpool"
-              >
-                <RefreshCw size={20} />
-              </button>
               {onOpenSettings && (
-                <button
-                  onClick={() => {
-                    onOpenSettings();
-                    vibrate();
-                  }}
-                  className="p-2 active:scale-95"
-                  title="Carpool Settings"
-                >
+                <button onClick={onOpenSettings} className="p-2 active:scale-95">
                   <Settings size={20} />
                 </button>
               )}
-              <button
-                onClick={() => setShowInfo(true)}
-                className="p-2 -mr-2 active:scale-95"
-              >
-                <Info size={20} />
+              <button onClick={() => setShowInfo(true)} className="p-2 -mr-2 active:scale-95">
+                <MoreVertical size={20} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Event Info Bar */}
-        <div className="bg-blue-50 dark:bg-gray-800 px-4 py-2 border-b dark:border-gray-700">
-          <div className="flex items-center justify-between text-xs">
-            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-              <Calendar size={12} />
-              {eventDateStr}
-            </span>
-            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-              <Clock size={12} />
-              {eventTime}
-            </span>
-            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-              <MapPin size={12} />
-              {event.location || 'TBD'}
-            </span>
-          </div>
-        </div>
+        {/* Overview Section - Always Shown First */}
+        {activeView === 'overview' && (
+          <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
+            {/* Event Header Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg m-4 p-4 shadow-sm">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {event.title}
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    {eventDateStr} • {eventTime} • {event.location || 'Madison Square Garden'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-blue-600 dark:text-blue-400 font-semibold">Carpool Coordination</p>
+                  <p className="text-blue-500 dark:text-blue-400 text-sm font-medium">
+                    {carpoolStats.totalFriends} friends invited
+                  </p>
+                </div>
+              </div>
 
-        {/* Status Banner */}
-        {driverStatus !== 'none' && (
-          <div className={`px-4 py-2 flex items-center justify-between ${
-            driverStatus === 'driver' 
-              ? 'bg-green-100 dark:bg-green-900/30' 
-              : 'bg-blue-100 dark:bg-blue-900/30'
-          }`}>
-            <div className="flex items-center gap-2">
-              {driverStatus === 'driver' ? (
-                <>
-                  <Car className="text-green-600 dark:text-green-400" size={16} />
-                  <span className="text-sm font-medium text-green-800 dark:text-green-200">
-                    You're driving • {carDetails.seats} seats
-                  </span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="text-blue-600 dark:text-blue-400" size={16} />
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    Looking for a ride
-                  </span>
-                </>
-              )}
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center">
+                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
+                    <Users className="text-blue-600 dark:text-blue-400" size={24} />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{carpoolStats.needingRides}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Need Rides</p>
+                </div>
+                <div className="text-center">
+                  <div className="bg-green-100 dark:bg-green-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
+                    <Car className="text-green-600 dark:text-green-400" size={24} />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{carpoolStats.driversAvailable}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Drivers Available</p>
+                </div>
+                <div className="text-center">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
+                    <DollarSign className="text-purple-600 dark:text-purple-400" size={24} />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{carpoolStats.estimatedSavings} per person</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Est. Savings</p>
+                </div>
+                <div className="text-center">
+                  <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
+                    <Navigation className="text-orange-600 dark:text-orange-400" size={24} />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{carpoolStats.distanceAway}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Miles Away</p>
+                </div>
+              </div>
             </div>
-            <button 
-              onClick={() => setDriverStatus('none')}
-              className="text-gray-500 active:scale-95"
-            >
-              <X size={16} />
-            </button>
+
+            {/* Quick Actions */}
+            <div className="p-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleQuickAction('offer-drive')}
+                  className="p-4 bg-blue-500 text-white rounded-xl font-medium active:scale-95 flex items-center gap-2"
+                >
+                  <Car size={20} />
+                  <span>Offer to Drive</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('need-ride')}
+                  className="p-4 bg-green-500 text-white rounded-xl font-medium active:scale-95 flex items-center gap-2"
+                >
+                  <UserPlus size={20} />
+                  <span>Need a Ride</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('suggest-meetup')}
+                  className="p-4 bg-purple-500 text-white rounded-xl font-medium active:scale-95 flex items-center gap-2"
+                >
+                  <MapPin size={20} />
+                  <span>Suggest Meetup</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('running-late')}
+                  className="p-4 bg-orange-500 text-white rounded-xl font-medium active:scale-95 flex items-center gap-2"
+                >
+                  <Clock size={20} />
+                  <span>Running Late</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('share-location')}
+                  className="p-4 bg-blue-600 text-white rounded-xl font-medium active:scale-95 flex items-center gap-2"
+                >
+                  <Share2 size={20} />
+                  <span>Share Location</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('quick-poll')}
+                  className="p-4 bg-orange-600 text-white rounded-xl font-medium active:scale-95 flex items-center gap-2"
+                >
+                  <Activity size={20} />
+                  <span>Quick Poll</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="p-4 space-y-3">
+              <button
+                onClick={() => setActiveView('coordination')}
+                className="w-full p-4 bg-blue-500 text-white rounded-xl font-medium active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Settings size={20} />
+                <span>Coordination</span>
+              </button>
+              <button
+                onClick={() => setActiveView('chat')}
+                className="w-full p-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-medium active:scale-95 flex items-center justify-center gap-2"
+              >
+                <MessageCircle size={20} />
+                <span>Live Chat</span>
+              </button>
+            </div>
+
+            {/* Smart Carpool Features */}
+            <div className="p-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Smart Carpool Features</h3>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2">
+                    <Route className="text-blue-600 dark:text-blue-400" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Smart Route Planning</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      AI optimizes pickup order and suggests best meetup spots
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="bg-green-100 dark:bg-green-900/30 rounded-lg p-2">
+                    <DollarSign className="text-green-600 dark:text-green-400" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Expense Splitting</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Auto-calculate gas costs and split evenly
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-lg p-2">
+                    <Bell className="text-purple-600 dark:text-purple-400" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Smart Notifications</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Get alerts for departures, delays, and updates
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-2">
+                    <Camera className="text-orange-600 dark:text-orange-400" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Car Photos</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Share car/license plate photos for easy identification
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2">
+                    <CloudRain className="text-blue-600 dark:text-blue-400" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Weather Alerts</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Automatic departure time adjustments for weather
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-2">
+                    <Phone className="text-red-600 dark:text-red-400" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Emergency Contacts</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Shared emergency contacts within carpool group
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Suggestions */}
+            {aiSuggestions && (
+              <div className="p-4">
+                <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-xl p-4">
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Sparkles className="text-yellow-500" size={16} />
+                    AI Suggestions
+                  </h4>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        • Best meetup spot: {aiSuggestions.meetupSpot}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        • Optimal departure time: {aiSuggestions.departureTime}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        • Recommended route: {aiSuggestions.route}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        • Parking suggestion: {aiSuggestions.parking}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Mobile Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 sticky top-0 z-10">
-          <button
-            onClick={() => setActiveSection('chat')}
-            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-              activeSection === 'chat'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
-          >
-            💬 Chat
-          </button>
-          <button
-            onClick={() => setActiveSection('plan')}
-            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-              activeSection === 'plan'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
-          >
-            📋 Plan
-          </button>
-          <button
-            onClick={() => setActiveSection('friends')}
-            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors relative ${
-              activeSection === 'friends'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
-          >
-            👥 Friends
-            {carpoolData?.friends && carpoolData.friends.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {carpoolData.friends.length}
-              </span>
-            )}
-          </button>
-        </div>
+        {/* Coordination View */}
+        {activeView === 'coordination' && (
+          <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => setActiveView('overview')}
+                className="p-2 active:scale-95"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <h3 className="text-lg font-semibold">Coordination</h3>
+            </div>
+            
+            {/* Coordination content would go here */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4">
+              <p className="text-gray-600 dark:text-gray-400">
+                Coordination features - driver management, timing, routes, etc.
+              </p>
+            </div>
+          </div>
+        )}
 
-        {/* Chat Section */}
-        {activeSection === 'chat' && (
-          <>
+        {/* Chat View */}
+        {activeView === 'chat' && (
+          <div className="flex-1 flex flex-col">
+            <div className="flex items-center gap-2 p-4 border-b dark:border-gray-700">
+              <button
+                onClick={() => setActiveView('overview')}
+                className="p-2 active:scale-95"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <h3 className="text-lg font-semibold">Live Chat</h3>
+            </div>
+
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50 dark:bg-gray-950" style={{ maxHeight: 'calc(100vh - 350px)' }}>
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50 dark:bg-gray-950">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -602,85 +842,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Active Polls */}
-            {polls.length > 0 && (
-              <div className="px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-t dark:border-gray-700">
-                {polls.map(poll => (
-                  <div key={poll.id} className="mb-2">
-                    <p className="text-sm font-medium mb-2">{poll.question}</p>
-                    <div className="flex gap-2">
-                      {poll.options.map((option, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => votePoll(poll.id, idx)}
-                          className={`flex-1 py-1 px-2 text-xs rounded-lg transition-colors ${
-                            option.votes.includes(userId || '')
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border dark:border-gray-600'
-                          }`}
-                        >
-                          {option.text} ({option.votes.length})
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Input Area */}
-            <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t dark:border-gray-700 safe-area-bottom">
-              {/* Quick Actions Bar */}
-              <div className="flex gap-2 mb-2 overflow-x-auto pb-2">
-                <button
-                  onClick={() => {
-                    // Scroll to top of messages to see event details
-                    const messagesContainer = document.querySelector('.overflow-y-auto');
-                    messagesContainer?.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="flex-shrink-0 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  📅 View Event
-                </button>
-                <button
-                  onClick={() => handleQuickAction('driver')}
-                  className="flex-shrink-0 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  🚗 I'll Drive
-                </button>
-                <button
-                  onClick={() => handleQuickAction('rider')}
-                  className="flex-shrink-0 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  🙋 Need Ride
-                </button>
-                <button
-                  onClick={() => handleQuickAction('location')}
-                  className="flex-shrink-0 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  📍 Location
-                </button>
-                <button
-                  onClick={() => handleQuickAction('late')}
-                  className="flex-shrink-0 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  ⏰ Running Late
-                </button>
-                <button
-                  onClick={() => setShowPoll(true)}
-                  className="flex-shrink-0 px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  📊 Poll
-                </button>
-                <button
-                  onClick={postEventDetails}
-                  className="flex-shrink-0 px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-full text-xs font-medium active:scale-95"
-                >
-                  📅 Post Event
-                </button>
-              </div>
-
-              {/* Message Input */}
+            <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t dark:border-gray-700">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleVoiceRecord}
@@ -710,179 +873,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 </button>
               </div>
             </div>
-          </>
-        )}
-
-        {/* Plan Section */}
-        {activeSection === 'plan' && (
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-            {/* AI Suggestions */}
-            <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-xl p-4">
-              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                <Zap className="text-yellow-500" size={16} />
-                Smart Suggestions
-              </h4>
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <MapPin className="text-blue-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">Meetup: Central Park</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Best for 3 riders</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Clock className="text-orange-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">Leave by 6:15 PM</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Heavy traffic expected</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Route className="text-green-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">Via Downtown</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Saves 12 minutes</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <DollarSign className="text-purple-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">$3.75 per person</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Parking split 4 ways</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-                <Users className="mx-auto text-blue-500 mb-1" size={20} />
-                <p className="text-lg font-bold">{carpoolStats.needingRides}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Need Rides</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-                <Car className="mx-auto text-green-500 mb-1" size={20} />
-                <p className="text-lg font-bold">{carpoolStats.driversAvailable}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Drivers</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-                <DollarSign className="mx-auto text-purple-500 mb-1" size={20} />
-                <p className="text-sm font-bold">{carpoolStats.estimatedSavings}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Est. Savings</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-                <TrendingUp className="mx-auto text-orange-500 mb-1" size={20} />
-                <p className="text-lg font-bold">-4.2</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">kg CO₂</p>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="space-y-2">
-              <button className="w-full p-3 bg-blue-500 text-white rounded-lg font-medium active:scale-98">
-                <Map className="inline mr-2" size={18} />
-                Open in Maps
-              </button>
-              <button className="w-full p-3 bg-green-500 text-white rounded-lg font-medium active:scale-98">
-                <Share2 className="inline mr-2" size={18} />
-                Share Trip Details
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Friends Section */}
-        {activeSection === 'friends' && (
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            {carpoolData?.friends && carpoolData.friends.length > 0 ? (
-              <>
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Select friends to invite
-                  </h4>
-                  <div className="space-y-2">
-                    {carpoolData.friends.map((friend: any) => (
-                      <label
-                        key={friend.friend_id}
-                        className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg active:scale-98"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFriends.includes(friend.friend_id)}
-                          onChange={(e) => {
-                            vibrate();
-                            if (e.target.checked) {
-                              setSelectedFriends([...selectedFriends, friend.friend_id]);
-                            } else {
-                              setSelectedFriends(selectedFriends.filter(id => id !== friend.friend_id));
-                            }
-                          }}
-                          className="rounded text-blue-500"
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{friend.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {friend.safe_to_carpool ? '✅ Verified' : 'Not verified'}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                
-                {selectedFriends.length > 0 && (
-                  <button
-                    onClick={() => {
-                      carpoolData.createCarpoolGroup?.(event.id, selectedFriends, "Let's carpool!");
-                      setSelectedFriends([]);
-                      showToast?.({ type: 'success', message: 'Invitations sent!' });
-                      vibrate();
-                    }}
-                    className="w-full p-3 bg-green-500 text-white rounded-lg font-medium active:scale-98"
-                  >
-                    Send Invites ({selectedFriends.length})
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <Users className="mx-auto mb-3 text-gray-300" size={48} />
-                <p className="text-gray-500 dark:text-gray-400">No friends available</p>
-                <button className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm">
-                  Invite Friends
-                </button>
-              </div>
-            )}
           </div>
         )}
 
         {/* Modals */}
-        {showNewCarpoolConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 px-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
-              <h3 className="text-lg font-semibold mb-3">Start New Carpool?</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                This will clear the current chat history and start fresh. Are you sure?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowNewCarpoolConfirm(false)}
-                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium active:scale-98"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={startNewCarpool}
-                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium active:scale-98"
-                >
-                  Start New
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {showPoll && (
           <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-60">
             <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg safe-area-bottom animate-slide-up">
@@ -918,23 +912,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
               <h3 className="text-lg font-semibold mb-3">About Carpool</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Coordinate rides with friends to save money and reduce emissions. 
-                Share locations, split costs, and arrive together!
+                Coordinate rides with friends to save money and reduce emissions.
               </p>
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2">
-                  <Shield className="text-green-500" size={16} />
-                  <span className="text-xs">Safe verified friends only</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="text-blue-500" size={16} />
-                  <span className="text-xs">Auto-split gas & parking</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Navigation className="text-purple-500" size={16} />
-                  <span className="text-xs">Real-time location sharing</span>
-                </div>
-              </div>
               <button
                 onClick={() => setShowInfo(false)}
                 className="w-full p-3 bg-blue-500 text-white rounded-lg font-medium active:scale-98"
@@ -948,7 +927,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     );
   }
 
-  // Desktop version
+  // Desktop version with full feature implementation
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
@@ -958,7 +937,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             <div>
               <h2 className="text-2xl font-bold flex items-center gap-2">
                 <Car />
-                Carpool Coordination
+                Event Carpool Feature Page
               </h2>
               <p className="text-blue-100 mt-1">{event.title}</p>
               <p className="text-sm text-blue-200">
@@ -991,88 +970,177 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               </button>
             </div>
           </div>
+          
+          {/* Event Stats Bar */}
+          <div className="mt-4 grid grid-cols-4 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold">{carpoolStats.totalFriends}</p>
+              <p className="text-xs text-blue-200">Friends Invited</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{carpoolStats.needingRides}</p>
+              <p className="text-xs text-blue-200">Need Rides</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{carpoolStats.driversAvailable}</p>
+              <p className="text-xs text-blue-200">Drivers Available</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold">{carpoolStats.estimatedSavings}</p>
+              <p className="text-xs text-blue-200">Est. Savings/Person</p>
+            </div>
+          </div>
         </div>
 
         {/* Desktop Content */}
         <div className="flex h-[70vh]">
-          {/* Left Sidebar - Stats & Actions */}
+          {/* Left Sidebar - Quick Actions & Features */}
           <div className="w-80 bg-gray-50 dark:bg-gray-800 p-6 border-r dark:border-gray-700">
-            {/* Stats */}
-            <div className="space-y-4 mb-6">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Trip Overview</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
-                  <Users className="mx-auto text-blue-500 mb-1" size={24} />
-                  <p className="text-xl font-bold">{carpoolStats.needingRides}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Need Rides</p>
-                </div>
-                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
-                  <Car className="mx-auto text-green-500 mb-1" size={24} />
-                  <p className="text-xl font-bold">{carpoolStats.driversAvailable}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Drivers</p>
-                </div>
+            {/* Quick Actions */}
+            <div className="space-y-3 mb-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Quick Actions</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleQuickAction('offer-drive')}
+                  className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <Car size={16} />
+                  Offer to Drive
+                </button>
+                <button
+                  onClick={() => handleQuickAction('need-ride')}
+                  className="p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <UserPlus size={16} />
+                  Need a Ride
+                </button>
+                <button
+                  onClick={() => handleQuickAction('suggest-meetup')}
+                  className="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <MapPin size={16} />
+                  Suggest Meetup
+                </button>
+                <button
+                  onClick={() => handleQuickAction('running-late')}
+                  className="p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <Clock size={16} />
+                  Running Late
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleQuickAction('share-location')}
+                  className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <Share2 size={16} />
+                  Share Location
+                </button>
+                <button
+                  onClick={() => handleQuickAction('quick-poll')}
+                  className="p-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <Activity size={16} />
+                  Quick Poll
+                </button>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="space-y-3 mb-6">
-              <h4 className="font-medium text-gray-900 dark:text-white">Quick Actions</h4>
-              <button
-                onClick={() => handleQuickAction('driver')}
-                className="w-full p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-left"
-              >
-                🚗 I can drive ({carDetails.seats} seats)
-              </button>
-              <button
-                onClick={() => handleQuickAction('rider')}
-                className="w-full p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-left"
-              >
-                🙋 I need a ride
-              </button>
-              <button
-                onClick={() => handleQuickAction('location')}
-                className="w-full p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-left"
-              >
-                📍 Share location
-              </button>
-              <button
-                onClick={postEventDetails}
-                className="w-full p-3 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-lg hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors text-left"
-              >
-                📅 Post event details
-              </button>
+            {/* Smart Features */}
+            <div className="space-y-4 mb-6">
+              <h4 className="font-medium text-gray-900 dark:text-white">Smart Carpool Features</h4>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <Route className="text-blue-500 mt-0.5" size={16} />
+                  <div>
+                    <p className="text-sm font-medium">Smart Route Planning</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">AI optimizes pickup order and suggests best meetup spots</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <DollarSign className="text-green-500 mt-0.5" size={16} />
+                  <div>
+                    <p className="text-sm font-medium">Expense Splitting</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Auto-calculate gas costs and split evenly</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <Bell className="text-purple-500 mt-0.5" size={16} />
+                  <div>
+                    <p className="text-sm font-medium">Smart Notifications</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Get alerts for departures, delays, and updates</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <Camera className="text-orange-500 mt-0.5" size={16} />
+                  <div>
+                    <p className="text-sm font-medium">Car Photos</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Share car/license plate photos for easy identification</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <CloudRain className="text-blue-500 mt-0.5" size={16} />
+                  <div>
+                    <p className="text-sm font-medium">Weather Alerts</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Automatic departure time adjustments for weather</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <Phone className="text-red-500 mt-0.5" size={16} />
+                  <div>
+                    <p className="text-sm font-medium">Emergency Contacts</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Shared emergency contacts within carpool group</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* AI Suggestions */}
-            <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-xl p-4">
-              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                <Zap className="text-yellow-500" size={16} />
-                Smart Suggestions
-              </h4>
-              <div className="space-y-3">
-                <div className="flex items-start gap-2">
-                  <MapPin className="text-blue-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">Central Park Meetup</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Best pickup spot</p>
+            {aiSuggestions && (
+              <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-xl p-4">
+                <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Sparkles className="text-yellow-500" size={16} />
+                  AI Suggestions
+                </h4>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="text-blue-500 mt-0.5" size={12} />
+                    <div>
+                      <p className="font-medium">Best meetup spot:</p>
+                      <p className="text-gray-600 dark:text-gray-400">{aiSuggestions.meetupSpot}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Clock className="text-orange-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">Leave at 6:15 PM</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Avoid rush hour</p>
+                  <div className="flex items-start gap-2">
+                    <Clock className="text-orange-500 mt-0.5" size={12} />
+                    <div>
+                      <p className="font-medium">Optimal departure time:</p>
+                      <p className="text-gray-600 dark:text-gray-400">{aiSuggestions.departureTime}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <DollarSign className="text-purple-500 mt-0.5" size={14} />
-                  <div>
-                    <p className="text-sm font-medium">$3.75 per person</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Gas + parking split</p>
+                  <div className="flex items-start gap-2">
+                    <Route className="text-green-500 mt-0.5" size={12} />
+                    <div>
+                      <p className="font-medium">Recommended route:</p>
+                      <p className="text-gray-600 dark:text-gray-400">{aiSuggestions.route}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <DollarSign className="text-purple-500 mt-0.5" size={12} />
+                    <div>
+                      <p className="font-medium">Parking suggestion:</p>
+                      <p className="text-gray-600 dark:text-gray-400">{aiSuggestions.parking}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Main Chat Area */}
@@ -1132,16 +1200,70 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                           <span className="text-xs text-gray-500 dark:text-gray-400">
                             {msg.time}
                           </span>
+                          {msg.edited && (
+                            <span className="text-xs text-gray-400 dark:text-gray-500 italic">
+                              (edited)
+                            </span>
+                          )}
+                          {/* Edit controls for user's own messages */}
+                          {msg.userId === userId && !msg.isAI && (
+                            <div className="flex gap-1 ml-auto">
+                              <button
+                                onClick={() => startEditMessage(msg.id, msg.message)}
+                                className="text-gray-400 hover:text-blue-500 transition-colors"
+                                title="Edit message"
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                onClick={() => deleteMessage(msg.id)}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                title="Delete message"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div className={`rounded-2xl px-4 py-3 ${
-                          msg.userId === userId
-                            ? 'bg-blue-500 text-white'
-                            : msg.isAI
-                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
-                            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                        }`}>
-                          <p>{msg.message}</p>
-                        </div>
+                        
+                        {editingMessage === msg.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={editMessageText}
+                              onChange={(e) => setEditMessageText(e.target.value)}
+                              className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={saveEditMessage}
+                                className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingMessage(null);
+                                  setEditMessageText('');
+                                }}
+                                className="px-3 py-1 bg-gray-400 text-white rounded text-xs hover:bg-gray-500 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={`rounded-2xl px-4 py-3 ${
+                            msg.userId === userId
+                              ? 'bg-blue-500 text-white'
+                              : msg.isAI
+                              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100'
+                              : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                          }`}>
+                            <p>{msg.message}</p>
+                          </div>
+                        )}
                         {msg.reactions && msg.reactions.length > 0 && (
                           <div className="flex gap-1 mt-1 px-2">
                             {msg.reactions.map((reaction, idx) => (
@@ -1164,22 +1286,95 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               <div className="px-6 py-4 bg-yellow-50 dark:bg-yellow-900/20 border-t dark:border-gray-700">
                 {polls.map(poll => (
                   <div key={poll.id} className="mb-4">
-                    <p className="font-medium mb-3">{poll.question}</p>
-                    <div className="flex gap-3">
-                      {poll.options.map((option, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => votePoll(poll.id, idx)}
-                          className={`px-4 py-2 rounded-lg transition-colors ${
-                            option.votes.includes(userId || '')
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                          }`}
-                        >
-                          {option.text} ({option.votes.length})
-                        </button>
-                      ))}
+                    <div className="flex items-center justify-between mb-3">
+                      {editingPoll === poll.id ? (
+                        <div className="flex-1 flex gap-2">
+                          <input
+                            type="text"
+                            value={editPollText}
+                            onChange={(e) => setEditPollText(e.target.value)}
+                            className="flex-1 px-3 py-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                          />
+                          <button
+                            onClick={saveEditPoll}
+                            className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingPoll(null);
+                              setEditPollText('');
+                            }}
+                            className="px-3 py-1 bg-gray-400 text-white rounded text-xs hover:bg-gray-500 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-medium">{poll.question}</p>
+                          {poll.createdBy === userId && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => startEditPoll(poll.id, poll.question)}
+                                className="text-gray-400 hover:text-blue-500 transition-colors"
+                                title="Edit poll"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => deletePoll(poll.id)}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                title="Delete poll"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
+                    
+                    {editingPoll !== poll.id && (
+                      <div className="flex gap-3">
+                        {poll.options.map((option, idx) => {
+                          const userVoted = option.votes.includes(userId || '');
+                          const userVotedElsewhere = poll.options.some((opt, i) => 
+                            i !== idx && opt.votes.includes(userId || '')
+                          );
+                          
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                if (userVoted) {
+                                  // Remove vote if clicking same option
+                                  votePoll(poll.id, idx);
+                                } else if (userVotedElsewhere) {
+                                  // Change vote if user voted elsewhere
+                                  const oldIndex = poll.options.findIndex(opt => 
+                                    opt.votes.includes(userId || '')
+                                  );
+                                  changeVote(poll.id, oldIndex, idx);
+                                } else {
+                                  // New vote
+                                  votePoll(poll.id, idx);
+                                }
+                              }}
+                              className={`px-4 py-2 rounded-lg transition-colors ${
+                                userVoted
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                              }`}
+                            >
+                              {option.text} ({option.votes.length})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1187,19 +1382,55 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
 
             {/* Input Area */}
             <div className="px-6 py-4 bg-white dark:bg-gray-900 border-t dark:border-gray-700">
-              {/* Quick Actions */}
+              {/* Quick Actions Bar */}
               <div className="flex gap-2 mb-3 overflow-x-auto">
                 <button
                   onClick={() => setShowPoll(true)}
-                  className="px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-sm font-medium hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                  className="px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full text-sm font-medium hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors whitespace-nowrap"
                 >
                   📊 Create Poll
                 </button>
                 <button
-                  onClick={() => handleQuickAction('late')}
-                  className="px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-full text-sm font-medium hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                  onClick={() => setShowEditCarDetails(true)}
+                  className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors whitespace-nowrap"
+                >
+                  🚗 Edit Car Details
+                </button>
+                <button
+                  onClick={() => setShowEditEventDetails(true)}
+                  className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors whitespace-nowrap"
+                >
+                  📍 Edit Meetup
+                </button>
+                <button
+                  onClick={() => handleQuickAction('running-late')}
+                  className="px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-full text-sm font-medium hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors whitespace-nowrap"
                 >
                   ⏰ Running Late
+                </button>
+                <button
+                  onClick={() => {
+                    // Post event details to chat
+                    const eventPostMessage: Message = {
+                      id: Date.now(),
+                      user: 'You',
+                      message: 'Shared event details',
+                      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      avatar: '😊',
+                      isEventPost: true,
+                      eventData: {
+                        title: event.title,
+                        date: eventDateStr,
+                        time: eventTime,
+                        location: event.location || 'Location TBD'
+                      }
+                    };
+                    setMessages(prev => [...prev, eventPostMessage]);
+                    showToast?.({ type: 'success', message: 'Event details posted!' });
+                  }}
+                  className="px-3 py-1.5 bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-full text-sm font-medium hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors whitespace-nowrap"
+                >
+                  📅 Post Event
                 </button>
               </div>
 
@@ -1328,7 +1559,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
               <h3 className="text-lg font-semibold mb-4">Start New Carpool?</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                This will clear the current chat history and start a fresh carpool group for this event. Are you sure?
+                This will clear the current chat history and start a fresh carpool group for this event. You can invite different friends and start new coordination.
               </p>
               <div className="flex gap-3">
                 <button
@@ -1338,10 +1569,141 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   Cancel
                 </button>
                 <button
-                  onClick={startNewCarpool}
+                  onClick={() => {
+                    // Reset everything for new carpool
+                    setMessages([]);
+                    setPolls([]);
+                    setDriverStatus('none');
+                    setSelectedFriends([]);
+                    setShowNewCarpoolConfirm(false);
+                    
+                    // Initialize with fresh event post
+                    setTimeout(() => {
+                      initializeCarpoolChat();
+                    }, 100);
+                    
+                    showToast?.({ type: 'success', message: 'Started new carpool group!' });
+                  }}
                   className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
                 >
-                  Start New
+                  Start New Carpool
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Car Details Modal */}
+        {showEditCarDetails && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Edit Car Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Car Make/Model</label>
+                  <input
+                    type="text"
+                    value={tempCarDetails.make}
+                    onChange={(e) => setTempCarDetails(prev => ({ ...prev, make: e.target.value }))}
+                    placeholder="e.g. Honda Civic"
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Car Color</label>
+                  <input
+                    type="text"
+                    value={tempCarDetails.color}
+                    onChange={(e) => setTempCarDetails(prev => ({ ...prev, color: e.target.value }))}
+                    placeholder="e.g. Blue"
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Available Seats</label>
+                  <select
+                    value={tempCarDetails.seats}
+                    onChange={(e) => setTempCarDetails(prev => ({ ...prev, seats: parseInt(e.target.value) }))}
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {[1,2,3,4,5,6,7,8].map(num => (
+                      <option key={num} value={num}>{num} seat{num > 1 ? 's' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditCarDetails(false);
+                    setTempCarDetails(carDetails); // Reset to original
+                  }}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveCarDetails}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Event Details Modal */}
+        {showEditEventDetails && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Edit Carpool Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Meetup Location</label>
+                  <input
+                    type="text"
+                    value={tempEventDetails.meetupLocation}
+                    onChange={(e) => setTempEventDetails(prev => ({ ...prev, meetupLocation: e.target.value }))}
+                    placeholder="e.g. Central Park Main Entrance"
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Departure Time</label>
+                  <input
+                    type="time"
+                    value={tempEventDetails.departureTime}
+                    onChange={(e) => setTempEventDetails(prev => ({ ...prev, departureTime: e.target.value }))}
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Additional Notes</label>
+                  <textarea
+                    value={tempEventDetails.notes}
+                    onChange={(e) => setTempEventDetails(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="e.g. Look for the blue Honda in parking spot 12"
+                    rows={3}
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditEventDetails(false);
+                    setTempEventDetails({ meetupLocation: '', departureTime: '', notes: '' }); // Reset
+                  }}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEventDetails}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Save & Share
                 </button>
               </div>
             </div>
