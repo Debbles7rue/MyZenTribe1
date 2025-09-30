@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import dynamic from "next/dynamic";
+import CommunitiesTutorial from "@/components/CommunitiesTutorial";
 
 // Dynamic import of map components to avoid SSR issues
 const MapExplorerClient = dynamic(
@@ -785,7 +786,10 @@ export default function CommunitiesPage() {
           Create Community
         </Link>
       </div>
-
+      
+{/* Communities Tutorial */}
+<CommunitiesTutorial />
+      
       {/* Add Pin Modal */}
       {showAddPin && (
         <AddPinModal
