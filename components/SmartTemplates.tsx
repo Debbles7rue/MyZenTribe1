@@ -167,6 +167,20 @@ const TEMPLATES: Template[] = [
       duration: 15,
       event_type: 'work'
     }
+  },
+  {
+    id: 'custom-blank',
+    name: 'Custom Event',
+    description: 'Create your own custom event from scratch',
+    icon: '✏️',
+    category: 'Custom',
+    duration: 60,
+    prepopulatedData: {
+      title: '',
+      description: '',
+      duration: 60,
+      event_type: 'personal'
+    }
   }
 ];
 
