@@ -9,6 +9,7 @@ import AvatarUploader from "@/components/AvatarUploader";
 import PostComposer from "@/components/PostComposer";
 import PostCard from "@/components/PostCard";
 import { Post } from "@/lib/posts";
+import ProfileTutorial from "@/components/ProfileTutorial";
 
 type Profile = {
   id: string;
@@ -1157,6 +1158,9 @@ export default function ProfilePage() {
             padding: 0.5rem 0.5rem;
           }
         }
+        {/* Profile Tutorial */}
+<ProfileTutorial />
+
       `}</style>
     </div>
   );
