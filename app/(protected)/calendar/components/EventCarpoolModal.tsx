@@ -79,6 +79,27 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [isOpen, event]);
 
+  // Sync temp details with actual details
+  useEffect(() => {
+    setTempCarDetails(carDetails);
+  }, [carDetails]);
+
+  // Debug logging to check if modal states are working
+  useEffect(() => {
+    if (showEditCarDetails) {
+      console.log('Car details modal should be open');
+    }
+    if (showEditEventDetails) {
+      console.log('Event details modal should be open');
+    }
+    if (showPoll) {
+      console.log('Poll modal should be open');
+    }
+    if (showNewCarpoolConfirm) {
+      console.log('New carpool confirm modal should be open');
+    }
+  }, [showEditCarDetails, showEditEventDetails, showPoll, showNewCarpoolConfirm]);
+
   // Don't render if modal is closed or no event
   if (!isOpen || !event) return null;
 
@@ -419,75 +440,162 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // Desktop version
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-        {/* Desktop Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-6xl h-[85vh] max-h-[800px] min-h-[600px] overflow-hidden shadow-2xl flex flex-col">
+        {/* Desktop Header - Fixed */}
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Event Carpool</h2>
-              <p className="text-blue-100 text-sm">{event.title}</p>
-              <p className="text-xs text-blue-200">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold truncate">Event Carpool</h2>
+              <p className="text-blue-100 text-sm truncate">{event.title}</p>
+              <p className="text-xs text-blue-200 truncate">
                 {eventDateStr} • {eventTime} • {event.location || 'TBD'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0 ml-4">
               <button
                 onClick={() => setShowNewCarpoolConfirm(true)}
-                className="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
+                title="Start a new carpool group"
               >
-                <RefreshCw size={16} />
                 New Carpool
               </button>
               <button
                 onClick={() => setShowEditCarDetails(true)}
-                className="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors text-sm"
+                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
+                title="Edit your car details"
               >
                 Edit Car
               </button>
               <button
                 onClick={() => setShowEditEventDetails(true)}
-                className="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors text-sm"
+                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
+                title="Edit meetup details"
               >
                 Edit Meetup
+              </button>
+              <button
+                onClick={() => setShowPoll(true)}
+                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
+                title="Create a poll"
+              >
+                Create Poll
               </button>
               {onOpenSettings && (
                 <button
                   onClick={onOpenSettings}
-                  className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
+                  className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
+                  title="Settings"
                 >
-                  <Settings size={18} />
+                  <Settings size={16} />
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
+                className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
+                title="Close"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Desktop Content - Tab Layout */}
-        <div className="flex h-[75vh]">
+        {/* Desktop Content - Flexible */}
+        <div className="flex flex-1 min-h-0">
           {/* Left Panel - Overview/Stats */}
-          <div className="w-80 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto">
-            <CarpoolOverview
-              event={event}
-              carpoolStats={carpoolStats}
-              aiSuggestions={aiSuggestions}
-              onQuickAction={handleQuickActionClick}
-              driverStatus={driverStatus}
-              onSetDriverStatus={setDriverStatus}
-              carDetails={carDetails}
-              onEditCarDetails={() => setShowEditCarDetails(true)}
-              onEditEventDetails={() => setShowEditEventDetails(true)}
-              isMobile={false}
-            />
+          <div className="w-80 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto flex-shrink-0">
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Event Overview</h3>
+              
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-blue-600">{carpoolStats.needingRides}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Need Rides</div>
+                </div>
+                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-green-600">{carpoolStats.driversAvailable}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Drivers</div>
+                </div>
+                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold text-purple-600">{carpoolStats.estimatedSavings}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Est. Savings</div>
+                </div>
+                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold text-orange-600">{carpoolStats.distanceAway}mi</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Distance</div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3">Quick Actions</h4>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                <button
+                  onClick={() => handleQuickActionClick('offer-drive')}
+                  className="p-2 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors"
+                >
+                  Offer to Drive
+                </button>
+                <button
+                  onClick={() => handleQuickActionClick('need-ride')}
+                  className="p-2 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
+                >
+                  Need a Ride
+                </button>
+                <button
+                  onClick={() => handleQuickActionClick('suggest-meetup')}
+                  className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors"
+                >
+                  Suggest Meetup
+                </button>
+                <button
+                  onClick={() => handleQuickActionClick('running-late')}
+                  className="p-2 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 transition-colors"
+                >
+                  Running Late
+                </button>
+              </div>
+
+              {/* Driver Status */}
+              {driverStatus !== 'none' && (
+                <div className={`p-3 rounded-lg mb-4 ${
+                  driverStatus === 'driver' 
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' 
+                    : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+                }`}>
+                  <div className="text-sm font-medium">
+                    {driverStatus === 'driver' ? 'You are driving' : 'You need a ride'}
+                  </div>
+                  {driverStatus === 'driver' && (
+                    <div className="text-xs mt-1">
+                      {carDetails.make} {carDetails.color} • {carDetails.seats} seats
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AI Suggestions */}
+              {aiSuggestions && (
+                <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-lg p-3">
+                  <h4 className="font-medium text-sm mb-2">AI Suggestions</h4>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <span className="font-medium">Meetup:</span> {aiSuggestions.meetupSpot}
+                    </div>
+                    <div>
+                      <span className="font-medium">Departure:</span> {aiSuggestions.departureTime}
+                    </div>
+                    <div>
+                      <span className="font-medium">Parking:</span> {aiSuggestions.parking}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Main Chat Area */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <CarpoolChat
               messages={messages}
               polls={polls}
@@ -558,7 +666,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
 
           {/* Right Panel - Friends */}
-          <div className="w-72 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto">
+          <div className="w-72 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto flex-shrink-0">
             <div className="p-4">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Invite Friends</h3>
               
@@ -575,8 +683,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                         onChange={() => handleFriendToggle(friend.friend_id)}
                         className="rounded text-blue-500 focus:ring-blue-500"
                       />
-                      <div className="flex-1">
-                        <p className="font-medium text-sm text-gray-900 dark:text-white">{friend.name}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{friend.name}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {friend.safe_to_carpool ? '✅ Verified' : 'Not verified'}
                         </p>
@@ -593,7 +701,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                           showToast?.({ type: 'success', message: 'Invitations sent!' });
                         }
                       }}
-                      className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                      className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
                     >
                       Send Invites ({selectedFriends.length})
                     </button>
@@ -601,8 +709,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-gray-500 dark:text-gray-400 mb-4">No friends available</p>
-                  <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                  <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">No friends available</p>
+                  <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
                     Invite Friends
                   </button>
                 </div>
@@ -611,7 +719,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         </div>
 
-        {/* Modals */}
+        {/* Modals - Direct Implementation for Testing */}
         <CarpoolModals
           showPoll={showPoll}
           onClosePoll={() => setShowPoll(false)}
@@ -635,6 +743,172 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           onCloseInfo={() => setShowInfo(false)}
           isMobile={false}
         />
+
+        {/* Fallback Direct Modals - Remove these once CarpoolModals works */}
+        {showEditCarDetails && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Edit Car Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Car Make/Model</label>
+                  <input
+                    type="text"
+                    value={tempCarDetails.make}
+                    onChange={(e) => setTempCarDetails({ ...tempCarDetails, make: e.target.value })}
+                    placeholder="e.g. Honda Civic"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Car Color</label>
+                  <input
+                    type="text"
+                    value={tempCarDetails.color}
+                    onChange={(e) => setTempCarDetails({ ...tempCarDetails, color: e.target.value })}
+                    placeholder="e.g. Blue"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Available Seats</label>
+                  <select
+                    value={tempCarDetails.seats}
+                    onChange={(e) => setTempCarDetails({ ...tempCarDetails, seats: parseInt(e.target.value) })}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {[1,2,3,4,5,6,7,8].map(num => (
+                      <option key={num} value={num}>{num} seat{num > 1 ? 's' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowEditCarDetails(false)}
+                  className="flex-1 p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveCarDetails}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showEditEventDetails && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Edit Carpool Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Meetup Location</label>
+                  <input
+                    type="text"
+                    value={tempEventDetails.meetupLocation}
+                    onChange={(e) => setTempEventDetails({ ...tempEventDetails, meetupLocation: e.target.value })}
+                    placeholder="e.g. Central Park Main Entrance"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Departure Time</label>
+                  <input
+                    type="time"
+                    value={tempEventDetails.departureTime}
+                    onChange={(e) => setTempEventDetails({ ...tempEventDetails, departureTime: e.target.value })}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Additional Notes</label>
+                  <textarea
+                    value={tempEventDetails.notes}
+                    onChange={(e) => setTempEventDetails({ ...tempEventDetails, notes: e.target.value })}
+                    placeholder="e.g. Look for the blue Honda"
+                    rows={3}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowEditEventDetails(false)}
+                  className="flex-1 p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEventDetails}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  Save & Share
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPoll && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Create Poll</h3>
+              <input
+                type="text"
+                value={newPollQuestion}
+                onChange={(e) => setNewPollQuestion(e.target.value)}
+                placeholder="What should we vote on?"
+                className="w-full p-3 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPoll(false)}
+                  className="flex-1 p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreatePoll}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  disabled={!newPollQuestion.trim()}
+                >
+                  Create Poll
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showNewCarpoolConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Start New Carpool?</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                This will clear the current chat history and start a fresh carpool group for this event.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowNewCarpoolConfirm(false)}
+                  className="flex-1 p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStartNewCarpool}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  Start New Carpool
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
