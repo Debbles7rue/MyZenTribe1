@@ -845,11 +845,12 @@ export default function CalendarPage() {
           resetForm={resetForm}
           showToast={showToast}
           
-          <CalendarTutorial />
-        
           // NEW PROPS TO PASS SETTINGS HANDLER TO CARPOOL MODAL
           onOpenCarpoolSettings={() => setShowCarpoolSettings(true)}
         />
+
+        {/* Calendar Tutorial */}
+        <CalendarTutorial />
       </div>
     </div>
   );
