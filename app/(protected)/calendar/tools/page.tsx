@@ -128,11 +128,40 @@ export default function CalendarToolsPage() {
     setShowSettings(true);
   };
 
-  // Template apply handler
-  const handleApplyTemplate = (templateEvents: any[]) => {
-    console.log('Applying template events:', templateEvents);
-    showToast({ type: 'success', message: 'Template events applied!' });
-    setShowTemplates(false);
+  // Template apply handler - UPDATED TO ACTUALLY CREATE EVENTS
+  const handleApplyTemplate = async (templateEvents: any[]) => {
+    if (!user) {
+      showToast({ type: 'error', message: 'Please log in first' });
+      return;
+    }
+
+    try {
+      console.log('Applying template events:', templateEvents);
+      
+      const { error } = await supabase.from('events').insert(templateEvents);
+      
+      if (error) {
+        console.error('Error creating template events:', error);
+        showToast({ type: 'error', message: 'Failed to apply template' });
+        return;
+      }
+      
+      showToast({ type: 'success', message: '✨ Template applied to calendar!' });
+      setShowTemplates(false);
+      
+      // Reload events to show new template events
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('*')
+        .eq('created_by', user.id);
+      
+      if (eventsData) {
+        setEvents(eventsData);
+      }
+    } catch (error) {
+      console.error('Template application error:', error);
+      showToast({ type: 'error', message: 'Failed to apply template' });
+    }
   };
 
   // Meeting schedule handler
@@ -369,6 +398,7 @@ export default function CalendarToolsPage() {
           onClose={() => setShowTemplates(false)}
           onApply={handleApplyTemplate}
           userId={user.id}
+          isMobile={typeof window !== 'undefined' ? window.innerWidth < 768 : false}
         />
       )}
 
@@ -422,7 +452,7 @@ export default function CalendarToolsPage() {
             }
           }}
           showToast={showToast}
-          isMobile={window.innerWidth < 768}
+          isMobile={typeof window !== 'undefined' ? window.innerWidth < 768 : false}
         />
       )}
 
