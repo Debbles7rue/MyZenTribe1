@@ -1,4 +1,4 @@
-// components/PostComposer.tsx - Streamlined and User-Friendly
+// components/PostComposer.tsx - Complete with Co-creators AND Tagged Friends
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -38,7 +38,9 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [uploadedMedia, setUploadedMedia] = useState<MediaUpload[]>([]);
   const [showCoCreators, setShowCoCreators] = useState(false);
+  const [showTaggedFriends, setShowTaggedFriends] = useState(false);
   const [coCreators, setCoCreators] = useState<string[]>([]);
+  const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusMessage | null>(null);
   const [showPrivacyOptions, setShowPrivacyOptions] = useState(false);
   
@@ -186,6 +188,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       const result = await createPost(body.trim() || "Shared a moment", privacy, {
         allow_share: allowShare,
         co_creators: coCreators.length > 0 ? coCreators : null,
+        tagged_users: taggedFriends.length > 0 ? taggedFriends : null,
         media: mediaItems.length > 0 ? mediaItems : undefined
       });
       
@@ -206,7 +209,9 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       setBody("");
       setUploadedMedia([]);
       setCoCreators([]);
+      setTaggedFriends([]);
       setShowCoCreators(false);
+      setShowTaggedFriends(false);
       setShowPrivacyOptions(false);
       setStatus({ type: 'success', message: 'Post shared successfully!' });
       
@@ -294,8 +299,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         {showCoCreators && (
           <div className="collaborators-section">
             <div className="section-header">
-              <h4>Tag Friends to Collaborate</h4>
-              <p>Tagged friends can add their own photos and videos to this post!</p>
+              <h4>Add Co-creators</h4>
+              <p>Co-creators can add their own photos and videos to this post!</p>
             </div>
             <SimpleFriendDropdown
               value={coCreators}
@@ -305,6 +310,29 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
               <button
                 type="button"
                 onClick={() => setCoCreators([])}
+                className="clear-btn"
+              >
+                Clear selections
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Tagged Friends Section */}
+        {showTaggedFriends && (
+          <div className="collaborators-section">
+            <div className="section-header">
+              <h4>Tag Friends</h4>
+              <p>Tagged friends will be notified and see this post on their feed.</p>
+            </div>
+            <SimpleFriendDropdown
+              value={taggedFriends}
+              onChange={setTaggedFriends}
+            />
+            {taggedFriends.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setTaggedFriends([])}
                 className="clear-btn"
               >
                 Clear selections
@@ -371,9 +399,20 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
               className="action-btn collaborators-btn"
               onClick={() => setShowCoCreators(!showCoCreators)}
             >
-              👥 Tag Friends
+              👥 Co-creators
               {coCreators.length > 0 && (
                 <span className="count-badge">{coCreators.length}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="action-btn tag-btn"
+              onClick={() => setShowTaggedFriends(!showTaggedFriends)}
+            >
+              🏷️ Tag Friends
+              {taggedFriends.length > 0 && (
+                <span className="count-badge">{taggedFriends.length}</span>
               )}
             </button>
             
@@ -619,6 +658,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           font-size: 0.875rem;
           text-decoration: underline;
           margin-top: 0.75rem;
+          min-height: 44px;
         }
 
         /* Privacy Options */
@@ -689,6 +729,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         .action-buttons {
           display: flex;
           gap: 0.5rem;
+          flex-wrap: wrap;
         }
 
         .action-btn {
@@ -704,6 +745,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           color: #374151;
           transition: all 0.2s;
           position: relative;
+          min-height: 44px;
         }
 
         .action-btn:hover {
@@ -745,6 +787,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           align-items: center;
           gap: 0.5rem;
           min-width: 80px;
+          min-height: 48px;
           justify-content: center;
         }
 
@@ -775,7 +818,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         /* Mobile Responsiveness */
         @media (max-width: 640px) {
           .action-buttons {
-            flex-wrap: wrap;
             gap: 0.375rem;
           }
 
@@ -798,6 +840,25 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
 
           .option-description {
             font-size: 0.6875rem;
+          }
+
+          .text-section {
+            padding: 1.25rem 1.25rem 1rem;
+          }
+
+          .main-textarea {
+            font-size: 16px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .action-buttons {
+            width: 100%;
+          }
+
+          .action-btn {
+            flex: 1;
+            min-width: calc(50% - 0.25rem);
           }
         }
       `}</style>
