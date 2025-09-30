@@ -7,6 +7,7 @@ import type { View } from "react-big-calendar";
 import { useToast } from "@/components/ToastProvider";
 import { useMoon } from "@/lib/useMoon";
 import { supabase } from "@/lib/supabaseClient";
+import CalendarTutorial from "@/components/CalendarTutorial";
 
 // Import our modular components
 import { useCalendarData } from "./hooks/useCalendarData";
@@ -843,6 +844,9 @@ export default function CalendarPage() {
           }}
           resetForm={resetForm}
           showToast={showToast}
+          
+          <CalendarTutorial />
+        
           // NEW PROPS TO PASS SETTINGS HANDLER TO CARPOOL MODAL
           onOpenCarpoolSettings={() => setShowCarpoolSettings(true)}
         />
