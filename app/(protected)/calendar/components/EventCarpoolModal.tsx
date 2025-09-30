@@ -673,78 +673,54 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             {/* Smart Carpool Features */}
             <div className="p-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Smart Carpool Features</h3>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2">
-                    <Route className="text-blue-600 dark:text-blue-400" size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">Smart Route Planning</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      AI optimizes pickup order and suggests best meetup spots
-                    </p>
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button className="p-4 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl text-left hover:shadow-md transition-all active:scale-95">
+                  <Route className="text-blue-600 dark:text-blue-400 mb-2" size={24} />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm">Smart Route Planning</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    AI optimizes pickup order and suggests best meetup spots
+                  </p>
+                </button>
                 
-                <div className="flex items-start gap-3">
-                  <div className="bg-green-100 dark:bg-green-900/30 rounded-lg p-2">
-                    <DollarSign className="text-green-600 dark:text-green-400" size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">Expense Splitting</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Auto-calculate gas costs and split evenly
-                    </p>
-                  </div>
-                </div>
+                <button className="p-4 bg-gradient-to-r from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-xl text-left hover:shadow-md transition-all active:scale-95">
+                  <DollarSign className="text-green-600 dark:text-green-400 mb-2" size={24} />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm">Expense Splitting</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Auto-calculate gas costs and split evenly
+                  </p>
+                </button>
                 
-                <div className="flex items-start gap-3">
-                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-lg p-2">
-                    <Bell className="text-purple-600 dark:text-purple-400" size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">Smart Notifications</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Get alerts for departures, delays, and updates
-                    </p>
-                  </div>
-                </div>
+                <button className="p-4 bg-gradient-to-r from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl text-left hover:shadow-md transition-all active:scale-95">
+                  <Bell className="text-purple-600 dark:text-purple-400 mb-2" size={24} />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm">Smart Notifications</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Get alerts for departures, delays, and updates
+                  </p>
+                </button>
 
-                <div className="flex items-start gap-3">
-                  <div className="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-2">
-                    <Camera className="text-orange-600 dark:text-orange-400" size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">Car Photos</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Share car/license plate photos for easy identification
-                    </p>
-                  </div>
-                </div>
+                <button className="p-4 bg-gradient-to-r from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-xl text-left hover:shadow-md transition-all active:scale-95">
+                  <Camera className="text-orange-600 dark:text-orange-400 mb-2" size={24} />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm">Car Photos</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Share car/license plate photos for easy identification
+                  </p>
+                </button>
 
-                <div className="flex items-start gap-3">
-                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2">
-                    <CloudRain className="text-blue-600 dark:text-blue-400" size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">Weather Alerts</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Automatic departure time adjustments for weather
-                    </p>
-                  </div>
-                </div>
+                <button className="p-4 bg-gradient-to-r from-blue-100 to-cyan-200 dark:from-blue-900/30 dark:to-cyan-800/30 rounded-xl text-left hover:shadow-md transition-all active:scale-95">
+                  <CloudRain className="text-blue-600 dark:text-blue-400 mb-2" size={24} />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm">Weather Alerts</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Automatic departure time adjustments for weather
+                  </p>
+                </button>
 
-                <div className="flex items-start gap-3">
-                  <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-2">
-                    <Phone className="text-red-600 dark:text-red-400" size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">Emergency Contacts</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Shared emergency contacts within carpool group
-                    </p>
-                  </div>
-                </div>
+                <button className="p-4 bg-gradient-to-r from-red-100 to-pink-200 dark:from-red-900/30 dark:to-pink-800/30 rounded-xl text-left hover:shadow-md transition-all active:scale-95">
+                  <Phone className="text-red-600 dark:text-red-400 mb-2" size={24} />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm">Emergency Contacts</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Shared emergency contacts within carpool group
+                  </p>
+                </button>
               </div>
             </div>
 
