@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import HomeFeed from "@/components/HomeFeed";
 import FriendQuestionnaire from "@/components/FriendQuestionnaire";
+import HomeTutorial from "@/components/HomeTutorial";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -154,6 +155,8 @@ export default function DashboardPage() {
           isNewFriend={true}
         />
       )}
+      {/* Home Tutorial */}
+<HomeTutorial />
     </div>
   );
 }
