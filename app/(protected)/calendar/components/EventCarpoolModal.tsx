@@ -419,127 +419,196 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // Desktop version
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         {/* Desktop Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6">
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">Event Carpool</h2>
-              <p className="text-blue-100 mt-1">{event.title}</p>
-              <p className="text-sm text-blue-200">
+              <h2 className="text-xl font-bold">Event Carpool</h2>
+              <p className="text-blue-100 text-sm">{event.title}</p>
+              <p className="text-xs text-blue-200">
                 {eventDateStr} • {eventTime} • {event.location || 'TBD'}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowNewCarpoolConfirm(true)}
-                className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors flex items-center gap-2"
+                className="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm"
               >
-                <RefreshCw size={20} />
-                <span className="text-sm">New Carpool</span>
+                <RefreshCw size={16} />
+                New Carpool
+              </button>
+              <button
+                onClick={() => setShowEditCarDetails(true)}
+                className="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors text-sm"
+              >
+                Edit Car
+              </button>
+              <button
+                onClick={() => setShowEditEventDetails(true)}
+                className="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors text-sm"
+              >
+                Edit Meetup
               </button>
               {onOpenSettings && (
                 <button
                   onClick={onOpenSettings}
                   className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
                 >
-                  <Settings size={20} />
+                  <Settings size={18} />
                 </button>
               )}
               <button
                 onClick={onClose}
                 className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Desktop Content */}
-        <div className="flex h-[70vh]">
-          {/* Sidebars */}
-          <CarpoolSidebars
-            selectedFriends={selectedFriends}
-            onFriendToggle={handleFriendToggle}
-            carpoolData={carpoolData}
-            event={event}
-            onShowPoll={() => setShowPoll(true)}
-            onShowEditCarDetails={() => setShowEditCarDetails(true)}
-            onShowEditEventDetails={() => setShowEditEventDetails(true)}
-            onQuickAction={handleQuickActionClick}
-            showToast={showToast}
-            isMobile={isMobile}
-          />
+        {/* Desktop Content - Tab Layout */}
+        <div className="flex h-[75vh]">
+          {/* Left Panel - Overview/Stats */}
+          <div className="w-80 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto">
+            <CarpoolOverview
+              event={event}
+              carpoolStats={carpoolStats}
+              aiSuggestions={aiSuggestions}
+              onQuickAction={handleQuickActionClick}
+              driverStatus={driverStatus}
+              onSetDriverStatus={setDriverStatus}
+              carDetails={carDetails}
+              onEditCarDetails={() => setShowEditCarDetails(true)}
+              onEditEventDetails={() => setShowEditEventDetails(true)}
+              isMobile={false}
+            />
+          </div>
 
           {/* Main Chat Area */}
-          <CarpoolChat
-            messages={messages}
-            polls={polls}
-            newMessage={newMessage}
-            onMessageChange={setNewMessage}
-            onSendMessage={handleSendMessage}
-            onVoiceRecord={handleVoiceRecord}
-            isVoiceRecording={isVoiceRecording}
-            onVotePoll={handleVotePoll}
-            onEditMessage={(id, text) => {
-              setEditingMessage(id);
-              setEditMessageText(text);
-            }}
-            onDeleteMessage={(id) => {
-              setMessages(messages.filter(msg => msg.id !== id));
-              showToast?.({ type: 'success', message: 'Message deleted!' });
-            }}
-            onEditPoll={(id, text) => {
-              setEditingPoll(id);
-              setEditPollText(text);
-            }}
-            onDeletePoll={(id) => {
-              setPolls(polls.filter(poll => poll.id !== id));
-              showToast?.({ type: 'success', message: 'Poll deleted!' });
-            }}
-            onChangeVote={handleChangeVote}
-            editingMessage={editingMessage}
-            editMessageText={editMessageText}
-            onEditMessageTextChange={setEditMessageText}
-            onSaveEditMessage={() => {
-              if (editingMessage && editMessageText.trim()) {
-                setMessages(messages.map(msg => 
-                  msg.id === editingMessage 
-                    ? { ...msg, message: editMessageText, edited: true }
-                    : msg
-                ));
+          <div className="flex-1">
+            <CarpoolChat
+              messages={messages}
+              polls={polls}
+              newMessage={newMessage}
+              onMessageChange={setNewMessage}
+              onSendMessage={handleSendMessage}
+              onVoiceRecord={handleVoiceRecord}
+              isVoiceRecording={isVoiceRecording}
+              onVotePoll={handleVotePoll}
+              onEditMessage={(id, text) => {
+                setEditingMessage(id);
+                setEditMessageText(text);
+              }}
+              onDeleteMessage={(id) => {
+                setMessages(messages.filter(msg => msg.id !== id));
+                showToast?.({ type: 'success', message: 'Message deleted!' });
+              }}
+              onEditPoll={(id, text) => {
+                setEditingPoll(id);
+                setEditPollText(text);
+              }}
+              onDeletePoll={(id) => {
+                setPolls(polls.filter(poll => poll.id !== id));
+                showToast?.({ type: 'success', message: 'Poll deleted!' });
+              }}
+              onChangeVote={handleChangeVote}
+              editingMessage={editingMessage}
+              editMessageText={editMessageText}
+              onEditMessageTextChange={setEditMessageText}
+              onSaveEditMessage={() => {
+                if (editingMessage && editMessageText.trim()) {
+                  setMessages(messages.map(msg => 
+                    msg.id === editingMessage 
+                      ? { ...msg, message: editMessageText, edited: true }
+                      : msg
+                  ));
+                  setEditingMessage(null);
+                  setEditMessageText('');
+                  showToast?.({ type: 'success', message: 'Message updated!' });
+                }
+              }}
+              onCancelEditMessage={() => {
                 setEditingMessage(null);
                 setEditMessageText('');
-                showToast?.({ type: 'success', message: 'Message updated!' });
-              }
-            }}
-            onCancelEditMessage={() => {
-              setEditingMessage(null);
-              setEditMessageText('');
-            }}
-            editingPoll={editingPoll}
-            editPollText={editPollText}
-            onEditPollTextChange={setEditPollText}
-            onSaveEditPoll={() => {
-              if (editingPoll && editPollText.trim()) {
-                setPolls(polls.map(poll => 
-                  poll.id === editingPoll 
-                    ? { ...poll, question: editPollText }
-                    : poll
-                ));
+              }}
+              editingPoll={editingPoll}
+              editPollText={editPollText}
+              onEditPollTextChange={setEditPollText}
+              onSaveEditPoll={() => {
+                if (editingPoll && editPollText.trim()) {
+                  setPolls(polls.map(poll => 
+                    poll.id === editingPoll 
+                      ? { ...poll, question: editPollText }
+                      : poll
+                  ));
+                  setEditingPoll(null);
+                  setEditPollText('');
+                  showToast?.({ type: 'success', message: 'Poll updated!' });
+                }
+              }}
+              onCancelEditPoll={() => {
                 setEditingPoll(null);
                 setEditPollText('');
-                showToast?.({ type: 'success', message: 'Poll updated!' });
-              }
-            }}
-            onCancelEditPoll={() => {
-              setEditingPoll(null);
-              setEditPollText('');
-            }}
-            userId={userId}
-            isMobile={isMobile}
-          />
+              }}
+              userId={userId}
+              isMobile={false}
+            />
+          </div>
+
+          {/* Right Panel - Friends */}
+          <div className="w-72 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto">
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Invite Friends</h3>
+              
+              {carpoolData?.friends && carpoolData.friends.length > 0 ? (
+                <div className="space-y-3">
+                  {carpoolData.friends.map((friend: any) => (
+                    <label
+                      key={friend.friend_id}
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedFriends.includes(friend.friend_id)}
+                        onChange={() => handleFriendToggle(friend.friend_id)}
+                        className="rounded text-blue-500 focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-sm text-gray-900 dark:text-white">{friend.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {friend.safe_to_carpool ? '✅ Verified' : 'Not verified'}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                  
+                  {selectedFriends.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (carpoolData.createCarpoolGroup) {
+                          carpoolData.createCarpoolGroup(event.id, selectedFriends, "Let's carpool!");
+                          setSelectedFriends([]);
+                          showToast?.({ type: 'success', message: 'Invitations sent!' });
+                        }
+                      }}
+                      className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                    >
+                      Send Invites ({selectedFriends.length})
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">No friends available</p>
+                  <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    Invite Friends
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Modals */}
@@ -564,7 +633,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           onStartNewCarpool={handleStartNewCarpool}
           showInfo={showInfo}
           onCloseInfo={() => setShowInfo(false)}
-          isMobile={isMobile}
+          isMobile={false}
         />
       </div>
     </div>
