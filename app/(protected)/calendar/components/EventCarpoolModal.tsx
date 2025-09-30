@@ -1710,6 +1710,85 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         )}
       </div>
     </div>
+  );-6">
+                <button
+                  onClick={() => {
+                    setShowEditCarDetails(false);
+                    setTempCarDetails(carDetails); // Reset to original
+                  }}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveCarDetails}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Event Details Modal */}
+        {showEditEventDetails && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Edit Carpool Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Meetup Location</label>
+                  <input
+                    type="text"
+                    value={tempEventDetails.meetupLocation}
+                    onChange={(e) => setTempEventDetails(prev => ({ ...prev, meetupLocation: e.target.value }))}
+                    placeholder="e.g. Central Park Main Entrance"
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Departure Time</label>
+                  <input
+                    type="time"
+                    value={tempEventDetails.departureTime}
+                    onChange={(e) => setTempEventDetails(prev => ({ ...prev, departureTime: e.target.value }))}
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Additional Notes</label>
+                  <textarea
+                    value={tempEventDetails.notes}
+                    onChange={(e) => setTempEventDetails(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="e.g. Look for the blue Honda in parking spot 12"
+                    rows={3}
+                    className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditEventDetails(false);
+                    setTempEventDetails({ meetupLocation: '', departureTime: '', notes: '' }); // Reset
+                  }}
+                  className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEventDetails}
+                  className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Save & Share
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
