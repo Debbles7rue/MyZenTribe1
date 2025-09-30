@@ -242,12 +242,15 @@ export default function SmartTemplates({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
       
-      <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden ${
-        isMobile ? 'max-h-[90vh]' : 'max-w-5xl max-h-[85vh]'
-      }`}>
+      <div 
+        className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden ${
+          isMobile ? 'max-h-[90vh]' : 'max-w-5xl max-h-[85vh]'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6 text-white">
           <div className="flex items-center justify-between">
