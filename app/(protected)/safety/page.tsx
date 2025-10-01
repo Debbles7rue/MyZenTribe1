@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import SOSButton from "@/components/SOSButton";
+import SafetyTutorial from "@/components/SafetyTutorial";
 import { getEmergencySettings, saveEmergencySettings } from "@/lib/sos";
 import type { EmergencySettings } from "@/lib/sos";
 
@@ -173,6 +174,9 @@ export default function SafetyPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
+      {/* Safety Tutorial */}
+      <SafetyTutorial />
+      
       <div className="container-app py-8 px-4">
         <div className="max-w-5xl mx-auto">
           {/* Page Header */}
@@ -195,7 +199,7 @@ export default function SafetyPage() {
             <h2 className="text-2xl font-bold text-white mb-4">Emergency SOS Setup</h2>
             <p className="text-white/90 mb-6">
               Configure your emergency contact and customizable message. When you press the SOS
-              button, we’ll help you quickly contact them with your location.
+              button, we'll help you quickly contact them with your location.
             </p>
 
             {loading ? (
@@ -297,7 +301,7 @@ export default function SafetyPage() {
                         disabled={!enabled}
                       />
                       <p className="text-white/80 text-xs mt-1">
-                        We’ll append a live location link when possible.
+                        We'll append a live location link when possible.
                       </p>
                     </div>
                     <div className="bg-white/10 rounded-lg p-3">
