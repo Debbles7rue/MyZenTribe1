@@ -9,14 +9,14 @@ const TUTORIAL_STEPS = [
   {
     step: 1,
     icon: "📰",
-    title: "Good News Only Zone",
-    description: "Tired of doom-scrolling? This is your sanctuary from the chaos—only beautiful, inspiring stories allowed here.",
+    title: "Good News & Inspiring Stories",
+    description: "This is your sanctuary from doom-scrolling—only beautiful, uplifting content allowed here.",
     highlight: true,
     features: [
       "Real stories that restore faith in humanity",
       "No politics, no drama, no terrible news",
-      "Inspiring acts of kindness and beauty",
-      "Proof that goodness still exists everywhere"
+      "Share inspiring stories you've experienced or heard about",
+      "Post photos of beauty and kindness in the world"
     ],
     refugeNote: {
       icon: "🌈",
@@ -27,28 +27,14 @@ const TUTORIAL_STEPS = [
   {
     step: 2,
     icon: "✨",
-    title: "Share Good Deeds Anonymously",
-    description: "Did something kind? Help brighten someone's world? Share it here to inspire others—no ego, just love.",
+    title: "Anonymous Kindness & Challenges",
+    description: "Share your good deeds anonymously and take on kindness challenges to inspire others.",
     highlight: false,
     features: [
       "Share your good deeds without revealing your identity",
-      "Keep ego out of kindness by staying anonymous",
-      "Inspire others with your acts of compassion",
+      "Join weekly kindness challenges with specific actions",
+      "Earn karma points for participating and spreading kindness",
       "Create a ripple effect of positive actions"
-    ],
-    tip: "The most powerful kindness often happens when no one is watching. Share your story to encourage others to be their best selves!"
-  },
-  {
-    step: 3,
-    icon: "🎯",
-    title: "Join Karma Challenges",
-    description: "Ready to make the world a little brighter? Take on specific kindness challenges and inspire a movement of good.",
-    highlight: false,
-    features: [
-      "Choose from weekly kindness challenges",
-      "Get specific, actionable ways to help others",
-      "See how many people are participating with you",
-      "Track your positive impact over time"
     ],
     challengeExamples: [
       {
@@ -60,48 +46,12 @@ const TUTORIAL_STEPS = [
         icon: "💌",
         challenge: "Gratitude Notes",
         description: "Leave encouraging notes in public places"
-      },
-      {
-        icon: "🌱",
-        challenge: "Environmental Love",
-        description: "Pick up litter during your daily walk"
       }
-    ]
-  },
-  {
-    step: 4,
-    icon: "🏆",
-    title: "Earn Karma Points",
-    description: "What goes around comes around! Earn karma points by participating in challenges and spreading kindness.",
-    highlight: false,
-    features: [
-      "Gain karma points for completing challenges",
-      "See your positive impact grow over time",
-      "Unlock special recognition levels",
-      "Inspire others through your consistency"
     ],
-    karmaNote: {
-      icon: "♻️",
-      title: "The Karma Circle",
-      message: "Karma isn't about keeping score—it's about creating a world where kindness flows freely. Your good deeds come back to you in ways you might never expect, often when you need them most."
-    }
+    tip: "The most powerful kindness often happens when no one is watching. Share your story to encourage others!"
   },
   {
-    step: 5,
-    icon: "💝",
-    title: "Share Stories That Touch You",
-    description: "See something beautiful? Read about an incredible act of kindness? Share it here so others can be inspired too.",
-    highlight: false,
-    features: [
-      "Post uplifting stories you've heard or experienced",
-      "Share photos of beauty and kindness in the world",
-      "Highlight local heroes and everyday angels",
-      "Create a collection of hope and inspiration"
-    ],
-    tip: "Sometimes we need reminding that there are still good people doing amazing things. Your story might be exactly what someone needs to hear today."
-  },
-  {
-    step: 6,
+    step: 3,
     icon: "🌟",
     title: "Be the Light",
     description: "In a world that can feel heavy, you have the power to be someone's ray of sunshine.",
