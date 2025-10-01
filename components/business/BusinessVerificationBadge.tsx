@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import type { VerificationLevel } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import type { VerificationLevel, FeedbackStats } from '@/lib/types';
 
 interface Props {
-  level: VerificationLevel;
+  level?: VerificationLevel;
+  businessId?: string;
   followerCount?: number;
   size?: 'small' | 'medium' | 'large';
   showTooltip?: boolean;
@@ -23,7 +25,7 @@ const VERIFICATION_CONFIG = {
   some: {
     icon: '⭐',
     label: 'Some Social Credibility',
-    description: 'One or two people have attended their events or used their services',
+    description: 'At least 3 people have given positive feedback about their services or events',
     color: 'text-blue-600',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200'
@@ -31,7 +33,7 @@ const VERIFICATION_CONFIG = {
   verified: {
     icon: '✅',
     label: 'Verified',
-    description: 'Multiple people have attended their events with positive experiences',
+    description: '10+ people have given positive feedback with great experiences',
     color: 'text-green-600',
     bgColor: 'bg-green-50',
     borderColor: 'border-green-200'
@@ -39,15 +41,91 @@ const VERIFICATION_CONFIG = {
 };
 
 export default function BusinessVerificationBadge({ 
-  level, 
+  level,
+  businessId,
   followerCount = 0,
   size = 'medium',
   showTooltip = true,
   className = ''
 }: Props) {
   const [showTooltipState, setShowTooltipState] = useState(false);
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackStats>({
+    total: 0,
+    positive: 0,
+    negative: 0,
+    hasUserFeedback: false
+  });
+  const [computedLevel, setComputedLevel] = useState<VerificationLevel>(level || 'none');
+
+  // Load feedback data and compute verification level
+  useEffect(() => {
+    if (businessId) {
+      loadFeedbackStats();
+    } else if (level) {
+      setComputedLevel(level);
+    } else {
+      // Fallback to follower-based verification if no businessId or level provided
+      setComputedLevel(getVerificationLevelFromFollowers(followerCount));
+    }
+  }, [businessId, level, followerCount]);
+
+  // Real-time updates for feedback changes
+  useEffect(() => {
+    if (!businessId) return;
+
+    const channel = supabase
+      .channel(`business-verification-${businessId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'business_feedback',
+          filter: `business_id=eq.${businessId}`
+        },
+        () => {
+          loadFeedbackStats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [businessId]);
+
+  async function loadFeedbackStats() {
+    if (!businessId) return;
+
+    try {
+      const { data: feedback, error } = await supabase
+        .from('business_feedback')
+        .select('rating')
+        .eq('business_id', businessId);
+
+      if (error) {
+        console.error('Error loading feedback stats:', error);
+        return;
+      }
+
+      const stats: FeedbackStats = {
+        total: feedback?.length || 0,
+        positive: feedback?.filter(f => f.rating === 'positive').length || 0,
+        negative: feedback?.filter(f => f.rating === 'negative').length || 0,
+        hasUserFeedback: false
+      };
+
+      setFeedbackStats(stats);
+      
+      // Compute verification level based on feedback
+      const newLevel = getVerificationLevelFromFeedback(stats.positive, stats.negative);
+      setComputedLevel(newLevel);
+    } catch (err) {
+      console.error('Error loading feedback stats:', err);
+    }
+  }
   
-  const config = VERIFICATION_CONFIG[level];
+  const config = VERIFICATION_CONFIG[computedLevel];
   
   // Size configurations
   const sizeConfig = {
@@ -88,14 +166,23 @@ export default function BusinessVerificationBadge({
       >
         <span className={styleConfig.icon}>{config.icon}</span>
         <span>{config.label}</span>
-        {followerCount > 0 && (
+        
+        {/* Show feedback count if we have businessId and feedback data */}
+        {businessId && feedbackStats.total > 0 && (
+          <span className="opacity-75">
+            ({feedbackStats.positive} 👍)
+          </span>
+        )}
+        
+        {/* Fallback to follower count if no feedback data */}
+        {!businessId && followerCount > 0 && (
           <span className="opacity-75">
             ({followerCount.toLocaleString()})
           </span>
         )}
       </div>
 
-      {/* Tooltip */}
+      {/* Enhanced Tooltip with feedback details */}
       {showTooltip && showTooltipState && (
         <div className={`
           absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2
@@ -105,7 +192,29 @@ export default function BusinessVerificationBadge({
         `}>
           <div className="font-semibold mb-1">{config.label}</div>
           <div className="opacity-90">{config.description}</div>
-          {followerCount > 0 && (
+          
+          {/* Show feedback stats if available */}
+          {businessId && feedbackStats.total > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-700">
+              <div className="text-xs space-y-1">
+                <div>
+                  <span className="text-green-400">{feedbackStats.positive} positive</span>
+                  {feedbackStats.negative > 0 && (
+                    <>
+                      <span className="mx-1">•</span>
+                      <span className="text-red-400">{feedbackStats.negative} negative</span>
+                    </>
+                  )}
+                </div>
+                <div className="opacity-75">
+                  Based on real user experiences
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Fallback to follower info */}
+          {!businessId && followerCount > 0 && (
             <div className="mt-1 text-xs opacity-75">
               {followerCount.toLocaleString()} follower{followerCount !== 1 ? 's' : ''}
             </div>
@@ -119,11 +228,30 @@ export default function BusinessVerificationBadge({
   );
 }
 
-// Utility function to determine verification level based on follower count
-export function getVerificationLevel(followerCount: number = 0): VerificationLevel {
+// NEW: Utility function to determine verification level based on feedback
+export function getVerificationLevelFromFeedback(
+  positiveCount: number = 0, 
+  negativeCount: number = 0
+): VerificationLevel {
+  // If there's significant negative feedback, reduce the threshold
+  const negativePenalty = negativeCount * 2; // Each negative feedback counts as 2 against
+  const effectivePositive = Math.max(0, positiveCount - negativePenalty);
+  
+  if (effectivePositive >= 10) return 'verified';
+  if (effectivePositive >= 3) return 'some';
+  return 'none';
+}
+
+// UPDATED: Legacy utility function for follower-based verification (fallback)
+export function getVerificationLevelFromFollowers(followerCount: number = 0): VerificationLevel {
   if (followerCount >= 50) return 'verified';
   if (followerCount >= 5) return 'some';
   return 'none';
+}
+
+// LEGACY: Keep this for backward compatibility
+export function getVerificationLevel(followerCount: number = 0): VerificationLevel {
+  return getVerificationLevelFromFollowers(followerCount);
 }
 
 // Utility function to get verification config
