@@ -9,28 +9,14 @@ const TUTORIAL_STEPS = [
   {
     step: 1,
     icon: "⏰",
-    title: "Schedule Your Practice",
-    description: "Create consistency in your meditation journey with flexible scheduling options.",
+    title: "Schedule Practice & Find Buddies",
+    description: "Build a consistent meditation practice with scheduling tools and accountability partners.",
     highlight: true,
     features: [
       "Set regular meditation times that work for your schedule",
       "Get gentle reminders when it's time to practice",
-      "Track your meditation streaks and progress",
-      "Adjust your schedule as your life changes"
-    ],
-    tip: "Even 5 minutes a day creates profound changes over time. Start small and build from there!"
-  },
-  {
-    step: 2,
-    icon: "👥",
-    title: "Meditation Buddies",
-    description: "Find accountability and connection through meditation partnerships.",
-    highlight: false,
-    features: [
-      "Schedule meditation sessions with friends",
-      "Support each other's practice journey",
-      "Share experiences and insights safely",
-      "Create deeper bonds through shared mindfulness"
+      "Schedule meditation sessions with friends for accountability",
+      "Track your meditation streaks and progress"
     ],
     buddyNote: {
       icon: "🤝",
@@ -39,7 +25,7 @@ const TUTORIAL_STEPS = [
     }
   },
   {
-    step: 3,
+    step: 2,
     icon: "🧘‍♀️",
     title: "Join Group Sessions",
     description: "Connect with others in scheduled group meditation sessions throughout the day.",
@@ -52,16 +38,16 @@ const TUTORIAL_STEPS = [
     ]
   },
   {
-    step: 4,
+    step: 3,
     icon: "💬",
-    title: "Sacred Sharing Space",
-    description: "Connect with others through our peaceful meditation lounge chat.",
+    title: "Sacred Chat & Track Progress",
+    description: "Share your journey with others and watch your practice grow over time.",
     highlight: false,
     features: [
-      "Share positive messages and insights",
+      "Share positive messages and insights in the meditation lounge",
       "Support others on their meditation journey",
-      "Ask questions and receive gentle guidance",
-      "Keep the space sacred and uplifting"
+      "See your personal meditation statistics",
+      "Contribute to our global meditation counter"
     ],
     guidelines: [
       {
@@ -73,20 +59,15 @@ const TUTORIAL_STEPS = [
         icon: "🙏",
         rule: "Respect & Reverence",
         description: "Honor everyone's unique spiritual journey"
-      },
-      {
-        icon: "✨",
-        rule: "Mindful Sharing",
-        description: "Share insights that inspire and heal"
       }
     ]
   },
   {
-    step: 5,
+    step: 4,
     icon: "🕯️",
     title: "Light Candles for Loved Ones",
     description: "Send love and healing energy to those who need it most through our virtual candle room.",
-    highlight: false,
+    highlight: true,
     features: [
       "Light a candle for someone special ($0.99)",
       "Honor the memory of loved ones who have passed",
@@ -97,34 +78,7 @@ const TUTORIAL_STEPS = [
       icon: "💝",
       title: "Why Light a Candle?",
       message: "Lighting a candle is a beautiful way to focus your intention and send positive energy across any distance. It's a sacred act of love that connects hearts and souls."
-    }
-  },
-  {
-    step: 6,
-    icon: "📊",
-    title: "Track Your Sacred Journey",
-    description: "Watch your meditation practice grow and see your contribution to the global peace mission.",
-    highlight: false,
-    features: [
-      "See your personal meditation statistics",
-      "Track your consistency and growth over time",
-      "Contribute to our global meditation counter",
-      "Celebrate milestones in your practice"
-    ],
-    tip: "Every session—no matter how short—adds to the global field of peace. Your practice truly matters!"
-  },
-  {
-    step: 7,
-    icon: "🌸",
-    title: "Your Meditation Hub",
-    description: "Everything you need for a consistent, meaningful meditation practice is right here.",
-    highlight: true,
-    features: [
-      "Access all meditation tools from one peaceful space",
-      "Connect with your meditation community anytime",
-      "Track your growth and celebrate your journey",
-      "Find support and inspiration when you need it most"
-    ],
+    },
     finalMessage: "Your meditation practice is a gift to yourself and to all of humanity. Every moment of peace you cultivate ripples out into the world. 🙏"
   }
 ];
