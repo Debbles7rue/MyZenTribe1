@@ -1,9 +1,11 @@
-// components/business/BusinessHeader.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import BusinessFollowButton from '@/components/business/BusinessFollowButton';
+import BusinessVerificationBadge from '@/components/business/BusinessVerificationBadge';
+import { getVerificationLevel } from '@/components/business/BusinessVerificationBadge';
 
 interface BusinessHeader {
   id: string;
@@ -14,6 +16,8 @@ interface BusinessHeader {
   handle?: string;
   visibility?: 'public' | 'private' | 'unlisted';
   verified?: boolean;
+  follower_count?: number;
+  verification_level?: 'none' | 'some' | 'verified';
 }
 
 interface Props {
@@ -32,7 +36,7 @@ export default function BusinessHeader({ businessId }: Props) {
   async function loadBusiness() {
     const { data } = await supabase
       .from('business_profiles')
-      .select('id, display_name, tagline, logo_url, cover_url, handle, visibility, verified')
+      .select('id, display_name, tagline, logo_url, cover_url, handle, visibility, verified, follower_count, verification_level')
       .eq('id', businessId)
       .single();
     
@@ -75,6 +79,9 @@ export default function BusinessHeader({ businessId }: Props) {
     );
   }
 
+  // Calculate verification level if not set
+  const verificationLevel = business?.verification_level || getVerificationLevel(business?.follower_count || 0);
+
   return (
     <div className="bg-white rounded-lg shadow-sm mb-6">
       {/* Cover Section */}
@@ -101,20 +108,42 @@ export default function BusinessHeader({ businessId }: Props) {
                 />
               )}
               <div className="flex-1">
-                <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 flex-wrap">
                   {business?.display_name || 'My Business'}
                   {business?.verified && <span className="text-blue-400">✓</span>}
                 </h1>
                 {business?.tagline && (
                   <p className="text-sm sm:text-base opacity-90">{business.tagline}</p>
                 )}
+                
+                {/* Verification Badge - Mobile Friendly */}
+                <div className="mt-2">
+                  <BusinessVerificationBadge 
+                    level={verificationLevel}
+                    followerCount={business?.follower_count}
+                    size="small"
+                    className="bg-white/10 backdrop-blur border-white/20"
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="absolute top-4 right-4 flex gap-2">
+        {/* Action buttons - Updated for mobile */}
+        <div className="absolute top-4 right-4 flex flex-col sm:flex-row gap-2">
+          {/* Follow Button - Positioned prominently */}
+          {business?.visibility === 'public' && (
+            <BusinessFollowButton
+              businessId={businessId}
+              businessName={business?.display_name}
+              size="small"
+              variant="outline"
+              showCount={false}
+              className="bg-white/90 backdrop-blur border-white/50 hover:bg-white"
+            />
+          )}
+          
           <button
             onClick={handleShare}
             className="px-3 py-1.5 bg-white/90 backdrop-blur text-gray-700 rounded-lg text-sm font-medium hover:bg-white transition-colors"
@@ -130,9 +159,9 @@ export default function BusinessHeader({ businessId }: Props) {
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Status Bar - Enhanced with follower count */}
       <div className="px-6 py-3 bg-gray-50 rounded-b-lg border-b flex items-center justify-between">
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-4 text-sm flex-wrap">
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
             business?.visibility === 'public' 
               ? 'bg-green-100 text-green-700' 
@@ -146,7 +175,27 @@ export default function BusinessHeader({ businessId }: Props) {
           {business?.handle && (
             <span className="text-gray-600">@{business.handle}</span>
           )}
+          
+          {/* Follower count display */}
+          {business?.follower_count !== undefined && business.follower_count > 0 && (
+            <span className="text-gray-500 text-xs">
+              {business.follower_count.toLocaleString()} follower{business.follower_count !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
+
+        {/* Desktop Follow Button - Full size with count */}
+        {business?.visibility === 'public' && (
+          <div className="hidden sm:block">
+            <BusinessFollowButton
+              businessId={businessId}
+              businessName={business?.display_name}
+              size="small"
+              variant="primary"
+              showCount={true}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
