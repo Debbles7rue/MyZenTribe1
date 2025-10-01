@@ -4,6 +4,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import BusinessFollowButton from '@/components/business/BusinessFollowButton';
+import BusinessVerificationBadge from '@/components/business/BusinessVerificationBadge';
+import { getVerificationLevel } from '@/components/business/BusinessVerificationBadge';
 
 interface BusinessProfile {
   id: string;
@@ -24,6 +27,9 @@ interface BusinessProfile {
   gallery?: any[];
   social_links?: Record<string, string> | null;
   visibility?: 'public' | 'private' | 'unlisted';
+  verified?: boolean;
+  follower_count?: number;
+  verification_level?: 'none' | 'some' | 'verified';
 }
 
 export default function BusinessPublicPage() {
@@ -85,6 +91,9 @@ export default function BusinessPublicPage() {
     );
   }
 
+  // Calculate verification level if not set
+  const verificationLevel = business.verification_level || getVerificationLevel(business.follower_count || 0);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
@@ -116,11 +125,43 @@ export default function BusinessPublicPage() {
             )}
             
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">{business.display_name}</h1>
-              {business.tagline && (
-                <p className="text-gray-600 mt-1">{business.tagline}</p>
-              )}
-              <p className="text-sm text-gray-500 mt-2">@{business.handle}</p>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-bold">{business.display_name}</h1>
+                    {business.verified && (
+                      <span className="text-blue-500 text-xl" title="Verified Business">✓</span>
+                    )}
+                  </div>
+                  
+                  {business.tagline && (
+                    <p className="text-gray-600 mt-1">{business.tagline}</p>
+                  )}
+                  
+                  <p className="text-sm text-gray-500 mt-2">@{business.handle}</p>
+                  
+                  {/* Verification Badge */}
+                  <div className="mt-3">
+                    <BusinessVerificationBadge 
+                      level={verificationLevel}
+                      followerCount={business.follower_count}
+                      size="medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Follow Button - Mobile and Desktop Responsive */}
+                <div className="flex-shrink-0">
+                  <BusinessFollowButton
+                    businessId={business.id}
+                    businessName={business.display_name}
+                    size="medium"
+                    variant="primary"
+                    showCount={true}
+                    className="w-full sm:w-auto"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
