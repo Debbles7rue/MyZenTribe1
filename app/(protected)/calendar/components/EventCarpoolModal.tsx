@@ -440,7 +440,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // Desktop version
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-6xl h-[85vh] max-h-[800px] min-h-[600px] overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-6xl h-[75vh] max-h-[700px] min-h-[500px] overflow-hidden shadow-2xl flex flex-col">
         {/* Desktop Header - Fixed */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
