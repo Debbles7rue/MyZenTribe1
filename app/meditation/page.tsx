@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import MeditationTutorial from '@/components/MeditationTutorial';
 
 // Brand Blessing - Hidden blessing embedded in code
 export const BLESSING_ID = "mzt-blessing-v1";
@@ -62,6 +63,9 @@ export default function MeditationEntryPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-950 via-purple-900 to-indigo-950 relative overflow-hidden">
       
+      {/* Meditation Tutorial */}
+      <MeditationTutorial />
+
       {/* Cosmic background */}
       <div className="absolute inset-0">
         {/* Ethereal glow orbs */}
