@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
+import KarmaTutorial from "@/components/KarmaTutorial";
 
 type Tab = "karma" | "good_news";
 type KarmaTab = "browse_challenges" | "my_challenges" | "create_challenge" | "all_acts";
@@ -519,6 +520,9 @@ export default function KarmaCornerPage() {
 
   return (
     <div className="page-wrap" style={pageBg}>
+      {/* Karma Tutorial */}
+      <KarmaTutorial />
+      
       <div className="page">
         <div className="container-app">
           {/* Header */}
