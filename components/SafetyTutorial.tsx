@@ -27,52 +27,26 @@ const TUTORIAL_STEPS = [
   {
     step: 2,
     icon: "🚨",
-    title: "Set Up Your SOS System",
-    description: "Configure your emergency contact system now, before you ever need it. Hope for the best, prepare for the worst.",
+    title: "Set Up & Test Your SOS System",
+    description: "Configure your emergency contact system now, before you ever need it. Test it to make sure it works!",
     highlight: false,
     features: [
       "Choose a trusted emergency contact person",
-      "Customize your emergency message",
+      "Customize your emergency message (like 'Call police' or 'Come get me')",
       "System automatically includes your GPS location",
-      "Quick access through the floating SOS button"
+      "CRITICAL: Test with your contact before relying on it"
     ],
-    setupSteps: [
-      {
-        icon: "👤",
-        step: "Choose Contact",
-        description: "Pick someone who will respond quickly and take action"
-      },
-      {
-        icon: "📝",
-        step: "Write Message",
-        description: "Pre-write messages like 'Call police' or 'Come get me'"
-      },
-      {
-        icon: "🧪",
-        step: "Test the System",
-        description: "CRITICAL: Test with your contact before relying on it"
-      }
-    ]
+    testingNote: {
+      icon: "🔧",
+      title: "System Check",
+      message: "Test your SOS system with different devices and locations. What works at home might not work everywhere. Regular testing could save your life."
+    }
   },
   {
     step: 3,
-    icon: "📍",
-    title: "Smart Event Safety",
-    description: "Attending events with new people? Follow these guidelines to stay safe while building your community.",
-    highlight: false,
-    features: [
-      "Research event hosts and venues beforehand",
-      "Check for reviews or testimonials when available",
-      "Use the buddy system for unfamiliar events",
-      "Know your exit routes and transportation options"
-    ],
-    tip: "MyZenTribe can't vet every event host as the platform grows. Use your best judgment and trust your instincts!"
-  },
-  {
-    step: 4,
     icon: "🤝",
-    title: "Meeting People Safely",
-    description: "Building your tribe means connecting with new people—here's how to do it wisely.",
+    title: "Smart Event & Meeting Safety",
+    description: "Stay safe while building your community by following these guidelines.",
     highlight: false,
     guidelines: [
       {
@@ -91,18 +65,19 @@ const TUTORIAL_STEPS = [
         description: "If something feels off, it probably is—don't ignore that feeling"
       },
       {
-        icon: "🔒",
-        rule: "Keep Personal Details Private",
-        description: "Be cautious about sharing address, workplace, or routine details"
+        icon: "🔍",
+        rule: "Research Before You Go",
+        description: "Check event hosts, venues, and use the buddy system for new places"
       }
-    ]
+    ],
+    tip: "MyZenTribe can't vet every event host as the platform grows. Use your best judgment and trust your instincts!"
   },
   {
-    step: 5,
+    step: 4,
     icon: "⚡",
     title: "When to Use Your SOS",
     description: "The SOS system works for different levels of situations—from uncomfortable to truly dangerous.",
-    highlight: false,
+    highlight: true,
     sosScenarios: [
       {
         icon: "😰",
@@ -122,38 +97,6 @@ const TUTORIAL_STEPS = [
         examples: "Being followed, threatened, or in immediate danger",
         action: "Call 911 first, then use SOS to alert your contact"
       }
-    ],
-    tip: "Your SOS is there for peace of mind—use it whenever you feel uncertain, not just in worst-case scenarios!"
-  },
-  {
-    step: 6,
-    icon: "🧪",
-    title: "Test Your Safety System",
-    description: "Your SOS system is only effective if it works when you need it. Test it now!",
-    highlight: false,
-    features: [
-      "Send a test message to your emergency contact",
-      "Verify they receive the message and location",
-      "Make sure they know how to respond",
-      "Update your system if anything doesn't work"
-    ],
-    testingNote: {
-      icon: "🔧",
-      title: "System Check",
-      message: "Test your SOS system with different devices and locations. What works at home might not work everywhere. Regular testing could save your life."
-    }
-  },
-  {
-    step: 7,
-    icon: "💜",
-    title: "Stay Safe, Stay Connected",
-    description: "Safety doesn't mean living in fear—it means being smart so you can enjoy community with peace of mind.",
-    highlight: true,
-    features: [
-      "Your safety tools are always available when you need them",
-      "Trust your community, but verify when meeting new people",
-      "Report suspicious behavior to help protect others",
-      "Enjoy building your tribe with confidence and wisdom"
     ],
     finalMessage: "We're here to support your safety and your connections. You deserve to feel secure while building meaningful relationships. Stay safe, beautiful soul. 💜"
   }
