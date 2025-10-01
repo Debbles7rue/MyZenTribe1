@@ -1,0 +1,341 @@
+// components/KarmaTutorial.tsx
+"use client";
+
+import { useEffect, useState } from "react";
+
+const STORAGE_KEY = "mzt_karma_tutorial_seen_v1";
+
+const TUTORIAL_STEPS = [
+  {
+    step: 1,
+    icon: "📰",
+    title: "Good News Only Zone",
+    description: "Tired of doom-scrolling? This is your sanctuary from the chaos—only beautiful, inspiring stories allowed here.",
+    highlight: true,
+    features: [
+      "Real stories that restore faith in humanity",
+      "No politics, no drama, no terrible news",
+      "Inspiring acts of kindness and beauty",
+      "Proof that goodness still exists everywhere"
+    ],
+    refugeNote: {
+      icon: "🌈",
+      title: "Your Daily Refuge",
+      message: "We're bombarded with negativity everywhere else. Here, we celebrate what's good in life. This is your escape from the noise—let's keep it peaceful and uplifting."
+    }
+  },
+  {
+    step: 2,
+    icon: "✨",
+    title: "Share Good Deeds Anonymously",
+    description: "Did something kind? Help brighten someone's world? Share it here to inspire others—no ego, just love.",
+    highlight: false,
+    features: [
+      "Share your good deeds without revealing your identity",
+      "Keep ego out of kindness by staying anonymous",
+      "Inspire others with your acts of compassion",
+      "Create a ripple effect of positive actions"
+    ],
+    tip: "The most powerful kindness often happens when no one is watching. Share your story to encourage others to be their best selves!"
+  },
+  {
+    step: 3,
+    icon: "🎯",
+    title: "Join Karma Challenges",
+    description: "Ready to make the world a little brighter? Take on specific kindness challenges and inspire a movement of good.",
+    highlight: false,
+    features: [
+      "Choose from weekly kindness challenges",
+      "Get specific, actionable ways to help others",
+      "See how many people are participating with you",
+      "Track your positive impact over time"
+    ],
+    challengeExamples: [
+      {
+        icon: "☕",
+        challenge: "Pay It Forward",
+        description: "Buy coffee for the person behind you in line"
+      },
+      {
+        icon: "💌",
+        challenge: "Gratitude Notes",
+        description: "Leave encouraging notes in public places"
+      },
+      {
+        icon: "🌱",
+        challenge: "Environmental Love",
+        description: "Pick up litter during your daily walk"
+      }
+    ]
+  },
+  {
+    step: 4,
+    icon: "🏆",
+    title: "Earn Karma Points",
+    description: "What goes around comes around! Earn karma points by participating in challenges and spreading kindness.",
+    highlight: false,
+    features: [
+      "Gain karma points for completing challenges",
+      "See your positive impact grow over time",
+      "Unlock special recognition levels",
+      "Inspire others through your consistency"
+    ],
+    karmaNote: {
+      icon: "♻️",
+      title: "The Karma Circle",
+      message: "Karma isn't about keeping score—it's about creating a world where kindness flows freely. Your good deeds come back to you in ways you might never expect, often when you need them most."
+    }
+  },
+  {
+    step: 5,
+    icon: "💝",
+    title: "Share Stories That Touch You",
+    description: "See something beautiful? Read about an incredible act of kindness? Share it here so others can be inspired too.",
+    highlight: false,
+    features: [
+      "Post uplifting stories you've heard or experienced",
+      "Share photos of beauty and kindness in the world",
+      "Highlight local heroes and everyday angels",
+      "Create a collection of hope and inspiration"
+    ],
+    tip: "Sometimes we need reminding that there are still good people doing amazing things. Your story might be exactly what someone needs to hear today."
+  },
+  {
+    step: 6,
+    icon: "🌟",
+    title: "Be the Light",
+    description: "In a world that can feel heavy, you have the power to be someone's ray of sunshine.",
+    highlight: true,
+    features: [
+      "Every act of kindness creates ripples of good",
+      "Your story might inspire someone else's good deed",
+      "Small actions can have massive impacts",
+      "You're part of a growing movement of light workers"
+    ],
+    finalMessage: "You don't have to change the whole world—just change someone's day. That's how we heal the world, one heart at a time. 💫"
+  }
+];
+
+export default function KarmaTutorial() {
+  const [open, setOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const seen = localStorage.getItem(STORAGE_KEY);
+    if (!seen) {
+      setOpen(true);
+    }
+  }, []);
+
+  const close = (remember: boolean) => {
+    if (typeof window !== "undefined" && remember) {
+      localStorage.setItem(STORAGE_KEY, "1");
+    }
+    setOpen(false);
+  };
+
+  const goNext = () => {
+    if (currentStep < TUTORIAL_STEPS.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const goPrev = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const isFirstStep = currentStep === 0;
+  const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
+  const step = TUTORIAL_STEPS[currentStep];
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={() => close(true)}
+      />
+      
+      {/* Modal Panel */}
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header with progress */}
+        <div className={`${step.highlight ? 'bg-gradient-to-br from-emerald-600 to-teal-600' : 'bg-gradient-to-br from-emerald-500 to-green-600'} p-6 text-white relative`}>
+          <button
+            onClick={() => close(true)}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition-all text-xl"
+            aria-label="Close tutorial"
+          >
+            ×
+          </button>
+          
+          <div className="flex items-center gap-4 mb-3">
+            <div className="text-5xl">{step.icon}</div>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-emerald-100 mb-1">
+                Step {step.step} of {TUTORIAL_STEPS.length}
+              </div>
+              <h2 className="text-2xl font-bold leading-tight">{step.title}</h2>
+            </div>
+          </div>
+          
+          {/* Progress bar */}
+          <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-white rounded-full transition-all duration-300"
+              style={{ width: `${((currentStep + 1) / TUTORIAL_STEPS.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
+          <p className="text-gray-700 text-base leading-relaxed mb-6">
+            {step.description}
+          </p>
+
+          {/* Feature List */}
+          {step.features && (
+            <ul className="space-y-3 mb-6">
+              {step.features.map((feature, idx) => (
+                <li key={idx} className="flex items-start gap-3">
+                  <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                  <span className="text-gray-700 flex-1">{feature}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Refuge Note (Step 1) */}
+          {step.refugeNote && (
+            <div className="mb-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+              <div className="flex items-start gap-3">
+                <span className="text-3xl">{step.refugeNote.icon}</span>
+                <div>
+                  <div className="font-bold text-blue-900 mb-2">{step.refugeNote.title}</div>
+                  <div className="text-sm text-blue-800 leading-relaxed">{step.refugeNote.message}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Challenge Examples (Step 3) */}
+          {step.challengeExamples && (
+            <div className="space-y-3 mb-6">
+              <div className="text-sm font-semibold text-gray-700 mb-2">Example Challenges:</div>
+              {step.challengeExamples.map((example, idx) => (
+                <div key={idx} className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <span className="text-xl">{example.icon}</span>
+                  <div>
+                    <div className="font-semibold text-emerald-900 text-sm">{example.challenge}</div>
+                    <div className="text-xs text-emerald-700">{example.description}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Karma Note (Step 4) */}
+          {step.karmaNote && (
+            <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border-2 border-amber-200">
+              <div className="flex items-start gap-3">
+                <span className="text-3xl">{step.karmaNote.icon}</span>
+                <div>
+                  <div className="font-bold text-amber-900 mb-2">{step.karmaNote.title}</div>
+                  <div className="text-sm text-amber-800 leading-relaxed">{step.karmaNote.message}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pro Tip */}
+          {step.tip && (
+            <div className="mb-6 bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
+              <div className="flex items-start gap-2">
+                <span className="text-xl">💡</span>
+                <div>
+                  <div className="font-semibold text-amber-900 text-sm mb-1">Pro Tip</div>
+                  <div className="text-sm text-amber-800">{step.tip}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Final Message */}
+          {step.finalMessage && (
+            <div className="p-4 bg-gradient-to-r from-emerald-100 to-teal-100 rounded-xl border border-emerald-200">
+              <p className="text-emerald-900 font-medium text-center italic">
+                {step.finalMessage}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Navigation */}
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between gap-4">
+            {/* Step Indicators */}
+            <div className="flex gap-2">
+              {TUTORIAL_STEPS.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentStep(idx)}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    idx === currentStep 
+                      ? 'bg-emerald-600 w-6' 
+                      : idx < currentStep 
+                        ? 'bg-emerald-300' 
+                        : 'bg-gray-300'
+                  }`}
+                  aria-label={`Go to step ${idx + 1}`}
+                />
+              ))}
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex gap-2">
+              {!isFirstStep && (
+                <button
+                  onClick={goPrev}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                >
+                  Back
+                </button>
+              )}
+              
+              {!isLastStep ? (
+                <button
+                  onClick={goNext}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  onClick={() => close(true)}
+                  className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-lg"
+                >
+                  Spread the Light ✨
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Skip Tutorial Link */}
+          <div className="text-center mt-3">
+            <button
+              onClick={() => close(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              Remind me later
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
