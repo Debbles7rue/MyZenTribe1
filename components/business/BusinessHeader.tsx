@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import BusinessFollowButton from '@/components/business/BusinessFollowButton';
 import BusinessVerificationBadge from '@/components/business/BusinessVerificationBadge';
-import { getVerificationLevel } from '@/components/business/BusinessVerificationBadge';
 
 interface BusinessHeader {
   id: string;
@@ -79,9 +78,6 @@ export default function BusinessHeader({ businessId }: Props) {
     );
   }
 
-  // Calculate verification level if not set
-  const verificationLevel = business?.verification_level || getVerificationLevel(business?.follower_count || 0);
-
   return (
     <div className="bg-white rounded-lg shadow-sm mb-6">
       {/* Cover Section */}
@@ -116,10 +112,11 @@ export default function BusinessHeader({ businessId }: Props) {
                   <p className="text-sm sm:text-base opacity-90">{business.tagline}</p>
                 )}
                 
-                {/* Verification Badge - Mobile Friendly */}
+                {/* Verification Badge - Now uses feedback-based verification */}
                 <div className="mt-2">
                   <BusinessVerificationBadge 
-                    level={verificationLevel}
+                    businessId={businessId}
+                    level={business?.verification_level}
                     followerCount={business?.follower_count}
                     size="small"
                     className="bg-white/10 backdrop-blur border-white/20"
@@ -132,7 +129,7 @@ export default function BusinessHeader({ businessId }: Props) {
 
         {/* Action buttons - Updated for mobile */}
         <div className="absolute top-4 right-4 flex flex-col sm:flex-row gap-2">
-          {/* Follow Button - Positioned prominently */}
+          {/* Follow Button with Feedback Integration - Positioned prominently */}
           {business?.visibility === 'public' && (
             <BusinessFollowButton
               businessId={businessId}
@@ -184,7 +181,7 @@ export default function BusinessHeader({ businessId }: Props) {
           )}
         </div>
 
-        {/* Desktop Follow Button - Full size with count */}
+        {/* Desktop Follow Button with Feedback - Full size with count */}
         {business?.visibility === 'public' && (
           <div className="hidden sm:block">
             <BusinessFollowButton
