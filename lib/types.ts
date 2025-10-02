@@ -144,9 +144,11 @@ export type FeedItem = {
   content: DBEvent | BusinessPost;
 };
 
+
 /** NEW: Feedback System Types */
 export type FeedbackType = 'service' | 'event';
 export type FeedbackRating = 'positive' | 'negative';
+export type FeedbackModalStep = 'type' | 'explanation' | 'rating';
 
 export type BusinessFeedback = {
   id: string;
@@ -155,7 +157,7 @@ export type BusinessFeedback = {
   feedback_type: FeedbackType;
   rating: FeedbackRating;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 };
 
 export type FeedbackStats = {
@@ -165,8 +167,6 @@ export type FeedbackStats = {
   hasUserFeedback: boolean;
   userFeedback?: BusinessFeedback;
 };
-
-export type FeedbackModalStep = 'type' | 'explanation' | 'rating';
 
 export type FeedbackFormData = {
   type: FeedbackType | null;
