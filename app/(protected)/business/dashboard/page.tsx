@@ -8,6 +8,7 @@ import BusinessHeader from '@/components/business/BusinessHeader';
 import BusinessSidebar from '@/components/business/BusinessSidebar';
 import BusinessTabs from '@/components/business/BusinessTabs';
 import BusinessWelcome from '@/components/business/BusinessWelcome';
+import BusinessTutorial from '@/components/BusinessTutorial';
 import PostComposer from '@/components/PostComposer';
 import PostCard from '@/components/PostCard';
 import { Post } from '@/lib/posts';
@@ -202,6 +203,9 @@ export default function BusinessDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Business Tutorial */}
+      <BusinessTutorial />
     </div>
   );
 }
