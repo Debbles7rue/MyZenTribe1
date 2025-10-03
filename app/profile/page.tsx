@@ -1,5 +1,4 @@
 // app/profile/page.tsx
-// app/profile/page.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, Suspense } from "react";
@@ -30,8 +29,18 @@ type BusinessProfile = {
   tagline: string | null;
 };
 
-// Animated Counter Component
-function AnimatedCounter({ value, label }: { value: number; label: string }) {
+// Animated Counter Component with Click Support
+function AnimatedCounter({ 
+  value, 
+  label, 
+  href, 
+  onClick 
+}: { 
+  value: number; 
+  label: string; 
+  href?: string;
+  onClick?: () => void;
+}) {
   const [displayValue, setDisplayValue] = useState(0);
   
   useEffect(() => {
@@ -53,10 +62,36 @@ function AnimatedCounter({ value, label }: { value: number; label: string }) {
     return () => clearInterval(timer);
   }, [value]);
 
-  return (
-    <div className="stat-card">
+  const content = (
+    <>
       <div className="stat-number">{displayValue.toLocaleString()}</div>
       <div className="stat-label">{label}</div>
+    </>
+  );
+
+  if (href || onClick) {
+    return (
+      <div 
+        className="stat-card clickable" 
+        onClick={onClick}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+      >
+        {href ? (
+          <Link href={href} className="stat-link">
+            {content}
+          </Link>
+        ) : (
+          content
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="stat-card">
+      {content}
     </div>
   );
 }
@@ -90,6 +125,7 @@ export default function ProfilePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [inviteExpanded, setInviteExpanded] = useState(false);
   const [friendsCount, setFriendsCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   const [componentsReady, setComponentsReady] = useState(false);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
@@ -188,6 +224,25 @@ export default function ProfilePage() {
         }
       } catch (err) {
         console.error("Error loading friends count:", err);
+      }
+    })();
+  }, [userId]);
+
+  // Load following count (businesses only)
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      try {
+        const { count } = await supabase
+          .from("followers")
+          .select("*", { count: "exact", head: true })
+          .eq("follower_id", userId);
+        
+        if (typeof count === "number") {
+          setFollowingCount(count);
+        }
+      } catch (err) {
+        console.error("Error loading following count:", err);
       }
     })();
   }, [userId]);
@@ -515,7 +570,11 @@ export default function ProfilePage() {
                   <div className="stats-row">
                     <div className="stats-grid">
                       <AnimatedCounter value={0} label="Followers" />
-                      <AnimatedCounter value={0} label="Following" />
+                      <AnimatedCounter 
+                        value={followingCount} 
+                        label="Following" 
+                        href={userId ? `/profile/${userId}/following` : undefined}
+                      />
                       <AnimatedCounter value={friendsCount} label="Friends" />
                     </div>
                     
@@ -840,14 +899,24 @@ export default function ProfilePage() {
           padding: 0.75rem;
           text-align: center;
           transition: all 0.2s ease;
+        }
+
+        .stat-card.clickable {
           cursor: pointer;
         }
 
-        .stat-card:hover {
+        .stat-card:hover,
+        .stat-card.clickable:hover {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(139,92,246,0.2);
           background: rgba(255,255,255,0.95);
           border-color: rgba(139,92,246,0.3);
+        }
+
+        .stat-link {
+          text-decoration: none;
+          color: inherit;
+          display: block;
         }
 
         .stat-number {
@@ -1158,10 +1227,10 @@ export default function ProfilePage() {
             padding: 0.5rem 0.5rem;
           }
         }
-        {/* Profile Tutorial */}
-<ProfileTutorial />
-
       `}</style>
+      
+      {/* Profile Tutorial */}
+      <ProfileTutorial />
     </div>
   );
 }
