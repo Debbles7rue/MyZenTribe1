@@ -57,13 +57,15 @@ export default function CommitmentPage() {
           padding: 1rem 0;
         }
 
-        .home-button-wrapper {
+        .header-button-wrapper {
           display: flex;
           justify-content: center;
+          gap: 1rem;
           margin-bottom: 2rem;
+          flex-wrap: wrap;
         }
 
-        .btn-home {
+        .btn-home, .btn-tutorials {
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -81,11 +83,22 @@ export default function CommitmentPage() {
           min-height: 48px;
         }
 
-        .btn-home:hover {
+        .btn-home:hover, .btn-tutorials:hover {
           background: linear-gradient(135deg, #f9f5ff, #ede9fe);
           border-color: #9333ea;
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);
+        }
+
+        .btn-tutorials {
+          background: linear-gradient(135deg, #9333ea, #c084fc);
+          color: white;
+          border-color: #9333ea;
+        }
+
+        .btn-tutorials:hover {
+          background: linear-gradient(135deg, #7c3aed, #a855f7);
+          border-color: #7c3aed;
         }
 
         .hero-section {
@@ -211,6 +224,11 @@ export default function CommitmentPage() {
             padding: 0.5rem 0;
           }
 
+          .header-button-wrapper {
+            flex-direction: column;
+            align-items: center;
+          }
+
           .brand-lockup {
             font-size: 2rem;
             margin-bottom: 1rem;
@@ -250,9 +268,11 @@ export default function CommitmentPage() {
             padding: 1.5rem;
           }
 
-          .btn-home {
+          .btn-home, .btn-tutorials {
             padding: 0.75rem 1.5rem;
             font-size: 0.95rem;
+            width: 100%;
+            max-width: 250px;
           }
         }
 
@@ -271,6 +291,7 @@ export default function CommitmentPage() {
         @media (prefers-reduced-motion: reduce) {
           .commitment-card,
           .btn-home,
+          .btn-tutorials,
           .commitment-card::before {
             transition: none;
           }
@@ -282,10 +303,13 @@ export default function CommitmentPage() {
       `}</style>
 
       <div className="commitment-container">
-        {/* Home Button */}
-        <div className="home-button-wrapper">
+        {/* Header Buttons */}
+        <div className="header-button-wrapper">
           <Link href="/" className="btn-home">
             ← Home
+          </Link>
+          <Link href="/tutorials" className="btn-tutorials">
+            📖 Browse Tutorials
           </Link>
         </div>
 
