@@ -564,7 +564,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // Desktop version - Enhanced with layout options
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-6xl h-[75vh] max-h-[700px] min-h-[500px] overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl max-h-[85vh] min-h-[600px] overflow-hidden shadow-2xl flex flex-col">
         {/* Enhanced Desktop Header */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -722,7 +722,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           // Your original custom layout (preserved)
           <div className="flex flex-1 min-h-0">
             {/* Left Panel - Overview/Stats */}
-            <div className="w-80 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto flex-shrink-0">
+            <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Event Overview</h3>
@@ -934,7 +934,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
 
             {/* Right Panel - Friends */}
-            <div className="w-72 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto flex-shrink-0">
+            <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Invite Friends</h3>
                 
