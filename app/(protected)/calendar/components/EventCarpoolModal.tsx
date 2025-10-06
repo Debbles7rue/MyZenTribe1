@@ -662,6 +662,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   userId={userId}
                   isMobile={isMobile}
                 />
+                </div>
               </div>
             </div>
           )}
@@ -859,14 +860,20 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         ) : (
           <div className="flex flex-1 min-h-0">
-            <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto flex-shrink-0">
-              <div className="p-4">
+            <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col flex-shrink-0">
+              {/* Fixed header */}
+              <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Event Overview</h3>
                   <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">
                     <X size={16} />
                   </button>
                 </div>
+              </div>
+              
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-4">
                 
                 <div className="space-y-2 mb-6">
                   <button onClick={() => setShowNewCarpoolConfirm(true)} className="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
