@@ -41,7 +41,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isMobile = false,
   onOpenSettings
 }) => {
-  // State management - KEEPING ALL ORIGINAL STATE
+  // ALL ORIGINAL STATE PRESERVED
   const [activeView, setActiveView] = useState<ActiveView>('overview');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -56,7 +56,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     notes: ''
   });
 
-  // Modal states - KEEPING ALL ORIGINAL MODAL STATES
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -65,17 +64,15 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [showEditEventDetails, setShowEditEventDetails] = useState(false);
   const [newPollQuestion, setNewPollQuestion] = useState('');
 
-  // Message editing states - KEEPING ALL EDITING FUNCTIONALITY
   const [editingMessage, setEditingMessage] = useState<number | null>(null);
   const [editMessageText, setEditMessageText] = useState('');
   const [editingPoll, setEditingPoll] = useState<string | null>(null);
   const [editPollText, setEditPollText] = useState('');
 
-  // Enhancement: Layout preference state - KEEPING LAYOUT OPTIONS
   const [desktopLayout, setDesktopLayout] = useState<'custom' | 'modular'>('custom');
   const [showQuickActions, setShowQuickActions] = useState(true);
 
-  // Initialize chat when modal opens - KEEPING ORIGINAL
+  // ALL ORIGINAL EFFECTS PRESERVED
   useEffect(() => {
     if (isOpen && event) {
       const initialMessages = initializeCarpoolChat(event);
@@ -83,28 +80,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [isOpen, event]);
 
-  // Sync temp details with actual details - KEEPING ORIGINAL
   useEffect(() => {
     setTempCarDetails(carDetails);
   }, [carDetails]);
 
-  // Debug logging - KEEPING ORIGINAL
-  useEffect(() => {
-    if (showEditCarDetails) {
-      console.log('Car details modal should be open');
-    }
-    if (showEditEventDetails) {
-      console.log('Event details modal should be open');
-    }
-    if (showPoll) {
-      console.log('Poll modal should be open');
-    }
-    if (showNewCarpoolConfirm) {
-      console.log('New carpool confirm modal should be open');
-    }
-  }, [showEditCarDetails, showEditEventDetails, showPoll, showNewCarpoolConfirm]);
-
-  // Enhancement: Auto-save functionality - KEEPING ORIGINAL
   useEffect(() => {
     const autoSave = setTimeout(() => {
       if (newMessage.trim()) {
@@ -114,7 +93,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     return () => clearTimeout(autoSave);
   }, [newMessage, event?.id]);
 
-  // Enhancement: Load draft message on mount - KEEPING ORIGINAL
   useEffect(() => {
     if (event?.id) {
       const draft = localStorage.getItem(`carpool-draft-${event.id}`);
@@ -124,28 +102,16 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [event?.id]);
 
-  // Don't render if modal is closed or no event
   if (!isOpen || !event) return null;
 
-  // Calculate stats and suggestions - KEEPING ORIGINAL
   const carpoolStats = generateCarpoolStats(carpoolData);
   const aiSuggestions = generateAISuggestions(event);
   const { eventTime, eventDateStr } = formatEventTime(event.start_time);
 
-  // Enhanced quick action handler with more actions - KEEPING ALL ORIGINAL FUNCTIONALITY
+  // ALL ORIGINAL HANDLERS PRESERVED
   const handleQuickActionClick = (action: string) => {
-    handleQuickAction(
-      action,
-      messages,
-      setMessages,
-      driverStatus,
-      setDriverStatus,
-      carDetails,
-      showToast,
-      isMobile
-    );
+    handleQuickAction(action, messages, setMessages, driverStatus, setDriverStatus, carDetails, showToast, isMobile);
     
-    // Enhanced actions - KEEPING ALL ORIGINAL
     switch (action) {
       case 'quick-poll':
         setShowPoll(true);
@@ -174,10 +140,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   };
 
-  // ALL ORIGINAL HANDLERS - KEEPING COMPLETE FUNCTIONALITY
   const handleSendMessage = () => {
     if (!newMessage.trim()) return;
-    
     vibrate(isMobile);
     const newMsg: Message = {
       id: Date.now(),
@@ -187,11 +151,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       avatar: '😊'
     };
-    
     setMessages(prev => [...prev, newMsg]);
     setNewMessage('');
-    
-    // Clear draft after sending
     localStorage.removeItem(`carpool-draft-${event.id}`);
   };
 
@@ -217,7 +178,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
 
   const handleCreatePoll = () => {
     if (!newPollQuestion.trim()) return;
-    
     vibrate(isMobile);
     const poll: Poll = {
       id: Date.now().toString(),
@@ -230,7 +190,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       createdBy: userId || '',
       active: true
     };
-    
     setPolls([...polls, poll]);
     setMessages([...messages, {
       id: Date.now(),
@@ -239,7 +198,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       avatar: '😊'
     }]);
-    
     setNewPollQuestion('');
     setShowPoll(false);
     showToast?.({ type: 'success', message: 'Poll created!' });
@@ -263,9 +221,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setPolls(polls.map(poll => {
       if (poll.id === pollId) {
         const newOptions = [...poll.options];
-        // Remove vote from old option
         newOptions[oldOptionIndex].votes = newOptions[oldOptionIndex].votes.filter(id => id !== userId);
-        // Add vote to new option
         if (!newOptions[newOptionIndex].votes.includes(userId || '')) {
           newOptions[newOptionIndex].votes.push(userId || '');
         }
@@ -279,16 +235,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
 
   const handleFriendToggle = (friendId: string) => {
     setSelectedFriends(prev => 
-      prev.includes(friendId) 
-        ? prev.filter(id => id !== friendId)
-        : [...prev, friendId]
+      prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId]
     );
   };
 
   const handleSaveCarDetails = () => {
     setCarDetails(tempCarDetails);
     setShowEditCarDetails(false);
-    
     if (driverStatus === 'driver') {
       const carUpdateMsg: Message = {
         id: Date.now(),
@@ -299,7 +252,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       };
       setMessages(prev => [...prev, carUpdateMsg]);
     }
-    
     showToast?.({ type: 'success', message: 'Car details updated!' });
   };
 
@@ -322,21 +274,19 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setDriverStatus('none');
     setSelectedFriends([]);
     setShowNewCarpoolConfirm(false);
-    
     setTimeout(() => {
       const initialMessages = initializeCarpoolChat(event);
       setMessages(initialMessages);
     }, 100);
-    
     showToast?.({ type: 'success', message: 'Started new carpool group!' });
   };
 
-  // Mobile version - ENHANCED TO MATCH MOCKUP BUT KEEPING ALL FUNCTIONALITY
+  // MOBILE VERSION - FIXED SCROLLING
   if (isMobile) {
     return (
-      <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
-        {/* Enhanced Mobile Header - MATCHING MOCKUP */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
+      <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col h-screen">
+        {/* Header */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
           <div className="flex items-center justify-between">
             <button onClick={onClose} className="p-2 -ml-2 active:scale-95">
               <ArrowLeft size={24} />
@@ -355,8 +305,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               </button>
             </div>
           </div>
-
-          {/* Enhanced stats bar - KEEPING ORIGINAL FUNCTIONALITY */}
           <div className="mt-3 flex justify-center gap-6 text-sm">
             <div className="text-center">
               <div className="font-bold">{carpoolStats.needingRides}</div>
@@ -373,8 +321,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         </div>
 
-        {/* Enhanced View Navigation with icons - KEEPING ORIGINAL VIEWS */}
-        <div className="flex bg-gray-100 dark:bg-gray-800">
+        {/* Navigation */}
+        <div className="flex-shrink-0 flex bg-gray-100 dark:bg-gray-800">
           {([
             { view: 'overview', icon: MapPin, label: 'Overview' }, 
             { view: 'chat', icon: Car, label: 'Chat' }
@@ -394,137 +342,138 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           ))}
         </div>
 
-        {/* Content - KEEPING ALL ORIGINAL VIEWS AND FUNCTIONALITY */}
-        {activeView === 'overview' && (
-          <CarpoolOverview
-            event={event}
-            carpoolStats={carpoolStats}
-            aiSuggestions={aiSuggestions}
-            onQuickAction={handleQuickActionClick}
-            driverStatus={driverStatus}
-            onSetDriverStatus={setDriverStatus}
-            carDetails={carDetails}
-            onEditCarDetails={() => setShowEditCarDetails(true)}
-            onEditEventDetails={() => setShowEditEventDetails(true)}
-            isMobile={isMobile}
-          />
-        )}
-
-        {activeView === 'chat' && (
-          <>
-            {/* Enhanced quick actions bar for mobile chat - KEEPING ORIGINAL */}
-            {showQuickActions && (
-              <div className="p-3 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
-                <div className="flex gap-2 overflow-x-auto">
-                  <button
-                    onClick={() => handleQuickActionClick('offer-drive')}
-                    className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1"
-                  >
-                    <Car size={14} />
-                    Offer Drive
-                  </button>
-                  <button
-                    onClick={() => handleQuickActionClick('need-ride')}
-                    className="px-3 py-2 bg-green-500 text-white rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1"
-                  >
-                    <UserPlus size={14} />
-                    Need Ride
-                  </button>
-                  <button
-                    onClick={() => handleQuickActionClick('running-late')}
-                    className="px-3 py-2 bg-orange-500 text-white rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1"
-                  >
-                    <Clock size={14} />
-                    Late
-                  </button>
-                  <button
-                    onClick={() => handleQuickActionClick('share-event')}
-                    className="px-3 py-2 bg-purple-500 text-white rounded-lg text-xs font-medium whitespace-nowrap"
-                  >
-                    Share
-                  </button>
-                  <button
-                    onClick={() => setShowQuickActions(false)}
-                    className="px-2 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-xs"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* KEEPING ALL ORIGINAL CHAT FUNCTIONALITY */}
-            <CarpoolChat
-              messages={messages}
-              polls={polls}
-              newMessage={newMessage}
-              onMessageChange={setNewMessage}
-              onSendMessage={handleSendMessage}
-              onVoiceRecord={handleVoiceRecord}
-              isVoiceRecording={isVoiceRecording}
-              onVotePoll={handleVotePoll}
-              onEditMessage={(id, text) => {
-                setEditingMessage(id);
-                setEditMessageText(text);
-              }}
-              onDeleteMessage={(id) => {
-                setMessages(messages.filter(msg => msg.id !== id));
-                showToast?.({ type: 'success', message: 'Message deleted!' });
-              }}
-              onEditPoll={(id, text) => {
-                setEditingPoll(id);
-                setEditPollText(text);
-              }}
-              onDeletePoll={(id) => {
-                setPolls(polls.filter(poll => poll.id !== id));
-                showToast?.({ type: 'success', message: 'Poll deleted!' });
-              }}
-              onChangeVote={handleChangeVote}
-              editingMessage={editingMessage}
-              editMessageText={editMessageText}
-              onEditMessageTextChange={setEditMessageText}
-              onSaveEditMessage={() => {
-                if (editingMessage && editMessageText.trim()) {
-                  setMessages(messages.map(msg => 
-                    msg.id === editingMessage 
-                      ? { ...msg, message: editMessageText, edited: true }
-                      : msg
-                  ));
-                  setEditingMessage(null);
-                  setEditMessageText('');
-                  showToast?.({ type: 'success', message: 'Message updated!' });
-                }
-              }}
-              onCancelEditMessage={() => {
-                setEditingMessage(null);
-                setEditMessageText('');
-              }}
-              editingPoll={editingPoll}
-              editPollText={editPollText}
-              onEditPollTextChange={setEditPollText}
-              onSaveEditPoll={() => {
-                if (editingPoll && editPollText.trim()) {
-                  setPolls(polls.map(poll => 
-                    poll.id === editingPoll 
-                      ? { ...poll, question: editPollText }
-                      : poll
-                  ));
-                  setEditingPoll(null);
-                  setEditPollText('');
-                  showToast?.({ type: 'success', message: 'Poll updated!' });
-                }
-              }}
-              onCancelEditPoll={() => {
-                setEditingPoll(null);
-                setEditPollText('');
-              }}
-              userId={userId}
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {activeView === 'overview' && (
+            <CarpoolOverview
+              event={event}
+              carpoolStats={carpoolStats}
+              aiSuggestions={aiSuggestions}
+              onQuickAction={handleQuickActionClick}
+              driverStatus={driverStatus}
+              onSetDriverStatus={setDriverStatus}
+              carDetails={carDetails}
+              onEditCarDetails={() => setShowEditCarDetails(true)}
+              onEditEventDetails={() => setShowEditEventDetails(true)}
               isMobile={isMobile}
             />
-          </>
-        )}
+          )}
 
-        {/* Enhanced floating action button - KEEPING ORIGINAL */}
+          {activeView === 'chat' && (
+            <div className="flex flex-col h-full">
+              {showQuickActions && (
+                <div className="flex-shrink-0 p-3 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
+                  <div className="flex gap-2 overflow-x-auto">
+                    <button
+                      onClick={() => handleQuickActionClick('offer-drive')}
+                      className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1"
+                    >
+                      <Car size={14} />
+                      Offer Drive
+                    </button>
+                    <button
+                      onClick={() => handleQuickActionClick('need-ride')}
+                      className="px-3 py-2 bg-green-500 text-white rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1"
+                    >
+                      <UserPlus size={14} />
+                      Need Ride
+                    </button>
+                    <button
+                      onClick={() => handleQuickActionClick('running-late')}
+                      className="px-3 py-2 bg-orange-500 text-white rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1"
+                    >
+                      <Clock size={14} />
+                      Late
+                    </button>
+                    <button
+                      onClick={() => handleQuickActionClick('share-event')}
+                      className="px-3 py-2 bg-purple-500 text-white rounded-lg text-xs font-medium whitespace-nowrap"
+                    >
+                      Share
+                    </button>
+                    <button
+                      onClick={() => setShowQuickActions(false)}
+                      className="px-2 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-xs"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1 min-h-0">
+                <CarpoolChat
+                  messages={messages}
+                  polls={polls}
+                  newMessage={newMessage}
+                  onMessageChange={setNewMessage}
+                  onSendMessage={handleSendMessage}
+                  onVoiceRecord={handleVoiceRecord}
+                  isVoiceRecording={isVoiceRecording}
+                  onVotePoll={handleVotePoll}
+                  onEditMessage={(id, text) => {
+                    setEditingMessage(id);
+                    setEditMessageText(text);
+                  }}
+                  onDeleteMessage={(id) => {
+                    setMessages(messages.filter(msg => msg.id !== id));
+                    showToast?.({ type: 'success', message: 'Message deleted!' });
+                  }}
+                  onEditPoll={(id, text) => {
+                    setEditingPoll(id);
+                    setEditPollText(text);
+                  }}
+                  onDeletePoll={(id) => {
+                    setPolls(polls.filter(poll => poll.id !== id));
+                    showToast?.({ type: 'success', message: 'Poll deleted!' });
+                  }}
+                  onChangeVote={handleChangeVote}
+                  editingMessage={editingMessage}
+                  editMessageText={editMessageText}
+                  onEditMessageTextChange={setEditMessageText}
+                  onSaveEditMessage={() => {
+                    if (editingMessage && editMessageText.trim()) {
+                      setMessages(messages.map(msg => 
+                        msg.id === editingMessage 
+                          ? { ...msg, message: editMessageText, edited: true }
+                          : msg
+                      ));
+                      setEditingMessage(null);
+                      setEditMessageText('');
+                      showToast?.({ type: 'success', message: 'Message updated!' });
+                    }
+                  }}
+                  onCancelEditMessage={() => {
+                    setEditingMessage(null);
+                    setEditMessageText('');
+                  }}
+                  editingPoll={editingPoll}
+                  editPollText={editPollText}
+                  onEditPollTextChange={setEditPollText}
+                  onSaveEditPoll={() => {
+                    if (editingPoll && editPollText.trim()) {
+                      setPolls(polls.map(poll => 
+                        poll.id === editingPoll 
+                          ? { ...poll, question: editPollText }
+                          : poll
+                      ));
+                      setEditingPoll(null);
+                      setEditPollText('');
+                      showToast?.({ type: 'success', message: 'Poll updated!' });
+                    }
+                  }}
+                  onCancelEditPoll={() => {
+                    setEditingPoll(null);
+                    setEditPollText('');
+                  }}
+                  userId={userId}
+                  isMobile={isMobile}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         {!showQuickActions && activeView === 'chat' && (
           <button
             onClick={() => setShowQuickActions(true)}
@@ -534,7 +483,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </button>
         )}
 
-        {/* Modals - KEEPING ALL ORIGINAL MODAL FUNCTIONALITY */}
         <CarpoolModals
           showPoll={showPoll}
           onClosePoll={() => setShowPoll(false)}
@@ -562,11 +510,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     );
   }
 
-  // Desktop version - KEEPING ALL ORIGINAL DESKTOP FUNCTIONALITY
+  // DESKTOP VERSION - ALL ORIGINAL FUNCTIONALITY
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl max-h-[85vh] min-h-[600px] overflow-hidden shadow-2xl flex flex-col">
-        {/* Enhanced Desktop Header - KEEPING ORIGINAL */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
@@ -576,41 +523,34 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 {eventDateStr} • {eventTime} • {event.location || 'TBD'}
               </p>
             </div>
-            
-            {/* Enhanced header controls - KEEPING ALL ORIGINAL FUNCTIONALITY */}
             <div className="flex items-center gap-2 flex-shrink-0 ml-4">
               <button
                 onClick={() => setDesktopLayout(desktopLayout === 'custom' ? 'modular' : 'custom')}
                 className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-                title="Switch layout"
               >
                 {desktopLayout === 'custom' ? 'Modular View' : 'Custom View'}
               </button>
               <button
                 onClick={() => setShowNewCarpoolConfirm(true)}
                 className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-                title="Start a new carpool group"
               >
                 New Carpool
               </button>
               <button
                 onClick={() => setShowEditCarDetails(true)}
                 className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-                title="Edit your car details"
               >
                 Edit Car
               </button>
               <button
                 onClick={() => setShowEditEventDetails(true)}
                 className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-                title="Edit meetup details"
               >
                 Edit Meetup
               </button>
               <button
                 onClick={() => setShowPoll(true)}
                 className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-                title="Create a poll"
               >
                 Create Poll
               </button>
@@ -618,7 +558,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 <button
                   onClick={onOpenSettings}
                   className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
-                  title="Settings"
                 >
                   <Settings size={16} />
                 </button>
@@ -626,7 +565,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               <button
                 onClick={onClose}
                 className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
-                title="Close"
               >
                 <X size={16} />
               </button>
@@ -634,9 +572,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         </div>
 
-        {/* Desktop Content - Layout choice - KEEPING ALL ORIGINAL LAYOUTS */}
         {desktopLayout === 'modular' ? (
-          // Modular layout using extracted components - KEEPING ORIGINAL
           <div className="flex flex-1 min-h-0">
             <CarpoolSidebars
               selectedFriends={selectedFriends}
@@ -650,7 +586,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               showToast={showToast}
               isMobile={false}
             />
-
             <CarpoolChat
               messages={messages}
               polls={polls}
@@ -720,51 +655,31 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             />
           </div>
         ) : (
-          // Your original custom layout (preserved) - KEEPING ALL ORIGINAL CUSTOM LAYOUT
           <div className="flex flex-1 min-h-0">
-            {/* Left Panel - Overview/Stats - KEEPING ORIGINAL */}
             <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Event Overview</h3>
-                  <button
-                    onClick={onClose}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
-                    title="Close"
-                  >
+                  <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">
                     <X size={16} />
                   </button>
                 </div>
                 
-                {/* Essential Action Buttons - KEEPING ORIGINAL */}
                 <div className="space-y-2 mb-6">
-                  <button
-                    onClick={() => setShowNewCarpoolConfirm(true)}
-                    className="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                  >
+                  <button onClick={() => setShowNewCarpoolConfirm(true)} className="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
                     🔄 Start New Carpool
                   </button>
-                  <button
-                    onClick={() => setShowEditCarDetails(true)}
-                    className="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
-                  >
+                  <button onClick={() => setShowEditCarDetails(true)} className="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium">
                     🚗 Edit Car Details
                   </button>
-                  <button
-                    onClick={() => setShowEditEventDetails(true)}
-                    className="w-full p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium"
-                  >
+                  <button onClick={() => setShowEditEventDetails(true)} className="w-full p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium">
                     📍 Edit Meetup Details
                   </button>
-                  <button
-                    onClick={() => setShowPoll(true)}
-                    className="w-full p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
-                  >
+                  <button onClick={() => setShowPoll(true)} className="w-full p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium">
                     📊 Create Poll
                   </button>
                 </div>
 
-                {/* Stats Grid - KEEPING ORIGINAL */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   <div className="bg-white dark:bg-gray-700 rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-blue-600">{carpoolStats.needingRides}</div>
@@ -784,48 +699,28 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   </div>
                 </div>
 
-                {/* Enhanced Quick Actions - KEEPING ALL ORIGINAL */}
                 <h4 className="font-medium text-gray-900 dark:text-white mb-3">Quick Actions</h4>
                 <div className="grid grid-cols-2 gap-2 mb-6">
-                  <button
-                    onClick={() => handleQuickActionClick('offer-drive')}
-                    className="p-2 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors"
-                  >
+                  <button onClick={() => handleQuickActionClick('offer-drive')} className="p-2 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors">
                     Offer to Drive
                   </button>
-                  <button
-                    onClick={() => handleQuickActionClick('need-ride')}
-                    className="p-2 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
-                  >
+                  <button onClick={() => handleQuickActionClick('need-ride')} className="p-2 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors">
                     Need a Ride
                   </button>
-                  <button
-                    onClick={() => handleQuickActionClick('suggest-meetup')}
-                    className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors"
-                  >
+                  <button onClick={() => handleQuickActionClick('suggest-meetup')} className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors">
                     Suggest Meetup
                   </button>
-                  <button
-                    onClick={() => handleQuickActionClick('running-late')}
-                    className="p-2 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 transition-colors"
-                  >
+                  <button onClick={() => handleQuickActionClick('running-late')} className="p-2 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 transition-colors">
                     Running Late
                   </button>
-                  <button
-                    onClick={() => handleQuickActionClick('share-event')}
-                    className="p-2 bg-pink-500 text-white rounded text-xs hover:bg-pink-600 transition-colors"
-                  >
+                  <button onClick={() => handleQuickActionClick('share-event')} className="p-2 bg-pink-500 text-white rounded text-xs hover:bg-pink-600 transition-colors">
                     Share Event
                   </button>
-                  <button
-                    onClick={() => handleQuickActionClick('emergency-contact')}
-                    className="p-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors"
-                  >
+                  <button onClick={() => handleQuickActionClick('emergency-contact')} className="p-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors">
                     Emergency
                   </button>
                 </div>
 
-                {/* Driver Status - KEEPING ORIGINAL */}
                 {driverStatus !== 'none' && (
                   <div className={`p-3 rounded-lg mb-4 ${
                     driverStatus === 'driver' 
@@ -843,27 +738,19 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   </div>
                 )}
 
-                {/* AI Suggestions - KEEPING ORIGINAL */}
                 {aiSuggestions && (
                   <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-lg p-3">
                     <h4 className="font-medium text-sm mb-2">AI Suggestions</h4>
                     <div className="space-y-2 text-xs">
-                      <div>
-                        <span className="font-medium">Meetup:</span> {aiSuggestions.meetupSpot}
-                      </div>
-                      <div>
-                        <span className="font-medium">Departure:</span> {aiSuggestions.departureTime}
-                      </div>
-                      <div>
-                        <span className="font-medium">Parking:</span> {aiSuggestions.parking}
-                      </div>
+                      <div><span className="font-medium">Meetup:</span> {aiSuggestions.meetupSpot}</div>
+                      <div><span className="font-medium">Departure:</span> {aiSuggestions.departureTime}</div>
+                      <div><span className="font-medium">Parking:</span> {aiSuggestions.parking}</div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Main Chat Area - KEEPING ALL ORIGINAL CHAT FUNCTIONALITY */}
             <div className="flex-1 min-w-0">
               <CarpoolChat
                 messages={messages}
@@ -934,11 +821,9 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               />
             </div>
 
-            {/* Right Panel - Friends - KEEPING ALL ORIGINAL FRIEND FUNCTIONALITY */}
             <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Invite Friends</h3>
-                
                 {carpoolData?.friends && carpoolData.friends.length > 0 ? (
                   <div className="space-y-3">
                     {carpoolData.friends.map((friend: any) => (
@@ -960,7 +845,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                         </div>
                       </label>
                     ))}
-                    
                     {selectedFriends.length > 0 && (
                       <button
                         onClick={() => {
@@ -989,7 +873,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         )}
 
-        {/* Enhanced Modals - KEEPING ALL ORIGINAL MODAL FUNCTIONALITY */}
         <CarpoolModals
           showPoll={showPoll}
           onClosePoll={() => setShowPoll(false)}
