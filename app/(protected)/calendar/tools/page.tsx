@@ -10,6 +10,7 @@ import CalendarAnalytics from '@/components/CalendarAnalytics';
 import SmartTemplates from '@/components/SmartTemplates';
 import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
 import EventCarpoolModal from '../components/EventCarpoolModal';
+import CarpoolFriendSelector from '@/components/CarpoolFriendSelector';
 import { useToast } from '@/components/ToastProvider';
 
 const supabase = createClient(
@@ -89,6 +90,8 @@ export default function CalendarToolsPage() {
   const [showCarpoolManagement, setShowCarpoolManagement] = useState(false);
   const [selectedCarpoolGroup, setSelectedCarpoolGroup] = useState<CarpoolGroup | null>(null);
   const [carpoolFilter, setCarpoolFilter] = useState<'all' | 'upcoming' | 'active' | 'completed'>('all');
+  const [showCreateCarpoolGroup, setShowCreateCarpoolGroup] = useState(false);
+  const [selectedEventForCarpool, setSelectedEventForCarpool] = useState<any>(null);
 
   // Load user and data
   useEffect(() => {
@@ -281,6 +284,12 @@ export default function CalendarToolsPage() {
   const handleCarpoolManagementClick = () => {
     console.log('Carpool Management clicked');
     setShowCarpoolManagement(true);
+  };
+
+  // NEW: Create New Carpool Group Handler
+  const handleCreateNewCarpoolGroup = () => {
+    console.log('Create new carpool group clicked');
+    setShowCreateCarpoolGroup(true);
   };
 
   const handleSettingsClick = () => {
