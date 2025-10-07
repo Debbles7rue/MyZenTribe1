@@ -703,11 +703,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     );
   }
 
-  // DESKTOP VERSION - FIXED LAYOUT
+  // DESKTOP VERSION - FIXED MODAL POSITIONING AND SCROLLING
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl my-8 shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]">
+        {/* FIXED HEADER */}
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold truncate">Event Carpool</h2>
@@ -772,9 +773,9 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           </div>
         </div>
 
-        {/* LAYOUT - FIXED HEIGHT CONTAINERS */}
+        {/* LAYOUT - FIXED HEIGHT CONTAINERS WITH PROPER OVERFLOW */}
         {desktopLayout === 'modular' ? (
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
             <CarpoolSidebars
               selectedFriends={selectedFriends}
               onFriendToggle={handleFriendToggle}
@@ -787,7 +788,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               showToast={showToast}
               isMobile={false}
             />
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <CarpoolChat
                 messages={messages}
                 polls={polls}
@@ -858,15 +859,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 min-h-0">
-            <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col flex-shrink-0">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            {/* LEFT SIDEBAR - FIXED WIDTH WITH SCROLL */}
+            <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col flex-shrink-0 overflow-hidden">
               {/* Fixed header */}
               <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Event Overview</h3>
-                  <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">
-                    <X size={16} />
-                  </button>
                 </div>
               </div>
               
@@ -968,8 +967,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               </div>
             </div>
 
-            {/* CHAT CONTAINER WITH FIXED HEIGHT */}
-            <div className="flex-1 min-h-0">
+            {/* CHAT CONTAINER WITH FIXED HEIGHT AND PROPER OVERFLOW */}
+            <div className="flex-1 min-h-0 overflow-hidden">
               <CarpoolChat
                 messages={messages}
                 polls={polls}
@@ -1039,53 +1038,58 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               />
             </div>
 
-            <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 overflow-y-auto flex-shrink-0">
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Invite Friends</h3>
-                {carpoolData?.friends && carpoolData.friends.length > 0 ? (
-                  <div className="space-y-3">
-                    {carpoolData.friends.map((friend: any) => (
-                      <label
-                        key={friend.friend_id}
-                        className="flex items-center gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFriends.includes(friend.friend_id)}
-                          onChange={() => handleFriendToggle(friend.friend_id)}
-                          className="rounded text-blue-500 focus:ring-blue-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{friend.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {friend.safe_to_carpool ? 'Verified' : 'Not verified'}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                    {selectedFriends.length > 0 && (
-                      <button
-                        onClick={() => {
-                          if (carpoolData.createCarpoolGroup) {
-                            carpoolData.createCarpoolGroup(event.id, selectedFriends, "Let's carpool!");
-                            setSelectedFriends([]);
-                            showToast?.({ type: 'success', message: 'Invitations sent!' });
-                          }
-                        }}
-                        className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
-                      >
-                        Send Invites ({selectedFriends.length})
+            {/* RIGHT SIDEBAR - FIXED WIDTH WITH SCROLL */}
+            <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 flex-shrink-0 overflow-hidden">
+              <div className="flex flex-col h-full">
+                <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Invite Friends</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  {carpoolData?.friends && carpoolData.friends.length > 0 ? (
+                    <div className="space-y-3">
+                      {carpoolData.friends.map((friend: any) => (
+                        <label
+                          key={friend.friend_id}
+                          className="flex items-center gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedFriends.includes(friend.friend_id)}
+                            onChange={() => handleFriendToggle(friend.friend_id)}
+                            className="rounded text-blue-500 focus:ring-blue-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{friend.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {friend.safe_to_carpool ? 'Verified' : 'Not verified'}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                      {selectedFriends.length > 0 && (
+                        <button
+                          onClick={() => {
+                            if (carpoolData.createCarpoolGroup) {
+                              carpoolData.createCarpoolGroup(event.id, selectedFriends, "Let's carpool!");
+                              setSelectedFriends([]);
+                              showToast?.({ type: 'success', message: 'Invitations sent!' });
+                            }
+                          }}
+                          className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
+                        >
+                          Send Invites ({selectedFriends.length})
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">No friends available</p>
+                      <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                        Invite Friends
                       </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">No friends available</p>
-                    <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
-                      Invite Friends
-                    </button>
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
