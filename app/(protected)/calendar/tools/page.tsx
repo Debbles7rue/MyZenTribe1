@@ -590,19 +590,22 @@ export default function CalendarToolsPage() {
               Create Template
             </button>
             <button 
-              onClick={handleCarpoolManagementClick}
-              className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
-            >
-              Manage Carpools
-            </button>
-            <button 
               onClick={handleAnalyticsClick}
               className="px-4 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
             >
               View Analytics
             </button>
-            <button className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
-              Schedule Focus Time
+            <button 
+              onClick={handleMeetingCoordinatorClick}
+              className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+            >
+              Schedule Meeting
+            </button>
+            <button 
+              onClick={handleCarpoolChatClick}
+              className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+            >
+              Quick Carpool
             </button>
           </div>
         </div>
