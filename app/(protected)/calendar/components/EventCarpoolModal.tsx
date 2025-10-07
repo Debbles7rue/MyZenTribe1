@@ -960,9 +960,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   <button onClick={() => handleQuickActionClick('need-ride')} className="p-2 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors">
                     Need a Ride
                   </button>
-                  <button onClick={() => handleQuickActionClick('suggest-meetup')} className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors">
-                    Suggest Meetup
-                  </button>
                   <button onClick={() => handleQuickActionClick('running-late')} className="p-2 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 transition-colors">
                     Running Late
                   </button>
@@ -971,6 +968,9 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   </button>
                   <button onClick={() => handleQuickActionClick('emergency-contact')} className="p-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors">
                     Emergency
+                  </button>
+                  <button onClick={handleOpenFriendInvite} className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors">
+                    Invite Friends
                   </button>
                 </div>
 
@@ -1083,53 +1083,19 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   <h3 className="font-semibold text-gray-900 dark:text-white">Invite Friends</h3>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
-                  {carpoolData?.friends && carpoolData.friends.length > 0 ? (
-                    <div className="space-y-3">
-                      {carpoolData.friends.map((friend: any) => (
-                        <label
-                          key={friend.friend_id}
-                          className="flex items-center gap-3 p-3 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedFriends.includes(friend.friend_id)}
-                            onChange={() => handleFriendToggle(friend.friend_id)}
-                            className="rounded text-blue-500 focus:ring-blue-500"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{friend.name}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {friend.safe_to_carpool ? 'Verified' : 'Not verified'}
-                            </p>
-                          </div>
-                        </label>
-                      ))}
-                      {selectedFriends.length > 0 && (
-                        <button
-                          onClick={() => {
-                            if (carpoolData.createCarpoolGroup) {
-                              carpoolData.createCarpoolGroup(event.id, selectedFriends, "Let's carpool!");
-                              setSelectedFriends([]);
-                              showToast?.({ type: 'success', message: 'Invitations sent!' });
-                            }
-                          }}
-                          className="w-full p-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors text-sm"
-                        >
-                          Send Invites ({selectedFriends.length})
-                        </button>
-                      )}
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">👥</span>
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">No friends available</p>
-                      <button 
-                        onClick={handleOpenFriendInvite}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
-                      >
-                        Invite Friends
-                      </button>
-                    </div>
-                  )}
+                    <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Invite Friends</p>
+                    <p className="text-gray-400 dark:text-gray-500 mb-4 text-xs">Add friends to your network to start carpooling together</p>
+                    <button 
+                      onClick={handleOpenFriendInvite}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                    >
+                      + Invite Friends
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
