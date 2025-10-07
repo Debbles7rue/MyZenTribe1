@@ -1,11 +1,12 @@
 // app/(protected)/calendar/components/CarpoolManager.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   Car, Users, Plus, MessageCircle, Archive, Trash2, Clock,
   MapPin, Calendar, ChevronRight, Settings, RefreshCw, User,
-  CheckCircle, AlertCircle, Eye, Edit, Crown, UserCheck
+  CheckCircle, AlertCircle, Eye, Edit, Crown, UserCheck, Save,
+  Database, Wifi, WifiOff, Sync, SyncOff
 } from 'lucide-react';
 import EventCarpoolModal from './EventCarpoolModal';
 import type { DBEvent } from '@/lib/types';
@@ -48,6 +49,32 @@ interface CarpoolParticipant {
   user_name: string;
 }
 
+// EXTRACTED: Data persistence interfaces and types
+interface CarpoolData {
+  messages: any[];
+  polls: any[];
+  selectedFriends: string[];
+  driverStatus: string;
+  carDetails: any;
+  tempEventDetails: any;
+}
+
+interface PersistenceOptions {
+  useSupabase?: boolean;
+  useLocalStorage?: boolean;
+  autoSave?: boolean;
+  autoSaveInterval?: number;
+}
+
+interface PersistenceState {
+  currentCarpoolId: string | null;
+  isSaving: boolean;
+  lastSaved: Date | null;
+  saveError: string | null;
+  isOnline: boolean;
+  syncStatus: 'synced' | 'pending' | 'error';
+}
+
 const CarpoolManager: React.FC<CarpoolManagerProps> = ({
   isOpen,
   onClose,
@@ -65,11 +92,301 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
   const [newCarpoolName, setNewCarpoolName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
+  // EXTRACTED: Enhanced persistence state management
+  const [persistenceState, setPersistenceState] = useState<PersistenceState>({
+    currentCarpoolId: null,
+    isSaving: false,
+    lastSaved: null,
+    saveError: null,
+    isOnline: true,
+    syncStatus: 'synced'
+  });
+
+  const [persistenceOptions] = useState<PersistenceOptions>({
+    useSupabase: true,
+    useLocalStorage: true,
+    autoSave: true,
+    autoSaveInterval: 120000 // 2 minutes
+  });
+
+  // EXTRACTED: Network status monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      setPersistenceState(prev => ({ ...prev, isOnline: true }));
+      showToast?.({ type: 'success', message: 'Connection restored' });
+    };
+
+    const handleOffline = () => {
+      setPersistenceState(prev => ({ ...prev, isOnline: false }));
+      showToast?.({ type: 'warning', message: 'Offline mode - changes saved locally' });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check
+    setPersistenceState(prev => ({ ...prev, isOnline: navigator.onLine }));
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showToast]);
+
   useEffect(() => {
     if (isOpen && event) {
       loadCarpoolGroups();
     }
   }, [isOpen, event]);
+
+  // EXTRACTED: Enhanced carpool data persistence with offline support
+  const saveCarpoolData = useCallback(async (
+    carpoolId: string, 
+    data: CarpoolData, 
+    options?: Partial<PersistenceOptions>
+  ) => {
+    const opts = { ...persistenceOptions, ...options };
+    
+    if (!userId || !event?.id || persistenceState.isSaving) return { success: false, message: 'Invalid state' };
+    
+    setPersistenceState(prev => ({ 
+      ...prev, 
+      isSaving: true, 
+      saveError: null,
+      syncStatus: 'pending'
+    }));
+    
+    try {
+      // Always save to localStorage as backup/offline storage
+      if (opts.useLocalStorage) {
+        const localStorageKey = `carpool-${event.id}-${userId}`;
+        const fallbackData = {
+          ...data,
+          carpoolId,
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem(localStorageKey, JSON.stringify(fallbackData));
+      }
+      
+      // Try Supabase save if online and enabled
+      if (opts.useSupabase && persistenceState.isOnline) {
+        try {
+          const carpoolData = {
+            id: carpoolId || undefined,
+            event_id: event.id,
+            driver_id: userId,
+            messages: JSON.stringify(data.messages),
+            polls: JSON.stringify(data.polls),
+            selected_friends: data.selectedFriends,
+            driver_status: data.driverStatus,
+            car_details: JSON.stringify(data.carDetails),
+            event_details: JSON.stringify(data.tempEventDetails),
+            updated_at: new Date().toISOString()
+          };
+
+          if (carpoolId && carpoolId !== 'new') {
+            // Update existing carpool
+            const { error } = await supabase
+              .from('carpool_groups')
+              .update(carpoolData)
+              .eq('id', carpoolId)
+              .eq('driver_id', userId);
+            
+            if (error) throw error;
+          } else {
+            // Create new carpool
+            const { data: newData, error } = await supabase
+              .from('carpool_groups')
+              .insert([{ ...carpoolData, created_at: new Date().toISOString() }])
+              .select()
+              .single();
+            
+            if (error) throw error;
+            if (newData) {
+              setPersistenceState(prev => ({ ...prev, currentCarpoolId: newData.id }));
+            }
+          }
+
+          setPersistenceState(prev => ({ 
+            ...prev, 
+            lastSaved: new Date(),
+            syncStatus: 'synced'
+          }));
+          
+          showToast?.({ 
+            type: 'success', 
+            message: 'Carpool data saved to cloud!' 
+          });
+
+          return { success: true, message: 'Saved to cloud', carpoolId };
+        } catch (supabaseError: any) {
+          console.warn('Supabase save failed, using localStorage:', supabaseError);
+          setPersistenceState(prev => ({ 
+            ...prev, 
+            lastSaved: new Date(),
+            syncStatus: 'error',
+            saveError: supabaseError.message
+          }));
+          
+          showToast?.({ 
+            type: 'info', 
+            message: 'Saved locally (cloud unavailable)' 
+          });
+
+          return { success: true, message: 'Saved locally', carpoolId };
+        }
+      } else {
+        // Offline or Supabase disabled
+        setPersistenceState(prev => ({ 
+          ...prev, 
+          lastSaved: new Date(),
+          syncStatus: persistenceState.isOnline ? 'synced' : 'pending'
+        }));
+        
+        showToast?.({ 
+          type: 'info', 
+          message: persistenceState.isOnline ? 'Saved locally' : 'Saved offline' 
+        });
+
+        return { success: true, message: 'Saved locally', carpoolId };
+      }
+    } catch (error: any) {
+      console.error('Save carpool error:', error);
+      setPersistenceState(prev => ({ 
+        ...prev, 
+        saveError: error.message,
+        syncStatus: 'error'
+      }));
+      
+      showToast?.({ 
+        type: 'error', 
+        message: 'Failed to save data completely' 
+      });
+
+      return { success: false, message: error.message };
+    } finally {
+      setPersistenceState(prev => ({ ...prev, isSaving: false }));
+    }
+  }, [userId, event?.id, persistenceState, persistenceOptions, showToast]);
+
+  // EXTRACTED: Enhanced carpool data loading with offline support
+  const loadCarpoolData = useCallback(async (carpoolId?: string) => {
+    if (!userId || !event?.id) return { success: false, data: null };
+    
+    try {
+      // Try Supabase first if online
+      if (persistenceState.isOnline && persistenceOptions.useSupabase) {
+        const { data, error } = await supabase
+          .from('carpool_groups')
+          .select('*')
+          .eq('event_id', event.id)
+          .eq('driver_id', userId)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        
+        if (!error && data && data.length > 0) {
+          const carpool = data[0];
+          setPersistenceState(prev => ({ 
+            ...prev, 
+            currentCarpoolId: carpool.id,
+            syncStatus: 'synced'
+          }));
+          
+          const carpoolData = {
+            messages: carpool.messages ? JSON.parse(carpool.messages) : [],
+            polls: carpool.polls ? JSON.parse(carpool.polls) : [],
+            selectedFriends: carpool.selected_friends || [],
+            driverStatus: carpool.driver_status || 'none',
+            carDetails: carpool.car_details ? JSON.parse(carpool.car_details) : { seats: 4, make: '', color: '' },
+            tempEventDetails: carpool.event_details ? JSON.parse(carpool.event_details) : { meetupLocation: '', departureTime: '', notes: '' }
+          };
+
+          showToast?.({ type: 'success', message: 'Carpool data loaded from cloud!' });
+          return { success: true, data: carpoolData, source: 'cloud' };
+        }
+      }
+    } catch (supabaseError) {
+      console.warn('Supabase load failed, trying localStorage:', supabaseError);
+      setPersistenceState(prev => ({ ...prev, syncStatus: 'error' }));
+    }
+    
+    // Fallback to localStorage
+    if (persistenceOptions.useLocalStorage) {
+      try {
+        const localStorageKey = `carpool-${event.id}-${userId}`;
+        const savedData = localStorage.getItem(localStorageKey);
+        
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          setPersistenceState(prev => ({ 
+            ...prev, 
+            currentCarpoolId: parsed.carpoolId || null,
+            syncStatus: persistenceState.isOnline ? 'pending' : 'synced'
+          }));
+          
+          const carpoolData = {
+            messages: parsed.messages || [],
+            polls: parsed.polls || [],
+            selectedFriends: parsed.selectedFriends || [],
+            driverStatus: parsed.driverStatus || 'none',
+            carDetails: parsed.carDetails || { seats: 4, make: '', color: '' },
+            tempEventDetails: parsed.tempEventDetails || { meetupLocation: '', departureTime: '', notes: '' }
+          };
+          
+          showToast?.({ 
+            type: 'info', 
+            message: persistenceState.isOnline ? 'Loaded from local storage' : 'Loaded offline data'
+          });
+          
+          return { success: true, data: carpoolData, source: 'local' };
+        }
+      } catch (localError) {
+        console.warn('localStorage load failed:', localError);
+      }
+    }
+
+    return { success: false, data: null };
+  }, [userId, event?.id, persistenceState, persistenceOptions, showToast]);
+
+  // EXTRACTED: Sync pending changes when coming back online
+  const syncPendingChanges = useCallback(async () => {
+    if (!persistenceState.isOnline || persistenceState.syncStatus !== 'pending') return;
+
+    try {
+      const localStorageKey = `carpool-${event?.id}-${userId}`;
+      const savedData = localStorage.getItem(localStorageKey);
+      
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.carpoolId) {
+          await saveCarpoolData(parsed.carpoolId, parsed, { useLocalStorage: false });
+        }
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+    }
+  }, [persistenceState, event?.id, userId, saveCarpoolData]);
+
+  // Auto-sync when coming online
+  useEffect(() => {
+    if (persistenceState.isOnline && persistenceState.syncStatus === 'pending') {
+      syncPendingChanges();
+    }
+  }, [persistenceState.isOnline, syncPendingChanges]);
+
+  // EXTRACTED: Enhanced auto-save with offline awareness
+  useEffect(() => {
+    if (!isOpen || !event || !persistenceOptions.autoSave) return;
+    
+    const autoSaveInterval = setInterval(() => {
+      // Only auto-save if we have unsaved changes
+      if (persistenceState.syncStatus === 'pending') {
+        syncPendingChanges();
+      }
+    }, persistenceOptions.autoSaveInterval);
+
+    return () => clearInterval(autoSaveInterval);
+  }, [isOpen, event, persistenceOptions.autoSave, persistenceOptions.autoSaveInterval, persistenceState.syncStatus, syncPendingChanges]);
 
   const loadCarpoolGroups = async () => {
     if (!event || !userId) return;
@@ -239,6 +556,7 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
 
   const openCarpool = (group: CarpoolGroup) => {
     setSelectedCarpool(group);
+    setPersistenceState(prev => ({ ...prev, currentCarpoolId: group.id }));
     setShowCarpoolModal(true);
   };
 
@@ -260,6 +578,24 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
     }
   };
 
+  // ENHANCED: Get sync status icon
+  const getSyncStatusIcon = () => {
+    if (!persistenceState.isOnline) {
+      return <WifiOff size={16} className="text-orange-500" title="Offline" />;
+    }
+    
+    switch (persistenceState.syncStatus) {
+      case 'synced': 
+        return <Sync size={16} className="text-green-500" title="Synced" />;
+      case 'pending': 
+        return <RefreshCw size={16} className="text-blue-500 animate-spin" title="Syncing..." />;
+      case 'error': 
+        return <SyncOff size={16} className="text-red-500" title="Sync Error" />;
+      default: 
+        return <Database size={16} className="text-gray-500" />;
+    }
+  };
+
   if (!isOpen || !event) return null;
 
   const eventDate = new Date(event.start_time);
@@ -273,12 +609,12 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
     day: 'numeric' 
   });
 
-  // Mobile version
+  // Mobile version - ENHANCED with persistence status
   if (isMobile) {
     return (
       <>
         <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
-          {/* Mobile Header */}
+          {/* Enhanced Mobile Header with sync status */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
             <div className="flex items-center justify-between">
               <button onClick={onClose} className="p-2 -ml-2 active:scale-95">
@@ -287,6 +623,21 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
               <div className="flex-1 text-center">
                 <h3 className="font-semibold text-lg">Carpool Coordination</h3>
                 <p className="text-xs opacity-90 truncate px-4">{event.title}</p>
+                {/* ENHANCED: Mobile sync status */}
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  {getSyncStatusIcon()}
+                  <span className="text-xs opacity-75">
+                    {persistenceState.isOnline ? 
+                      (persistenceState.syncStatus === 'synced' ? 'Synced' : 
+                       persistenceState.syncStatus === 'pending' ? 'Syncing...' : 'Sync Error') 
+                      : 'Offline Mode'}
+                  </span>
+                  {persistenceState.lastSaved && (
+                    <span className="text-xs opacity-60">
+                      • Saved {persistenceState.lastSaved.toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -309,18 +660,30 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
             </div>
           </div>
 
-          {/* Event Info */}
+          {/* Enhanced Event Info with sync controls */}
           <div className="bg-blue-50 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <Calendar className="text-blue-600 dark:text-blue-400" size={16} />
-              <div className="flex-1">
-                <p className="font-medium text-gray-900 dark:text-white text-sm">
-                  {eventDateStr} • {eventTime}
-                </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  {event.location || 'Location TBD'}
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Calendar className="text-blue-600 dark:text-blue-400" size={16} />
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900 dark:text-white text-sm">
+                    {eventDateStr} • {eventTime}
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {event.location || 'Location TBD'}
+                  </p>
+                </div>
               </div>
+              {/* ENHANCED: Manual sync button for mobile */}
+              {persistenceState.isOnline && persistenceState.syncStatus === 'pending' && (
+                <button
+                  onClick={syncPendingChanges}
+                  className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg active:scale-95"
+                  title="Sync Now"
+                >
+                  <RefreshCw size={16} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -506,14 +869,14 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
           </div>
         )}
 
-        {/* Carpool Modal */}
+        {/* Carpool Modal with persistence services */}
         {showCarpoolModal && selectedCarpool && (
           <EventCarpoolModal
             isOpen={showCarpoolModal}
             onClose={() => {
               setShowCarpoolModal(false);
               setSelectedCarpool(null);
-              // Reload groups to get updated data
+              setPersistenceState(prev => ({ ...prev, currentCarpoolId: null }));
               loadCarpoolGroups();
             }}
             event={event}
@@ -522,18 +885,25 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
             showToast={showToast}
             isMobile={isMobile}
             onOpenSettings={onOpenSettings}
+            // ENHANCED: Pass persistence services to EventCarpoolModal
+            persistenceServices={{
+              saveCarpoolData,
+              loadCarpoolData,
+              persistenceState,
+              syncPendingChanges
+            }}
           />
         )}
       </>
     );
   }
 
-  // Desktop version
+  // Desktop version - ENHANCED with persistence dashboard
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-          {/* Desktop Header */}
+          {/* Enhanced Desktop Header with sync dashboard */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -545,6 +915,34 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
                 <p className="text-sm text-blue-200">
                   {eventDateStr} • {eventTime} • {event.location || 'TBD'}
                 </p>
+                {/* ENHANCED: Desktop sync status dashboard */}
+                <div className="flex items-center gap-4 mt-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    {getSyncStatusIcon()}
+                    <span className="text-blue-200">
+                      {persistenceState.isOnline ? 
+                        (persistenceState.syncStatus === 'synced' ? 'All data synced' : 
+                         persistenceState.syncStatus === 'pending' ? 'Syncing changes...' : 'Sync error') 
+                        : 'Offline mode active'}
+                    </span>
+                  </div>
+                  {persistenceState.lastSaved && (
+                    <div className="flex items-center gap-1">
+                      <Save size={12} />
+                      <span className="text-blue-300">
+                        Last saved: {persistenceState.lastSaved.toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+                  {persistenceState.isOnline && persistenceState.syncStatus === 'pending' && (
+                    <button
+                      onClick={syncPendingChanges}
+                      className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-xs"
+                    >
+                      Sync Now
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -580,9 +978,25 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
               </div>
             ) : carpoolGroups.length > 0 ? (
               <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  My Carpools ({carpoolGroups.length})
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    My Carpools ({carpoolGroups.length})
+                  </h3>
+                  {/* ENHANCED: Desktop sync controls */}
+                  <div className="flex items-center gap-2">
+                    {persistenceState.saveError && (
+                      <div className="text-red-600 text-sm">
+                        Error: {persistenceState.saveError}
+                      </div>
+                    )}
+                    {persistenceState.isSaving && (
+                      <div className="flex items-center gap-2 text-blue-600 text-sm">
+                        <RefreshCw size={14} className="animate-spin" />
+                        Saving...
+                      </div>
+                    )}
+                  </div>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {carpoolGroups.map((group) => (
@@ -776,14 +1190,15 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
         </div>
       )}
 
-      {/* Carpool Modal */}
+      {/* Enhanced Carpool Modal with persistence services */}
       {showCarpoolModal && selectedCarpool && (
         <EventCarpoolModal
           isOpen={showCarpoolModal}
           onClose={() => {
             setShowCarpoolModal(false);
             setSelectedCarpool(null);
-            loadCarpoolGroups(); // Reload to get updated data
+            setPersistenceState(prev => ({ ...prev, currentCarpoolId: null }));
+            loadCarpoolGroups();
           }}
           event={event}
           userId={userId}
@@ -791,6 +1206,13 @@ const CarpoolManager: React.FC<CarpoolManagerProps> = ({
           showToast={showToast}
           isMobile={isMobile}
           onOpenSettings={onOpenSettings}
+          // ENHANCED: Pass persistence services to EventCarpoolModal
+          persistenceServices={{
+            saveCarpoolData,
+            loadCarpoolData,
+            persistenceState,
+            syncPendingChanges
+          }}
         />
       )}
     </>
