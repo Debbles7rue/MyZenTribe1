@@ -10,6 +10,7 @@ import CarpoolOverview from './carpool/CarpoolOverview';
 import CarpoolChat from './carpool/CarpoolChat';
 import CarpoolSidebars from './carpool/CarpoolSidebars';
 import CarpoolModals from './carpool/CarpoolModals';
+import FriendSelector from '@/components/FriendSelector';
 
 // Import types and utilities
 import type { 
@@ -81,6 +82,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // NEW STATE FOR PROFILE SETTINGS
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  
+  // NEW STATE FOR FRIEND INVITE MODAL
+  const [showFriendInvite, setShowFriendInvite] = useState(false);
+  const [selectedFriendsToInvite, setSelectedFriendsToInvite] = useState<string[]>([]);
 
   // IMPROVED SAVE FUNCTION WITH ERROR HANDLING
   const saveCarpoolData = useCallback(async () => {
@@ -280,6 +288,36 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
 
     return () => clearInterval(autoSaveInterval);
   }, [isOpen, event, messages.length, polls.length, selectedFriends.length, saveCarpoolData]);
+
+  // NEW PROFILE SETTINGS HANDLERS
+  const handleOpenProfileSettings = () => {
+    setShowProfileSettings(true);
+  };
+
+  const handleCloseProfileSettings = () => {
+    setShowProfileSettings(false);
+  };
+
+  // NEW FRIEND INVITE HANDLERS
+  const handleOpenFriendInvite = () => {
+    setShowFriendInvite(true);
+  };
+
+  const handleCloseFriendInvite = () => {
+    setShowFriendInvite(false);
+    setSelectedFriendsToInvite([]);
+  };
+
+  const handleSendFriendInvites = () => {
+    if (selectedFriendsToInvite.length > 0 && carpoolData?.createCarpoolGroup) {
+      carpoolData.createCarpoolGroup(event.id, selectedFriendsToInvite, "Join our carpool!");
+      showToast?.({ 
+        type: 'success', 
+        message: `Invitations sent to ${selectedFriendsToInvite.length} friend${selectedFriendsToInvite.length > 1 ? 's' : ''}!` 
+      });
+      handleCloseFriendInvite();
+    }
+  };
 
   if (!isOpen || !event) return null;
 
@@ -487,11 +525,9 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               >
                 {isSaving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
               </button>
-              {onOpenSettings && (
-                <button onClick={onOpenSettings} className="p-2 active:scale-95">
-                  <Settings size={20} />
-                </button>
-              )}
+              <button onClick={handleOpenProfileSettings} className="p-2 active:scale-95">
+                <Settings size={20} />
+              </button>
               <button onClick={() => setShowInfo(true)} className="p-2 -mr-2 active:scale-95">
                 <MoreVertical size={20} />
               </button>
@@ -697,6 +733,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           onStartNewCarpool={handleStartNewCarpool}
           showInfo={showInfo}
           onCloseInfo={() => setShowInfo(false)}
+          showProfileSettings={showProfileSettings}
+          onCloseProfileSettings={handleCloseProfileSettings}
+          userId={userId}
+          showToast={showToast}
           isMobile={isMobile}
         />
       </div>
@@ -755,14 +795,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               >
                 Create Poll
               </button>
-              {onOpenSettings && (
-                <button
-                  onClick={onOpenSettings}
-                  className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
-                >
-                  <Settings size={16} />
-                </button>
-              )}
+              <button
+                onClick={handleOpenProfileSettings}
+                className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
+              >
+                <Settings size={16} />
+              </button>
               <button
                 onClick={onClose}
                 className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
@@ -1084,7 +1122,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   ) : (
                     <div className="text-center py-8">
                       <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">No friends available</p>
-                      <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                      <button 
+                        onClick={handleOpenFriendInvite}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                      >
                         Invite Friends
                       </button>
                     </div>
@@ -1116,7 +1157,16 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           onStartNewCarpool={handleStartNewCarpool}
           showInfo={showInfo}
           onCloseInfo={() => setShowInfo(false)}
-          isMobile={false}
+          showProfileSettings={showProfileSettings}
+          onCloseProfileSettings={handleCloseProfileSettings}
+          showFriendInvite={showFriendInvite}
+          onCloseFriendInvite={handleCloseFriendInvite}
+          selectedFriendsToInvite={selectedFriendsToInvite}
+          onSelectedFriendsToInviteChange={setSelectedFriendsToInvite}
+          onSendFriendInvites={handleSendFriendInvites}
+          userId={userId}
+          showToast={showToast}
+          isMobile={isMobile}
         />
       </div>
     </div>
