@@ -1,6 +1,6 @@
 // app/(protected)/calendar/components/carpool/CarpoolModals.tsx
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   X, Shield, DollarSign, Navigation, Info
 } from 'lucide-react';
@@ -29,6 +29,31 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
   onCloseInfo,
   isMobile = false
 }) => {
+  // FIX: Use useCallback to prevent re-renders that cause focus loss
+  const handleCarMakeChange = useCallback((value: string) => {
+    onTempCarDetailsChange({ ...tempCarDetails, make: value });
+  }, [tempCarDetails, onTempCarDetailsChange]);
+
+  const handleCarColorChange = useCallback((value: string) => {
+    onTempCarDetailsChange({ ...tempCarDetails, color: value });
+  }, [tempCarDetails, onTempCarDetailsChange]);
+
+  const handleCarSeatsChange = useCallback((value: number) => {
+    onTempCarDetailsChange({ ...tempCarDetails, seats: value });
+  }, [tempCarDetails, onTempCarDetailsChange]);
+
+  const handleMeetupLocationChange = useCallback((value: string) => {
+    onTempEventDetailsChange({ ...tempEventDetails, meetupLocation: value });
+  }, [tempEventDetails, onTempEventDetailsChange]);
+
+  const handleDepartureTimeChange = useCallback((value: string) => {
+    onTempEventDetailsChange({ ...tempEventDetails, departureTime: value });
+  }, [tempEventDetails, onTempEventDetailsChange]);
+
+  const handleNotesChange = useCallback((value: string) => {
+    onTempEventDetailsChange({ ...tempEventDetails, notes: value });
+  }, [tempEventDetails, onTempEventDetailsChange]);
+
   // Poll Creation Modal
   const PollModal = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
@@ -40,6 +65,7 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
           Ask your carpool group a question to help coordinate your trip.
         </p>
         <input
+          key="poll-input"
           type="text"
           value={newPollQuestion}
           onChange={(e) => onPollQuestionChange(e.target.value)}
@@ -89,9 +115,10 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
               Car Make/Model
             </label>
             <input
+              key="car-make-input"
               type="text"
               value={tempCarDetails.make}
-              onChange={(e) => onTempCarDetailsChange({ ...tempCarDetails, make: e.target.value })}
+              onChange={(e) => handleCarMakeChange(e.target.value)}
               placeholder="e.g. Honda Civic, Toyota Prius"
               className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -101,9 +128,10 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
               Car Color
             </label>
             <input
+              key="car-color-input"
               type="text"
               value={tempCarDetails.color}
-              onChange={(e) => onTempCarDetailsChange({ ...tempCarDetails, color: e.target.value })}
+              onChange={(e) => handleCarColorChange(e.target.value)}
               placeholder="e.g. Blue, Red, Silver"
               className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -113,8 +141,9 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
               Available Seats
             </label>
             <select
+              key="car-seats-select"
               value={tempCarDetails.seats}
-              onChange={(e) => onTempCarDetailsChange({ ...tempCarDetails, seats: parseInt(e.target.value) })}
+              onChange={(e) => handleCarSeatsChange(parseInt(e.target.value))}
               className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {[1,2,3,4,5,6,7,8].map(num => (
@@ -166,9 +195,10 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
               Meetup Location
             </label>
             <input
+              key="meetup-location-input"
               type="text"
               value={tempEventDetails.meetupLocation}
-              onChange={(e) => onTempEventDetailsChange({ ...tempEventDetails, meetupLocation: e.target.value })}
+              onChange={(e) => handleMeetupLocationChange(e.target.value)}
               placeholder="e.g. Central Park Main Entrance, Starbucks on 5th Ave"
               className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -181,9 +211,10 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
               Departure Time
             </label>
             <input
+              key="departure-time-input"
               type="time"
               value={tempEventDetails.departureTime}
-              onChange={(e) => onTempEventDetailsChange({ ...tempEventDetails, departureTime: e.target.value })}
+              onChange={(e) => handleDepartureTimeChange(e.target.value)}
               className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -195,8 +226,9 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
               Additional Notes
             </label>
             <textarea
+              key="notes-textarea"
               value={tempEventDetails.notes}
-              onChange={(e) => onTempEventDetailsChange({ ...tempEventDetails, notes: e.target.value })}
+              onChange={(e) => handleNotesChange(e.target.value)}
               placeholder="e.g. Look for the blue Honda in parking spot 12, I'll be wearing a red jacket"
               rows={3}
               className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -331,6 +363,7 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
             <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg safe-area-bottom animate-slide-up">
               <h3 className="text-lg font-semibold mb-4">Create Poll</h3>
               <input
+                key="mobile-poll-input"
                 type="text"
                 value={newPollQuestion}
                 onChange={(e) => onPollQuestionChange(e.target.value)}
