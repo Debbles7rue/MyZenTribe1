@@ -180,5 +180,14 @@ export interface CarpoolModalsProps {
   onStartNewCarpool: () => void;
   showInfo: boolean;
   onCloseInfo: () => void;
+  showProfileSettings: boolean;
+  onCloseProfileSettings: () => void;
+  showFriendInvite: boolean;
+  onCloseFriendInvite: () => void;
+  selectedFriendsToInvite: string[];
+  onSelectedFriendsToInviteChange: (friendIds: string[]) => void;
+  onSendFriendInvites: () => void;
+  userId: string | null;
+  showToast?: (toast: { type: string; message: string }) => void;
   isMobile?: boolean;
 }
