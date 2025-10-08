@@ -2,8 +2,10 @@
 
 import React, { useCallback } from 'react';
 import {
-  X, Shield, DollarSign, Navigation, Info
+  X, Shield, DollarSign, Navigation, Info, Settings, User, 
+  Bell, Lock, Eye, UserPlus, Search
 } from 'lucide-react';
+import FriendSelector from '@/components/FriendSelector';
 import type { CarpoolModalsProps } from './types';
 
 const CarpoolModals: React.FC<CarpoolModalsProps> = ({
@@ -27,6 +29,17 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
   onStartNewCarpool,
   showInfo,
   onCloseInfo,
+  // FIXED: Added missing profile settings props
+  showProfileSettings,
+  onCloseProfileSettings,
+  // FIXED: Added missing friend invite props
+  showFriendInvite,
+  onCloseFriendInvite,
+  selectedFriendsToInvite,
+  onSelectedFriendsToInviteChange,
+  onSendFriendInvites,
+  userId,
+  showToast,
   isMobile = false
 }) => {
   // FIX: Use useCallback to prevent re-renders that cause focus loss
@@ -53,6 +66,197 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
   const handleNotesChange = useCallback((value: string) => {
     onTempEventDetailsChange({ ...tempEventDetails, notes: value });
   }, [tempEventDetails, onTempEventDetailsChange]);
+
+  // FIXED: Added Profile Settings Modal
+  const ProfileSettingsModal = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+      <div className={`bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 ${
+        isMobile ? 'max-w-lg' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Settings size={20} />
+            Carpool Profile Settings
+          </h3>
+          <button
+            onClick={onCloseProfileSettings}
+            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Profile Section */}
+          <div className="border-b dark:border-gray-700 pb-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <User size={16} />
+              Profile Information
+            </h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="How others see you in carpools"
+                  className="w-full p-2 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  placeholder="For emergency contact"
+                  className="w-full p-2 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Privacy Section */}
+          <div className="border-b dark:border-gray-700 pb-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <Lock size={16} />
+              Privacy Settings
+            </h4>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Share location during carpools</span>
+                <input type="checkbox" className="rounded" defaultChecked />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Allow friend invitations</span>
+                <input type="checkbox" className="rounded" defaultChecked />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Show online status</span>
+                <input type="checkbox" className="rounded" />
+              </label>
+            </div>
+          </div>
+
+          {/* Notification Section */}
+          <div className="pb-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <Bell size={16} />
+              Notifications
+            </h4>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Carpool messages</span>
+                <input type="checkbox" className="rounded" defaultChecked />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Location updates</span>
+                <input type="checkbox" className="rounded" defaultChecked />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Departure reminders</span>
+                <input type="checkbox" className="rounded" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onCloseProfileSettings}
+            className={`flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${
+              isMobile ? 'active:scale-98' : ''
+            }`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              showToast?.({ type: 'success', message: 'Profile settings saved!' });
+              onCloseProfileSettings();
+            }}
+            className={`flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors ${
+              isMobile ? 'active:scale-98' : ''
+            }`}
+          >
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // FIXED: Added Friend Invite Modal with FriendSelector
+  const FriendInviteModal = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+      <div className={`bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto ${
+        isMobile ? 'max-w-lg max-h-[90vh]' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <UserPlus size={20} />
+            Invite Friends to Carpool
+          </h3>
+          <button
+            onClick={onCloseFriendInvite}
+            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+          Select friends to invite to your carpool group. They'll receive a notification and can join the coordination chat.
+        </p>
+
+        {/* Friend Selector Component */}
+        <div className="mb-4">
+          <FriendSelector
+            value={selectedFriendsToInvite}
+            onChange={onSelectedFriendsToInviteChange}
+            multiple={true}
+            placeholder="Search and select friends to invite..."
+            label="Select Friends"
+          />
+        </div>
+
+        {selectedFriendsToInvite.length > 0 && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-4">
+            <p className="text-blue-800 dark:text-blue-200 text-sm">
+              <strong>{selectedFriendsToInvite.length}</strong> friend{selectedFriendsToInvite.length > 1 ? 's' : ''} selected for invitation
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCloseFriendInvite}
+            className={`flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${
+              isMobile ? 'active:scale-98' : ''
+            }`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              if (selectedFriendsToInvite.length > 0) {
+                onSendFriendInvites();
+              } else {
+                showToast?.({ type: 'warning', message: 'Please select at least one friend to invite.' });
+              }
+            }}
+            disabled={selectedFriendsToInvite.length === 0}
+            className={`flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              isMobile ? 'active:scale-98' : ''
+            }`}
+          >
+            Send Invites ({selectedFriendsToInvite.length})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // Poll Creation Modal
   const PollModal = () => (
@@ -392,6 +596,9 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
         {showEditCarDetails && <CarDetailsModal />}
         {showEditEventDetails && <EventDetailsModal />}
         {showNewCarpoolConfirm && <NewCarpoolConfirmModal />}
+        {/* FIXED: Added missing modals */}
+        {showProfileSettings && <ProfileSettingsModal />}
+        {showFriendInvite && <FriendInviteModal />}
         
         {showInfo && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 px-4">
@@ -435,6 +642,9 @@ const CarpoolModals: React.FC<CarpoolModalsProps> = ({
       {showEditEventDetails && <EventDetailsModal />}
       {showNewCarpoolConfirm && <NewCarpoolConfirmModal />}
       {showInfo && <InfoModal />}
+      {/* FIXED: Added missing modals */}
+      {showProfileSettings && <ProfileSettingsModal />}
+      {showFriendInvite && <FriendInviteModal />}
     </>
   );
 };
