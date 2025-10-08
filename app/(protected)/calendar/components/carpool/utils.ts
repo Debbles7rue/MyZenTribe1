@@ -631,13 +631,62 @@ export const generateCarpoolStats = (
 export const generateAISuggestions = (event: DBEvent | null): AISuggestions | null => {
   if (!event) return null;
   
+  // Get event time for better departure suggestions
+  const eventDate = new Date(event.start_time);
+  const eventTime = eventDate.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit' 
+  });
+  
+  // Calculate suggested departure time (30 minutes before event)
+  const departureTime = new Date(eventDate.getTime() - 30 * 60000);
+  const departureTimeStr = departureTime.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit' 
+  });
+  
+  // Get location-based suggestions
+  const location = event.location || 'the venue';
+  const isOutdoor = event.title.toLowerCase().includes('park') || 
+                   event.title.toLowerCase().includes('outdoor') || 
+                   event.title.toLowerCase().includes('beach');
+  
+  // Get current hour for time-based suggestions
+  const currentHour = new Date().getHours();
+  const isRushHour = (currentHour >= 7 && currentHour <= 9) || (currentHour >= 16 && currentHour <= 19);
+  
   return {
-    meetupSpot: 'Central Park (most central for everyone)',
-    departureTime: '6:30 PM (accounts for traffic)',
-    route: 'Highway 101 → Downtown → Venue',
-    parking: 'Book spot at SpotHero for $15 (split 4 ways = $3.75 each)',
-    weatherAlert: null,
-    alternativeRoute: 'Avoid I-95 construction'
+    meetupSpot: location.includes('Park') 
+      ? `Main entrance of ${location} (most visible spot)`
+      : location.includes('Mall') || location.includes('Center')
+      ? `Food court area at ${location} (easy to find)`
+      : `Main lobby/entrance of ${location} (central meeting point)`,
+    
+    departureTime: isRushHour 
+      ? `${departureTimeStr} (accounts for rush hour traffic)`
+      : `${departureTimeStr} (30min buffer recommended)`,
+    
+    route: location.includes('downtown') || location.includes('Downtown')
+      ? 'Take main roads → Avoid construction zones → Downtown'
+      : location.includes('Mall') || location.includes('mall')
+      ? 'Highway → Shopping district → Mall entrance'
+      : `Best route to ${location} → Check traffic updates`,
+    
+    parking: location.includes('Mall') || location.includes('mall')
+      ? 'Free mall parking - meet near main entrance'
+      : location.includes('downtown') || location.includes('Downtown')
+      ? 'Use SpotHero app for pre-booking ($10-15 split between riders)'
+      : isOutdoor
+      ? 'Street parking usually available - arrive early'
+      : 'Check venue website for parking options',
+    
+    weatherAlert: isOutdoor 
+      ? 'Check weather forecast - outdoor event may be affected'
+      : null,
+    
+    alternativeRoute: isRushHour
+      ? 'Avoid highways during rush hour - use local roads'
+      : 'Have backup route ready in case of traffic'
   };
 };
 
