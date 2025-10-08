@@ -1,7 +1,7 @@
 // app/(protected)/calendar/components/EventCarpoolModal.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Save, Map } from 'lucide-react';
+import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Save, Map, Maximize2 } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 
@@ -819,8 +819,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     <button onClick={() => setShowNewCarpoolConfirm(true)} className="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
                       🔄 Start New Carpool
                     </button>
-                    <button onClick={() => setShowEditCarDetails(true)} className="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium">
-                      🚗 Edit Car Details
+                    {/* REPLACED: Car Details with Invite Friends */}
+                    <button 
+                      onClick={handleOpenFriendInvite} 
+                      className="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                    >
+                      <UserPlus size={18} />
+                      <span>Invite Friends</span>
                     </button>
                     <button onClick={() => setShowEditEventDetails(true)} className="w-full p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium">
                       📍 Edit Meetup Details
@@ -873,8 +878,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     <button onClick={() => handleQuickActionClick('emergency-contact')} className="p-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors">
                       Emergency
                     </button>
-                    <button onClick={handleOpenFriendInvite} className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors">
-                      Invite Friends
+                    <button onClick={() => setShowEditCarDetails(true)} className="p-2 bg-indigo-500 text-white rounded text-xs hover:bg-indigo-600 transition-colors">
+                      Car Details
                     </button>
                   </div>
 
@@ -980,26 +985,67 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 />
               </div>
 
-              {/* RIGHT SIDEBAR */}
+              {/* RIGHT SIDEBAR - REPLACED WITH MAP PREVIEW */}
               <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 flex-shrink-0 overflow-hidden">
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Invite Friends</h3>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-4">
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                        <span className="text-2xl">👥</span>
-                      </div>
-                      <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Invite Friends</p>
-                      <p className="text-gray-400 dark:text-gray-500 mb-4 text-xs">Add friends to your network to start carpooling together</p>
-                      <button 
-                        onClick={handleOpenFriendInvite}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                    <h3 className="font-semibold text-gray-900 dark:text-white flex items-center justify-between">
+                      <span>Event Location</span>
+                      <button
+                        onClick={() => setActiveView('map')}
+                        className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1"
                       >
-                        + Invite Friends
+                        <Maximize2 size={14} />
+                        <span>Full View</span>
                       </button>
-                    </div>
+                    </h3>
+                  </div>
+                  <div className="flex-1 relative">
+                    {eventCoordinates ? (
+                      <>
+                        {/* Map Preview Container */}
+                        <div className="absolute inset-0">
+                          <CarpoolMap
+                            eventId={event.id}
+                            userId={userId || ''}
+                            eventLocation={{ 
+                              lat: eventCoordinates.lat, 
+                              lng: eventCoordinates.lng,
+                              address: event.location 
+                            }}
+                            showToast={showToast}
+                            isMobile={false}
+                          />
+                        </div>
+                        {/* Click overlay to open full map */}
+                        <button
+                          onClick={() => setActiveView('map')}
+                          className="absolute inset-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer z-10"
+                          title="Click to view full map"
+                        />
+                        {/* Map Info Overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4 pointer-events-none">
+                          <p className="text-white text-sm font-medium">
+                            {event.location || 'Event Location'}
+                          </p>
+                          <p className="text-white/80 text-xs">
+                            Click to view full map with carpool locations
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center h-full p-4">
+                        <div className="text-center">
+                          <MapPin className="mx-auto mb-3 text-gray-300" size={48} />
+                          <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
+                            Map Preview
+                          </p>
+                          <p className="text-gray-400 dark:text-gray-500 text-xs">
+                            {event.location ? 'Loading map...' : 'No location set'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
