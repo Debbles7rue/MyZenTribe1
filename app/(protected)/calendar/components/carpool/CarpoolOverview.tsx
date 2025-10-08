@@ -112,14 +112,15 @@ const CarpoolOverview: React.FC<EnhancedCarpoolOverviewProps> = ({
     }
   };
 
-  // Fixed friend invite handler
+  // Fixed friend invite handler - connects to existing FriendSelector modal
   const handleFriendInvite = () => {
     if (onOpenFriendInvite) {
       onOpenFriendInvite();
     } else {
+      console.warn('onOpenFriendInvite prop not provided to CarpoolOverview');
       showToast?.({ 
-        type: 'info', 
-        message: 'Friend invite feature coming soon!' 
+        type: 'error', 
+        message: 'Friend invite handler not connected. Check component props.' 
       });
     }
   };
