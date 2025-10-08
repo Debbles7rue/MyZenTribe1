@@ -221,13 +221,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       // Load existing data first
       handleLoadCarpoolData();
       
-      // Fallback to initial messages if no saved data
-      setTimeout(() => {
-        if (messages.length === 0) {
-          const initialMessages = initializeCarpoolChat(event);
-          setMessages(initialMessages);
-        }
-      }, 1000);
+      // Don't auto-populate with sample messages - let users start fresh
     }
   }, [isOpen, event, handleLoadCarpoolData]);
 
@@ -296,10 +290,39 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   };
 
+  // Override the handleStartNewCarpoolInModal to not use sample messages
+  const handleStartNewCarpool = () => {
+    // Clear all data for a fresh start
+    setMessages([]);
+    setPolls([]);
+    setDriverStatus('none');
+    setSelectedFriends([]);
+    setCurrentCarpoolId(null);
+    setShowNewCarpoolConfirm(false);
+    
+    // Only add a welcome message, not sample conversations
+    const welcomeMessage: Message = {
+      id: Date.now(),
+      user: 'System',
+      message: `Welcome! Start organizing your carpool for ${event.title}`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      avatar: '🚗'
+    };
+    setMessages([welcomeMessage]);
+    
+    showToast?.({ type: 'success', message: 'Started new carpool group!' });
+  };
+
   if (!isOpen || !event) return null;
 
-  const carpoolStats = generateCarpoolStats(carpoolData);
-  const aiSuggestions = generateAISuggestions(event);
+  // Generate real stats based on actual carpool data
+  const carpoolStats = {
+    needingRides: messages.filter(m => m.message?.includes('need a ride') || m.message?.includes('Need a ride')).length,
+    driversAvailable: messages.filter(m => m.message?.includes('can drive') || m.message?.includes('I can drive')).length,
+    estimatedSavings: selectedFriends.length > 0 ? `${Math.round(selectedFriends.length * 8)}` : '$0',
+    distanceAway: 0
+  };
+  const aiSuggestions = null; // Don't show AI suggestions with fake data
   const { eventTime, eventDateStr } = formatEventTime(event.start_time);
 
   // ALL ORIGINAL HANDLERS PRESERVED
@@ -608,7 +631,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             onSaveEventDetails={() => handleSaveEventDetailsInModal(tempEventDetails, setShowEditEventDetails, messages, setMessages, showToast)}
             showNewCarpoolConfirm={showNewCarpoolConfirm}
             onCloseNewCarpoolConfirm={() => setShowNewCarpoolConfirm(false)}
-            onStartNewCarpool={() => handleStartNewCarpoolInModal(setMessages, setPolls, setDriverStatus, setSelectedFriends, setCurrentCarpoolId, setShowNewCarpoolConfirm, event, showToast)}
+            onStartNewCarpool={handleStartNewCarpool}
             showInfo={showInfo}
             onCloseInfo={() => setShowInfo(false)}
             showProfileSettings={false}
@@ -899,17 +922,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                       )}
                     </div>
                   )}
-
-                  {aiSuggestions && (
-                    <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-lg p-3">
-                      <h4 className="font-medium text-sm mb-2">AI Suggestions</h4>
-                      <div className="space-y-2 text-xs">
-                        <div><span className="font-medium">Meetup:</span> {aiSuggestions.meetupSpot}</div>
-                        <div><span className="font-medium">Departure:</span> {aiSuggestions.departureTime}</div>
-                        <div><span className="font-medium">Parking:</span> {aiSuggestions.parking}</div>
-                      </div>
-                    </div>
-                  )}
                   </div>
                 </div>
               </div>
@@ -1001,7 +1013,22 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     </h3>
                   </div>
                   <div className="flex-1 relative">
-                    {eventCoordinates ? (
+                    {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+                      <div className="flex items-center justify-center h-full p-4">
+                        <div className="text-center">
+                          <MapPin className="mx-auto mb-3 text-gray-300" size={48} />
+                          <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
+                            Map Setup Required
+                          </p>
+                          <p className="text-gray-400 dark:text-gray-500 text-xs">
+                            Google Maps API key not configured
+                          </p>
+                          <p className="text-gray-400 dark:text-gray-500 text-xs mt-2">
+                            Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your .env.local
+                          </p>
+                        </div>
+                      </div>
+                    ) : eventCoordinates ? (
                       <>
                         {/* Map Preview Container */}
                         <div className="absolute inset-0">
@@ -1070,7 +1097,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             onSaveEventDetails={() => handleSaveEventDetailsInModal(tempEventDetails, setShowEditEventDetails, messages, setMessages, showToast)}
             showNewCarpoolConfirm={showNewCarpoolConfirm}
             onCloseNewCarpoolConfirm={() => setShowNewCarpoolConfirm(false)}
-            onStartNewCarpool={() => handleStartNewCarpoolInModal(setMessages, setPolls, setDriverStatus, setSelectedFriends, setCurrentCarpoolId, setShowNewCarpoolConfirm, event, showToast)}
+            onStartNewCarpool={handleStartNewCarpool}
             showInfo={showInfo}
             onCloseInfo={() => setShowInfo(false)}
             showProfileSettings={false}
