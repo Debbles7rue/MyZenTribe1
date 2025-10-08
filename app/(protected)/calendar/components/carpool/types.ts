@@ -115,6 +115,25 @@ export interface CarpoolOverviewProps {
   onEditCarDetails: () => void;
   onEditEventDetails: () => void;
   isMobile?: boolean;
+  // FIXED: Added missing friend invite prop
+  onOpenFriendInvite?: () => void;
+  onOpenProfileSettings?: () => void;
+  showToast?: (toast: { type: string; message: string }) => void;
+  // Enhanced persistence props
+  persistenceState?: {
+    currentCarpoolId: string | null;
+    isSaving: boolean;
+    lastSaved: Date | null;
+    saveError: string | null;
+    isOnline: boolean;
+    syncStatus: 'synced' | 'pending' | 'error';
+  };
+  onSaveData?: () => void;
+  onSyncPendingChanges?: () => void;
+  tempEventDetails?: EventDetails;
+  onSaveCarDetails?: () => void;
+  isEditingCarDetails?: boolean;
+  tempCarDetails?: CarDetails;
 }
 
 export interface CarpoolChatProps {
@@ -184,6 +203,7 @@ export interface CarpoolModalsProps {
   onCloseInfo: () => void;
   showProfileSettings: boolean;
   onCloseProfileSettings: () => void;
+  // FIXED: Added proper friend invite modal props that use FriendSelector
   showFriendInvite: boolean;
   onCloseFriendInvite: () => void;
   selectedFriendsToInvite: string[];
