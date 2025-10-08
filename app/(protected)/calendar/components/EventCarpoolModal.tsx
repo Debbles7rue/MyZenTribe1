@@ -1,7 +1,7 @@
 // app/(protected)/calendar/components/EventCarpoolModal.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Save } from 'lucide-react';
+import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Save, Map } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 
@@ -10,8 +10,8 @@ import CarpoolOverview from './carpool/CarpoolOverview';
 import CarpoolChat from './carpool/CarpoolChat';
 import CarpoolSidebars from './carpool/CarpoolSidebars';
 import CarpoolModals from './carpool/CarpoolModals';
+import CarpoolMap from './carpool/CarpoolMap'; // ADDED: Map component import
 import FriendSelector from '@/components/FriendSelector';
-// FIXED: Add import for CarpoolSettings
 import CarpoolSettings from './CarpoolSettings';
 
 // Import types and utilities
@@ -25,7 +25,7 @@ import type {
   EventDetails
 } from './carpool/types';
 
-// FIXED: Import ALL functions from utils instead of duplicating
+// Import ALL functions from utils instead of duplicating
 import {
   generateCarpoolStats,
   generateAISuggestions,
@@ -43,14 +43,18 @@ import {
   handleSaveEventDetailsInModal,
   handleStartNewCarpoolInModal,
   handleFriendToggleInModal,
-  // Persistence functions (no more duplication!)
+  // Persistence functions
   saveCarpoolData,
   loadCarpoolData,
-  syncPendingChanges
+  syncPendingChanges,
+  geocodeAddress // ADDED: For geocoding addresses
 } from './carpool/utils';
 
 // Supabase client
 const supabase = createClient();
+
+// ADDED: Extended ActiveView type to include map
+type ExtendedActiveView = ActiveView | 'map';
 
 const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isOpen,
@@ -63,8 +67,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isMobile = false,
   onOpenSettings
 }) => {
-  // ALL ORIGINAL STATE PRESERVED
-  const [activeView, setActiveView] = useState<ActiveView>('overview');
+  // ALL ORIGINAL STATE PRESERVED - Updated activeView type
+  const [activeView, setActiveView] = useState<ExtendedActiveView>('overview');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [polls, setPolls] = useState<Poll[]>([]);
@@ -100,14 +104,17 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // NEW STATE FOR PROFILE SETTINGS
+  // STATE FOR PROFILE SETTINGS
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   
-  // NEW STATE FOR FRIEND INVITE MODAL - USES EXISTING FRIENDSELECTOR
+  // STATE FOR FRIEND INVITE MODAL
   const [showFriendInvite, setShowFriendInvite] = useState(false);
   const [selectedFriendsToInvite, setSelectedFriendsToInvite] = useState<string[]>([]);
 
-  // FIXED: Use extracted save function from utils.ts
+  // ADDED: State for event coordinates
+  const [eventCoordinates, setEventCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Use extracted save function from utils.ts
   const handleSaveCarpoolData = useCallback(async () => {
     if (!userId || !event?.id || isSaving) return;
     
@@ -150,7 +157,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [userId, event?.id, currentCarpoolId, messages, polls, selectedFriends, driverStatus, carDetails, tempEventDetails, isSaving, showToast]);
 
-  // FIXED: Use extracted load function from utils.ts
+  // Use extracted load function from utils.ts
   const handleLoadCarpoolData = useCallback(async () => {
     if (!userId || !event?.id) return;
     
@@ -174,7 +181,41 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [userId, event?.id, showToast]);
 
-  // ALL ORIGINAL EFFECTS PRESERVED WITH ENHANCEMENTS
+  // ADDED: Geocode event location if needed
+  useEffect(() => {
+    const checkAndGeocodeEvent = async () => {
+      if (!event) return;
+      
+      // Check if event already has coordinates
+      if (event.latitude && event.longitude) {
+        setEventCoordinates({ lat: event.latitude, lng: event.longitude });
+        return;
+      }
+      
+      // If no coordinates but has address, geocode it
+      if (event.location) {
+        const coords = await geocodeAddress(event.location);
+        if (coords) {
+          setEventCoordinates(coords);
+          
+          // Optionally save coordinates back to database
+          await supabase
+            .from('events')
+            .update({ 
+              latitude: coords.lat, 
+              longitude: coords.lng 
+            })
+            .eq('id', event.id);
+        }
+      }
+    };
+    
+    if (isOpen && event) {
+      checkAndGeocodeEvent();
+    }
+  }, [isOpen, event]);
+
+  // ALL ORIGINAL EFFECTS PRESERVED
   useEffect(() => {
     if (isOpen && event) {
       // Load existing data first
@@ -212,7 +253,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [event?.id]);
 
-  // Auto-save every 2 minutes (less aggressive)
+  // Auto-save every 2 minutes
   useEffect(() => {
     if (!isOpen || !event) return;
     
@@ -225,7 +266,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     return () => clearInterval(autoSaveInterval);
   }, [isOpen, event, messages.length, polls.length, selectedFriends.length, handleSaveCarpoolData]);
 
-  // NEW PROFILE SETTINGS HANDLERS
+  // PROFILE SETTINGS HANDLERS
   const handleOpenProfileSettings = () => {
     setShowProfileSettings(true);
   };
@@ -234,7 +275,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setShowProfileSettings(false);
   };
 
-  // FIXED: FRIEND INVITE HANDLERS - CONNECTS TO EXISTING FRIENDSELECTOR
+  // FRIEND INVITE HANDLERS
   const handleOpenFriendInvite = () => {
     setShowFriendInvite(true);
   };
@@ -261,7 +302,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const aiSuggestions = generateAISuggestions(event);
   const { eventTime, eventDateStr } = formatEventTime(event.start_time);
 
-  // ALL ORIGINAL HANDLERS PRESERVED - USING EXTRACTED FUNCTIONS
+  // ALL ORIGINAL HANDLERS PRESERVED
   const handleQuickActionClick = (action: string) => {
     handleQuickAction(action, messages, setMessages, driverStatus, setDriverStatus, carDetails, showToast, isMobile);
     
@@ -293,7 +334,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   };
 
-  // MOBILE VERSION - FIXED LAYOUT
+  // MOBILE VERSION WITH MAP ADDED
   if (isMobile) {
     return (
       <>
@@ -305,7 +346,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 <ArrowLeft size={24} />
               </button>
               <div className="flex-1 text-center">
-                <h3 className="font-semibold text-lg">Event Carpool Feature Page</h3>
+                <h3 className="font-semibold text-lg">Event Carpool</h3>
                 {lastSaved && (
                   <p className="text-xs text-blue-200">
                     Saved {lastSaved.toLocaleTimeString()}
@@ -344,12 +385,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           </div>
 
-          {/* Navigation */}
+          {/* UPDATED Navigation with Map Tab */}
           <div className="flex-shrink-0 flex bg-gray-100 dark:bg-gray-800">
             {([
-              { view: 'overview', icon: MapPin, label: 'Overview' }, 
-              { view: 'chat', icon: Car, label: 'Chat' }
-            ] as const).map(({ view, icon: Icon, label }) => (
+              { view: 'overview' as const, icon: MapPin, label: 'Overview' }, 
+              { view: 'chat' as const, icon: Car, label: 'Chat' },
+              { view: 'map' as const, icon: Map, label: 'Map' } // ADDED: Map tab
+            ]).map(({ view, icon: Icon, label }) => (
               <button
                 key={view}
                 onClick={() => setActiveView(view)}
@@ -365,7 +407,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             ))}
           </div>
 
-          {/* Content - FIXED CONTAINER HEIGHT */}
+          {/* Content with Map View Added */}
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeView === 'overview' && (
               <CarpoolOverview
@@ -379,7 +421,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 onEditCarDetails={() => setShowEditCarDetails(true)}
                 onEditEventDetails={() => setShowEditEventDetails(true)}
                 isMobile={isMobile}
-                // FIXED: Pass friend invite handler to connect with FriendSelector
                 onOpenFriendInvite={handleOpenFriendInvite}
                 onOpenProfileSettings={handleOpenProfileSettings}
                 showToast={showToast}
@@ -389,7 +430,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   isSaving,
                   lastSaved,
                   saveError,
-                  isOnline: true,
+                  isOnline: navigator.onLine,
                   syncStatus: 'synced'
                 }}
                 onSaveData={handleSaveCarpoolData}
@@ -438,7 +479,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   </div>
                 )}
 
-                {/* CHAT COMPONENT WITH FIXED HEIGHT */}
                 <div className="flex-1 min-h-0">
                   <CarpoolChat
                     messages={messages}
@@ -510,6 +550,35 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* ADDED: Map View */}
+            {activeView === 'map' && (
+              eventCoordinates ? (
+                <CarpoolMap
+                  eventId={event.id}
+                  userId={userId || ''}
+                  eventLocation={{ 
+                    lat: eventCoordinates.lat, 
+                    lng: eventCoordinates.lng,
+                    address: event.location 
+                  }}
+                  showToast={showToast}
+                  isMobile={isMobile}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-8">
+                  <div className="text-center">
+                    <MapPin className="mx-auto mb-4 text-gray-300" size={64} />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                      Map Not Available
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      {event.location ? 'Loading location coordinates...' : 'No event location specified'}
+                    </p>
+                  </div>
+                </div>
+              )
+            )}
           </div>
 
           {!showQuickActions && activeView === 'chat' && (
@@ -544,7 +613,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             onCloseInfo={() => setShowInfo(false)}
             showProfileSettings={false}
             onCloseProfileSettings={() => {}}
-            // FIXED: Pass proper friend invite props that use FriendSelector
             showFriendInvite={showFriendInvite}
             onCloseFriendInvite={handleCloseFriendInvite}
             selectedFriendsToInvite={selectedFriendsToInvite}
@@ -556,7 +624,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           />
         </div>
 
-        {/* FIXED: Add CarpoolSettings component for mobile */}
         <CarpoolSettings
           isOpen={showProfileSettings}
           onClose={handleCloseProfileSettings}
@@ -567,12 +634,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     );
   }
 
-  // DESKTOP VERSION - FIXED MODAL POSITIONING AND SCROLLING
+  // DESKTOP VERSION WITH MAP VIEW
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
         <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl my-8 shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]">
-          {/* SIMPLIFIED HEADER - Remove duplicate buttons */}
+          {/* Header */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
@@ -597,6 +664,14 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 >
                   {desktopLayout === 'custom' ? 'Modular' : 'Custom'}
                 </button>
+                {/* ADDED: Map View Button */}
+                <button
+                  onClick={() => setActiveView(activeView === 'map' ? 'chat' : 'map')}
+                  className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-sm transition-colors whitespace-nowrap flex items-center gap-1"
+                >
+                  <Map size={14} />
+                  {activeView === 'map' ? 'Chat' : 'Map'}
+                </button>
                 <button
                   onClick={handleOpenProfileSettings}
                   className="bg-white/20 hover:bg-white/30 p-1 rounded transition-colors"
@@ -613,8 +688,37 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           </div>
 
-          {/* LAYOUT - FIXED HEIGHT CONTAINERS WITH PROPER OVERFLOW */}
-          {desktopLayout === 'modular' ? (
+          {/* LAYOUT WITH MAP VIEW */}
+          {activeView === 'map' ? (
+            // ADDED: Full-screen map view for desktop
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {eventCoordinates ? (
+                <CarpoolMap
+                  eventId={event.id}
+                  userId={userId || ''}
+                  eventLocation={{ 
+                    lat: eventCoordinates.lat, 
+                    lng: eventCoordinates.lng,
+                    address: event.location 
+                  }}
+                  showToast={showToast}
+                  isMobile={false}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-8">
+                  <div className="text-center">
+                    <MapPin className="mx-auto mb-4 text-gray-300" size={80} />
+                    <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+                      Map Not Available
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      {event.location ? 'Loading location coordinates...' : 'No event location specified'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : desktopLayout === 'modular' ? (
             <div className="flex flex-1 min-h-0 overflow-hidden">
               <CarpoolSidebars
                 selectedFriends={selectedFriends}
@@ -700,16 +804,14 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           ) : (
             <div className="flex flex-1 min-h-0 overflow-hidden">
-              {/* LEFT SIDEBAR - FIXED WIDTH WITH SCROLL */}
+              {/* LEFT SIDEBAR */}
               <div className="w-72 bg-gray-50 dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col flex-shrink-0 overflow-hidden">
-                {/* Fixed header */}
                 <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 dark:text-white">Event Overview</h3>
                   </div>
                 </div>
                 
-                {/* Scrollable content */}
                 <div className="flex-1 overflow-y-auto">
                   <div className="p-4">
                   
@@ -771,7 +873,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     <button onClick={() => handleQuickActionClick('emergency-contact')} className="p-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors">
                       Emergency
                     </button>
-                    {/* FIXED: Friend invite button with proper handler */}
                     <button onClick={handleOpenFriendInvite} className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors">
                       Invite Friends
                     </button>
@@ -808,7 +909,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 </div>
               </div>
 
-              {/* CHAT CONTAINER WITH FIXED HEIGHT AND PROPER OVERFLOW */}
+              {/* CHAT CONTAINER */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 <CarpoolChat
                   messages={messages}
@@ -879,7 +980,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 />
               </div>
 
-              {/* RIGHT SIDEBAR - FIXED WIDTH WITH SCROLL */}
+              {/* RIGHT SIDEBAR */}
               <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 flex-shrink-0 overflow-hidden">
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
@@ -892,7 +993,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                       </div>
                       <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Invite Friends</p>
                       <p className="text-gray-400 dark:text-gray-500 mb-4 text-xs">Add friends to your network to start carpooling together</p>
-                      {/* FIXED: Friend invite button with proper handler */}
                       <button 
                         onClick={handleOpenFriendInvite}
                         className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
@@ -929,7 +1029,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             onCloseInfo={() => setShowInfo(false)}
             showProfileSettings={false}
             onCloseProfileSettings={() => {}}
-            // FIXED: Pass proper friend invite props that use FriendSelector
             showFriendInvite={showFriendInvite}
             onCloseFriendInvite={handleCloseFriendInvite}
             selectedFriendsToInvite={selectedFriendsToInvite}
@@ -942,7 +1041,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         </div>
       </div>
 
-      {/* FIXED: Add CarpoolSettings component for desktop */}
       <CarpoolSettings
         isOpen={showProfileSettings}
         onClose={handleCloseProfileSettings}
