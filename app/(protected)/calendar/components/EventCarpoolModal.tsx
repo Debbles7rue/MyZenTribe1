@@ -23,32 +23,28 @@ import type {
   EventDetails
 } from './carpool/types';
 
-// UPDATED: Add persistence services interface
-interface PersistenceServices {
-  saveCarpoolData: (carpoolId: string, data: any, options?: any) => Promise<any>;
-  loadCarpoolData: (carpoolId?: string) => Promise<any>;
-  persistenceState: {
-    currentCarpoolId: string | null;
-    isSaving: boolean;
-    lastSaved: Date | null;
-    saveError: string | null;
-    isOnline: boolean;
-    syncStatus: 'synced' | 'pending' | 'error';
-  };
-  syncPendingChanges: () => Promise<void>;
-}
-
-interface EnhancedEventCarpoolModalProps extends EventCarpoolModalProps {
-  persistenceServices?: PersistenceServices;
-}
-
+// FIXED: Import ALL functions from utils instead of duplicating
 import {
   generateCarpoolStats,
   generateAISuggestions,
   initializeCarpoolChat,
   handleQuickAction,
   formatEventTime,
-  vibrate
+  vibrate,
+  // Extracted handler functions
+  handleSendMessage,
+  handleVoiceRecord,
+  handleCreatePollInChat,
+  handleVotePollInChat,
+  handleChangeVoteInChat,
+  handleSaveCarDetailsInModal,
+  handleSaveEventDetailsInModal,
+  handleStartNewCarpoolInModal,
+  handleFriendToggleInModal,
+  // Persistence functions (no more duplication!)
+  saveCarpoolData,
+  loadCarpoolData,
+  syncPendingChanges
 } from './carpool/utils';
 
 // Supabase client
@@ -105,82 +101,41 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // NEW STATE FOR PROFILE SETTINGS
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   
-  // NEW STATE FOR FRIEND INVITE MODAL
+  // NEW STATE FOR FRIEND INVITE MODAL - USES EXISTING FRIENDSELECTOR
   const [showFriendInvite, setShowFriendInvite] = useState(false);
   const [selectedFriendsToInvite, setSelectedFriendsToInvite] = useState<string[]>([]);
 
-  // IMPROVED SAVE FUNCTION WITH ERROR HANDLING
-  const saveCarpoolData = useCallback(async () => {
+  // FIXED: Use extracted save function from utils.ts
+  const handleSaveCarpoolData = useCallback(async () => {
     if (!userId || !event?.id || isSaving) return;
     
     setIsSaving(true);
     setSaveError(null);
     
     try {
-      // Use localStorage as fallback if Supabase fails
-      const localStorageKey = `carpool-${event.id}-${userId}`;
-      const fallbackData = {
+      const carpoolData = {
         messages,
         polls,
         selectedFriends,
         driverStatus,
         carDetails,
-        tempEventDetails,
-        timestamp: new Date().toISOString()
+        tempEventDetails
       };
-      
-      // Always save to localStorage as backup
-      localStorage.setItem(localStorageKey, JSON.stringify(fallbackData));
-      
-      // Try Supabase save
-      try {
-        const carpoolData = {
-          id: currentCarpoolId || undefined,
-          event_id: event.id,
-          driver_id: userId,
-          messages: JSON.stringify(messages),
-          polls: JSON.stringify(polls),
-          selected_friends: selectedFriends,
-          driver_status: driverStatus,
-          car_details: JSON.stringify(carDetails),
-          event_details: JSON.stringify(tempEventDetails),
-          updated_at: new Date().toISOString()
-        };
 
-        if (currentCarpoolId) {
-          // Update existing carpool
-          const { error } = await supabase
-            .from('carpool_groups')
-            .update(carpoolData)
-            .eq('id', currentCarpoolId)
-            .eq('driver_id', userId);
-          
-          if (error) throw error;
-        } else {
-          // Create new carpool
-          const { data, error } = await supabase
-            .from('carpool_groups')
-            .insert([carpoolData])
-            .select()
-            .single();
-          
-          if (error) throw error;
-          if (data) setCurrentCarpoolId(data.id);
-        }
+      const result = await saveCarpoolData(
+        currentCarpoolId || 'new',
+        carpoolData,
+        {},
+        userId,
+        event.id,
+        showToast
+      );
 
-        setLastSaved(new Date());
-        showToast?.({ 
-          type: 'success', 
-          message: 'Carpool data saved!' 
-        });
-      } catch (supabaseError: any) {
-        console.warn('Supabase save failed, using localStorage:', supabaseError);
-        setLastSaved(new Date());
-        showToast?.({ 
-          type: 'info', 
-          message: 'Data saved locally (database unavailable)' 
-        });
+      if (result.success && result.carpoolId && result.carpoolId !== currentCarpoolId) {
+        setCurrentCarpoolId(result.carpoolId);
       }
+      
+      setLastSaved(new Date());
     } catch (error: any) {
       console.error('Save carpool error:', error);
       setSaveError(error.message);
@@ -193,67 +148,27 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [userId, event?.id, currentCarpoolId, messages, polls, selectedFriends, driverStatus, carDetails, tempEventDetails, isSaving, showToast]);
 
-  // IMPROVED LOAD FUNCTION WITH FALLBACK
-  const loadCarpoolData = useCallback(async () => {
+  // FIXED: Use extracted load function from utils.ts
+  const handleLoadCarpoolData = useCallback(async () => {
     if (!userId || !event?.id) return;
     
     try {
-      // Try Supabase first
-      const { data, error } = await supabase
-        .from('carpool_groups')
-        .select('*')
-        .eq('event_id', event.id)
-        .eq('driver_id', userId)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      const result = await loadCarpoolData(undefined, userId, event.id, showToast);
       
-      if (!error && data && data.length > 0) {
-        const carpool = data[0];
-        setCurrentCarpoolId(carpool.id);
+      if (result.success && result.data) {
+        if (result.carpoolId) {
+          setCurrentCarpoolId(result.carpoolId);
+        }
         
-        // Restore state from Supabase
-        if (carpool.messages) {
-          try { setMessages(JSON.parse(carpool.messages)); } catch (e) { console.warn('Failed to parse messages'); }
-        }
-        if (carpool.polls) {
-          try { setPolls(JSON.parse(carpool.polls)); } catch (e) { console.warn('Failed to parse polls'); }
-        }
-        if (carpool.selected_friends) {
-          setSelectedFriends(carpool.selected_friends);
-        }
-        setDriverStatus(carpool.driver_status || 'none');
-        if (carpool.car_details) {
-          try { setCarDetails(JSON.parse(carpool.car_details)); } catch (e) { console.warn('Failed to parse car details'); }
-        }
-        if (carpool.event_details) {
-          try { setTempEventDetails(JSON.parse(carpool.event_details)); } catch (e) { console.warn('Failed to parse event details'); }
-        }
-
-        showToast?.({ type: 'success', message: 'Carpool data loaded from database!' });
-        return;
+        setMessages(result.data.messages || []);
+        setPolls(result.data.polls || []);
+        setSelectedFriends(result.data.selectedFriends || []);
+        setDriverStatus(result.data.driverStatus || 'none');
+        setCarDetails(result.data.carDetails || { seats: 4, make: '', color: '' });
+        setTempEventDetails(result.data.tempEventDetails || { meetupLocation: '', departureTime: '', notes: '' });
       }
-    } catch (supabaseError) {
-      console.warn('Supabase load failed, trying localStorage:', supabaseError);
-    }
-    
-    // Fallback to localStorage
-    try {
-      const localStorageKey = `carpool-${event.id}-${userId}`;
-      const savedData = localStorage.getItem(localStorageKey);
-      
-      if (savedData) {
-        const parsed = JSON.parse(savedData);
-        setMessages(parsed.messages || []);
-        setPolls(parsed.polls || []);
-        setSelectedFriends(parsed.selectedFriends || []);
-        setDriverStatus(parsed.driverStatus || 'none');
-        setCarDetails(parsed.carDetails || { seats: 4, make: '', color: '' });
-        setTempEventDetails(parsed.tempEventDetails || { meetupLocation: '', departureTime: '', notes: '' });
-        
-        showToast?.({ type: 'info', message: 'Carpool data loaded from local storage!' });
-      }
-    } catch (localError) {
-      console.warn('localStorage load failed:', localError);
+    } catch (error) {
+      console.warn('Error loading carpool data:', error);
     }
   }, [userId, event?.id, showToast]);
 
@@ -261,7 +176,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   useEffect(() => {
     if (isOpen && event) {
       // Load existing data first
-      loadCarpoolData();
+      handleLoadCarpoolData();
       
       // Fallback to initial messages if no saved data
       setTimeout(() => {
@@ -271,7 +186,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         }
       }, 1000);
     }
-  }, [isOpen, event, loadCarpoolData]);
+  }, [isOpen, event, handleLoadCarpoolData]);
 
   useEffect(() => {
     setTempCarDetails(carDetails);
@@ -301,12 +216,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     
     const autoSaveInterval = setInterval(() => {
       if (messages.length > 0 || polls.length > 0 || selectedFriends.length > 0) {
-        saveCarpoolData();
+        handleSaveCarpoolData();
       }
     }, 120000); // 2 minutes
 
     return () => clearInterval(autoSaveInterval);
-  }, [isOpen, event, messages.length, polls.length, selectedFriends.length, saveCarpoolData]);
+  }, [isOpen, event, messages.length, polls.length, selectedFriends.length, handleSaveCarpoolData]);
 
   // NEW PROFILE SETTINGS HANDLERS
   const handleOpenProfileSettings = () => {
@@ -317,7 +232,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setShowProfileSettings(false);
   };
 
-  // NEW FRIEND INVITE HANDLERS
+  // FIXED: FRIEND INVITE HANDLERS - CONNECTS TO EXISTING FRIENDSELECTOR
   const handleOpenFriendInvite = () => {
     setShowFriendInvite(true);
   };
@@ -344,7 +259,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const aiSuggestions = generateAISuggestions(event);
   const { eventTime, eventDateStr } = formatEventTime(event.start_time);
 
-  // ALL ORIGINAL HANDLERS PRESERVED
+  // ALL ORIGINAL HANDLERS PRESERVED - USING EXTRACTED FUNCTIONS
   const handleQuickActionClick = (action: string) => {
     handleQuickAction(action, messages, setMessages, driverStatus, setDriverStatus, carDetails, showToast, isMobile);
     
@@ -376,148 +291,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   };
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
-    vibrate(isMobile);
-    const newMsg: Message = {
-      id: Date.now(),
-      user: 'You',
-      userId: userId,
-      message: newMessage,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      avatar: '😊'
-    };
-    setMessages(prev => [...prev, newMsg]);
-    setNewMessage('');
-    localStorage.removeItem(`carpool-draft-${event.id}`);
-  };
-
-  const handleVoiceRecord = () => {
-    vibrate(isMobile);
-    setIsVoiceRecording(!isVoiceRecording);
-    if (!isVoiceRecording) {
-      showToast?.({ type: 'info', message: '🎤 Recording...' });
-      setTimeout(() => {
-        setIsVoiceRecording(false);
-        const voiceMsg: Message = {
-          id: Date.now(),
-          user: 'You',
-          message: '🎵 Voice message (0:03)',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          avatar: '😊'
-        };
-        setMessages(prev => [...prev, voiceMsg]);
-        showToast?.({ type: 'success', message: 'Voice message sent!' });
-      }, 3000);
-    }
-  };
-
-  const handleCreatePoll = () => {
-    if (!newPollQuestion.trim()) return;
-    vibrate(isMobile);
-    const poll: Poll = {
-      id: Date.now().toString(),
-      question: newPollQuestion,
-      options: [
-        { text: 'Yes', votes: [] },
-        { text: 'No', votes: [] },
-        { text: 'Maybe', votes: [] }
-      ],
-      createdBy: userId || '',
-      active: true
-    };
-    setPolls([...polls, poll]);
-    setMessages([...messages, {
-      id: Date.now(),
-      user: 'You',
-      message: `📊 Poll: ${newPollQuestion}`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      avatar: '😊'
-    }]);
-    setNewPollQuestion('');
-    setShowPoll(false);
-    showToast?.({ type: 'success', message: 'Poll created!' });
-  };
-
-  const handleVotePoll = (pollId: string, optionIndex: number) => {
-    vibrate(isMobile);
-    setPolls(polls.map(poll => {
-      if (poll.id === pollId) {
-        const newOptions = [...poll.options];
-        if (!newOptions[optionIndex].votes.includes(userId || '')) {
-          newOptions[optionIndex].votes.push(userId || '');
-        }
-        return { ...poll, options: newOptions };
-      }
-      return poll;
-    }));
-  };
-
-  const handleChangeVote = (pollId: string, oldOptionIndex: number, newOptionIndex: number) => {
-    setPolls(polls.map(poll => {
-      if (poll.id === pollId) {
-        const newOptions = [...poll.options];
-        newOptions[oldOptionIndex].votes = newOptions[oldOptionIndex].votes.filter(id => id !== userId);
-        if (!newOptions[newOptionIndex].votes.includes(userId || '')) {
-          newOptions[newOptionIndex].votes.push(userId || '');
-        }
-        return { ...poll, options: newOptions };
-      }
-      return poll;
-    }));
-    vibrate(isMobile);
-    showToast?.({ type: 'success', message: 'Vote changed!' });
-  };
-
-  const handleFriendToggle = (friendId: string) => {
-    setSelectedFriends(prev => 
-      prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId]
-    );
-  };
-
-  const handleSaveCarDetails = () => {
-    setCarDetails(tempCarDetails);
-    setShowEditCarDetails(false);
-    if (driverStatus === 'driver') {
-      const carUpdateMsg: Message = {
-        id: Date.now(),
-        user: 'You',
-        message: `🚗 Updated car info: ${tempCarDetails.make} ${tempCarDetails.color}, ${tempCarDetails.seats} seats available`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        avatar: '😊'
-      };
-      setMessages(prev => [...prev, carUpdateMsg]);
-    }
-    showToast?.({ type: 'success', message: 'Car details updated!' });
-  };
-
-  const handleSaveEventDetails = () => {
-    const eventUpdateMsg: Message = {
-      id: Date.now(),
-      user: 'You',
-      message: `📍 Updated carpool details: Meetup at ${tempEventDetails.meetupLocation}, departing ${tempEventDetails.departureTime}${tempEventDetails.notes ? ` - ${tempEventDetails.notes}` : ''}`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      avatar: '😊'
-    };
-    setMessages(prev => [...prev, eventUpdateMsg]);
-    setShowEditEventDetails(false);
-    showToast?.({ type: 'success', message: 'Carpool details updated!' });
-  };
-
-  const handleStartNewCarpool = () => {
-    setMessages([]);
-    setPolls([]);
-    setDriverStatus('none');
-    setSelectedFriends([]);
-    setCurrentCarpoolId(null);
-    setShowNewCarpoolConfirm(false);
-    setTimeout(() => {
-      const initialMessages = initializeCarpoolChat(event);
-      setMessages(initialMessages);
-    }, 100);
-    showToast?.({ type: 'success', message: 'Started new carpool group!' });
-  };
-
   // MOBILE VERSION - FIXED LAYOUT
   if (isMobile) {
     return (
@@ -538,7 +311,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
             <div className="flex items-center gap-1">
               <button
-                onClick={saveCarpoolData}
+                onClick={handleSaveCarpoolData}
                 disabled={isSaving}
                 className="p-2 active:scale-95 disabled:opacity-50"
               >
@@ -603,6 +376,20 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               onEditCarDetails={() => setShowEditCarDetails(true)}
               onEditEventDetails={() => setShowEditEventDetails(true)}
               isMobile={isMobile}
+              // FIXED: Pass friend invite handler to connect with FriendSelector
+              onOpenFriendInvite={handleOpenFriendInvite}
+              onOpenProfileSettings={handleOpenProfileSettings}
+              showToast={showToast}
+              tempEventDetails={tempEventDetails}
+              persistenceState={{
+                currentCarpoolId,
+                isSaving,
+                lastSaved,
+                saveError,
+                isOnline: true,
+                syncStatus: 'synced'
+              }}
+              onSaveData={handleSaveCarpoolData}
             />
           )}
 
@@ -655,10 +442,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   polls={polls}
                   newMessage={newMessage}
                   onMessageChange={setNewMessage}
-                  onSendMessage={handleSendMessage}
-                  onVoiceRecord={handleVoiceRecord}
+                  onSendMessage={() => handleSendMessage(newMessage, userId, messages, setMessages, setNewMessage, event.id, isMobile, showToast)}
+                  onVoiceRecord={() => handleVoiceRecord(isVoiceRecording, setIsVoiceRecording, messages, setMessages, isMobile, showToast)}
                   isVoiceRecording={isVoiceRecording}
-                  onVotePoll={handleVotePoll}
+                  onVotePoll={(pollId, optionIndex) => handleVotePollInChat(pollId, optionIndex, userId, polls, setPolls, isMobile)}
                   onEditMessage={(id, text) => {
                     setEditingMessage(id);
                     setEditMessageText(text);
@@ -675,7 +462,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     setPolls(polls.filter(poll => poll.id !== id));
                     showToast?.({ type: 'success', message: 'Poll deleted!' });
                   }}
-                  onChangeVote={handleChangeVote}
+                  onChangeVote={(pollId, oldOptionIndex, newOptionIndex) => handleChangeVoteInChat(pollId, oldOptionIndex, newOptionIndex, userId, polls, setPolls, isMobile, showToast)}
                   editingMessage={editingMessage}
                   editMessageText={editMessageText}
                   onEditMessageTextChange={setEditMessageText}
@@ -736,24 +523,30 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           onClosePoll={() => setShowPoll(false)}
           newPollQuestion={newPollQuestion}
           onPollQuestionChange={setNewPollQuestion}
-          onCreatePoll={handleCreatePoll}
+          onCreatePoll={() => handleCreatePollInChat(newPollQuestion, userId, polls, setPolls, messages, setMessages, setNewPollQuestion, setShowPoll, isMobile, showToast)}
           showEditCarDetails={showEditCarDetails}
           onCloseEditCarDetails={() => setShowEditCarDetails(false)}
           tempCarDetails={tempCarDetails}
           onTempCarDetailsChange={setTempCarDetails}
-          onSaveCarDetails={handleSaveCarDetails}
+          onSaveCarDetails={() => handleSaveCarDetailsInModal(tempCarDetails, setCarDetails, setShowEditCarDetails, driverStatus, messages, setMessages, showToast)}
           showEditEventDetails={showEditEventDetails}
           onCloseEditEventDetails={() => setShowEditEventDetails(false)}
           tempEventDetails={tempEventDetails}
           onTempEventDetailsChange={setTempEventDetails}
-          onSaveEventDetails={handleSaveEventDetails}
+          onSaveEventDetails={() => handleSaveEventDetailsInModal(tempEventDetails, setShowEditEventDetails, messages, setMessages, showToast)}
           showNewCarpoolConfirm={showNewCarpoolConfirm}
           onCloseNewCarpoolConfirm={() => setShowNewCarpoolConfirm(false)}
-          onStartNewCarpool={handleStartNewCarpool}
+          onStartNewCarpool={() => handleStartNewCarpoolInModal(setMessages, setPolls, setDriverStatus, setSelectedFriends, setCurrentCarpoolId, setShowNewCarpoolConfirm, event, showToast)}
           showInfo={showInfo}
           onCloseInfo={() => setShowInfo(false)}
           showProfileSettings={showProfileSettings}
           onCloseProfileSettings={handleCloseProfileSettings}
+          // FIXED: Pass proper friend invite props that use FriendSelector
+          showFriendInvite={showFriendInvite}
+          onCloseFriendInvite={handleCloseFriendInvite}
+          selectedFriendsToInvite={selectedFriendsToInvite}
+          onSelectedFriendsToInviteChange={setSelectedFriendsToInvite}
+          onSendFriendInvites={handleSendFriendInvites}
           userId={userId}
           showToast={showToast}
           isMobile={isMobile}
@@ -778,7 +571,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-4">
               <button
-                onClick={saveCarpoolData}
+                onClick={handleSaveCarpoolData}
                 disabled={isSaving}
                 className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap disabled:opacity-50"
               >
@@ -835,7 +628,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           <div className="flex flex-1 min-h-0 overflow-hidden">
             <CarpoolSidebars
               selectedFriends={selectedFriends}
-              onFriendToggle={handleFriendToggle}
+              onFriendToggle={(friendId) => handleFriendToggleInModal(friendId, selectedFriends, setSelectedFriends)}
               carpoolData={carpoolData}
               event={event}
               onShowPoll={() => setShowPoll(true)}
@@ -851,10 +644,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 polls={polls}
                 newMessage={newMessage}
                 onMessageChange={setNewMessage}
-                onSendMessage={handleSendMessage}
-                onVoiceRecord={handleVoiceRecord}
+                onSendMessage={() => handleSendMessage(newMessage, userId, messages, setMessages, setNewMessage, event.id, isMobile, showToast)}
+                onVoiceRecord={() => handleVoiceRecord(isVoiceRecording, setIsVoiceRecording, messages, setMessages, isMobile, showToast)}
                 isVoiceRecording={isVoiceRecording}
-                onVotePoll={handleVotePoll}
+                onVotePoll={(pollId, optionIndex) => handleVotePollInChat(pollId, optionIndex, userId, polls, setPolls, isMobile)}
                 onEditMessage={(id, text) => {
                   setEditingMessage(id);
                   setEditMessageText(text);
@@ -871,7 +664,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   setPolls(polls.filter(poll => poll.id !== id));
                   showToast?.({ type: 'success', message: 'Poll deleted!' });
                 }}
-                onChangeVote={handleChangeVote}
+                onChangeVote={(pollId, oldOptionIndex, newOptionIndex) => handleChangeVoteInChat(pollId, oldOptionIndex, newOptionIndex, userId, polls, setPolls, isMobile, showToast)}
                 editingMessage={editingMessage}
                 editMessageText={editMessageText}
                 onEditMessageTextChange={setEditMessageText}
@@ -944,7 +737,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     📊 Create Poll
                   </button>
                   <button 
-                    onClick={saveCarpoolData}
+                    onClick={handleSaveCarpoolData}
                     disabled={isSaving}
                     className="w-full p-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium disabled:opacity-50"
                   >
@@ -988,6 +781,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   <button onClick={() => handleQuickActionClick('emergency-contact')} className="p-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors">
                     Emergency
                   </button>
+                  {/* FIXED: Friend invite button with proper handler */}
                   <button onClick={handleOpenFriendInvite} className="p-2 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors">
                     Invite Friends
                   </button>
@@ -1031,10 +825,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 polls={polls}
                 newMessage={newMessage}
                 onMessageChange={setNewMessage}
-                onSendMessage={handleSendMessage}
-                onVoiceRecord={handleVoiceRecord}
+                onSendMessage={() => handleSendMessage(newMessage, userId, messages, setMessages, setNewMessage, event.id, isMobile, showToast)}
+                onVoiceRecord={() => handleVoiceRecord(isVoiceRecording, setIsVoiceRecording, messages, setMessages, isMobile, showToast)}
                 isVoiceRecording={isVoiceRecording}
-                onVotePoll={handleVotePoll}
+                onVotePoll={(pollId, optionIndex) => handleVotePollInChat(pollId, optionIndex, userId, polls, setPolls, isMobile)}
                 onEditMessage={(id, text) => {
                   setEditingMessage(id);
                   setEditMessageText(text);
@@ -1051,7 +845,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   setPolls(polls.filter(poll => poll.id !== id));
                   showToast?.({ type: 'success', message: 'Poll deleted!' });
                 }}
-                onChangeVote={handleChangeVote}
+                onChangeVote={(pollId, oldOptionIndex, newOptionIndex) => handleChangeVoteInChat(pollId, oldOptionIndex, newOptionIndex, userId, polls, setPolls, isMobile, showToast)}
                 editingMessage={editingMessage}
                 editMessageText={editMessageText}
                 onEditMessageTextChange={setEditMessageText}
@@ -1108,6 +902,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     </div>
                     <p className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Invite Friends</p>
                     <p className="text-gray-400 dark:text-gray-500 mb-4 text-xs">Add friends to your network to start carpooling together</p>
+                    {/* FIXED: Friend invite button with proper handler */}
                     <button 
                       onClick={handleOpenFriendInvite}
                       className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
@@ -1126,24 +921,25 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
           onClosePoll={() => setShowPoll(false)}
           newPollQuestion={newPollQuestion}
           onPollQuestionChange={setNewPollQuestion}
-          onCreatePoll={handleCreatePoll}
+          onCreatePoll={() => handleCreatePollInChat(newPollQuestion, userId, polls, setPolls, messages, setMessages, setNewPollQuestion, setShowPoll, isMobile, showToast)}
           showEditCarDetails={showEditCarDetails}
           onCloseEditCarDetails={() => setShowEditCarDetails(false)}
           tempCarDetails={tempCarDetails}
           onTempCarDetailsChange={setTempCarDetails}
-          onSaveCarDetails={handleSaveCarDetails}
+          onSaveCarDetails={() => handleSaveCarDetailsInModal(tempCarDetails, setCarDetails, setShowEditCarDetails, driverStatus, messages, setMessages, showToast)}
           showEditEventDetails={showEditEventDetails}
           onCloseEditEventDetails={() => setShowEditEventDetails(false)}
           tempEventDetails={tempEventDetails}
           onTempEventDetailsChange={setTempEventDetails}
-          onSaveEventDetails={handleSaveEventDetails}
+          onSaveEventDetails={() => handleSaveEventDetailsInModal(tempEventDetails, setShowEditEventDetails, messages, setMessages, showToast)}
           showNewCarpoolConfirm={showNewCarpoolConfirm}
           onCloseNewCarpoolConfirm={() => setShowNewCarpoolConfirm(false)}
-          onStartNewCarpool={handleStartNewCarpool}
+          onStartNewCarpool={() => handleStartNewCarpoolInModal(setMessages, setPolls, setDriverStatus, setSelectedFriends, setCurrentCarpoolId, setShowNewCarpoolConfirm, event, showToast)}
           showInfo={showInfo}
           onCloseInfo={() => setShowInfo(false)}
           showProfileSettings={showProfileSettings}
           onCloseProfileSettings={handleCloseProfileSettings}
+          // FIXED: Pass proper friend invite props that use FriendSelector
           showFriendInvite={showFriendInvite}
           onCloseFriendInvite={handleCloseFriendInvite}
           selectedFriendsToInvite={selectedFriendsToInvite}
