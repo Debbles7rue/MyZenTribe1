@@ -1,4 +1,3 @@
-// app/business/[slug]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import BusinessFollowButton from '@/components/business/BusinessFollowButton';
 import BusinessVerificationBadge from '@/components/business/BusinessVerificationBadge';
+import BusinessViewerTutorial from '@/components/BusinessViewerTutorial';
 import { getVerificationLevel } from '@/components/business/BusinessVerificationBadge';
 
 interface BusinessProfile {
@@ -32,12 +32,25 @@ interface BusinessProfile {
   verification_level?: 'none' | 'some' | 'verified';
 }
 
+interface BusinessEvent {
+  id: string;
+  title: string;
+  description?: string;
+  start_time: string;
+  end_time: string;
+  location?: string;
+  image_path?: string;
+}
+
 export default function BusinessPublicPage() {
   const params = useParams();
   const slug = params?.slug as string;
   const [business, setBusiness] = useState<BusinessProfile | null>(null);
+  const [events, setEvents] = useState<BusinessEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('about');
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -60,6 +73,7 @@ export default function BusinessPublicPage() {
           }
         } else {
           setBusiness(data);
+          loadBusinessEvents(data.id);
         }
       } catch (err: any) {
         console.error('Error loading business:', err);
@@ -71,6 +85,28 @@ export default function BusinessPublicPage() {
     
     load();
   }, [slug]);
+
+  async function loadBusinessEvents(businessId: string) {
+    setEventsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('host_business_id', businessId)
+        .eq('status', 'scheduled')
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true })
+        .limit(10);
+
+      if (!error && data) {
+        setEvents(data);
+      }
+    } catch (err) {
+      console.error('Error loading events:', err);
+    } finally {
+      setEventsLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -109,8 +145,8 @@ export default function BusinessPublicPage() {
       </div>
 
       {/* Business Info */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 -mt-16 relative">
-        <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-16 relative">
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-start gap-4">
             {business.logo_url ? (
               <img 
@@ -144,6 +180,7 @@ export default function BusinessPublicPage() {
                   <div className="mt-3">
                     <BusinessVerificationBadge 
                       level={verificationLevel}
+                      businessId={business.id}
                       followerCount={business.follower_count}
                       size="medium"
                     />
@@ -164,70 +201,258 @@ export default function BusinessPublicPage() {
               </div>
             </div>
           </div>
+        </div>
 
-          {business.bio && (
-            <div className="mt-6">
-              <h2 className="text-lg font-semibold mb-2">About</h2>
-              <p className="text-gray-700 whitespace-pre-wrap">{business.bio}</p>
-            </div>
-          )}
-
-          {/* Contact Info */}
-          <div className="mt-6 space-y-2">
-            {business.phone_public && business.phone && (
-              <div className="flex items-center gap-2">
-                <span>📞</span>
-                <a href={`tel:${business.phone}`} className="text-blue-600 hover:underline">
-                  {business.phone}
-                </a>
-              </div>
-            )}
-            
-            {business.email_public && business.email && (
-              <div className="flex items-center gap-2">
-                <span>✉️</span>
-                <a href={`mailto:${business.email}`} className="text-blue-600 hover:underline">
-                  {business.email}
-                </a>
-              </div>
-            )}
-            
-            {business.website_url && (
-              <div className="flex items-center gap-2">
-                <span>🌐</span>
-                <a 
-                  href={business.website_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+        {/* Navigation Tabs */}
+        <div className="bg-white rounded-lg shadow-lg mb-6">
+          <div className="border-b">
+            <nav className="flex space-x-8 px-6">
+              {[
+                { id: 'about', label: 'About', icon: '📋' },
+                { id: 'services', label: 'Services', icon: '💎' },
+                { id: 'events', label: 'Events', icon: '📅' },
+                { id: 'gallery', label: 'Gallery', icon: '📸' },
+                { id: 'contact', label: 'Contact', icon: '📞' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.id
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  Website
-                </a>
+                  <span className="mr-2">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="p-6">
+            {/* About Tab */}
+            {activeTab === 'about' && (
+              <div className="space-y-6">
+                {business.bio && (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-3">About</h2>
+                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{business.bio}</p>
+                  </div>
+                )}
+
+                {business.categories && business.categories.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-3">Categories</h2>
+                    <div className="flex flex-wrap gap-2">
+                      {business.categories.map((category, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium"
+                        >
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {business.hours && (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-3">Hours</h2>
+                    <div className="space-y-1">
+                      {Object.entries(business.hours).map(([day, hours]: [string, any]) => (
+                        <div key={day} className="flex justify-between">
+                          <span className="capitalize font-medium">{day}</span>
+                          <span className="text-gray-600">
+                            {hours.closed ? 'Closed' : `${hours.open} - ${hours.close}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Services Tab */}
+            {activeTab === 'services' && (
+              <div>
+                <h2 className="text-lg font-semibold mb-6">Services & Offerings</h2>
+                {business.services && business.services.length > 0 ? (
+                  <div className="grid gap-6 md:grid-cols-2">
+                    {business.services.map((service: any, index: number) => (
+                      <div key={service.id || index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <h3 className="font-semibold text-lg mb-2">{service.title || service.name}</h3>
+                        {service.description && (
+                          <p className="text-gray-600 mb-3">{service.description}</p>
+                        )}
+                        <div className="flex justify-between items-center">
+                          {service.price && (
+                            <span className="text-purple-600 font-semibold">{service.price}</span>
+                          )}
+                          {service.duration && (
+                            <span className="text-gray-500 text-sm">{service.duration}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <span className="text-4xl mb-4 block">💎</span>
+                    <p>No services listed yet.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Events Tab */}
+            {activeTab === 'events' && (
+              <div>
+                <h2 className="text-lg font-semibold mb-6">Upcoming Events</h2>
+                {eventsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                    <p className="mt-2 text-gray-500">Loading events...</p>
+                  </div>
+                ) : events.length > 0 ? (
+                  <div className="space-y-4">
+                    {events.map((event) => (
+                      <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg mb-2">{event.title}</h3>
+                            {event.description && (
+                              <p className="text-gray-600 mb-3">{event.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span>📅 {new Date(event.start_time).toLocaleDateString()}</span>
+                              <span>🕐 {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              {event.location && <span>📍 {event.location}</span>}
+                            </div>
+                          </div>
+                          {event.image_path && (
+                            <img 
+                              src={event.image_path} 
+                              alt={event.title}
+                              className="w-20 h-20 rounded-lg object-cover ml-4"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <span className="text-4xl mb-4 block">📅</span>
+                    <p>No upcoming events.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Gallery Tab */}
+            {activeTab === 'gallery' && (
+              <div>
+                <h2 className="text-lg font-semibold mb-6">Gallery</h2>
+                {business.gallery && business.gallery.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {business.gallery.map((item: any, index: number) => (
+                      <div key={index} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                        <img 
+                          src={item.url || item.image_url} 
+                          alt={item.alt || `Gallery image ${index + 1}`}
+                          className="w-full h-full object-cover hover:scale-105 transition-transform"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <span className="text-4xl mb-4 block">📸</span>
+                    <p>No gallery images yet.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Contact Tab */}
+            {activeTab === 'contact' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold mb-6">Contact Information</h2>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    {business.phone_public && business.phone && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">📞</span>
+                        <div>
+                          <p className="font-medium">Phone</p>
+                          <a href={`tel:${business.phone}`} className="text-blue-600 hover:underline">
+                            {business.phone}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {business.email_public && business.email && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">✉️</span>
+                        <div>
+                          <p className="font-medium">Email</p>
+                          <a href={`mailto:${business.email}`} className="text-blue-600 hover:underline">
+                            {business.email}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {business.website_url && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🌐</span>
+                        <div>
+                          <p className="font-medium">Website</p>
+                          <a 
+                            href={business.website_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            Visit Website
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {business.social_links && Object.keys(business.social_links).length > 0 && (
+                    <div>
+                      <h3 className="font-medium mb-3">Social Media</h3>
+                      <div className="space-y-2">
+                        {Object.entries(business.social_links).map(([platform, url]) => (
+                          <a
+                            key={platform}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-blue-600 hover:underline"
+                          >
+                            <span className="capitalize">{platform}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
-
-          {/* Services */}
-          {business.services && business.services.length > 0 && (
-            <div className="mt-6">
-              <h2 className="text-lg font-semibold mb-3">Services</h2>
-              <div className="space-y-3">
-                {business.services.map((service: any, index: number) => (
-                  <div key={service.id || index} className="border-l-4 border-purple-400 pl-4">
-                    <h3 className="font-medium">{service.title}</h3>
-                    {service.description && (
-                      <p className="text-gray-600 text-sm mt-1">{service.description}</p>
-                    )}
-                    {service.price && (
-                      <p className="text-purple-600 font-medium mt-1">{service.price}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Business Viewer Tutorial */}
+      <BusinessViewerTutorial />
     </div>
   );
 }
