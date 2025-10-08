@@ -774,7 +774,235 @@ export const formatEventTime = (startTime: string): { eventTime: string; eventDa
   return { eventTime, eventDateStr };
 };
 
-// Utility functions for status display
+// ===== EXTRACTED EVENT HANDLERS FROM EVENTCARPOOLMODAL =====
+
+// Handle sending messages in carpool chat
+export const handleSendMessage = (
+  newMessage: string,
+  userId: string | null,
+  messages: Message[],
+  setMessages: (messages: Message[]) => void,
+  setNewMessage: (message: string) => void,
+  eventId: string,
+  isMobile?: boolean,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  if (!newMessage.trim()) return;
+  
+  vibrate(isMobile);
+  const newMsg: Message = {
+    id: Date.now(),
+    user: 'You',
+    userId: userId,
+    message: newMessage,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    avatar: '😊'
+  };
+  setMessages([...messages, newMsg]);
+  setNewMessage('');
+  localStorage.removeItem(`carpool-draft-${eventId}`);
+};
+
+// Handle voice recording in carpool chat
+export const handleVoiceRecord = (
+  isVoiceRecording: boolean,
+  setIsVoiceRecording: (recording: boolean) => void,
+  messages: Message[],
+  setMessages: (messages: Message[]) => void,
+  isMobile?: boolean,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  vibrate(isMobile);
+  setIsVoiceRecording(!isVoiceRecording);
+  if (!isVoiceRecording) {
+    showToast?.({ type: 'info', message: '🎤 Recording...' });
+    setTimeout(() => {
+      setIsVoiceRecording(false);
+      const voiceMsg: Message = {
+        id: Date.now(),
+        user: 'You',
+        message: '🎵 Voice message (0:03)',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        avatar: '😊'
+      };
+      setMessages([...messages, voiceMsg]);
+      showToast?.({ type: 'success', message: 'Voice message sent!' });
+    }, 3000);
+  }
+};
+
+// Handle creating polls in carpool chat
+export const handleCreatePollInChat = (
+  newPollQuestion: string,
+  userId: string | null,
+  polls: Poll[],
+  setPolls: (polls: Poll[]) => void,
+  messages: Message[],
+  setMessages: (messages: Message[]) => void,
+  setNewPollQuestion: (question: string) => void,
+  setShowPoll: (show: boolean) => void,
+  isMobile?: boolean,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  if (!newPollQuestion.trim()) return;
+  
+  vibrate(isMobile);
+  const poll: Poll = {
+    id: Date.now().toString(),
+    question: newPollQuestion,
+    options: [
+      { text: 'Yes', votes: [] },
+      { text: 'No', votes: [] },
+      { text: 'Maybe', votes: [] }
+    ],
+    createdBy: userId || '',
+    active: true
+  };
+  setPolls([...polls, poll]);
+  setMessages([...messages, {
+    id: Date.now(),
+    user: 'You',
+    message: `📊 Poll: ${newPollQuestion}`,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    avatar: '😊'
+  }]);
+  setNewPollQuestion('');
+  setShowPoll(false);
+  showToast?.({ type: 'success', message: 'Poll created!' });
+};
+
+// Handle voting on polls in carpool chat
+export const handleVotePollInChat = (
+  pollId: string,
+  optionIndex: number,
+  userId: string | null,
+  polls: Poll[],
+  setPolls: (polls: Poll[]) => void,
+  isMobile?: boolean
+) => {
+  vibrate(isMobile);
+  setPolls(polls.map(poll => {
+    if (poll.id === pollId) {
+      const newOptions = [...poll.options];
+      if (!newOptions[optionIndex].votes.includes(userId || '')) {
+        newOptions[optionIndex].votes.push(userId || '');
+      }
+      return { ...poll, options: newOptions };
+    }
+    return poll;
+  }));
+};
+
+// Handle changing votes on polls
+export const handleChangeVoteInChat = (
+  pollId: string,
+  oldOptionIndex: number,
+  newOptionIndex: number,
+  userId: string | null,
+  polls: Poll[],
+  setPolls: (polls: Poll[]) => void,
+  isMobile?: boolean,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  setPolls(polls.map(poll => {
+    if (poll.id === pollId) {
+      const newOptions = [...poll.options];
+      newOptions[oldOptionIndex].votes = newOptions[oldOptionIndex].votes.filter(id => id !== userId);
+      if (!newOptions[newOptionIndex].votes.includes(userId || '')) {
+        newOptions[newOptionIndex].votes.push(userId || '');
+      }
+      return { ...poll, options: newOptions };
+    }
+    return poll;
+  }));
+  vibrate(isMobile);
+  showToast?.({ type: 'success', message: 'Vote changed!' });
+};
+
+// Handle saving car details
+export const handleSaveCarDetailsInModal = (
+  tempCarDetails: CarDetails,
+  setCarDetails: (details: CarDetails) => void,
+  setShowEditCarDetails: (show: boolean) => void,
+  driverStatus: DriverStatus,
+  messages: Message[],
+  setMessages: (messages: Message[]) => void,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  setCarDetails(tempCarDetails);
+  setShowEditCarDetails(false);
+  if (driverStatus === 'driver') {
+    const carUpdateMsg: Message = {
+      id: Date.now(),
+      user: 'You',
+      message: `🚗 Updated car info: ${tempCarDetails.make} ${tempCarDetails.color}, ${tempCarDetails.seats} seats available`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      avatar: '😊'
+    };
+    setMessages([...messages, carUpdateMsg]);
+  }
+  showToast?.({ type: 'success', message: 'Car details updated!' });
+};
+
+// Handle saving event details
+export const handleSaveEventDetailsInModal = (
+  tempEventDetails: EventDetails,
+  setShowEditEventDetails: (show: boolean) => void,
+  messages: Message[],
+  setMessages: (messages: Message[]) => void,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  const eventUpdateMsg: Message = {
+    id: Date.now(),
+    user: 'You',
+    message: `📍 Updated carpool details: Meetup at ${tempEventDetails.meetupLocation}, departing ${tempEventDetails.departureTime}${tempEventDetails.notes ? ` - ${tempEventDetails.notes}` : ''}`,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    avatar: '😊'
+  };
+  setMessages([...messages, eventUpdateMsg]);
+  setShowEditEventDetails(false);
+  showToast?.({ type: 'success', message: 'Carpool details updated!' });
+};
+
+// Handle starting new carpool
+export const handleStartNewCarpoolInModal = (
+  setMessages: (messages: Message[]) => void,
+  setPolls: (polls: Poll[]) => void,
+  setDriverStatus: (status: DriverStatus) => void,
+  setSelectedFriends: (friends: string[]) => void,
+  setCurrentCarpoolId: (id: string | null) => void,
+  setShowNewCarpoolConfirm: (show: boolean) => void,
+  event: any,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  setMessages([]);
+  setPolls([]);
+  setDriverStatus('none');
+  setSelectedFriends([]);
+  setCurrentCarpoolId(null);
+  setShowNewCarpoolConfirm(false);
+  setTimeout(() => {
+    const initialMessages = initializeCarpoolChat(event);
+    setMessages(initialMessages);
+  }, 100);
+  showToast?.({ type: 'success', message: 'Started new carpool group!' });
+};
+
+// Handle friend toggle in carpool
+export const handleFriendToggleInModal = (
+  friendId: string,
+  selectedFriends: string[],
+  setSelectedFriends: (friends: string[]) => void
+) => {
+  setSelectedFriends(
+    selectedFriends.includes(friendId) 
+      ? selectedFriends.filter(id => id !== friendId) 
+      : [...selectedFriends, friendId]
+  );
+};
+
+// ===== UTILITY FUNCTIONS (PRESERVED) =====
+
 export const getStatusColor = (status: string): string => {
   switch (status) {
     case 'active': return 'text-green-600 bg-green-100 dark:bg-green-900/30';
