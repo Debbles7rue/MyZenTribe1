@@ -1,10 +1,12 @@
 // components/CarpoolProfileSettings.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Car, MapPin, Phone, User, Shield, Save, Edit, 
-  Users, Clock, DollarSign, Settings, Home, AlertCircle
+  Car, MapPin, Phone, User, Shield, Save, Edit, Camera,
+  Users, Clock, DollarSign, Settings, Home, AlertCircle,
+  Lock, Eye, EyeOff, Upload, X, Check, Sparkles, Heart,
+  Music, Cigarette, PawPrint, Coffee, Star, Award, Zap
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -13,6 +15,9 @@ const supabase = createClient();
 interface CarpoolProfile {
   id?: string;
   user_id: string;
+  // Profile Pictures
+  profile_picture_url?: string;
+  car_picture_url?: string;
   // Car Information
   car_make: string;
   car_model: string;
@@ -26,8 +31,15 @@ interface CarpoolProfile {
   home_city: string;
   home_state: string;
   home_zip: string;
+  location_privacy: 'full' | 'street' | 'area' | 'city' | 'hidden';
   preferred_pickup_locations: string[];
   max_detour_minutes: number;
+  // Profile Info
+  display_name: string;
+  bio: string;
+  driving_style: 'chill' | 'efficient' | 'adventurous' | 'cautious';
+  fun_fact: string;
+  favorite_road_trip_snack: string;
   // Contact & Emergency
   phone_number: string;
   emergency_contact_name: string;
@@ -46,6 +58,7 @@ interface CarpoolProfile {
   insurance_verified: boolean;
   background_check_completed: boolean;
   safe_driver_rating: number;
+  total_trips_completed: number;
   // Settings
   auto_share_location: boolean;
   send_arrival_notifications: boolean;
@@ -72,6 +85,11 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
 }) => {
   const [profile, setProfile] = useState<CarpoolProfile>({
     user_id: userId,
+    display_name: '',
+    bio: '',
+    driving_style: 'chill',
+    fun_fact: '',
+    favorite_road_trip_snack: '',
     car_make: '',
     car_model: '',
     car_color: '',
@@ -83,6 +101,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
     home_city: '',
     home_state: '',
     home_zip: '',
+    location_privacy: 'area',
     preferred_pickup_locations: [],
     max_detour_minutes: 15,
     phone_number: '',
@@ -100,6 +119,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
     insurance_verified: false,
     background_check_completed: false,
     safe_driver_rating: 5,
+    total_trips_completed: 0,
     auto_share_location: true,
     send_arrival_notifications: true,
     allow_carpool_invites: true,
@@ -108,8 +128,46 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'car' | 'location' | 'contact' | 'preferences' | 'safety'>('car');
+  const [activeTab, setActiveTab] = useState<'profile' | 'car' | 'location' | 'preferences' | 'safety'>('profile');
   const [newPickupLocation, setNewPickupLocation] = useState('');
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+  const [uploadingCarPic, setUploadingCarPic] = useState(false);
+  const [profileCompletion, setProfileCompletion] = useState(0);
+
+  const profilePicInputRef = useRef<HTMLInputElement>(null);
+  const carPicInputRef = useRef<HTMLInputElement>(null);
+
+  // Color options for car
+  const carColors = [
+    { value: 'Black', hex: '#000000' },
+    { value: 'White', hex: '#FFFFFF' },
+    { value: 'Silver', hex: '#C0C0C0' },
+    { value: 'Gray', hex: '#808080' },
+    { value: 'Blue', hex: '#0000FF' },
+    { value: 'Red', hex: '#FF0000' },
+    { value: 'Green', hex: '#00FF00' },
+    { value: 'Yellow', hex: '#FFFF00' },
+    { value: 'Orange', hex: '#FFA500' },
+    { value: 'Brown', hex: '#A52A2A' },
+    { value: 'Purple', hex: '#800080' },
+    { value: 'Gold', hex: '#FFD700' }
+  ];
+
+  // Calculate profile completion
+  useEffect(() => {
+    const requiredFields = [
+      profile.display_name,
+      profile.phone_number,
+      profile.car_make,
+      profile.car_model,
+      profile.car_color,
+      profile.home_city,
+      profile.home_state
+    ];
+    const filledFields = requiredFields.filter(field => field && field !== '').length;
+    const completion = Math.round((filledFields / requiredFields.length) * 100);
+    setProfileCompletion(completion);
+  }, [profile]);
 
   // Load existing carpool profile
   useEffect(() => {
@@ -121,7 +179,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
           .eq('user_id', userId)
           .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        if (error && error.code !== 'PGRST116') {
           throw error;
         }
 
@@ -130,7 +188,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
         }
       } catch (error) {
         console.error('Failed to load carpool profile:', error);
-        showToast?.({ type: 'info', message: 'Creating new carpool profile' });
+        showToast?.({ type: 'info', message: 'Setting up your carpool profile' });
       } finally {
         setLoading(false);
       }
@@ -141,6 +199,63 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
 
   const handleInputChange = (field: keyof CarpoolProfile, value: any) => {
     setProfile(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleProfilePicUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingProfilePic(true);
+    try {
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userId}_profile_${Date.now()}.${fileExt}`;
+      const { data, error } = await supabase.storage
+        .from('profile-pictures')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-pictures')
+        .getPublicUrl(fileName);
+
+      handleInputChange('profile_picture_url', publicUrl);
+      showToast?.({ type: 'success', message: 'Profile picture uploaded!' });
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast?.({ type: 'error', message: 'Failed to upload profile picture' });
+    } finally {
+      setUploadingProfilePic(false);
+    }
+  };
+
+  const handleCarPicUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingCarPic(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userId}_car_${Date.now()}.${fileExt}`;
+      const { data, error } = await supabase.storage
+        .from('car-pictures')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('car-pictures')
+        .getPublicUrl(fileName);
+
+      handleInputChange('car_picture_url', publicUrl);
+      showToast?.({ type: 'success', message: 'Car picture uploaded!' });
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast?.({ type: 'error', message: 'Failed to upload car picture' });
+    } finally {
+      setUploadingCarPic(false);
+    }
   };
 
   const addPickupLocation = () => {
@@ -169,7 +284,6 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
       };
 
       if (profile.id) {
-        // Update existing profile
         const { error } = await supabase
           .from('carpool_profiles')
           .update(saveData)
@@ -177,7 +291,6 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
         
         if (error) throw error;
       } else {
-        // Create new profile
         const { data, error } = await supabase
           .from('carpool_profiles')
           .insert([{ ...saveData, created_at: new Date().toISOString() }])
@@ -188,7 +301,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
         if (data) setProfile(data);
       }
 
-      showToast?.({ type: 'success', message: 'Carpool profile saved successfully!' });
+      showToast?.({ type: 'success', message: 'Profile saved successfully! 🎉' });
       onSave?.(profile);
       
       if (isModal && onClose) {
@@ -196,18 +309,37 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
       }
     } catch (error) {
       console.error('Failed to save carpool profile:', error);
-      showToast?.({ type: 'error', message: 'Failed to save carpool profile' });
+      showToast?.({ type: 'error', message: 'Failed to save profile' });
     } finally {
       setSaving(false);
     }
   };
 
+  const getLocationPrivacyDisplay = () => {
+    if (!profile.home_address && !profile.home_city) return 'Not set';
+    
+    switch (profile.location_privacy) {
+      case 'full':
+        return `${profile.home_address}, ${profile.home_city}, ${profile.home_state} ${profile.home_zip}`;
+      case 'street':
+        return `${profile.home_address?.split(' ').slice(1).join(' ')}, ${profile.home_city}`;
+      case 'area':
+        return `Near ${profile.home_city}, ${profile.home_state}`;
+      case 'city':
+        return `${profile.home_city}, ${profile.home_state}`;
+      case 'hidden':
+        return 'Location hidden';
+      default:
+        return 'Not set';
+    }
+  };
+
   const tabs = [
-    { id: 'car', label: 'Vehicle', icon: Car },
-    { id: 'location', label: 'Location', icon: MapPin },
-    { id: 'contact', label: 'Contact', icon: Phone },
-    { id: 'preferences', label: 'Preferences', icon: Settings },
-    { id: 'safety', label: 'Safety', icon: Shield }
+    { id: 'profile', label: 'Profile', icon: User, emoji: '👤' },
+    { id: 'car', label: 'Vehicle', icon: Car, emoji: '🚗' },
+    { id: 'location', label: 'Location', icon: MapPin, emoji: '📍' },
+    { id: 'preferences', label: 'Preferences', icon: Settings, emoji: '⚙️' },
+    { id: 'safety', label: 'Safety', icon: Shield, emoji: '🛡️' }
   ];
 
   if (loading) {
@@ -220,15 +352,206 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
 
   const TabContent = () => {
     switch (activeTab) {
-      case 'car':
+      case 'profile':
         return (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Vehicle Information</h3>
-            
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Profile Information
+            </h3>
+
+            {/* Profile Picture Upload */}
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                  {profile.profile_picture_url ? (
+                    <img 
+                      src={profile.profile_picture_url} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User size={40} className="text-white" />
+                  )}
+                </div>
+                <button
+                  onClick={() => profilePicInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 bg-green-600 text-white p-2 rounded-full hover:bg-green-700 transition-colors"
+                  disabled={uploadingProfilePic}
+                >
+                  {uploadingProfilePic ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  ) : (
+                    <Camera size={16} />
+                  )}
+                </button>
+                <input
+                  ref={profilePicInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePicUpload}
+                  className="hidden"
+                />
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-gray-900 dark:text-white">Profile Picture</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Upload a photo so friends can recognize you
+                </p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Make *
+                  Display Name *
+                </label>
+                <input
+                  type="text"
+                  value={profile.display_name}
+                  onChange={(e) => handleInputChange('display_name', e.target.value)}
+                  placeholder="How you want to be called"
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Driving Style 🚗
+                </label>
+                <select
+                  value={profile.driving_style}
+                  onChange={(e) => handleInputChange('driving_style', e.target.value)}
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="chill">😎 Chill Cruiser</option>
+                  <option value="efficient">⚡ Efficient Commuter</option>
+                  <option value="adventurous">🎢 Adventurous Driver</option>
+                  <option value="cautious">🛡️ Safety First</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Bio / About Me
+              </label>
+              <textarea
+                value={profile.bio}
+                onChange={(e) => handleInputChange('bio', e.target.value)}
+                placeholder="Tell potential carpool buddies a bit about yourself..."
+                rows={3}
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Fun Fact 🎉
+                </label>
+                <input
+                  type="text"
+                  value={profile.fun_fact}
+                  onChange={(e) => handleInputChange('fun_fact', e.target.value)}
+                  placeholder="Share something interesting!"
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Favorite Road Trip Snack 🍿
+                </label>
+                <input
+                  type="text"
+                  value={profile.favorite_road_trip_snack}
+                  onChange={(e) => handleInputChange('favorite_road_trip_snack', e.target.value)}
+                  placeholder="Chips, candy, fruit..."
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+
+            {/* Stats & Achievements */}
+            <div className="bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-xl p-4">
+              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <Award className="text-yellow-500" size={16} />
+                Carpool Stats
+              </h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">{profile.total_trips_completed || 0}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Trips Completed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {profile.safe_driver_rating ? '⭐'.repeat(Math.round(profile.safe_driver_rating)) : '—'}
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Driver Rating</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{profileCompletion}%</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">Profile Complete</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'car':
+        return (
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Vehicle Information</h3>
+            
+            {/* Car Picture Upload */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="relative">
+                  <div className="w-32 h-24 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                    {profile.car_picture_url ? (
+                      <img 
+                        src={profile.car_picture_url} 
+                        alt="Car" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Car size={32} className="text-gray-400" />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => carPicInputRef.current?.click()}
+                    className="absolute bottom-2 right-2 bg-green-600 text-white p-1.5 rounded-full hover:bg-green-700 transition-colors"
+                    disabled={uploadingCarPic}
+                  >
+                    {uploadingCarPic ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                    ) : (
+                      <Camera size={14} />
+                    )}
+                  </button>
+                  <input
+                    ref={carPicInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCarPicUpload}
+                    className="hidden"
+                  />
+                </div>
+                
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white">Car Photo</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Help riders identify your car easily
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Make * 🏷️
                 </label>
                 <input
                   type="text"
@@ -241,7 +564,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Model *
+                  Model * 🚙
                 </label>
                 <input
                   type="text"
@@ -254,20 +577,33 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Color *
+                  Color * 🎨
                 </label>
-                <input
-                  type="text"
-                  value={profile.car_color}
-                  onChange={(e) => handleInputChange('car_color', e.target.value)}
-                  placeholder="Blue, Red, Silver, etc."
-                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <div className="flex gap-2">
+                  <select
+                    value={profile.car_color}
+                    onChange={(e) => handleInputChange('car_color', e.target.value)}
+                    className="flex-1 px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Select color</option>
+                    {carColors.map(color => (
+                      <option key={color.value} value={color.value}>{color.value}</option>
+                    ))}
+                  </select>
+                  {profile.car_color && (
+                    <div 
+                      className="w-10 h-10 rounded-lg border-2 border-gray-300"
+                      style={{ 
+                        backgroundColor: carColors.find(c => c.value === profile.car_color)?.hex || '#ccc' 
+                      }}
+                    />
+                  )}
+                </div>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Year
+                  Year 📅
                 </label>
                 <input
                   type="number"
@@ -279,30 +615,31 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
                   className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
-              
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  License Plate
+                  License Plate 🔖
                 </label>
                 <input
                   type="text"
                   value={profile.car_license_plate}
                   onChange={(e) => handleInputChange('car_license_plate', e.target.value.toUpperCase())}
                   placeholder="ABC-1234"
-                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 font-mono uppercase"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Total Seats *
+                  Total Seats * 💺
                 </label>
                 <select
                   value={profile.total_seats}
                   onChange={(e) => {
                     const total = parseInt(e.target.value);
                     handleInputChange('total_seats', total);
-                    // Ensure available seats doesn't exceed total - 1 (driver)
                     if (profile.available_seats >= total) {
                       handleInputChange('available_seats', total - 1);
                     }
@@ -316,21 +653,30 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
               </div>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Available Seats for Passengers
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Available Seats for Passengers 👥
               </label>
-              <select
-                value={profile.available_seats}
-                onChange={(e) => handleInputChange('available_seats', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                {Array.from({ length: profile.total_seats }, (_, i) => i).map(num => (
-                  <option key={num} value={num}>{num} passenger{num !== 1 ? 's' : ''}</option>
+              <div className="flex items-center gap-2">
+                {Array.from({ length: profile.total_seats }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleInputChange('available_seats', i)}
+                    className={`w-12 h-12 rounded-lg border-2 transition-all ${
+                      i === 0 
+                        ? 'bg-blue-500 text-white border-blue-500' 
+                        : i <= profile.available_seats 
+                          ? 'bg-green-100 dark:bg-green-900/30 border-green-500 text-green-700 dark:text-green-300' 
+                          : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600'
+                    }`}
+                    disabled={i === 0}
+                  >
+                    {i === 0 ? '🚗' : i <= profile.available_seats ? '✓' : i}
+                  </button>
                 ))}
-              </select>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                How many passengers can you typically take?
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Click to set how many passengers you can take (driver seat is always occupied)
               </p>
             </div>
           </div>
@@ -338,13 +684,66 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
 
       case 'location':
         return (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Location & Pickup</h3>
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Location & Privacy</h3>
             
+            {/* Location Privacy Settings */}
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="text-purple-600" size={20} />
+                <h4 className="font-medium text-gray-900 dark:text-white">Location Privacy Settings</h4>
+              </div>
+              
+              <div className="space-y-2">
+                {[
+                  { value: 'full', label: 'Full Address', icon: Eye, preview: '123 Main St, Austin, TX 78701' },
+                  { value: 'street', label: 'Street Only', icon: Eye, preview: 'Main St, Austin' },
+                  { value: 'area', label: 'Area Only', icon: Eye, preview: 'Near Austin, TX' },
+                  { value: 'city', label: 'City Only', icon: Eye, preview: 'Austin, TX' },
+                  { value: 'hidden', label: 'Hidden', icon: EyeOff, preview: 'Location hidden' }
+                ].map(option => (
+                  <label 
+                    key={option.value}
+                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                      profile.location_privacy === option.value 
+                        ? 'bg-purple-100 dark:bg-purple-900/30 border-2 border-purple-500' 
+                        : 'bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        value={option.value}
+                        checked={profile.location_privacy === option.value}
+                        onChange={(e) => handleInputChange('location_privacy', e.target.value)}
+                        className="text-purple-600 focus:ring-purple-500"
+                      />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                          <option.icon size={16} />
+                          {option.label}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Shows as: "{option.preview}"
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              
+              <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <strong>Your location will appear as:</strong><br />
+                  <span className="text-purple-600 dark:text-purple-400">{getLocationPrivacyDisplay()}</span>
+                </p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Home Address
+                  Home Address 🏠
                 </label>
                 <input
                   type="text"
@@ -357,7 +756,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  City *
+                  City * 🏙️
                 </label>
                 <input
                   type="text"
@@ -370,28 +769,29 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  State *
+                  State * 📍
                 </label>
                 <input
                   type="text"
                   value={profile.home_state}
                   onChange={(e) => handleInputChange('home_state', e.target.value)}
                   placeholder="TX"
-                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  maxLength={2}
+                  className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 uppercase"
                 />
               </div>
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Preferred Pickup Locations
+                Preferred Pickup Locations 🚏
               </label>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={newPickupLocation}
                   onChange={(e) => setNewPickupLocation(e.target.value)}
-                  placeholder="Coffee shop, mall, etc."
+                  placeholder="Coffee shop, mall, park & ride..."
                   className="flex-1 px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                   onKeyPress={(e) => e.key === 'Enter' && addPickupLocation()}
                 />
@@ -406,13 +806,16 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
               {profile.preferred_pickup_locations.length > 0 && (
                 <div className="space-y-2">
                   {profile.preferred_pickup_locations.map((location, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-2 rounded">
-                      <span className="text-sm">{location}</span>
+                    <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                      <span className="text-sm flex items-center gap-2">
+                        <MapPin size={14} className="text-green-600" />
+                        {location}
+                      </span>
                       <button
                         onClick={() => removePickupLocation(location)}
                         className="text-red-600 hover:text-red-800 text-sm"
                       >
-                        Remove
+                        <X size={16} />
                       </button>
                     </div>
                   ))}
@@ -422,49 +825,258 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Maximum Detour Time: {profile.max_detour_minutes} minutes
+                Maximum Detour Time: <span className="text-green-600 font-bold">{profile.max_detour_minutes}</span> minutes ⏱️
               </label>
               <input
                 type="range"
                 min="5"
                 max="30"
+                step="5"
                 value={profile.max_detour_minutes}
                 onChange={(e) => handleInputChange('max_detour_minutes', parseInt(e.target.value))}
-                className="w-full"
+                className="w-full accent-green-600"
               />
               <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>5 min</span>
+                <span>15 min</span>
                 <span>30 min</span>
               </div>
             </div>
           </div>
         );
 
-      case 'contact':
+      case 'preferences':
         return (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Contact Information</h3>
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Carpool Preferences</h3>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Phone Number *
-              </label>
-              <input
-                type="tel"
-                value={profile.phone_number}
-                onChange={(e) => handleInputChange('phone_number', e.target.value)}
-                placeholder="(555) 123-4567"
-                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Carpool Radius: <span className="text-green-600 font-bold">{profile.carpool_radius_miles}</span> miles 📏
+                </label>
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  step="5"
+                  value={profile.carpool_radius_miles}
+                  onChange={(e) => handleInputChange('carpool_radius_miles', parseInt(e.target.value))}
+                  className="w-full accent-green-600"
+                />
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>5 mi</span>
+                  <span>25 mi</span>
+                  <span>50 mi</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Advance Notice: <span className="text-green-600 font-bold">{profile.advance_notice_hours}</span> hours ⏰
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="48"
+                  value={profile.advance_notice_hours}
+                  onChange={(e) => handleInputChange('advance_notice_hours', parseInt(e.target.value))}
+                  className="w-full accent-green-600"
+                />
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>1 hr</span>
+                  <span>24 hrs</span>
+                  <span>48 hrs</span>
+                </div>
+              </div>
             </div>
             
-            <div className="border-t dark:border-gray-600 pt-4">
-              <h4 className="font-medium text-gray-900 dark:text-white mb-3">Emergency Contact</h4>
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <DollarSign className="text-green-600" size={20} />
+                Cost Sharing
+              </h4>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={profile.split_gas_costs}
+                    onChange={(e) => handleInputChange('split_gas_costs', e.target.checked)}
+                    className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-sm">Split gas costs with passengers ⛽</span>
+                </label>
+                
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={profile.split_parking_costs}
+                    onChange={(e) => handleInputChange('split_parking_costs', e.target.checked)}
+                    className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-sm">Split parking costs with passengers 🅿️</span>
+                </label>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3">Vehicle Rules</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={profile.allow_smoking}
+                    onChange={(e) => handleInputChange('allow_smoking', e.target.checked)}
+                    className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm flex items-center gap-1">
+                    <Cigarette size={14} className={profile.allow_smoking ? 'text-orange-500' : 'text-gray-400'} />
+                    {profile.allow_smoking ? 'Smoking allowed' : 'No smoking'}
+                  </span>
+                </label>
+                
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={profile.allow_pets}
+                    onChange={(e) => handleInputChange('allow_pets', e.target.checked)}
+                    className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm flex items-center gap-1">
+                    <PawPrint size={14} className={profile.allow_pets ? 'text-brown-500' : 'text-gray-400'} />
+                    {profile.allow_pets ? 'Pets welcome' : 'No pets'}
+                  </span>
+                </label>
+                
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={profile.allow_food_drinks}
+                    onChange={(e) => handleInputChange('allow_food_drinks', e.target.checked)}
+                    className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm flex items-center gap-1">
+                    <Coffee size={14} className={profile.allow_food_drinks ? 'text-brown-600' : 'text-gray-400'} />
+                    {profile.allow_food_drinks ? 'Food & drinks OK' : 'No food or drinks'}
+                  </span>
+                </label>
+                
+                <div>
+                  <select
+                    value={profile.music_preferences}
+                    onChange={(e) => handleInputChange('music_preferences', e.target.value)}
+                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="Driver chooses">🎵 Driver picks music</option>
+                    <option value="No music">🔇 No music</option>
+                    <option value="Group decides">👥 Group decides</option>
+                    <option value="Passengers choose">🎧 Passengers pick</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'safety':
+        return (
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Safety & Verification</h3>
+            
+            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h4 className="font-medium text-yellow-800 dark:text-yellow-200">Safety First! 🛡️</h4>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                    Verification helps build trust in the carpool community. Verified profiles get more matches!
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <Award className="text-purple-600" size={20} />
+                Verification Badges
+              </h4>
+              
+              <div className="space-y-2">
+                {[
+                  { 
+                    field: 'drivers_license_verified', 
+                    label: "Driver's License", 
+                    icon: '🪪',
+                    benefit: 'Proves you\'re a licensed driver'
+                  },
+                  { 
+                    field: 'insurance_verified', 
+                    label: 'Auto Insurance', 
+                    icon: '📋',
+                    benefit: 'Shows your vehicle is insured'
+                  },
+                  { 
+                    field: 'background_check_completed', 
+                    label: 'Background Check', 
+                    icon: '✅',
+                    benefit: 'Maximum trust & safety'
+                  }
+                ].map(item => (
+                  <label 
+                    key={item.field}
+                    className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-all ${
+                      profile[item.field as keyof CarpoolProfile] 
+                        ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-500' 
+                        : 'bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-green-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={profile[item.field as keyof CarpoolProfile] as boolean}
+                        onChange={(e) => handleInputChange(item.field as keyof CarpoolProfile, e.target.checked)}
+                        className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
+                      />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {item.icon} {item.label}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {item.benefit}
+                        </div>
+                      </div>
+                    </div>
+                    {profile[item.field as keyof CarpoolProfile] && (
+                      <span className="text-green-600 font-medium text-sm flex items-center gap-1">
+                        <Check size={16} />
+                        Verified
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t dark:border-gray-700 pt-4">
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3">Contact Information</h4>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Emergency Contact Name
+                    Phone Number * 📱
+                  </label>
+                  <input
+                    type="tel"
+                    value={profile.phone_number}
+                    onChange={(e) => handleInputChange('phone_number', e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Emergency Contact Name 🆘
                   </label>
                   <input
                     type="text"
@@ -475,9 +1087,9 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
                   />
                 </div>
                 
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Emergency Contact Phone
+                    Emergency Contact Phone ☎️
                   </label>
                   <input
                     type="tel"
@@ -489,227 +1101,59 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
                 </div>
               </div>
             </div>
-          </div>
-        );
-
-      case 'preferences':
-        return (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Carpool Preferences</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Carpool Radius: {profile.carpool_radius_miles} miles
-                </label>
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  value={profile.carpool_radius_miles}
-                  onChange={(e) => handleInputChange('carpool_radius_miles', parseInt(e.target.value))}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <span>5 mi</span>
-                  <span>50 mi</span>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Advance Notice: {profile.advance_notice_hours} hours
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="48"
-                  value={profile.advance_notice_hours}
-                  onChange={(e) => handleInputChange('advance_notice_hours', parseInt(e.target.value))}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <span>1 hr</span>
-                  <span>48 hrs</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-white">Cost Sharing</h4>
-              
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={profile.split_gas_costs}
-                  onChange={(e) => handleInputChange('split_gas_costs', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm">Split gas costs with passengers</span>
-              </label>
-              
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={profile.split_parking_costs}
-                  onChange={(e) => handleInputChange('split_parking_costs', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm">Split parking costs with passengers</span>
-              </label>
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-white">Vehicle Rules</h4>
-              
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={profile.allow_smoking}
-                  onChange={(e) => handleInputChange('allow_smoking', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm">Allow smoking</span>
-              </label>
-              
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={profile.allow_pets}
-                  onChange={(e) => handleInputChange('allow_pets', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm">Allow pets</span>
-              </label>
-              
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={profile.allow_food_drinks}
-                  onChange={(e) => handleInputChange('allow_food_drinks', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm">Allow food and drinks</span>
-              </label>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Music Preferences
-              </label>
-              <select
-                value={profile.music_preferences}
-                onChange={(e) => handleInputChange('music_preferences', e.target.value)}
-                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="Driver chooses">Driver chooses</option>
-                <option value="No music">No music</option>
-                <option value="Group decides">Group decides</option>
-                <option value="Passengers choose">Passengers choose</option>
-              </select>
-            </div>
-          </div>
-        );
-
-      case 'safety':
-        return (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Safety & Verification</h3>
-            
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-                <div>
-                  <h4 className="font-medium text-yellow-800 dark:text-yellow-200">Safety First</h4>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                    Verification helps build trust in the carpool community. Some features may require verification.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-white">Verification Status</h4>
-              
-              <div className="space-y-2">
-                <label className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={profile.drivers_license_verified}
-                      onChange={(e) => handleInputChange('drivers_license_verified', e.target.checked)}
-                      className="rounded text-green-600 focus:ring-green-500"
-                    />
-                    <span className="text-sm">Driver's License Verified</span>
-                  </div>
-                  {profile.drivers_license_verified && (
-                    <span className="text-green-600 text-sm">✓ Verified</span>
-                  )}
-                </label>
-                
-                <label className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={profile.insurance_verified}
-                      onChange={(e) => handleInputChange('insurance_verified', e.target.checked)}
-                      className="rounded text-green-600 focus:ring-green-500"
-                    />
-                    <span className="text-sm">Auto Insurance Verified</span>
-                  </div>
-                  {profile.insurance_verified && (
-                    <span className="text-green-600 text-sm">✓ Verified</span>
-                  )}
-                </label>
-                
-                <label className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={profile.background_check_completed}
-                      onChange={(e) => handleInputChange('background_check_completed', e.target.checked)}
-                      className="rounded text-green-600 focus:ring-green-500"
-                    />
-                    <span className="text-sm">Background Check Completed</span>
-                  </div>
-                  {profile.background_check_completed && (
-                    <span className="text-green-600 text-sm">✓ Verified</span>
-                  )}
-                </label>
-              </div>
-            </div>
             
             <div className="space-y-3">
               <h4 className="font-medium text-gray-900 dark:text-white">Safety Settings</h4>
               
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <input
                   type="checkbox"
                   checked={profile.auto_share_location}
                   onChange={(e) => handleInputChange('auto_share_location', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
+                  className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
                 />
-                <span className="text-sm">Auto-share location during carpool trips</span>
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    Auto-share location during trips 📍
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Let your carpool buddies track your location
+                  </p>
+                </div>
               </label>
               
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <input
                   type="checkbox"
                   checked={profile.send_arrival_notifications}
                   onChange={(e) => handleInputChange('send_arrival_notifications', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
+                  className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
                 />
-                <span className="text-sm">Send arrival notifications to emergency contact</span>
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    Send arrival notifications 🔔
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Notify emergency contact when you arrive
+                  </p>
+                </div>
               </label>
               
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <input
                   type="checkbox"
                   checked={profile.allow_carpool_invites}
                   onChange={(e) => handleInputChange('allow_carpool_invites', e.target.checked)}
-                  className="rounded text-green-600 focus:ring-green-500"
+                  className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
                 />
-                <span className="text-sm">Allow friends to invite me to carpools</span>
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    Allow carpool invites 💌
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Friends can invite you to join their carpools
+                  </p>
+                </div>
               </label>
             </div>
           </div>
@@ -721,43 +1165,60 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
   };
 
   const containerClass = isModal 
-    ? "bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
-    : "bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700";
+    ? "bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+    : "bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 shadow-lg";
 
   const content = (
     <div className={containerClass}>
       {/* Header */}
-      <div className="p-6 border-b dark:border-gray-700">
+      <div className="p-6 border-b dark:border-gray-700 bg-gradient-to-r from-green-500 to-blue-600">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Carpool Profile Settings</h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-              Set up your carpool information once and use it everywhere
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              <Sparkles className="text-yellow-300" />
+              Carpool Profile Settings
+            </h2>
+            <p className="text-green-100 text-sm mt-1">
+              Set up your profile once and carpool with confidence! 🚗✨
             </p>
           </div>
           {isModal && onClose && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="text-white hover:bg-white/20 p-2 rounded-full transition-colors"
             >
-              <Car size={24} />
+              <X size={24} />
             </button>
           )}
         </div>
         
+        {/* Profile Completion Bar */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-white text-sm mb-1">
+            <span>Profile Completion</span>
+            <span className="font-bold">{profileCompletion}%</span>
+          </div>
+          <div className="w-full bg-white/20 rounded-full h-2">
+            <div 
+              className="bg-white rounded-full h-2 transition-all duration-500"
+              style={{ width: `${profileCompletion}%` }}
+            />
+          </div>
+        </div>
+        
         {/* Tabs */}
-        <div className="flex gap-2 mt-4 overflow-x-auto">
-          {tabs.map(({ id, label, icon: Icon }) => (
+        <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+          {tabs.map(({ id, label, icon: Icon, emoji }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id as any)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
                 activeTab === id
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-white text-green-600 shadow-lg scale-105'
+                  : 'bg-white/20 text-white hover:bg-white/30'
               }`}
             >
-              <Icon size={16} />
+              <span className="text-lg">{emoji}</span>
               {label}
             </button>
           ))}
@@ -765,39 +1226,43 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+      <div className="p-6 overflow-y-auto max-h-[calc(90vh-250px)]">
         <TabContent />
       </div>
 
       {/* Footer */}
-      <div className="p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+      <div className="p-6 border-t dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex justify-between items-center">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            * Required fields
+            <span className="flex items-center gap-1">
+              <Star className="text-yellow-500" size={16} />
+              Complete your profile to get more carpool matches!
+            </span>
           </div>
           <div className="flex gap-3">
             {isModal && onClose && (
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all hover:scale-105"
               >
                 Cancel
               </button>
             )}
             <button
               onClick={handleSave}
-              disabled={saving || !profile.car_make || !profile.car_model || !profile.car_color || !profile.phone_number || !profile.home_city || !profile.home_state}
-              className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={saving || profileCompletion < 40}
+              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-105 shadow-lg"
             >
               {saving ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                   Saving...
                 </>
               ) : (
                 <>
                   <Save size={16} />
                   Save Profile
+                  {profileCompletion === 100 && ' 🎉'}
                 </>
               )}
             </button>
@@ -809,7 +1274,7 @@ const CarpoolProfileSettings: React.FC<CarpoolProfileSettingsProps> = ({
 
   if (isModal) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
         {content}
       </div>
     );
