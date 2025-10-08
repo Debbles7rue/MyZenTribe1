@@ -1,19 +1,52 @@
-// app/(protected)/calendar/components/CarpoolManagerUI.tsx
-// PROPERLY EXTRACTED: This contains the ACTUAL UI code from your CarpoolManager.tsx lines 461-900
+// app/(protected)/calendar/components/CarpoolManager.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import {
   Car, Users, Plus, MessageCircle, Archive, Trash2, Clock,
   MapPin, Calendar, ChevronRight, Settings, RefreshCw, User,
   CheckCircle, AlertCircle, Eye, Edit, Crown, UserCheck, Save,
-  Database, Wifi, WifiOff, Sync, SyncOff, X
+  Database, Wifi, WifiOff, Sync, SyncOff
 } from 'lucide-react';
 import EventCarpoolModal from './EventCarpoolModal';
-import { useCarpoolManager } from './CarpoolManager'; // Use the hook
 import type { DBEvent } from '@/lib/types';
-import type { CarpoolManagerUIProps } from './carpool/types';
+import type { 
+  CarpoolGroup, 
+  PersistenceState, 
+  PersistenceOptions,
+  CarpoolData 
+} from './carpool/types';
 
-const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
+// Import functions from utils
+import {
+  saveCarpoolData,
+  loadCarpoolData,
+  syncPendingChanges,
+  loadCarpoolGroups,
+  createNewCarpool,
+  archiveCarpool,
+  deleteCarpool,
+  getStatusColor,
+  getStatusIcon,
+  getSyncStatusIcon
+} from './carpool/utils';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+interface CarpoolManagerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  event: DBEvent | null;
+  userId: string | null;
+  showToast?: (toast: { type: string; message: string }) => void;
+  isMobile?: boolean;
+  onOpenSettings?: () => void;
+}
+
+const CarpoolManager: React.FC<CarpoolManagerProps> = ({
   isOpen,
   onClose,
   event,
@@ -22,74 +55,165 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
   isMobile = false,
   onOpenSettings
 }) => {
-  // EXTRACTED: Use the service layer hook instead of local state
-  const {
-    carpoolGroups,
-    loading,
-    selectedCarpool,
-    persistenceState,
-    loadCarpoolGroups,
-    createNewCarpool,
-    archiveCarpool,
-    deleteCarpool,
-    openCarpool,
-    setSelectedCarpool,
-    getSyncStatusIcon,
-    getStatusColor,
-    getStatusIcon,
-    syncPendingChanges
-  } = useCarpoolManager(event, userId, showToast);
-
-  // PRESERVED: Original local UI state from your CarpoolManager
+  const [carpoolGroups, setCarpoolGroups] = useState<CarpoolGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCarpool, setSelectedCarpool] = useState<CarpoolGroup | null>(null);
   const [showCarpoolModal, setShowCarpoolModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCarpoolName, setNewCarpoolName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
-  // PRESERVED: Original helper functions from your CarpoolManager
-  const handleCreateNewCarpool = async () => {
-    await createNewCarpool(newCarpoolName);
-    setNewCarpoolName('');
-    setShowCreateModal(false);
+  // Enhanced persistence state management
+  const [persistenceState, setPersistenceState] = useState<PersistenceState>({
+    currentCarpoolId: null,
+    isSaving: false,
+    lastSaved: null,
+    saveError: null,
+    isOnline: true,
+    syncStatus: 'synced'
+  });
+
+  const [persistenceOptions] = useState<PersistenceOptions>({
+    useSupabase: true,
+    useLocalStorage: true,
+    autoSave: true,
+    autoSaveInterval: 120000 // 2 minutes
+  });
+
+  // Network status monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      setPersistenceState(prev => ({ ...prev, isOnline: true }));
+      showToast?.({ type: 'success', message: 'Connection restored' });
+    };
+
+    const handleOffline = () => {
+      setPersistenceState(prev => ({ ...prev, isOnline: false }));
+      showToast?.({ type: 'warning', message: 'Offline mode - changes saved locally' });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check
+    setPersistenceState(prev => ({ ...prev, isOnline: navigator.onLine }));
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showToast]);
+
+  useEffect(() => {
+    if (isOpen && event) {
+      loadCarpoolGroupsData();
+    }
+  }, [isOpen, event]);
+
+  // Auto-sync when coming online
+  useEffect(() => {
+    if (persistenceState.isOnline && persistenceState.syncStatus === 'pending' && event && userId) {
+      handleSyncPendingChanges();
+    }
+  }, [persistenceState.isOnline, event, userId]);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (!isOpen || !event || !persistenceOptions.autoSave) return;
+    
+    const autoSaveInterval = setInterval(() => {
+      // Only auto-save if we have unsaved changes
+      if (persistenceState.syncStatus === 'pending' && event && userId) {
+        handleSyncPendingChanges();
+      }
+    }, persistenceOptions.autoSaveInterval);
+
+    return () => clearInterval(autoSaveInterval);
+  }, [isOpen, event, persistenceOptions.autoSave, persistenceOptions.autoSaveInterval, persistenceState.syncStatus, userId]);
+
+  // Wrapper functions that use the utils functions
+  const loadCarpoolGroupsData = async () => {
+    if (!event || !userId) return;
+    
+    try {
+      setLoading(true);
+      const groups = await loadCarpoolGroups(event.id, userId);
+      setCarpoolGroups(groups);
+    } catch (error) {
+      console.error('Error loading carpool groups:', error);
+      showToast?.({ type: 'error', message: 'Failed to load carpools' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOpenCarpool = (group: any) => {
-    openCarpool(group);
-    setShowCarpoolModal(true);
+  const handleCreateNewCarpool = async () => {
+    if (!event || !userId || !newCarpoolName.trim()) return;
+
+    try {
+      const group = await createNewCarpool(event.id, userId, newCarpoolName);
+      
+      // Reload groups
+      await loadCarpoolGroupsData();
+      
+      setNewCarpoolName('');
+      setShowCreateModal(false);
+      showToast?.({ type: 'success', message: 'Carpool created successfully!' });
+      
+      // Automatically open the new carpool
+      const newGroup = carpoolGroups.find(g => g.id === group.id);
+      if (newGroup) {
+        openCarpool(newGroup);
+      }
+    } catch (error) {
+      console.error('Error creating carpool:', error);
+      showToast?.({ type: 'error', message: 'Failed to create carpool' });
+    }
+  };
+
+  const handleArchiveCarpool = async (groupId: string) => {
+    try {
+      await archiveCarpool(groupId);
+      await loadCarpoolGroupsData();
+      showToast?.({ type: 'success', message: 'Carpool archived' });
+    } catch (error) {
+      console.error('Error archiving carpool:', error);
+      showToast?.({ type: 'error', message: 'Failed to archive carpool' });
+    }
   };
 
   const handleDeleteCarpool = async (groupId: string) => {
-    await deleteCarpool(groupId);
-    setShowDeleteConfirm(null);
+    try {
+      await deleteCarpool(groupId);
+      await loadCarpoolGroupsData();
+      setShowDeleteConfirm(null);
+      showToast?.({ type: 'success', message: 'Carpool deleted' });
+    } catch (error) {
+      console.error('Error deleting carpool:', error);
+      showToast?.({ type: 'error', message: 'Failed to delete carpool' });
+    }
   };
 
-  // EXTRACTED: Helper function for sync icons (converted from your utility functions)
-  const renderSyncStatusIcon = () => {
-    const { icon, className, title } = getSyncStatusIcon();
-    const iconSize = 16;
+  const handleSyncPendingChanges = async () => {
+    if (!event || !userId) return;
     
-    switch (icon) {
-      case 'WifiOff': return <WifiOff size={iconSize} className={className} title={title} />;
-      case 'Sync': return <Sync size={iconSize} className={className} title={title} />;
-      case 'RefreshCw': return <RefreshCw size={iconSize} className={className} title={title} />;
-      case 'SyncOff': return <SyncOff size={iconSize} className={className} title={title} />;
-      default: return <Database size={iconSize} className={className} title={title} />;
+    try {
+      await syncPendingChanges(event.id, userId, showToast);
+      setPersistenceState(prev => ({ ...prev, syncStatus: 'synced' }));
+    } catch (error) {
+      console.error('Sync error:', error);
+      setPersistenceState(prev => ({ ...prev, syncStatus: 'error' }));
     }
   };
 
-  const renderStatusIcon = (status: string) => {
-    const iconName = getStatusIcon(status);
-    switch (iconName) {
-      case 'AlertCircle': return <AlertCircle size={14} />;
-      case 'CheckCircle': return <CheckCircle size={14} />;
-      case 'Archive': return <Archive size={14} />;
-      default: return <Clock size={14} />;
-    }
+  const openCarpool = (group: CarpoolGroup) => {
+    setSelectedCarpool(group);
+    setPersistenceState(prev => ({ ...prev, currentCarpoolId: group.id }));
+    setShowCarpoolModal(true);
   };
 
   if (!isOpen || !event) return null;
 
-  // PRESERVED: Original date/time formatting from your CarpoolManager
   const eventDate = new Date(event.start_time);
   const eventTime = eventDate.toLocaleTimeString('en-US', { 
     hour: 'numeric', 
@@ -101,12 +225,15 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
     day: 'numeric' 
   });
 
-  // EXTRACTED: Mobile version from your CarpoolManager.tsx lines 461-600
+  // Get sync status icon
+  const syncStatusIcon = getSyncStatusIcon(persistenceState);
+
+  // Mobile version
   if (isMobile) {
     return (
       <>
         <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
-          {/* PRESERVED: Enhanced Mobile Header from your original lines 430-470 */}
+          {/* Enhanced Mobile Header with sync status */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
             <div className="flex items-center justify-between">
               <button onClick={onClose} className="p-2 -ml-2 active:scale-95">
@@ -115,9 +242,13 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
               <div className="flex-1 text-center">
                 <h3 className="font-semibold text-lg">Carpool Coordination</h3>
                 <p className="text-xs opacity-90 truncate px-4">{event.title}</p>
-                {/* PRESERVED: Mobile sync status from your enhanced features */}
+                {/* Mobile sync status */}
                 <div className="flex items-center justify-center gap-2 mt-1">
-                  {renderSyncStatusIcon()}
+                  {syncStatusIcon.icon === 'WifiOff' && <WifiOff size={16} className={syncStatusIcon.className} />}
+                  {syncStatusIcon.icon === 'Sync' && <Sync size={16} className={syncStatusIcon.className} />}
+                  {syncStatusIcon.icon === 'RefreshCw' && <RefreshCw size={16} className={syncStatusIcon.className} />}
+                  {syncStatusIcon.icon === 'SyncOff' && <SyncOff size={16} className={syncStatusIcon.className} />}
+                  {syncStatusIcon.icon === 'Database' && <Database size={16} className={syncStatusIcon.className} />}
                   <span className="text-xs opacity-75">
                     {persistenceState.isOnline ? 
                       (persistenceState.syncStatus === 'synced' ? 'Synced' : 
@@ -152,7 +283,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
             </div>
           </div>
 
-          {/* PRESERVED: Enhanced Event Info from your original lines 470-490 */}
+          {/* Enhanced Event Info with sync controls */}
           <div className="bg-blue-50 dark:bg-gray-800 px-4 py-3 border-b dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -166,10 +297,10 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                   </p>
                 </div>
               </div>
-              {/* PRESERVED: Manual sync button from your enhanced features */}
+              {/* Manual sync button for mobile */}
               {persistenceState.isOnline && persistenceState.syncStatus === 'pending' && (
                 <button
-                  onClick={syncPendingChanges}
+                  onClick={handleSyncPendingChanges}
                   className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg active:scale-95"
                   title="Sync Now"
                 >
@@ -179,7 +310,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
             </div>
           </div>
 
-          {/* PRESERVED: Content section from your original lines 490-580 */}
+          {/* Content */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
@@ -202,7 +333,10 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                             {group.name}
                           </h5>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(group.status)}`}>
-                            {renderStatusIcon(group.status)}
+                            {getStatusIcon(group.status) === 'AlertCircle' && <AlertCircle size={14} />}
+                            {getStatusIcon(group.status) === 'CheckCircle' && <CheckCircle size={14} />}
+                            {getStatusIcon(group.status) === 'Archive' && <Archive size={14} />}
+                            {getStatusIcon(group.status) === 'Clock' && <Clock size={14} />}
                             {group.status}
                           </span>
                         </div>
@@ -226,7 +360,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                       </div>
                     </div>
 
-                    {/* PRESERVED: Participants section from your original */}
+                    {/* Participants */}
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex -space-x-2">
                         {group.participants.slice(0, 4).map((participant, idx) => (
@@ -246,10 +380,10 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                       </div>
                     </div>
 
-                    {/* PRESERVED: Actions section from your original */}
+                    {/* Actions */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleOpenCarpool(group)}
+                        onClick={() => openCarpool(group)}
                         className="flex-1 px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-1"
                       >
                         <MessageCircle size={14} />
@@ -260,7 +394,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                         <>
                           {group.status === 'active' && (
                             <button
-                              onClick={() => archiveCarpool(group.id)}
+                              onClick={() => handleArchiveCarpool(group.id)}
                               className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                               title="Archive"
                             >
@@ -303,7 +437,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
           </div>
         </div>
 
-        {/* PRESERVED: Create Carpool Modal from your original lines 585-600 */}
+        {/* Create Carpool Modal */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-60">
             <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg safe-area-bottom">
@@ -335,7 +469,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
           </div>
         )}
 
-        {/* PRESERVED: Delete Confirmation Modal from your original */}
+        {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 px-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
@@ -351,7 +485,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                   Cancel
                 </button>
                 <button
-                  onClick={() => showDeleteConfirm && handleDeleteCarpool(showDeleteConfirm)}
+                  onClick={() => handleDeleteCarpool(showDeleteConfirm)}
                   className="flex-1 p-3 bg-red-500 text-white rounded-lg font-medium"
                 >
                   Delete
@@ -361,14 +495,15 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
           </div>
         )}
 
-        {/* PRESERVED: Carpool Modal from your original */}
+        {/* Carpool Modal */}
         {showCarpoolModal && selectedCarpool && (
           <EventCarpoolModal
             isOpen={showCarpoolModal}
             onClose={() => {
               setShowCarpoolModal(false);
               setSelectedCarpool(null);
-              loadCarpoolGroups();
+              setPersistenceState(prev => ({ ...prev, currentCarpoolId: null }));
+              loadCarpoolGroupsData();
             }}
             event={event}
             userId={userId}
@@ -382,12 +517,12 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
     );
   }
 
-  // EXTRACTED: Desktop version from your CarpoolManager.tsx lines 601-900
+  // Desktop version
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-          {/* PRESERVED: Enhanced Desktop Header from your original lines 630-680 */}
+          {/* Enhanced Desktop Header with sync dashboard */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -399,10 +534,14 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                 <p className="text-sm text-blue-200">
                   {eventDateStr} • {eventTime} • {event.location || 'TBD'}
                 </p>
-                {/* PRESERVED: Desktop sync status dashboard from your enhanced features */}
+                {/* Desktop sync status dashboard */}
                 <div className="flex items-center gap-4 mt-2 text-sm">
                   <div className="flex items-center gap-2">
-                    {renderSyncStatusIcon()}
+                    {syncStatusIcon.icon === 'WifiOff' && <WifiOff size={16} className={syncStatusIcon.className} />}
+                    {syncStatusIcon.icon === 'Sync' && <Sync size={16} className={syncStatusIcon.className} />}
+                    {syncStatusIcon.icon === 'RefreshCw' && <RefreshCw size={16} className={syncStatusIcon.className} />}
+                    {syncStatusIcon.icon === 'SyncOff' && <SyncOff size={16} className={syncStatusIcon.className} />}
+                    {syncStatusIcon.icon === 'Database' && <Database size={16} className={syncStatusIcon.className} />}
                     <span className="text-blue-200">
                       {persistenceState.isOnline ? 
                         (persistenceState.syncStatus === 'synced' ? 'All data synced' : 
@@ -420,7 +559,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                   )}
                   {persistenceState.isOnline && persistenceState.syncStatus === 'pending' && (
                     <button
-                      onClick={syncPendingChanges}
+                      onClick={handleSyncPendingChanges}
                       className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-xs"
                     >
                       Sync Now
@@ -448,13 +587,13 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                   onClick={onClose}
                   className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
                 >
-                  <X size={20} />
+                  ✕
                 </button>
               </div>
             </div>
           </div>
 
-          {/* PRESERVED: Desktop Content from your original lines 680-850 */}
+          {/* Desktop Content */}
           <div className="p-6 h-[70vh] overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
@@ -466,7 +605,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                     My Carpools ({carpoolGroups.length})
                   </h3>
-                  {/* PRESERVED: Desktop sync controls from your enhanced features */}
+                  {/* Desktop sync controls */}
                   <div className="flex items-center gap-2">
                     {persistenceState.saveError && (
                       <div className="text-red-600 text-sm">
@@ -495,7 +634,10 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                               {group.name}
                             </h4>
                             <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${getStatusColor(group.status)}`}>
-                              {renderStatusIcon(group.status)}
+                              {getStatusIcon(group.status) === 'AlertCircle' && <AlertCircle size={14} />}
+                              {getStatusIcon(group.status) === 'CheckCircle' && <CheckCircle size={14} />}
+                              {getStatusIcon(group.status) === 'Archive' && <Archive size={14} />}
+                              {getStatusIcon(group.status) === 'Clock' && <Clock size={14} />}
                               {group.status}
                             </span>
                           </div>
@@ -524,7 +666,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                         </div>
                       </div>
 
-                      {/* PRESERVED: Participants Grid from your original lines 760-790 */}
+                      {/* Participants Grid */}
                       <div className="mb-4">
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Participants:</p>
                         <div className="flex flex-wrap gap-2">
@@ -547,10 +689,10 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                         </div>
                       </div>
 
-                      {/* PRESERVED: Actions from your original lines 790-820 */}
+                      {/* Actions */}
                       <div className="flex gap-3">
                         <button
-                          onClick={() => handleOpenCarpool(group)}
+                          onClick={() => openCarpool(group)}
                           className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
                         >
                           <MessageCircle size={16} />
@@ -561,7 +703,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                           <div className="flex gap-2">
                             {group.status === 'active' && (
                               <button
-                                onClick={() => archiveCarpool(group.id)}
+                                onClick={() => handleArchiveCarpool(group.id)}
                                 className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                                 title="Archive carpool"
                               >
@@ -579,7 +721,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                         )}
                       </div>
 
-                      {/* PRESERVED: Last Activity from your original lines 820-830 */}
+                      {/* Last Activity */}
                       <div className="mt-3 pt-3 border-t dark:border-gray-700">
                         <p className="text-xs text-gray-500 dark:text-gray-500">
                           Last activity: {new Date(group.last_activity).toLocaleDateString()}
@@ -613,7 +755,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
         </div>
       </div>
 
-      {/* PRESERVED: Create Modal - Desktop from your original lines 850-870 */}
+      {/* Create Modal - Desktop */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
@@ -648,7 +790,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
         </div>
       )}
 
-      {/* PRESERVED: Delete Confirmation - Desktop from your original lines 870-900 */}
+      {/* Delete Confirmation - Desktop */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4">
@@ -664,7 +806,7 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
                 Cancel
               </button>
               <button
-                onClick={() => showDeleteConfirm && handleDeleteCarpool(showDeleteConfirm)}
+                onClick={() => handleDeleteCarpool(showDeleteConfirm)}
                 className="flex-1 p-3 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors"
               >
                 Delete Permanently
@@ -674,14 +816,15 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
         </div>
       )}
 
-      {/* PRESERVED: Enhanced Carpool Modal from your original */}
+      {/* Carpool Modal */}
       {showCarpoolModal && selectedCarpool && (
         <EventCarpoolModal
           isOpen={showCarpoolModal}
           onClose={() => {
             setShowCarpoolModal(false);
             setSelectedCarpool(null);
-            loadCarpoolGroups();
+            setPersistenceState(prev => ({ ...prev, currentCarpoolId: null }));
+            loadCarpoolGroupsData();
           }}
           event={event}
           userId={userId}
@@ -695,4 +838,4 @@ const CarpoolManagerUI: React.FC<CarpoolManagerUIProps> = ({
   );
 };
 
-export default CarpoolManagerUI;
+export default CarpoolManager;
