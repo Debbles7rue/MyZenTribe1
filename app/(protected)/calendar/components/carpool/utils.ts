@@ -1,6 +1,6 @@
 // app/(protected)/calendar/components/carpool/utils.ts
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import type { DBEvent } from '@/lib/types';
 import type { 
   Message, 
@@ -11,15 +11,15 @@ import type {
   CarpoolStats,
   CarpoolData,
   PersistenceOptions,
-  PersistenceState
+  PersistenceState,
+  CarDetails,
+  EventDetails,
+  DriverStatus
 } from './types';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = createClient();
 
-// ===== ENHANCED PERSISTENCE FUNCTIONS (MOVED FROM CARPOOLMANAGER) =====
+// ===== ENHANCED PERSISTENCE FUNCTIONS =====
 
 // Enhanced carpool data persistence with offline support
 export const saveCarpoolData = async (
@@ -56,45 +56,43 @@ export const saveCarpoolData = async (
     // Try Supabase save if online and enabled
     if (opts.useSupabase && navigator.onLine) {
       try {
-        const carpoolData = {
-          id: carpoolId || undefined,
-          event_id: eventId,
-          driver_id: userId,
-          messages: JSON.stringify(data.messages),
-          polls: JSON.stringify(data.polls),
-          selected_friends: data.selectedFriends,
-          driver_status: data.driverStatus,
-          car_details: JSON.stringify(data.carDetails),
-          event_details: JSON.stringify(data.tempEventDetails),
-          updated_at: new Date().toISOString()
-        };
+        // First, check if carpool_chat_data table exists, if not create the entry in carpool_groups
+        const { data: existingData } = await supabase
+          .from('carpool_chat_data')
+          .select('id')
+          .eq('event_id', eventId)
+          .eq('user_id', userId)
+          .single();
 
-        if (carpoolId && carpoolId !== 'new') {
-          // Update existing carpool
+        if (existingData) {
+          // Update existing record
           const { error } = await supabase
-            .from('carpool_groups')
-            .update(carpoolData)
-            .eq('id', carpoolId)
-            .eq('driver_id', userId);
+            .from('carpool_chat_data')
+            .update({
+              data: JSON.stringify(data),
+              updated_at: new Date().toISOString()
+            })
+            .eq('event_id', eventId)
+            .eq('user_id', userId);
           
           if (error) throw error;
         } else {
-          // Create new carpool
-          const { data: newData, error } = await supabase
-            .from('carpool_groups')
-            .insert([{ ...carpoolData, created_at: new Date().toISOString() }])
-            .select()
-            .single();
+          // Create new record
+          const { error } = await supabase
+            .from('carpool_chat_data')
+            .insert({
+              event_id: eventId,
+              user_id: userId,
+              data: JSON.stringify(data),
+              updated_at: new Date().toISOString()
+            });
           
           if (error) throw error;
-          if (newData) {
-            carpoolId = newData.id;
-          }
         }
         
         showToast?.({ 
           type: 'success', 
-          message: 'Carpool data saved to cloud!' 
+          message: 'Carpool data saved!' 
         });
 
         return { success: true, message: 'Saved to cloud', carpoolId };
@@ -103,7 +101,7 @@ export const saveCarpoolData = async (
         
         showToast?.({ 
           type: 'info', 
-          message: 'Saved locally (cloud unavailable)' 
+          message: 'Saved locally (cloud sync pending)' 
         });
 
         return { success: true, message: 'Saved locally', carpoolId };
@@ -122,21 +120,21 @@ export const saveCarpoolData = async (
     
     showToast?.({ 
       type: 'error', 
-      message: 'Failed to save data completely' 
+      message: 'Failed to save data' 
     });
 
     return { success: false, message: error.message };
   }
 };
 
-// Enhanced carpool data loading with offline support (replaces existing loadCarpoolData)
+// Enhanced carpool data loading with offline support
 export const loadCarpoolData = async (
   carpoolId?: string,
   userId?: string,
   eventId?: string,
   showToast?: (toast: { type: string; message: string }) => void
 ) => {
-  // If carpoolId is provided, use the original behavior for carpool groups
+  // If only carpoolId is provided, use the original behavior for carpool groups
   if (carpoolId && !userId && !eventId) {
     try {
       // Load carpool group details (original functionality)
@@ -191,27 +189,17 @@ export const loadCarpoolData = async (
     // Try Supabase first if online
     if (navigator.onLine) {
       const { data, error } = await supabase
-        .from('carpool_groups')
-        .select('*')
+        .from('carpool_chat_data')
+        .select('data')
         .eq('event_id', eventId)
-        .eq('driver_id', userId)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+        .eq('user_id', userId)
+        .single();
       
-      if (!error && data && data.length > 0) {
-        const carpool = data[0];
+      if (!error && data) {
+        const carpoolData = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
         
-        const carpoolData = {
-          messages: carpool.messages ? JSON.parse(carpool.messages) : [],
-          polls: carpool.polls ? JSON.parse(carpool.polls) : [],
-          selectedFriends: carpool.selected_friends || [],
-          driverStatus: carpool.driver_status || 'none',
-          carDetails: carpool.car_details ? JSON.parse(carpool.car_details) : { seats: 4, make: '', color: '' },
-          tempEventDetails: carpool.event_details ? JSON.parse(carpool.event_details) : { meetupLocation: '', departureTime: '', notes: '' }
-        };
-
-        showToast?.({ type: 'success', message: 'Carpool data loaded from cloud!' });
-        return { success: true, data: carpoolData, source: 'cloud', carpoolId: carpool.id };
+        showToast?.({ type: 'success', message: 'Carpool data loaded!' });
+        return { success: true, data: carpoolData, source: 'cloud' };
       }
     }
   } catch (supabaseError) {
@@ -246,7 +234,17 @@ export const loadCarpoolData = async (
     console.warn('localStorage load failed:', localError);
   }
 
-  return { success: false, data: null };
+  // No saved data found - return default
+  const defaultData = {
+    messages: [],
+    polls: [],
+    selectedFriends: [],
+    driverStatus: 'none',
+    carDetails: { seats: 4, make: '', color: '' },
+    tempEventDetails: { meetupLocation: '', departureTime: '', notes: '' }
+  };
+
+  return { success: true, data: defaultData, source: 'default' };
 };
 
 // Sync pending changes when coming back online
@@ -263,9 +261,14 @@ export const syncPendingChanges = async (
     
     if (savedData) {
       const parsed = JSON.parse(savedData);
-      if (parsed.carpoolId) {
-        await saveCarpoolData(parsed.carpoolId, parsed, { useLocalStorage: false }, userId, eventId, showToast);
-      }
+      await saveCarpoolData(
+        parsed.carpoolId || 'new', 
+        parsed, 
+        { useLocalStorage: false }, 
+        userId, 
+        eventId, 
+        showToast
+      );
     }
   } catch (error) {
     console.error('Sync error:', error);
@@ -340,6 +343,7 @@ export const createNewCarpool = async (eventId: string, userId: string, name: st
       .insert({
         event_id: eventId,
         creator_id: userId,
+        driver_id: userId,
         name: name.trim(),
         status: 'active',
         created_at: new Date().toISOString(),
@@ -414,6 +418,53 @@ export const deleteCarpool = async (groupId: string) => {
     throw error;
   }
 };
+
+// ===== GEOCODING AND MAP UTILITIES =====
+
+// Geocoding function for addresses
+export async function geocodeAddress(address: string): Promise<{lat: number, lng: number} | null> {
+  const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  
+  if (!API_KEY) {
+    console.error('Google Maps API key not found');
+    return null;
+  }
+  
+  try {
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${API_KEY}`
+    );
+    const data = await response.json();
+    
+    if (data.results && data.results[0]) {
+      return {
+        lat: data.results[0].geometry.location.lat,
+        lng: data.results[0].geometry.location.lng
+      };
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+  }
+  
+  return null;
+}
+
+// Get distance between two coordinates (in miles)
+export function getDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3959; // Earth's radius in miles
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function toRad(degrees: number): number {
+  return degrees * (Math.PI / 180);
+}
 
 // ===== ORIGINAL DATABASE FUNCTIONS (PRESERVED) =====
 
@@ -613,7 +664,7 @@ export const deletePoll = async (pollId: string): Promise<void> => {
   }
 };
 
-// ===== UTILITY FUNCTIONS (PRESERVED) =====
+// ===== UTILITY FUNCTIONS (ALL PRESERVED) =====
 
 export const generateCarpoolStats = (
   carpoolData?: any,
@@ -823,7 +874,7 @@ export const formatEventTime = (startTime: string): { eventTime: string; eventDa
   return { eventTime, eventDateStr };
 };
 
-// ===== EXTRACTED EVENT HANDLERS FROM EVENTCARPOOLMODAL =====
+// ===== ALL EVENT HANDLERS (PRESERVED) =====
 
 // Handle sending messages in carpool chat
 export const handleSendMessage = (
@@ -842,7 +893,7 @@ export const handleSendMessage = (
   const newMsg: Message = {
     id: Date.now(),
     user: 'You',
-    userId: userId,
+    userId: userId || undefined,
     message: newMessage,
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     avatar: '😊'
@@ -1086,3 +1137,20 @@ export const getSyncStatusIcon = (persistenceState: PersistenceState) => {
       return { icon: 'Database', className: 'text-gray-500', title: 'Unknown' };
   }
 };
+
+// Generate random avatar color
+export function getAvatarColor(userId: string): string {
+  const colors = [
+    '#EF4444', '#F97316', '#F59E0B', '#EAB308', 
+    '#84CC16', '#22C55E', '#10B981', '#14B8A6',
+    '#06B6D4', '#0EA5E9', '#3B82F6', '#6366F1',
+    '#8B5CF6', '#A855F7', '#D946EF', '#EC4899'
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+}
