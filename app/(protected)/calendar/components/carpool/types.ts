@@ -1,7 +1,9 @@
 // app/(protected)/calendar/components/carpool/types.ts
+// ENHANCED: Added new interfaces while preserving all existing ones
 
 import type { DBEvent } from '@/lib/types';
 
+// ===== EXISTING INTERFACES (PRESERVED) =====
 export interface EventCarpoolModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -190,4 +192,82 @@ export interface CarpoolModalsProps {
   userId: string | null;
   showToast?: (toast: { type: string; message: string }) => void;
   isMobile?: boolean;
+}
+
+// ===== NEW INTERFACES ADDED (SAFE ADDITIONS) =====
+
+// NEW: Enhanced persistence interfaces from CarpoolManager refactoring
+export interface CarpoolData {
+  messages: any[];
+  polls: any[];
+  selectedFriends: string[];
+  driverStatus: string;
+  carDetails: any;
+  tempEventDetails: any;
+}
+
+export interface PersistenceOptions {
+  useSupabase?: boolean;
+  useLocalStorage?: boolean;
+  autoSave?: boolean;
+  autoSaveInterval?: number;
+}
+
+export interface PersistenceState {
+  currentCarpoolId: string | null;
+  isSaving: boolean;
+  lastSaved: Date | null;
+  saveError: string | null;
+  isOnline: boolean;
+  syncStatus: 'synced' | 'pending' | 'error';
+}
+
+// NEW: Hook return interface for the new service layer
+export interface CarpoolManagerHookReturn {
+  // State
+  carpoolGroups: CarpoolGroup[];
+  loading: boolean;
+  selectedCarpool: CarpoolGroup | null;
+  persistenceState: PersistenceState;
+  persistenceOptions: PersistenceOptions;
+  
+  // Group Management
+  loadCarpoolGroups: () => Promise<void>;
+  createNewCarpool: (name: string) => Promise<void>;
+  archiveCarpool: (groupId: string) => Promise<void>;
+  deleteCarpool: (groupId: string) => Promise<void>;
+  openCarpool: (group: CarpoolGroup) => void;
+  setSelectedCarpool: (group: CarpoolGroup | null) => void;
+  
+  // Persistence Services
+  saveCarpoolData: (carpoolId: string, data: CarpoolData, options?: Partial<PersistenceOptions>) => Promise<any>;
+  loadCarpoolData: (carpoolId?: string) => Promise<any>;
+  syncPendingChanges: () => Promise<void>;
+  
+  // Utilities
+  getStatusColor: (status: string) => string;
+  getStatusIcon: (status: string) => string;
+  getSyncStatusIcon: () => { icon: string; className: string; title: string };
+}
+
+// NEW: Props for the new UI component architecture
+export interface CarpoolManagerUIProps {
+  isOpen: boolean;
+  onClose: () => void;
+  event: DBEvent | null;
+  userId: string | null;
+  showToast?: (toast: { type: string; message: string }) => void;
+  isMobile?: boolean;
+  onOpenSettings?: () => void;
+}
+
+// PRESERVED: Original manager props (keeping for backward compatibility)
+export interface CarpoolManagerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  event: DBEvent | null;
+  userId: string | null;
+  showToast?: (toast: { type: string; message: string }) => void;
+  isMobile?: boolean;
+  onOpenSettings?: () => void;
 }
