@@ -559,7 +559,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl my-8 shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]">
-        {/* FIXED HEADER */}
+        {/* SIMPLIFIED HEADER - Remove duplicate buttons */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
@@ -573,39 +573,16 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               <button
                 onClick={handleSaveCarpoolData}
                 disabled={isSaving}
-                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap disabled:opacity-50"
+                className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors whitespace-nowrap disabled:opacity-50 flex items-center gap-1"
               >
+                {isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                 {isSaving ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={() => setDesktopLayout(desktopLayout === 'custom' ? 'modular' : 'custom')}
-                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
+                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-sm transition-colors whitespace-nowrap"
               >
-                {desktopLayout === 'custom' ? 'Modular View' : 'Custom View'}
-              </button>
-              <button
-                onClick={() => setShowNewCarpoolConfirm(true)}
-                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-              >
-                New Carpool
-              </button>
-              <button
-                onClick={() => setShowEditCarDetails(true)}
-                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-              >
-                Edit Car
-              </button>
-              <button
-                onClick={() => setShowEditEventDetails(true)}
-                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-              >
-                Edit Meetup
-              </button>
-              <button
-                onClick={() => setShowPoll(true)}
-                className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs transition-colors whitespace-nowrap"
-              >
-                Create Poll
+                {desktopLayout === 'custom' ? 'Modular' : 'Custom'}
               </button>
               <button
                 onClick={handleOpenProfileSettings}
