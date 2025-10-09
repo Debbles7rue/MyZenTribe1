@@ -15,63 +15,161 @@ import { useRouter } from "next/navigation";
 type FilterTab = "all" | "unread";
 
 const typeLabel: Record<string, string> = {
+  // Friend notifications
   "friend.accepted": "Friend accepted",
   "friend.connected": "Friend connected",
+  "friend.request": "Friend request",
+  
+  // Event notifications
   "event.invited": "Event invite",
   "event.rsvp": "Event RSVP",
   "event.upcoming": "Event soon",
+  "event.update": "Event update",
+  "event.comment": "Event comment",
+  
+  // Todo/Reminder
   "todo.due": "To-do due",
   "reminder.due": "Reminder",
+  
+  // Community notifications
   "community.invited": "Community invite",
   "community.announcement": "Community news",
-  "album.invited": "Album invite",
-  "album.accepted": "Album invite accepted",
-  "album.declined": "Album invite declined",
+  "community.update": "Community update",
+  
+  // Carpool notifications
+  "carpool.invited": "Carpool invite",
+  "carpool.accepted": "Carpool joined",
+  "carpool.update": "Carpool update",
+  "carpool.safe_friends": "Carpool opportunity",
+  
+  // Post/Album notifications
+  "post.comment": "New comment",
+  "post.tagged": "Tagged in post",
+  "post.reaction": "Post reaction",
+  "post.cocreator": "Post co-creator",
+  "album.comment": "Album comment",
+  "album.tagged": "Tagged in album",
+  "album.reaction": "Album reaction",
+  "album.cocreator": "Album co-creator",
+  
+  // Comment reactions
+  "comment.reaction": "Comment reaction",
+  
+  // Message notifications
+  "message.received": "New message",
+  
+  // Gift notifications
+  "gift.received": "Gift received",
 };
 
 const typeEmoji: Record<string, string> = {
+  // Friend notifications
   "friend.accepted": "🤝",
   "friend.connected": "🧑‍🤝‍🧑",
+  "friend.request": "👋",
+  
+  // Event notifications
   "event.invited": "🎟️",
   "event.rsvp": "📩",
   "event.upcoming": "⏰",
+  "event.update": "📅",
+  "event.comment": "💬",
+  
+  // Todo/Reminder
   "todo.due": "✅",
   "reminder.due": "🔔",
+  
+  // Community notifications
   "community.invited": "🏘️",
   "community.announcement": "📣",
-  "album.invited": "📸",
-  "album.accepted": "✅",
-  "album.declined": "❌",
-};
-
-const typeColors: Record<string, { bg: string; border: string; text: string }> = {
-  "friend.accepted": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700" },
-  "friend.connected": { bg: "bg-indigo-50", border: "border-indigo-200", text: "text-indigo-700" },
-  "event.invited": { bg: "bg-pink-50", border: "border-pink-200", text: "text-pink-700" },
-  "event.rsvp": { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
-  "event.upcoming": { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700" },
-  "todo.due": { bg: "bg-green-50", border: "border-green-200", text: "text-green-700" },
-  "reminder.due": { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700" },
-  "community.invited": { bg: "bg-teal-50", border: "border-teal-200", text: "text-teal-700" },
-  "community.announcement": { bg: "bg-cyan-50", border: "border-cyan-200", text: "text-cyan-700" },
-  "album.invited": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700" },
-  "album.accepted": { bg: "bg-green-50", border: "border-green-200", text: "text-green-700" },
-  "album.declined": { bg: "bg-red-50", border: "border-red-200", text: "text-red-700" },
+  "community.update": "📢",
+  
+  // Carpool notifications
+  "carpool.invited": "🚗",
+  "carpool.accepted": "✅",
+  "carpool.update": "🚙",
+  "carpool.safe_friends": "👥",
+  
+  // Post/Album notifications
+  "post.comment": "💬",
+  "post.tagged": "🏷️",
+  "post.reaction": "❤️",
+  "post.cocreator": "🤝",
+  "album.comment": "💬",
+  "album.tagged": "🏷️",
+  "album.reaction": "❤️",
+  "album.cocreator": "🤝",
+  
+  // Comment reactions
+  "comment.reaction": "👍",
+  
+  // Message notifications
+  "message.received": "✉️",
+  
+  // Gift notifications
+  "gift.received": "🎁",
 };
 
 function fallbackHref(n: NotificationRow) {
+  // If backend set target_url, use it
   if (n.target_url) return n.target_url;
-  if (n.type.startsWith("event.") || n.type.startsWith("todo.") || n.type.startsWith("reminder."))
+  
+  // Carpool notifications
+  if (n.type.startsWith("carpool.")) {
+    if (n.entity_id) {
+      return `/calendar?openCarpool=${n.entity_id}`;
+    }
     return "/calendar";
+  }
+  
+  // Event notifications
+  if (n.type.startsWith("event.")) {
+    if (n.entity_id) {
+      return `/calendar?event=${n.entity_id}`;
+    }
+    return "/calendar";
+  }
+  
+  // Todo/Reminder notifications
+  if (n.type.startsWith("todo.") || n.type.startsWith("reminder.")) {
+    return "/calendar";
+  }
+  
+  // Friend notifications
   if (n.type.startsWith("friend.")) {
     const id = n.entity_id ?? n.actor_id ?? "";
     return id ? `/friends/${id}/edit` : "/profile";
   }
-  if (n.type.startsWith("community.")) return "/communities";
-  if (n.type.startsWith("album.")) {
-    return n.entity_id ? `/albums/${n.entity_id}` : "/albums";
+  
+  // Community notifications
+  if (n.type.startsWith("community.")) {
+    if (n.entity_id) {
+      return `/communities/${n.entity_id}`;
+    }
+    return "/communities";
   }
-  return "/";
+  
+  // Post/Album notifications
+  if (n.type.startsWith("post.") || n.type.startsWith("album.")) {
+    return n.entity_id ? `/feed/${n.entity_id}` : "/feed";
+  }
+  
+  // Comment notifications
+  if (n.type === "comment.reaction") {
+    return n.entity_id ? `/feed/${n.entity_id}` : "/feed";
+  }
+  
+  // Message notifications
+  if (n.type === "message.received") {
+    return n.actor_id ? `/messages/${n.actor_id}` : "/messages";
+  }
+  
+  // Gift notifications
+  if (n.type === "gift.received") {
+    return n.entity_id ? `/gifts/${n.entity_id}` : "/gifts";
+  }
+  
+  return "/"; // safe fallback
 }
 
 export default function NotificationsPanel() {
@@ -133,186 +231,121 @@ export default function NotificationsPanel() {
 
   if (loading && rows.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 p-4">
-        <div className="max-w-3xl mx-auto">
-          <div className="mb-6 text-center">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              Notifications
-            </h1>
-            <p className="text-gray-600 mt-2">Stay connected with your tribe</p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-8 text-center">
-            <div className="animate-pulse">
-              <div className="w-12 h-12 bg-purple-200 rounded-full mx-auto mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
-            </div>
-          </div>
+      <div className="p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Notifications</h2>
         </div>
+        <div className="rounded-xl border bg-white p-6 text-sm text-gray-500">Loading…</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 p-4">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Notifications
-          </h1>
-          <p className="text-gray-600 mt-2">Stay connected with your tribe</p>
+    <div className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex gap-2">
+          <button
+            className={`px-3 py-1.5 rounded-lg text-sm border ${tab === "all" ? "bg-violet-600 text-white border-violet-600" : "bg-white"}`}
+            onClick={() => setTab("all")}
+          >
+            All
+          </button>
+          <button
+            className={`px-3 py-1.5 rounded-lg text-sm border ${tab === "unread" ? "bg-violet-600 text-white border-violet-600" : "bg-white"}`}
+            onClick={() => setTab("unread")}
+          >
+            Unread
+          </button>
         </div>
 
-        {/* Tabs and Actions */}
-        <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white rounded-xl p-3 shadow-sm border border-purple-100">
-          <div className="flex gap-2">
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                tab === "all" 
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md" 
-                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-              }`}
-              onClick={() => setTab("all")}
-            >
-              All
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                tab === "unread" 
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md" 
-                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-              }`}
-              onClick={() => setTab("unread")}
-            >
-              Unread
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button 
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors" 
-              onClick={() => load(true)}
-            >
-              🔄 Refresh
-            </button>
-            <button 
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-green-200 text-green-700 hover:bg-green-50 transition-colors" 
-              onClick={handleMarkAll}
-            >
-              ✓ Mark all read
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <button className="px-3 py-1.5 rounded-lg text-sm border bg-white" onClick={() => load(true)}>
+            Refresh
+          </button>
+          <button className="px-3 py-1.5 rounded-lg text-sm border bg-white" onClick={handleMarkAll}>
+            Mark all read
+          </button>
         </div>
+      </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-            <div className="flex items-start gap-2">
-              <span className="text-lg">⚠️</span>
-              <div>
-                {error.includes("relation") ? (
-                  <>The notifications system is being set up. Please check back soon!</>
-                ) : error.includes("RLS") || error.toLowerCase().includes("permission") ? (
-                  <>We're updating your notification permissions. Please try again in a moment.</>
-                ) : (
-                  <>Error: {error}</>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {error.includes("relation") ? (
+            <>
+              The <code>notifications</code> table doesn't exist yet. You can still use the UI; once
+              the table is created, items will appear here. (Ask me for the minimal SQL when you're ready.)
+            </>
+          ) : error.includes("RLS") || error.toLowerCase().includes("permission") ? (
+            <>Your account isn't allowed to read notifications yet (RLS). I can fix the policy for you.</>
+          ) : (
+            <>Error: {error}</>
+          )}
+        </div>
+      )}
 
-        {/* Notifications List */}
-        {filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-purple-100 p-12 text-center">
-            <div className="text-6xl mb-4">🔔</div>
-            <div className="text-xl font-semibold text-gray-700">No notifications</div>
-            <div className="text-gray-500 mt-2">
-              {tab === "unread" ? "You're all caught up!" : "Your notification center is empty"}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map((n) => {
-              const label = typeLabel[n.type] ?? n.type;
-              const emoji = typeEmoji[n.type] ?? "🔔";
-              const colors = typeColors[n.type] ?? { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-700" };
-              const when = n.due_at ?? n.created_at;
-              const href = fallbackHref(n);
-              const unread = !n.read_at;
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border bg-white p-6 text-sm text-gray-500">No notifications.</div>
+      ) : (
+        <ul className="rounded-xl border bg-white divide-y">
+          {filtered.map((n) => {
+            const label = typeLabel[n.type] ?? n.type;
+            const emoji = typeEmoji[n.type] ?? "🔔";
+            const when = n.due_at ?? n.created_at;
+            const href = fallbackHref(n);
+            const unread = !n.read_at;
 
-              return (
-                <div 
-                  key={n.id} 
-                  className={`${colors.bg} ${colors.border} border rounded-xl p-4 transition-all hover:shadow-md ${
-                    unread ? "ring-2 ring-purple-300 ring-opacity-50" : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Icon */}
-                    <div className={`text-2xl flex items-center justify-center w-12 h-12 rounded-full ${colors.bg} border-2 ${colors.border}`}>
-                      {emoji}
+            return (
+              <li key={n.id} className={`p-3 sm:p-4 ${unread ? "bg-violet-50/40" : ""}`}>
+                <div className="flex items-start gap-3">
+                  <div className="text-xl leading-none">{emoji}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium truncate">{label}</div>
+                      <div className="text-xs text-gray-500 shrink-0">{relativeTime(when)}</div>
                     </div>
-                    
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div>
-                          <span className={`text-xs font-medium ${colors.text} uppercase tracking-wider`}>
-                            {label}
-                          </span>
-                          {unread && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                              New
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap">{relativeTime(when)}</span>
-                      </div>
-                      
-                      <div className="font-semibold text-gray-900 mb-1">{n.title}</div>
-                      {n.body && <div className="text-sm text-gray-600">{n.body}</div>}
+                    <div className="text-sm font-semibold mt-0.5">{n.title}</div>
+                    {n.body && <div className="text-sm text-gray-600 mt-0.5">{n.body}</div>}
 
-                      {/* Actions */}
-                      <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        className="px-2.5 py-1 rounded-md border text-sm"
+                        onClick={() => router.push(href)}
+                        title="Open"
+                      >
+                        Open
+                      </button>
+                      {unread && (
                         <button
-                          className="px-3 py-1.5 rounded-lg bg-white border border-purple-200 text-purple-700 text-sm font-medium hover:bg-purple-50 transition-colors"
-                          onClick={() => router.push(href)}
+                          className="px-2.5 py-1 rounded-md border text-sm"
+                          onClick={() => handleMarkRead(n.id)}
+                          title="Mark as read"
                         >
-                          Open →
+                          Mark read
                         </button>
-                        {unread && (
-                          <button
-                            className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-                            onClick={() => handleMarkRead(n.id)}
-                          >
-                            Mark read
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        {/* Load More */}
-        {filtered.length >= 20 && (
-          <div className="flex justify-center mt-6">
-            <button
-              className="px-6 py-2 rounded-lg bg-white border border-purple-200 text-purple-700 font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
-              onClick={() => {
-                setLoadingMore(true);
-                load(false);
-              }}
-              disabled={loadingMore}
-            >
-              {loadingMore ? "Loading..." : "Load more"}
-            </button>
-          </div>
-        )}
-      </div>
+      {filtered.length >= 20 && (
+        <div className="flex justify-center mt-3">
+          <button
+            className="px-3 py-1.5 rounded-lg text-sm border bg-white"
+            onClick={() => {
+              setLoadingMore(true);
+              load(false);
+            }}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
