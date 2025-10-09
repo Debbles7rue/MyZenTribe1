@@ -10,7 +10,7 @@ import CarpoolOverview from './carpool/CarpoolOverview';
 import CarpoolChat from './carpool/CarpoolChat';
 import CarpoolSidebars from './carpool/CarpoolSidebars';
 import CarpoolModals from './carpool/CarpoolModals';
-import CarpoolMap from './carpool/CarpoolMap'; // ADDED: Map component import
+import CarpoolMap from './carpool/CarpoolMap';
 import FriendSelector from '@/components/FriendSelector';
 import CarpoolSettings from './CarpoolSettings';
 
@@ -47,13 +47,14 @@ import {
   saveCarpoolData,
   loadCarpoolData,
   syncPendingChanges,
-  geocodeAddress // ADDED: For geocoding addresses
+  geocodeAddress,
+  clearCarpoolData
 } from './carpool/utils';
 
 // Supabase client
 const supabase = createClient();
 
-// ADDED: Extended ActiveView type to include map
+// Extended ActiveView type to include map
 type ExtendedActiveView = ActiveView | 'map';
 
 const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
@@ -111,7 +112,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [showFriendInvite, setShowFriendInvite] = useState(false);
   const [selectedFriendsToInvite, setSelectedFriendsToInvite] = useState<string[]>([]);
 
-  // ADDED: State for event coordinates
+  // State for event coordinates
   const [eventCoordinates, setEventCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
   // Use extracted save function from utils.ts
@@ -181,7 +182,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [userId, event?.id, showToast]);
 
-  // ADDED: Geocode event location if needed
+  // Geocode event location if needed
   useEffect(() => {
     const checkAndGeocodeEvent = async () => {
       if (!event) return;
@@ -207,6 +208,9 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             })
             .eq('id', event.id);
         }
+      } else {
+        // Default coordinates if no location
+        setEventCoordinates({ lat: 32.7767, lng: -96.7970 }); // Default to Dallas
       }
     };
     
@@ -293,24 +297,19 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   // Override the handleStartNewCarpoolInModal to not use sample messages
   const handleStartNewCarpool = () => {
     // Clear all data for a fresh start
-    setMessages([]);
-    setPolls([]);
-    setDriverStatus('none');
-    setSelectedFriends([]);
-    setCurrentCarpoolId(null);
-    setShowNewCarpoolConfirm(false);
-    
-    // Only add a welcome message, not sample conversations
-    const welcomeMessage: Message = {
-      id: Date.now(),
-      user: 'System',
-      message: `Welcome! Start organizing your carpool for ${event.title}`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      avatar: '🚗'
-    };
-    setMessages([welcomeMessage]);
-    
-    showToast?.({ type: 'success', message: 'Started new carpool group!' });
+    handleStartNewCarpoolInModal(
+      setMessages,
+      setPolls,
+      setDriverStatus,
+      setSelectedFriends,
+      setCurrentCarpoolId,
+      setShowNewCarpoolConfirm,
+      setTempEventDetails,
+      setTempCarDetails,
+      event,
+      userId,
+      showToast
+    );
   };
 
   if (!isOpen || !event) return null;
@@ -319,7 +318,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const carpoolStats = {
     needingRides: messages.filter(m => m.message?.includes('need a ride') || m.message?.includes('Need a ride')).length,
     driversAvailable: messages.filter(m => m.message?.includes('can drive') || m.message?.includes('I can drive')).length,
-    estimatedSavings: selectedFriends.length > 0 ? `${Math.round(selectedFriends.length * 8)}` : '$0',
+    estimatedSavings: selectedFriends.length > 0 ? `$${Math.round(selectedFriends.length * 8)}` : '$0',
     distanceAway: 0
   };
   const aiSuggestions = null; // Don't show AI suggestions with fake data
@@ -413,7 +412,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             {([
               { view: 'overview' as const, icon: MapPin, label: 'Overview' }, 
               { view: 'chat' as const, icon: Car, label: 'Chat' },
-              { view: 'map' as const, icon: Map, label: 'Map' } // ADDED: Map tab
+              { view: 'map' as const, icon: Map, label: 'Map' }
             ]).map(({ view, icon: Icon, label }) => (
               <button
                 key={view}
@@ -593,7 +592,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   <div className="text-center">
                     <MapPin className="mx-auto mb-4 text-gray-300" size={64} />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                      Map Not Available
+                      Map Loading...
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400">
                       {event.location ? 'Loading location coordinates...' : 'No event location specified'}
@@ -714,7 +713,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
 
           {/* LAYOUT WITH MAP VIEW */}
           {activeView === 'map' ? (
-            // ADDED: Full-screen map view for desktop
+            // Full-screen map view for desktop
             <div className="flex-1 min-h-0 overflow-hidden">
               {eventCoordinates ? (
                 <CarpoolMap
@@ -733,7 +732,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                   <div className="text-center">
                     <MapPin className="mx-auto mb-4 text-gray-300" size={80} />
                     <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-                      Map Not Available
+                      Map Loading...
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400">
                       {event.location ? 'Loading location coordinates...' : 'No event location specified'}
@@ -856,13 +855,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     </button>
                     <button onClick={() => setShowPoll(true)} className="w-full p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium">
                       📊 Create Poll
-                    </button>
-                    <button 
-                      onClick={handleSaveCarpoolData}
-                      disabled={isSaving}
-                      className="w-full p-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium disabled:opacity-50"
-                    >
-                      {isSaving ? 'Saving...' : 'Save Now'}
                     </button>
                   </div>
 
@@ -998,7 +990,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 />
               </div>
 
-              {/* RIGHT SIDEBAR - REPLACED WITH MAP PREVIEW */}
+              {/* RIGHT SIDEBAR - MAP PREVIEW WITHOUT API CHECK */}
               <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 flex-shrink-0 overflow-hidden">
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
@@ -1014,22 +1006,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     </h3>
                   </div>
                   <div className="flex-1 relative">
-                    {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
-                      <div className="flex items-center justify-center h-full p-4">
-                        <div className="text-center">
-                          <MapPin className="mx-auto mb-3 text-gray-300" size={48} />
-                          <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
-                            Map Setup Required
-                          </p>
-                          <p className="text-gray-400 dark:text-gray-500 text-xs">
-                            Google Maps API key not configured
-                          </p>
-                          <p className="text-gray-400 dark:text-gray-500 text-xs mt-2">
-                            Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your .env.local
-                          </p>
-                        </div>
-                      </div>
-                    ) : eventCoordinates ? (
+                    {/* FIXED: Removed Google Maps API check */}
+                    {eventCoordinates ? (
                       <>
                         {/* Map Preview Container */}
                         <div className="absolute inset-0">
@@ -1111,6 +1089,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             userId={userId}
             showToast={showToast}
             isMobile={isMobile}
+            event={event}
           />
         </div>
       </div>
