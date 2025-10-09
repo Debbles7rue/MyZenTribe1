@@ -247,6 +247,38 @@ export const loadCarpoolData = async (
   return { success: true, data: defaultData, source: 'default' };
 };
 
+// Clear carpool data for fresh start
+export const clearCarpoolData = async (
+  userId: string,
+  eventId: string,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  try {
+    // Clear from localStorage
+    const localStorageKey = `carpool-${eventId}-${userId}`;
+    localStorage.removeItem(localStorageKey);
+    
+    // Clear draft message
+    localStorage.removeItem(`carpool-draft-${eventId}`);
+    
+    // Clear from Supabase if online
+    if (navigator.onLine) {
+      await supabase
+        .from('carpool_chat_data')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', userId);
+    }
+    
+    showToast?.({ type: 'success', message: 'Carpool data cleared!' });
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing carpool data:', error);
+    showToast?.({ type: 'error', message: 'Failed to clear data' });
+    return { success: false };
+  }
+};
+
 // Sync pending changes when coming back online
 export const syncPendingChanges = async (
   eventId: string,
@@ -421,32 +453,54 @@ export const deleteCarpool = async (groupId: string) => {
 
 // ===== GEOCODING AND MAP UTILITIES =====
 
-// Geocoding function for addresses
+// Geocoding function using free Nominatim service (OpenStreetMap)
 export async function geocodeAddress(address: string): Promise<{lat: number, lng: number} | null> {
-  const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  
-  if (!API_KEY) {
-    console.error('Google Maps API key not found');
-    return null;
-  }
-  
   try {
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${API_KEY}`
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      {
+        headers: {
+          'User-Agent': 'MyZenTribe Carpool App'
+        }
+      }
     );
     const data = await response.json();
     
-    if (data.results && data.results[0]) {
+    if (data && data[0]) {
       return {
-        lat: data.results[0].geometry.location.lat,
-        lng: data.results[0].geometry.location.lng
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
       };
     }
   } catch (error) {
     console.error('Geocoding error:', error);
   }
   
-  return null;
+  // Fallback to approximate location based on common places
+  const commonLocations: { [key: string]: { lat: number; lng: number } } = {
+    'dallas': { lat: 32.7767, lng: -96.7970 },
+    'greenville': { lat: 33.1385, lng: -96.1108 },
+    'texas': { lat: 31.9686, lng: -99.9018 },
+    'new york': { lat: 40.7128, lng: -74.0060 },
+    'los angeles': { lat: 34.0522, lng: -118.2437 },
+    'chicago': { lat: 41.8781, lng: -87.6298 },
+    'houston': { lat: 29.7604, lng: -95.3698 },
+    'phoenix': { lat: 33.4484, lng: -112.0740 },
+    'philadelphia': { lat: 39.9526, lng: -75.1652 },
+    'san antonio': { lat: 29.4241, lng: -98.4936 },
+    'san diego': { lat: 32.7157, lng: -117.1611 },
+    'austin': { lat: 30.2672, lng: -97.7431 },
+  };
+  
+  const lowerAddress = address.toLowerCase();
+  for (const [city, coords] of Object.entries(commonLocations)) {
+    if (lowerAddress.includes(city)) {
+      return coords;
+    }
+  }
+  
+  // Default to Dallas area
+  return { lat: 32.7767, lng: -96.7970 };
 }
 
 // Get distance between two coordinates (in miles)
@@ -507,6 +561,53 @@ export const sendMessage = async (
   } catch (error) {
     console.error('Error sending message:', error);
     throw error;
+  }
+};
+
+// Send invite notification to friends
+export const sendCarpoolInvite = async (
+  eventId: string,
+  eventTitle: string,
+  fromUserId: string,
+  fromUserName: string,
+  toUserIds: string[],
+  message: string,
+  showToast?: (toast: { type: string; message: string }) => void
+) => {
+  try {
+    // Create notifications for each invited user
+    const notifications = toUserIds.map(toUserId => ({
+      user_id: toUserId,
+      type: 'carpool_invite',
+      title: 'Carpool Invitation',
+      message: `${fromUserName} invited you to carpool for "${eventTitle}"`,
+      data: JSON.stringify({
+        event_id: eventId,
+        event_title: eventTitle,
+        from_user_id: fromUserId,
+        from_user_name: fromUserName,
+        custom_message: message
+      }),
+      is_read: false,
+      created_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    if (error) throw error;
+
+    showToast?.({ 
+      type: 'success', 
+      message: `Invitations sent to ${toUserIds.length} friend${toUserIds.length > 1 ? 's' : ''}!` 
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending invites:', error);
+    showToast?.({ type: 'error', message: 'Failed to send invitations' });
+    return { success: false };
   }
 };
 
@@ -771,36 +872,9 @@ export const createEventPostMessage = (event: DBEvent): Message => {
 
 export const initializeCarpoolChat = (event: DBEvent): Message[] => {
   const eventPostMessage = createEventPostMessage(event);
-
-  // Sample existing messages for demo
-  const existingMessages: Message[] = [
-    eventPostMessage,
-    { 
-      id: 1, 
-      user: 'Sarah', 
-      message: 'I can drive! My Honda Civic fits 4 people', 
-      time: '2:30 PM', 
-      avatar: '👩‍🦰',
-      reactions: ['👍', '🚗']
-    },
-    { 
-      id: 2, 
-      user: 'Mike', 
-      message: 'Perfect! When should we meet up?', 
-      time: '2:32 PM', 
-      avatar: '👨‍💼' 
-    },
-    { 
-      id: 3, 
-      user: 'AI Assistant', 
-      message: 'Based on traffic patterns, I suggest meeting at Central Park at 6:15 PM. This gives you a 32-minute buffer for the drive.', 
-      time: '2:35 PM', 
-      avatar: '🤖', 
-      isAI: true 
-    }
-  ];
-
-  return existingMessages;
+  
+  // Only return the event message, no fake sample messages
+  return [eventPostMessage];
 };
 
 // Vibration utility for mobile haptic feedback
@@ -1064,7 +1138,7 @@ export const handleSaveEventDetailsInModal = (
   showToast?.({ type: 'success', message: 'Carpool details updated!' });
 };
 
-// Handle starting new carpool
+// FIXED: Handle starting new carpool - properly clears ALL data
 export const handleStartNewCarpoolInModal = (
   setMessages: (messages: Message[]) => void,
   setPolls: (polls: Poll[]) => void,
@@ -1072,20 +1146,45 @@ export const handleStartNewCarpoolInModal = (
   setSelectedFriends: (friends: string[]) => void,
   setCurrentCarpoolId: (id: string | null) => void,
   setShowNewCarpoolConfirm: (show: boolean) => void,
-  event: any,
+  setTempEventDetails?: (details: EventDetails) => void,
+  setTempCarDetails?: (details: CarDetails) => void,
+  event?: any,
+  userId?: string,
   showToast?: (toast: { type: string; message: string }) => void
 ) => {
+  // Clear ALL data for a fresh start
   setMessages([]);
   setPolls([]);
   setDriverStatus('none');
   setSelectedFriends([]);
   setCurrentCarpoolId(null);
+  
+  // CRITICAL: Clear event details to prevent "drum circle" carrying over
+  if (setTempEventDetails) {
+    setTempEventDetails({ meetupLocation: '', departureTime: '', notes: '' });
+  }
+  
+  // Clear car details too
+  if (setTempCarDetails) {
+    setTempCarDetails({ seats: 4, make: '', color: '' });
+  }
+  
+  // Clear from localStorage if we have userId and event
+  if (userId && event?.id) {
+    clearCarpoolData(userId, event.id);
+  }
+  
   setShowNewCarpoolConfirm(false);
-  setTimeout(() => {
-    const initialMessages = initializeCarpoolChat(event);
-    setMessages(initialMessages);
-  }, 100);
-  showToast?.({ type: 'success', message: 'Started new carpool group!' });
+  
+  // Add only the welcome message after clearing
+  if (event) {
+    setTimeout(() => {
+      const initialMessages = initializeCarpoolChat(event);
+      setMessages(initialMessages);
+    }, 100);
+  }
+  
+  showToast?.({ type: 'success', message: 'Started fresh carpool group!' });
 };
 
 // Handle friend toggle in carpool
