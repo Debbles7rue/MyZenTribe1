@@ -7,7 +7,12 @@ import {
 } from 'lucide-react';
 import type { CarpoolChatProps } from './types';
 
-const CarpoolChat: React.FC<CarpoolChatProps> = ({
+// ADDED: Extended props interface to include onViewProfile
+interface ExtendedCarpoolChatProps extends CarpoolChatProps {
+  onViewProfile?: (userId: string) => void;
+}
+
+const CarpoolChat: React.FC<ExtendedCarpoolChatProps> = ({
   messages,
   polls,
   newMessage,
@@ -32,7 +37,8 @@ const CarpoolChat: React.FC<CarpoolChatProps> = ({
   onSaveEditPoll,
   onCancelEditPoll,
   userId,
-  isMobile = false
+  isMobile = false,
+  onViewProfile // ADDED: New prop for viewing profiles
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +110,17 @@ const CarpoolChat: React.FC<CarpoolChatProps> = ({
                   <EventPost eventData={msg.eventData} />
                 ) : (
                   <>
+                    {/* ADDED: Username display with click handler for mobile */}
+                    {msg.userId !== userId && !msg.isAI && (
+                      <div className="mb-1 px-1">
+                        <button
+                          onClick={() => msg.userId && onViewProfile?.(msg.userId)}
+                          className="text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                        >
+                          {msg.user}
+                        </button>
+                      </div>
+                    )}
                     <div className={`rounded-2xl px-3 py-2 ${
                       msg.userId === userId
                         ? 'bg-blue-500 text-white'
@@ -260,9 +277,14 @@ const CarpoolChat: React.FC<CarpoolChatProps> = ({
               ) : (
                 <>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {/* UPDATED: Made username clickable for desktop */}
+                    <button
+                      onClick={() => msg.userId && onViewProfile?.(msg.userId)}
+                      className="text-sm font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
+                      title="View profile"
+                    >
                       {msg.user}
-                    </span>
+                    </button>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {msg.time}
                     </span>
