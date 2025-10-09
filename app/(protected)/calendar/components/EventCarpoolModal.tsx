@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Map, Maximize2, Link, Image, Type } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { sendCarpoolInvites } from '@/lib/notifications/send-notifications';
 
 // Import modular components
 import CarpoolOverview from './carpool/CarpoolOverview';
@@ -322,41 +323,44 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
 
     try {
-      // Create notifications for each invited friend
-      const notifications = selectedFriendsToInvite.map(friendId => ({
-        user_id: friendId,
-        type: 'carpool_invite',
-        title: 'Carpool Invitation',
-        message: `You've been invited to carpool for ${event?.title || 'an event'}`,
-        data: {
-          event_id: event?.id,
-          carpool_id: currentCarpoolId,
-          inviter_id: userId
-        },
-        read: false,
-        created_at: new Date().toISOString()
-      }));
+      // Get user's name for the notification
+      const { data: userData } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('user_id', userId)
+        .single();
+      
+      const inviterName = userData?.display_name || 'Someone';
 
-      const { error } = await supabase
-        .from('notifications')
-        .insert(notifications);
-
-      if (error) throw error;
-
-      // Also use the existing createCarpoolGroup if available
-      if (carpoolData?.createCarpoolGroup) {
-        await carpoolData.createCarpoolGroup(
-          event.id, 
-          selectedFriendsToInvite, 
-          `Join our carpool for ${event?.title}!`
-        );
-      }
-
-      showToast?.({ 
-        type: 'success', 
-        message: `Invitations sent to ${selectedFriendsToInvite.length} friend${selectedFriendsToInvite.length > 1 ? 's' : ''}!` 
+      // Send notifications using the centralized notification system
+      const result = await sendCarpoolInvites({
+        eventId: event.id,
+        eventTitle: tempEventDetails.eventTitle || event.title,
+        carpoolId: currentCarpoolId || 'new',
+        inviterUserId: userId,
+        inviterName,
+        invitedUserIds: selectedFriendsToInvite,
+        message: "Let's carpool together!"
       });
-      handleCloseFriendInvite();
+
+      if (result.success) {
+        // Also use the existing createCarpoolGroup if available (for backward compatibility)
+        if (carpoolData?.createCarpoolGroup) {
+          await carpoolData.createCarpoolGroup(
+            event.id, 
+            selectedFriendsToInvite, 
+            `Join our carpool for ${tempEventDetails.eventTitle || event.title}!`
+          );
+        }
+
+        showToast?.({ 
+          type: 'success', 
+          message: `Invitations sent to ${selectedFriendsToInvite.length} friend${selectedFriendsToInvite.length > 1 ? 's' : ''}!` 
+        });
+        handleCloseFriendInvite();
+      } else {
+        throw result.error || new Error('Failed to send notifications');
+      }
     } catch (error) {
       console.error('Error sending invites:', error);
       showToast?.({ type: 'error', message: 'Failed to send invitations' });
