@@ -1,7 +1,7 @@
 // app/(protected)/calendar/components/EventCarpoolModal.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Map, Maximize2, Link, Image, Type } from 'lucide-react';
+import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Map, Maximize2, Link, Image, Type, Calendar } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { sendCarpoolInvites } from '@/lib/notifications/send-notifications';
@@ -61,6 +61,8 @@ interface EnhancedEventDetails extends EventDetails {
   eventTitle?: string;
   eventImageUrl?: string;
   eventLink?: string;
+  eventDate?: string;
+  eventLocation?: string;
 }
 
 const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
@@ -746,11 +748,19 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             event={event}
           />
 
-          {/* ENHANCED: Event Details Modal */}
+          {/* ENHANCED: Event Details Modal - FIXED FOR MOBILE */}
           {showEventDetailsModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-60">
-              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg safe-area-bottom">
-                <h3 className="text-lg font-semibold mb-4">Event Details</h3>
+            <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-[70]">
+              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto safe-area-bottom">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Event Details</h3>
+                  <button
+                    onClick={() => setShowEventDetailsModal(false)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
                 
                 <div className="space-y-4">
                   <div>
@@ -769,22 +779,70 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      <Image size={14} className="inline mr-1" />
-                      Event Image URL (optional)
+                      <Calendar size={14} className="inline mr-1" />
+                      Event Date & Time
                     </label>
                     <input
-                      type="url"
-                      value={tempEventDetails.eventImageUrl}
-                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventImageUrl: e.target.value }))}
-                      placeholder="https://example.com/event-image.jpg"
+                      type="datetime-local"
+                      value={tempEventDetails.eventDate || event.start_time?.slice(0, 16)}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventDate: e.target.value }))}
                       className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <MapPin size={14} className="inline mr-1" />
+                      Event Location/Address
+                    </label>
+                    <input
+                      type="text"
+                      value={tempEventDetails.eventLocation || event.location}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventLocation: e.target.value }))}
+                      placeholder="e.g., Madison Square Garden, 4 Penn Plaza, New York"
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Image size={14} className="inline mr-1" />
+                      Event Image
+                    </label>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setTempEventDetails(prev => ({ 
+                                ...prev, 
+                                eventImageUrl: reader.result as string 
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="w-full p-2 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-500 file:text-white"
+                      />
+                      <p className="text-xs text-gray-500">Or paste image URL:</p>
+                      <input
+                        type="url"
+                        value={tempEventDetails.eventImageUrl}
+                        onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventImageUrl: e.target.value }))}
+                        placeholder="https://example.com/event-image.jpg"
+                        className="w-full p-2 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       <Link size={14} className="inline mr-1" />
-                      Event Link (optional)
+                      Event Link/Tickets (optional)
                     </label>
                     <input
                       type="url"
@@ -794,6 +852,10 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                       className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
                     />
                   </div>
+
+                  <hr className="my-4 border-gray-200 dark:border-gray-700" />
+
+                  <h4 className="text-md font-semibold text-green-600 dark:text-green-400">Carpool Plans</h4>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -834,6 +896,21 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                       className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
                     />
                   </div>
+
+                  {/* Image preview */}
+                  {tempEventDetails.eventImageUrl && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preview:</p>
+                      <img 
+                        src={tempEventDetails.eventImageUrl} 
+                        alt="Event preview" 
+                        className="w-full max-h-32 object-cover rounded-lg"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3 mt-6">
@@ -1298,13 +1375,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             event={{...event, title: tempEventDetails.eventTitle || event.title}}
           />
 
-          {/* ENHANCED: Event Details Modal for Desktop */}
+          {/* ENHANCED: Event Details Modal for Desktop - FIXED */}
           {showEventDetailsModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                 <h3 className="text-xl font-semibold mb-6">Event & Carpool Details</h3>
                 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
                     <h4 className="text-lg font-medium mb-4 text-blue-600 dark:text-blue-400">Event Information</h4>
                     
@@ -1319,35 +1396,83 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                           value={tempEventDetails.eventTitle}
                           onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventTitle: e.target.value }))}
                           placeholder="e.g., Concert at Madison Square Garden"
-                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <Calendar size={14} className="inline mr-1" />
+                          Event Date & Time
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={tempEventDetails.eventDate || event.start_time?.slice(0, 16)}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventDate: e.target.value }))}
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <MapPin size={14} className="inline mr-1" />
+                          Event Location/Address
+                        </label>
+                        <input
+                          type="text"
+                          value={tempEventDetails.eventLocation || event.location}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventLocation: e.target.value }))}
+                          placeholder="e.g., Madison Square Garden, 4 Penn Plaza, New York"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           <Image size={14} className="inline mr-1" />
-                          Event Image URL
+                          Event Image
                         </label>
-                        <input
-                          type="url"
-                          value={tempEventDetails.eventImageUrl}
-                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventImageUrl: e.target.value }))}
-                          placeholder="https://example.com/event-image.jpg"
-                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
-                        />
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setTempEventDetails(prev => ({ 
+                                    ...prev, 
+                                    eventImageUrl: reader.result as string 
+                                  }));
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="w-full p-2 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-500 file:text-white hover:file:bg-blue-600"
+                          />
+                          <p className="text-xs text-gray-500">Or paste image URL:</p>
+                          <input
+                            type="url"
+                            value={tempEventDetails.eventImageUrl}
+                            onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventImageUrl: e.target.value }))}
+                            placeholder="https://example.com/event-image.jpg"
+                            className="w-full p-2 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-sm"
+                          />
+                        </div>
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           <Link size={14} className="inline mr-1" />
-                          Event Link
+                          Event Link/Tickets
                         </label>
                         <input
                           type="url"
                           value={tempEventDetails.eventLink}
                           onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventLink: e.target.value }))}
                           placeholder="https://ticketmaster.com/event/..."
-                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                     </div>
@@ -1360,14 +1485,14 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           <MapPin size={14} className="inline mr-1" />
-                          Meetup Location
+                          Carpool Meetup Location
                         </label>
                         <input
                           type="text"
                           value={tempEventDetails.meetupLocation}
                           onChange={(e) => setTempEventDetails(prev => ({ ...prev, meetupLocation: e.target.value }))}
                           placeholder="e.g., Starbucks on Main St"
-                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
 
@@ -1380,7 +1505,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                           type="time"
                           value={tempEventDetails.departureTime}
                           onChange={(e) => setTempEventDetails(prev => ({ ...prev, departureTime: e.target.value }))}
-                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
 
@@ -1392,15 +1517,42 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                           value={tempEventDetails.notes}
                           onChange={(e) => setTempEventDetails(prev => ({ ...prev, notes: e.target.value }))}
                           placeholder="Any additional details for the carpool..."
-                          rows={3}
-                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                          rows={4}
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
+                      </div>
+
+                      {/* Map Preview Section */}
+                      <div className="border dark:border-gray-700 rounded-lg overflow-hidden h-48">
+                        <div className="h-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                          {eventCoordinates ? (
+                            <div className="relative w-full h-full">
+                              <CarpoolMap
+                                eventId={event.id}
+                                userId={userId || ''}
+                                eventLocation={{ 
+                                  lat: eventCoordinates.lat, 
+                                  lng: eventCoordinates.lng,
+                                  address: tempEventDetails.eventLocation || event.location 
+                                }}
+                                showToast={showToast}
+                                isMobile={false}
+                              />
+                            </div>
+                          ) : (
+                            <div className="text-center text-gray-500">
+                              <MapPin size={32} className="mx-auto mb-2 opacity-50" />
+                              <p className="text-sm">Map preview</p>
+                              <p className="text-xs">Enter event location to see map</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Image preview if URL is provided */}
+                {/* Image preview if URL or file is provided */}
                 {tempEventDetails.eventImageUrl && (
                   <div className="mt-6">
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Image Preview:</p>
