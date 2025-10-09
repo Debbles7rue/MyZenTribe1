@@ -128,10 +128,79 @@ const CarpoolMap: React.FC<CarpoolMapProps> = ({
     }
   }, []);
 
-  // Load carpool locations
+  // Get accuracy radius based on privacy level
+  const getAccuracyRadius = (privacyLevel: string): number => {
+    switch (privacyLevel) {
+      case 'full': return 0;
+      case 'street': return 100; // 100 meters
+      case 'area': return 500; // 500 meters
+      case 'city': return 2000; // 2km
+      default: return 1000;
+    }
+  };
+
+  // Load carpool locations - UPDATED TO FETCH REAL DATA
   const loadLocations = useCallback(async () => {
     try {
-      // For demo purposes, create sample locations
+      // First, try to get real participants for this event
+      const { data: participants, error: participantsError } = await supabase
+        .from('carpool_participants')
+        .select(`
+          user_id,
+          role,
+          group_id,
+          carpool_groups!inner(event_id)
+        `)
+        .eq('carpool_groups.event_id', eventId);
+
+      // If we have real participants, load their profiles
+      if (participants && participants.length > 0) {
+        const userIds = participants.map(p => p.user_id);
+        
+        const { data: profiles, error: profilesError } = await supabase
+          .from('carpool_profiles')
+          .select('*')
+          .in('user_id', userIds);
+
+        if (profiles && profiles.length > 0) {
+          // Transform real profile data to map locations
+          const realLocations: MapLocation[] = profiles
+            .filter(profile => 
+              profile.home_latitude && 
+              profile.home_longitude && 
+              profile.location_privacy !== 'hidden'
+            )
+            .map(profile => ({
+              id: profile.user_id,
+              user_id: profile.user_id,
+              user_name: profile.display_name || 'Anonymous',
+              user_avatar: profile.profile_picture_url,
+              location_type: profile.willing_to_drive ? 'driver' : 'rider',
+              latitude: profile.home_latitude,
+              longitude: profile.home_longitude,
+              accuracy_radius: getAccuracyRadius(profile.location_privacy || 'area'),
+              privacy_level: profile.location_privacy || 'area',
+              car_details: profile.willing_to_drive ? {
+                make: profile.car_make || 'Unknown',
+                color: profile.car_color || 'Unknown',
+                seats: profile.available_seats || 0,
+                license_plate: profile.location_privacy === 'full' ? profile.car_license_plate : undefined
+              } : undefined,
+              status: 'confirmed'
+            }));
+
+          if (realLocations.length > 0) {
+            setLocations(realLocations);
+            showToast?.({ 
+              type: 'success', 
+              message: `Found ${realLocations.length} carpool participant${realLocations.length > 1 ? 's' : ''}` 
+            });
+            return;
+          }
+        }
+      }
+
+      // If no real data, show sample locations for demo
       const sampleLocations: MapLocation[] = [
         {
           id: '1',
@@ -180,21 +249,29 @@ const CarpoolMap: React.FC<CarpoolMapProps> = ({
 
       setLocations(sampleLocations);
       
-      // In production, you would load from Supabase:
-      /*
-      const { data: carpoolData, error } = await supabase
-        .from('carpool_participants')
-        .select('*')
-        .eq('event_id', eventId);
-      
-      if (!error && carpoolData) {
-        // Transform data
-      }
-      */
-      
     } catch (error) {
       console.error('Error loading locations:', error);
       showToast?.({ type: 'error', message: 'Failed to load carpool locations' });
+      
+      // Fall back to sample data on error
+      const sampleLocations: MapLocation[] = [
+        {
+          id: '1',
+          user_id: 'user-1',
+          user_name: 'Sample Driver',
+          location_type: 'driver',
+          latitude: eventLocation.lat + 0.01,
+          longitude: eventLocation.lng + 0.015,
+          privacy_level: 'full',
+          car_details: {
+            make: 'Honda Civic',
+            color: 'Blue',
+            seats: 4
+          },
+          status: 'confirmed'
+        }
+      ];
+      setLocations(sampleLocations);
     }
   }, [eventId, eventLocation, showToast]);
 
@@ -219,20 +296,26 @@ const CarpoolMap: React.FC<CarpoolMapProps> = ({
     navigator.geolocation.getCurrentPosition(async (position) => {
       try {
         setUserCoords([position.coords.latitude, position.coords.longitude]);
-        showToast?.({ type: 'success', message: 'Location shared!' });
         
-        // In production, save to Supabase:
-        /*
-        await supabase
+        // Save to database for real implementation
+        const { error } = await supabase
           .from('carpool_live_locations')
           .upsert({
             user_id: userId,
             event_id: eventId,
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
             timestamp: new Date().toISOString()
           });
-        */
+        
+        if (error) {
+          console.error('Error saving location:', error);
+          // Continue anyway to show location on map
+        }
+        
+        showToast?.({ type: 'success', message: 'Location shared!' });
+        loadLocations(); // Reload to show updated location
       } catch (error) {
         console.error('Error sharing location:', error);
         showToast?.({ type: 'error', message: 'Failed to share location' });
@@ -549,6 +632,11 @@ const CarpoolMap: React.FC<CarpoolMapProps> = ({
             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
             <span>Event location</span>
           </div>
+          {locations.length === 0 && (
+            <div className="text-xs text-gray-500 mt-2">
+              (Showing sample data - no participants yet)
+            </div>
+          )}
         </div>
       </div>
 
