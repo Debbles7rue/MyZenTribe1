@@ -29,7 +29,7 @@ import CalendarModals from "./components/CalendarModals";
 import FloatingActionButton from "./components/FloatingActionButton";
 import MoodTracker from "./components/MoodTracker";
 import HolidayReminders from "./components/HolidayReminders";
-import CalendarDebugger from "./components/CalendarDebugger"; // ADD THIS IMPORT
+// REMOVED: CalendarDebugger import
 import CarpoolSettings from "./components/CarpoolSettings"; // NEW IMPORT
 import { Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
@@ -628,12 +628,7 @@ export default function CalendarPage() {
                   selectedBatchEvents={batchMode ? selectedBatchEvents : undefined}
                 />
               )}
-              {/* ADD CALENDAR DEBUGGER HERE */}
-              <CalendarDebugger 
-                onSelectSlot={onSelectSlot}
-                onSelectEvent={onSelectEvent}
-                events={calendarEvents}
-              />
+              {/* REMOVED: CalendarDebugger component */}
             </div>
           </div>
         </div>
