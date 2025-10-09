@@ -1,7 +1,7 @@
 // app/(protected)/calendar/components/EventCarpoolModal.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Save, Map, Maximize2 } from 'lucide-react';
+import { ArrowLeft, X, Settings, RefreshCw, MoreVertical, Car, UserPlus, MapPin, Clock, Map, Maximize2, Link, Image, Type } from 'lucide-react';
 import type { DBEvent } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 
@@ -25,7 +25,7 @@ import type {
   EventDetails
 } from './carpool/types';
 
-// Import ALL functions from utils instead of duplicating
+// Import ALL functions from utils
 import {
   generateCarpoolStats,
   generateAISuggestions,
@@ -33,7 +33,6 @@ import {
   handleQuickAction,
   formatEventTime,
   vibrate,
-  // Extracted handler functions
   handleSendMessage,
   handleVoiceRecord,
   handleCreatePollInChat,
@@ -43,7 +42,6 @@ import {
   handleSaveEventDetailsInModal,
   handleStartNewCarpoolInModal,
   handleFriendToggleInModal,
-  // Persistence functions
   saveCarpoolData,
   loadCarpoolData,
   syncPendingChanges,
@@ -57,6 +55,13 @@ const supabase = createClient();
 // Extended ActiveView type to include map
 type ExtendedActiveView = ActiveView | 'map';
 
+// Enhanced Event Details interface for better structure
+interface EnhancedEventDetails extends EventDetails {
+  eventTitle?: string;
+  eventImageUrl?: string;
+  eventLink?: string;
+}
+
 const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isOpen,
   onClose,
@@ -68,7 +73,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   isMobile = false,
   onOpenSettings
 }) => {
-  // ALL ORIGINAL STATE PRESERVED - Updated activeView type
+  // Core state
   const [activeView, setActiveView] = useState<ExtendedActiveView>('overview');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -77,12 +82,18 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [driverStatus, setDriverStatus] = useState<DriverStatus>('none');
   const [carDetails, setCarDetails] = useState<CarDetails>({ seats: 4, make: '', color: '' });
   const [tempCarDetails, setTempCarDetails] = useState<CarDetails>(carDetails);
-  const [tempEventDetails, setTempEventDetails] = useState<EventDetails>({
+  
+  // ENHANCED: Better event details structure
+  const [tempEventDetails, setTempEventDetails] = useState<EnhancedEventDetails>({
     meetupLocation: '',
     departureTime: '',
-    notes: ''
+    notes: '',
+    eventTitle: event?.title || '',
+    eventImageUrl: '',
+    eventLink: ''
   });
 
+  // UI state
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -90,32 +101,58 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
   const [showEditCarDetails, setShowEditCarDetails] = useState(false);
   const [showEditEventDetails, setShowEditEventDetails] = useState(false);
   const [newPollQuestion, setNewPollQuestion] = useState('');
+  const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
 
+  // Edit state
   const [editingMessage, setEditingMessage] = useState<number | null>(null);
   const [editMessageText, setEditMessageText] = useState('');
   const [editingPoll, setEditingPoll] = useState<string | null>(null);
   const [editPollText, setEditPollText] = useState('');
 
+  // Layout state
   const [desktopLayout, setDesktopLayout] = useState<'custom' | 'modular'>('custom');
   const [showQuickActions, setShowQuickActions] = useState(true);
 
-  // ENHANCED STATE FOR PERSISTENCE
-  const [currentCarpoolId, setCurrentCarpoolId] = useState<string | null>(null);
+  // Persistence state
+  const [currentCarpoolId, setCurrentCarpoolId] = useState<string | null>(carpoolGroupId || null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // STATE FOR PROFILE SETTINGS
+  // Modal state
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  
-  // STATE FOR FRIEND INVITE MODAL
   const [showFriendInvite, setShowFriendInvite] = useState(false);
   const [selectedFriendsToInvite, setSelectedFriendsToInvite] = useState<string[]>([]);
 
-  // State for event coordinates
+  // Map state
   const [eventCoordinates, setEventCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Use extracted save function from utils.ts
+  // FIXED: Clear data when switching between carpools
+  useEffect(() => {
+    if (carpoolGroupId && carpoolGroupId !== currentCarpoolId) {
+      // Clear all data when switching to a different carpool
+      setMessages([]);
+      setPolls([]);
+      setSelectedFriends([]);
+      setDriverStatus('none');
+      setCarDetails({ seats: 4, make: '', color: '' });
+      setTempCarDetails({ seats: 4, make: '', color: '' });
+      setTempEventDetails({
+        meetupLocation: '',
+        departureTime: '',
+        notes: '',
+        eventTitle: event?.title || '',
+        eventImageUrl: '',
+        eventLink: ''
+      });
+      setCurrentCarpoolId(carpoolGroupId);
+      
+      // Then load the new carpool data
+      handleLoadCarpoolData();
+    }
+  }, [carpoolGroupId]);
+
+  // ENHANCED: Save function with better error handling
   const handleSaveCarpoolData = useCallback(async () => {
     if (!userId || !event?.id || isSaving) return;
     
@@ -129,7 +166,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
         selectedFriends,
         driverStatus,
         carDetails,
-        tempEventDetails
+        tempEventDetails,
+        carpoolGroupId: currentCarpoolId // Include group ID
       };
 
       const result = await saveCarpoolData(
@@ -146,60 +184,65 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       }
       
       setLastSaved(new Date());
+      showToast?.({ type: 'success', message: 'Carpool data saved!' });
     } catch (error: any) {
       console.error('Save carpool error:', error);
       setSaveError(error.message);
       showToast?.({ 
         type: 'error', 
-        message: 'Failed to save data completely' 
+        message: 'Failed to save data' 
       });
     } finally {
       setIsSaving(false);
     }
   }, [userId, event?.id, currentCarpoolId, messages, polls, selectedFriends, driverStatus, carDetails, tempEventDetails, isSaving, showToast]);
 
-  // Use extracted load function from utils.ts
+  // ENHANCED: Load function that properly loads carpool-specific data
   const handleLoadCarpoolData = useCallback(async () => {
     if (!userId || !event?.id) return;
     
     try {
-      const result = await loadCarpoolData(undefined, userId, event.id, showToast);
+      // Load data specific to this carpool group
+      const result = await loadCarpoolData(currentCarpoolId || undefined, userId, event.id, showToast);
       
       if (result.success && result.data) {
-        if (result.carpoolId) {
-          setCurrentCarpoolId(result.carpoolId);
+        // Only load data if it matches the current carpool
+        if (!currentCarpoolId || result.carpoolId === currentCarpoolId) {
+          setMessages(result.data.messages || []);
+          setPolls(result.data.polls || []);
+          setSelectedFriends(result.data.selectedFriends || []);
+          setDriverStatus(result.data.driverStatus || 'none');
+          setCarDetails(result.data.carDetails || { seats: 4, make: '', color: '' });
+          setTempEventDetails(result.data.tempEventDetails || {
+            meetupLocation: '',
+            departureTime: '',
+            notes: '',
+            eventTitle: event?.title || '',
+            eventImageUrl: '',
+            eventLink: ''
+          });
         }
-        
-        setMessages(result.data.messages || []);
-        setPolls(result.data.polls || []);
-        setSelectedFriends(result.data.selectedFriends || []);
-        setDriverStatus(result.data.driverStatus || 'none');
-        setCarDetails(result.data.carDetails || { seats: 4, make: '', color: '' });
-        setTempEventDetails(result.data.tempEventDetails || { meetupLocation: '', departureTime: '', notes: '' });
       }
     } catch (error) {
       console.warn('Error loading carpool data:', error);
     }
-  }, [userId, event?.id, showToast]);
+  }, [userId, event?.id, currentCarpoolId, showToast]);
 
-  // Geocode event location if needed
+  // Geocode event location
   useEffect(() => {
     const checkAndGeocodeEvent = async () => {
       if (!event) return;
       
-      // Check if event already has coordinates
       if (event.latitude && event.longitude) {
         setEventCoordinates({ lat: event.latitude, lng: event.longitude });
         return;
       }
       
-      // If no coordinates but has address, geocode it
       if (event.location) {
         const coords = await geocodeAddress(event.location);
         if (coords) {
           setEventCoordinates(coords);
           
-          // Optionally save coordinates back to database
           await supabase
             .from('events')
             .update({ 
@@ -209,8 +252,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             .eq('id', event.id);
         }
       } else {
-        // Default coordinates if no location
-        setEventCoordinates({ lat: 32.7767, lng: -96.7970 }); // Default to Dallas
+        setEventCoordinates({ lat: 32.7767, lng: -96.7970 }); // Default
       }
     };
     
@@ -219,39 +261,47 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   }, [isOpen, event]);
 
-  // ALL ORIGINAL EFFECTS PRESERVED
+  // Load data on open
   useEffect(() => {
     if (isOpen && event) {
-      // Load existing data first
       handleLoadCarpoolData();
-      
-      // Don't auto-populate with sample messages - let users start fresh
     }
-  }, [isOpen, event, handleLoadCarpoolData]);
+  }, [isOpen, event]);
+
+  // Auto-update tempEventDetails when event changes
+  useEffect(() => {
+    if (event) {
+      setTempEventDetails(prev => ({
+        ...prev,
+        eventTitle: event.title || ''
+      }));
+    }
+  }, [event]);
 
   useEffect(() => {
     setTempCarDetails(carDetails);
   }, [carDetails]);
 
+  // Draft message auto-save
   useEffect(() => {
     const autoSave = setTimeout(() => {
-      if (newMessage.trim()) {
-        localStorage.setItem(`carpool-draft-${event?.id}`, newMessage);
+      if (newMessage.trim() && currentCarpoolId) {
+        localStorage.setItem(`carpool-draft-${currentCarpoolId}-${event?.id}`, newMessage);
       }
     }, 1000);
     return () => clearTimeout(autoSave);
-  }, [newMessage, event?.id]);
+  }, [newMessage, event?.id, currentCarpoolId]);
 
   useEffect(() => {
-    if (event?.id) {
-      const draft = localStorage.getItem(`carpool-draft-${event.id}`);
+    if (event?.id && currentCarpoolId) {
+      const draft = localStorage.getItem(`carpool-draft-${currentCarpoolId}-${event.id}`);
       if (draft) {
         setNewMessage(draft);
       }
     }
-  }, [event?.id]);
+  }, [event?.id, currentCarpoolId]);
 
-  // Auto-save every 2 minutes
+  // Auto-save every 2 minutes - THIS WAS MISSING!
   useEffect(() => {
     if (!isOpen || !event) return;
     
@@ -264,7 +314,85 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     return () => clearInterval(autoSaveInterval);
   }, [isOpen, event, messages.length, polls.length, selectedFriends.length, handleSaveCarpoolData]);
 
-  // PROFILE SETTINGS HANDLERS
+  // ENHANCED: Send friend invites with notifications
+  const handleSendFriendInvites = async () => {
+    if (selectedFriendsToInvite.length === 0) {
+      showToast?.({ type: 'warning', message: 'Please select friends to invite' });
+      return;
+    }
+
+    try {
+      // Create notifications for each invited friend
+      const notifications = selectedFriendsToInvite.map(friendId => ({
+        user_id: friendId,
+        type: 'carpool_invite',
+        title: 'Carpool Invitation',
+        message: `You've been invited to carpool for ${event?.title || 'an event'}`,
+        data: {
+          event_id: event?.id,
+          carpool_id: currentCarpoolId,
+          inviter_id: userId
+        },
+        read: false,
+        created_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('notifications')
+        .insert(notifications);
+
+      if (error) throw error;
+
+      // Also use the existing createCarpoolGroup if available
+      if (carpoolData?.createCarpoolGroup) {
+        await carpoolData.createCarpoolGroup(
+          event.id, 
+          selectedFriendsToInvite, 
+          `Join our carpool for ${event?.title}!`
+        );
+      }
+
+      showToast?.({ 
+        type: 'success', 
+        message: `Invitations sent to ${selectedFriendsToInvite.length} friend${selectedFriendsToInvite.length > 1 ? 's' : ''}!` 
+      });
+      handleCloseFriendInvite();
+    } catch (error) {
+      console.error('Error sending invites:', error);
+      showToast?.({ type: 'error', message: 'Failed to send invitations' });
+    }
+  };
+
+  // FIXED: Start new carpool clears all old data
+  const handleStartNewCarpool = () => {
+    // Clear ALL data for a fresh start
+    setMessages([]);
+    setPolls([]);
+    setDriverStatus('none');
+    setSelectedFriends([]);
+    setCarDetails({ seats: 4, make: '', color: '' });
+    setTempCarDetails({ seats: 4, make: '', color: '' });
+    setTempEventDetails({
+      meetupLocation: '',
+      departureTime: '',
+      notes: '',
+      eventTitle: event?.title || '',
+      eventImageUrl: '',
+      eventLink: ''
+    });
+    setCurrentCarpoolId(null);
+    setShowNewCarpoolConfirm(false);
+    
+    // Clear local storage
+    if (currentCarpoolId && event?.id) {
+      localStorage.removeItem(`carpool-draft-${currentCarpoolId}-${event.id}`);
+      localStorage.removeItem(`carpool-${currentCarpoolId}`);
+    }
+    
+    showToast?.({ type: 'success', message: 'Started fresh carpool!' });
+  };
+
+  // Profile settings handlers
   const handleOpenProfileSettings = () => {
     setShowProfileSettings(true);
   };
@@ -273,7 +401,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setShowProfileSettings(false);
   };
 
-  // FRIEND INVITE HANDLERS
+  // Friend invite handlers
   const handleOpenFriendInvite = () => {
     setShowFriendInvite(true);
   };
@@ -283,48 +411,20 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     setSelectedFriendsToInvite([]);
   };
 
-  const handleSendFriendInvites = () => {
-    if (selectedFriendsToInvite.length > 0 && carpoolData?.createCarpoolGroup) {
-      carpoolData.createCarpoolGroup(event.id, selectedFriendsToInvite, "Join our carpool!");
-      showToast?.({ 
-        type: 'success', 
-        message: `Invitations sent to ${selectedFriendsToInvite.length} friend${selectedFriendsToInvite.length > 1 ? 's' : ''}!` 
-      });
-      handleCloseFriendInvite();
-    }
-  };
-
-  // Override the handleStartNewCarpoolInModal to not use sample messages
-  const handleStartNewCarpool = () => {
-    // Clear all data for a fresh start
-    handleStartNewCarpoolInModal(
-      setMessages,
-      setPolls,
-      setDriverStatus,
-      setSelectedFriends,
-      setCurrentCarpoolId,
-      setShowNewCarpoolConfirm,
-      setTempEventDetails,
-      setTempCarDetails,
-      event,
-      userId,
-      showToast
-    );
-  };
-
   if (!isOpen || !event) return null;
 
-  // Generate real stats based on actual carpool data
+  // Generate real stats based on actual data
   const carpoolStats = {
-    needingRides: messages.filter(m => m.message?.includes('need a ride') || m.message?.includes('Need a ride')).length,
-    driversAvailable: messages.filter(m => m.message?.includes('can drive') || m.message?.includes('I can drive')).length,
+    totalFriends: selectedFriends.length,
+    needingRides: messages.filter(m => m.message?.toLowerCase().includes('need a ride') || m.message?.toLowerCase().includes('need ride')).length,
+    driversAvailable: messages.filter(m => m.message?.toLowerCase().includes('can drive') || m.message?.toLowerCase().includes('i can drive')).length,
     estimatedSavings: selectedFriends.length > 0 ? `$${Math.round(selectedFriends.length * 8)}` : '$0',
     distanceAway: 0
   };
-  const aiSuggestions = null; // Don't show AI suggestions with fake data
+  
+  const aiSuggestions = null; // Don't show AI suggestions until we have real data
   const { eventTime, eventDateStr } = formatEventTime(event.start_time);
 
-  // ALL ORIGINAL HANDLERS PRESERVED
   const handleQuickActionClick = (action: string) => {
     handleQuickAction(action, messages, setMessages, driverStatus, setDriverStatus, carDetails, showToast, isMobile);
     
@@ -335,12 +435,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
       case 'share-event':
         if (navigator.share) {
           navigator.share({
-            title: `Carpool to ${event.title}`,
-            text: `Join our carpool to ${event.title} on ${eventDateStr}`,
-            url: window.location.href
+            title: `Carpool to ${tempEventDetails.eventTitle || event.title}`,
+            text: `Join our carpool to ${tempEventDetails.eventTitle || event.title} on ${eventDateStr}`,
+            url: tempEventDetails.eventLink || window.location.href
           });
         } else {
-          navigator.clipboard.writeText(window.location.href);
+          navigator.clipboard.writeText(tempEventDetails.eventLink || window.location.href);
           showToast?.({ type: 'success', message: 'Event link copied to clipboard!' });
         }
         break;
@@ -356,12 +456,12 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     }
   };
 
-  // MOBILE VERSION WITH MAP ADDED
+  // MOBILE VERSION
   if (isMobile) {
     return (
       <>
         <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col h-screen">
-          {/* Header */}
+          {/* FIXED: Single header without duplicate save button */}
           <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 safe-area-top">
             <div className="flex items-center justify-between">
               <button onClick={onClose} className="p-2 -ml-2 active:scale-95">
@@ -369,6 +469,9 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               </button>
               <div className="flex-1 text-center">
                 <h3 className="font-semibold text-lg">Event Carpool</h3>
+                <p className="text-xs text-blue-100 truncate px-4">
+                  {tempEventDetails.eventTitle || event.title}
+                </p>
                 {lastSaved && (
                   <p className="text-xs text-blue-200">
                     Saved {lastSaved.toLocaleTimeString()}
@@ -376,13 +479,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 )}
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={handleSaveCarpoolData}
-                  disabled={isSaving}
-                  className="p-2 active:scale-95 disabled:opacity-50"
-                >
-                  {isSaving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
-                </button>
                 <button onClick={handleOpenProfileSettings} className="p-2 active:scale-95">
                   <Settings size={20} />
                 </button>
@@ -407,7 +503,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           </div>
 
-          {/* UPDATED Navigation with Map Tab */}
+          {/* Navigation tabs */}
           <div className="flex-shrink-0 flex bg-gray-100 dark:bg-gray-800">
             {([
               { view: 'overview' as const, icon: MapPin, label: 'Overview' }, 
@@ -429,11 +525,11 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             ))}
           </div>
 
-          {/* Content with Map View Added */}
+          {/* Content */}
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeView === 'overview' && (
               <CarpoolOverview
-                event={event}
+                event={{...event, title: tempEventDetails.eventTitle || event.title}}
                 carpoolStats={carpoolStats}
                 aiSuggestions={aiSuggestions}
                 onQuickAction={handleQuickActionClick}
@@ -441,7 +537,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 onSetDriverStatus={setDriverStatus}
                 carDetails={carDetails}
                 onEditCarDetails={() => setShowEditCarDetails(true)}
-                onEditEventDetails={() => setShowEditEventDetails(true)}
+                onEditEventDetails={() => setShowEventDetailsModal(true)}
                 isMobile={isMobile}
                 onOpenFriendInvite={handleOpenFriendInvite}
                 onOpenProfileSettings={handleOpenProfileSettings}
@@ -573,7 +669,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
               </div>
             )}
 
-            {/* ADDED: Map View */}
             {activeView === 'map' && (
               eventCoordinates ? (
                 <CarpoolMap
@@ -612,6 +707,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </button>
           )}
 
+          {/* All modals */}
           <CarpoolModals
             showPoll={showPoll}
             onClosePoll={() => setShowPoll(false)}
@@ -645,6 +741,117 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             isMobile={isMobile}
             event={event}
           />
+
+          {/* ENHANCED: Event Details Modal */}
+          {showEventDetailsModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-60">
+              <div className="bg-white dark:bg-gray-800 rounded-t-2xl p-6 w-full max-w-lg safe-area-bottom">
+                <h3 className="text-lg font-semibold mb-4">Event Details</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Type size={14} className="inline mr-1" />
+                      Event Title
+                    </label>
+                    <input
+                      type="text"
+                      value={tempEventDetails.eventTitle}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventTitle: e.target.value }))}
+                      placeholder="e.g., Concert at Madison Square Garden"
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Image size={14} className="inline mr-1" />
+                      Event Image URL (optional)
+                    </label>
+                    <input
+                      type="url"
+                      value={tempEventDetails.eventImageUrl}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventImageUrl: e.target.value }))}
+                      placeholder="https://example.com/event-image.jpg"
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Link size={14} className="inline mr-1" />
+                      Event Link (optional)
+                    </label>
+                    <input
+                      type="url"
+                      value={tempEventDetails.eventLink}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventLink: e.target.value }))}
+                      placeholder="https://ticketmaster.com/event/..."
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <MapPin size={14} className="inline mr-1" />
+                      Carpool Meetup Location
+                    </label>
+                    <input
+                      type="text"
+                      value={tempEventDetails.meetupLocation}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, meetupLocation: e.target.value }))}
+                      placeholder="e.g., Starbucks on Main St"
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Clock size={14} className="inline mr-1" />
+                      Departure Time
+                    </label>
+                    <input
+                      type="time"
+                      value={tempEventDetails.departureTime}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, departureTime: e.target.value }))}
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Notes (optional)
+                    </label>
+                    <textarea
+                      value={tempEventDetails.notes}
+                      onChange={(e) => setTempEventDetails(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Any additional details..."
+                      rows={3}
+                      className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowEventDetailsModal(false)}
+                    className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleSaveEventDetailsInModal(tempEventDetails, setShowEventDetailsModal, messages, setMessages, showToast);
+                      handleSaveCarpoolData();
+                    }}
+                    className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium"
+                  >
+                    Save Details
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <CarpoolSettings
@@ -657,37 +864,30 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
     );
   }
 
-  // DESKTOP VERSION WITH MAP VIEW
+  // DESKTOP VERSION (similar fixes applied)
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
         <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl my-8 shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]">
-          {/* Header */}
+          {/* FIXED: Single header without duplicate save */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 flex-shrink-0 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-bold truncate">Event Carpool</h2>
-                <p className="text-blue-100 text-sm truncate">{event.title}</p>
+                <p className="text-blue-100 text-sm truncate">
+                  {tempEventDetails.eventTitle || event.title}
+                </p>
                 <p className="text-xs text-blue-200 truncate">
                   {eventDateStr} • {eventTime} • {event.location || 'TBD'}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                 <button
-                  onClick={handleSaveCarpoolData}
-                  disabled={isSaving}
-                  className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors whitespace-nowrap disabled:opacity-50 flex items-center gap-1"
-                >
-                  {isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                  {isSaving ? 'Saving...' : 'Save'}
-                </button>
-                <button
                   onClick={() => setDesktopLayout(desktopLayout === 'custom' ? 'modular' : 'custom')}
                   className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-sm transition-colors whitespace-nowrap"
                 >
                   {desktopLayout === 'custom' ? 'Modular' : 'Custom'}
                 </button>
-                {/* ADDED: Map View Button */}
                 <button
                   onClick={() => setActiveView(activeView === 'map' ? 'chat' : 'map')}
                   className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-sm transition-colors whitespace-nowrap flex items-center gap-1"
@@ -711,9 +911,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           </div>
 
-          {/* LAYOUT WITH MAP VIEW */}
+          {/* Layout content */}
           {activeView === 'map' ? (
-            // Full-screen map view for desktop
             <div className="flex-1 min-h-0 overflow-hidden">
               {eventCoordinates ? (
                 <CarpoolMap
@@ -750,7 +949,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 event={event}
                 onShowPoll={() => setShowPoll(true)}
                 onShowEditCarDetails={() => setShowEditCarDetails(true)}
-                onShowEditEventDetails={() => setShowEditEventDetails(true)}
+                onShowEditEventDetails={() => setShowEventDetailsModal(true)}
                 onQuickAction={handleQuickActionClick}
                 showToast={showToast}
                 isMobile={false}
@@ -832,6 +1031,13 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900 dark:text-white">Event Overview</h3>
+                    <button
+                      onClick={handleSaveCarpoolData}
+                      disabled={isSaving}
+                      className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
                   </div>
                 </div>
                 
@@ -842,7 +1048,6 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     <button onClick={() => setShowNewCarpoolConfirm(true)} className="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
                       🔄 Start New Carpool
                     </button>
-                    {/* REPLACED: Car Details with Invite Friends */}
                     <button 
                       onClick={handleOpenFriendInvite} 
                       className="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
@@ -850,8 +1055,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                       <UserPlus size={18} />
                       <span>Invite Friends</span>
                     </button>
-                    <button onClick={() => setShowEditEventDetails(true)} className="w-full p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium">
-                      📍 Edit Meetup Details
+                    <button onClick={() => setShowEventDetailsModal(true)} className="w-full p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium">
+                      📝 Edit Event Details
                     </button>
                     <button onClick={() => setShowPoll(true)} className="w-full p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium">
                       📊 Create Poll
@@ -990,7 +1195,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                 />
               </div>
 
-              {/* RIGHT SIDEBAR - MAP PREVIEW WITHOUT API CHECK */}
+              {/* RIGHT SIDEBAR - MAP PREVIEW */}
               <div className="w-64 bg-gray-50 dark:bg-gray-800 border-l dark:border-gray-700 flex-shrink-0 overflow-hidden">
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 p-4 border-b dark:border-gray-700">
@@ -1006,10 +1211,8 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                     </h3>
                   </div>
                   <div className="flex-1 relative">
-                    {/* FIXED: Removed Google Maps API check */}
                     {eventCoordinates ? (
                       <>
-                        {/* Map Preview Container */}
                         <div className="absolute inset-0">
                           <CarpoolMap
                             eventId={event.id}
@@ -1023,13 +1226,11 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
                             isMobile={false}
                           />
                         </div>
-                        {/* Click overlay to open full map */}
                         <button
                           onClick={() => setActiveView('map')}
                           className="absolute inset-0 bg-transparent hover:bg-black/5 transition-colors cursor-pointer z-10"
                           title="Click to view full map"
                         />
-                        {/* Map Info Overlay */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4 pointer-events-none">
                           <p className="text-white text-sm font-medium">
                             {event.location || 'Event Location'}
@@ -1058,6 +1259,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             </div>
           )}
 
+          {/* All modals */}
           <CarpoolModals
             showPoll={showPoll}
             onClosePoll={() => setShowPoll(false)}
@@ -1089,8 +1291,146 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             userId={userId}
             showToast={showToast}
             isMobile={isMobile}
-            event={event}
+            event={{...event, title: tempEventDetails.eventTitle || event.title}}
           />
+
+          {/* ENHANCED: Event Details Modal for Desktop */}
+          {showEventDetailsModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60 p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                <h3 className="text-xl font-semibold mb-6">Event & Carpool Details</h3>
+                
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="text-lg font-medium mb-4 text-blue-600 dark:text-blue-400">Event Information</h4>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <Type size={14} className="inline mr-1" />
+                          Event Title
+                        </label>
+                        <input
+                          type="text"
+                          value={tempEventDetails.eventTitle}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventTitle: e.target.value }))}
+                          placeholder="e.g., Concert at Madison Square Garden"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <Image size={14} className="inline mr-1" />
+                          Event Image URL
+                        </label>
+                        <input
+                          type="url"
+                          value={tempEventDetails.eventImageUrl}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventImageUrl: e.target.value }))}
+                          placeholder="https://example.com/event-image.jpg"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <Link size={14} className="inline mr-1" />
+                          Event Link
+                        </label>
+                        <input
+                          type="url"
+                          value={tempEventDetails.eventLink}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, eventLink: e.target.value }))}
+                          placeholder="https://ticketmaster.com/event/..."
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-lg font-medium mb-4 text-green-600 dark:text-green-400">Carpool Plans</h4>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <MapPin size={14} className="inline mr-1" />
+                          Meetup Location
+                        </label>
+                        <input
+                          type="text"
+                          value={tempEventDetails.meetupLocation}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, meetupLocation: e.target.value }))}
+                          placeholder="e.g., Starbucks on Main St"
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <Clock size={14} className="inline mr-1" />
+                          Departure Time
+                        </label>
+                        <input
+                          type="time"
+                          value={tempEventDetails.departureTime}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, departureTime: e.target.value }))}
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Notes
+                        </label>
+                        <textarea
+                          value={tempEventDetails.notes}
+                          onChange={(e) => setTempEventDetails(prev => ({ ...prev, notes: e.target.value }))}
+                          placeholder="Any additional details for the carpool..."
+                          rows={3}
+                          className="w-full p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Image preview if URL is provided */}
+                {tempEventDetails.eventImageUrl && (
+                  <div className="mt-6">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Image Preview:</p>
+                    <img 
+                      src={tempEventDetails.eventImageUrl} 
+                      alt="Event preview" 
+                      className="w-full max-h-48 object-cover rounded-lg"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowEventDetailsModal(false)}
+                    className="flex-1 p-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleSaveEventDetailsInModal(tempEventDetails, setShowEventDetailsModal, messages, setMessages, showToast);
+                      handleSaveCarpoolData();
+                    }}
+                    className="flex-1 p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                  >
+                    Save All Details
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
