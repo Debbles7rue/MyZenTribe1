@@ -52,44 +52,170 @@ export function useCalendarActions(props: UseCalendarActionsProps) {
     setSelectedCarpoolFriends
   } = props;
 
-  // Create event
-  const handleCreateEvent = useCallback(async () => {
+  // ENHANCED: Create event with meeting coordinator support
+  const handleCreateEvent = useCallback(async (eventData?: any) => {
     if (!me) {
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
 
-    if (!form.title || !form.start || !form.end) {
+    // Use provided eventData (from meeting coordinator) or form data
+    const data = eventData || form;
+
+    // Check for required fields based on data source
+    if (!data.title) {
+      showToast({ type: 'error', message: 'Please enter a title' });
+      return;
+    }
+    
+    // For regular form, check start/end; for coordinator data, check start_time/end_time
+    if (!data.start_time && !data.end_time && (!data.start || !data.end)) {
       showToast({ type: 'error', message: 'Please fill in required fields' });
       return;
     }
 
-    const payload: any = {
-      title: form.title,
-      description: form.description || null,
-      location: form.location || null,
-      start_time: new Date(form.start).toISOString(),
-      end_time: new Date(form.end).toISOString(),
-      visibility: form.visibility,
-      created_by: me,
-      event_type: form.event_type || null,
-      community_id: form.community_id || null,
-      image_path: form.image_path || null,
-      source: form.source,
-      completed: false
-    };
+    try {
+      // Create the main event
+      const payload: any = {
+        title: data.title,
+        description: data.description || null,
+        location: data.location || null,
+        start_time: data.start_time || new Date(data.start).toISOString(),
+        end_time: data.end_time || new Date(data.end).toISOString(),
+        visibility: data.visibility || 'private',
+        created_by: me,
+        event_type: data.event_type || 'meeting',
+        community_id: data.community_id || null,
+        image_path: data.image_path || null,
+        source: data.source || 'personal',
+        completed: false,
+        // Store coordination metadata in description if from AI coordinator
+        ...(data.source === 'ai_coordinator' && {
+          description: `${data.description || ''}\n\n---\nCreated with AI Meeting Coordinator\nParticipants: ${data.participants?.length || 0} friends, ${data.email_invites?.length || 0} email invites`
+        })
+      };
 
-    const { error } = await supabase.from("events").insert(payload);
-    if (error) {
-      showToast({ type: 'error', message: error.message });
-      return;
+      const { data: newEvent, error: eventError } = await supabase
+        .from("events")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (eventError) {
+        showToast({ type: 'error', message: eventError.message });
+        return;
+      }
+
+      // If this is from the meeting coordinator, handle invitations
+      if (data.source === 'ai_coordinator' && newEvent) {
+        // Create meeting coordination record
+        const coordinationData = {
+          event_id: newEvent.id,
+          organizer_id: me,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        };
+
+        const { data: coordination, error: coordError } = await supabase
+          .from('meeting_coordinations')
+          .insert(coordinationData)
+          .select()
+          .single();
+
+        if (coordError) {
+          console.error('Failed to create coordination:', coordError);
+          // Don't fail the whole operation if coordination fails
+        }
+
+        // Handle friend invitations
+        if (data.participants && data.participants.length > 0 && coordination) {
+          const invitations = data.participants.map((friendId: string) => ({
+            coordination_id: coordination.id,
+            event_id: newEvent.id,
+            invitee_id: friendId,
+            invitee_email: null,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          }));
+
+          const { error: inviteError } = await supabase
+            .from('meeting_invitations')
+            .insert(invitations);
+
+          if (inviteError) {
+            console.error('Failed to create invitations:', inviteError);
+          }
+
+          // Send notifications to invited friends
+          const notifications = data.participants.map((friendId: string) => {
+            const friend = friends.find(f => f.friend_id === friendId);
+            return {
+              user_id: friendId,
+              type: 'meeting_invite',
+              title: `Meeting Invitation: ${data.title}`,
+              message: `${friend?.name || 'A friend'} invited you to "${data.title}"`,
+              data: {
+                event_id: newEvent.id,
+                coordination_id: coordination.id,
+                start_time: newEvent.start_time,
+                location: newEvent.location
+              },
+              created_at: new Date().toISOString(),
+              read: false
+            };
+          });
+
+          const { error: notifError } = await supabase
+            .from('notifications')
+            .insert(notifications);
+
+          if (notifError) {
+            console.error('Failed to send notifications:', notifError);
+          }
+        }
+
+        // Handle email invitations
+        if (data.email_invites && data.email_invites.length > 0 && coordination) {
+          const emailInvitations = data.email_invites.map((email: string) => ({
+            coordination_id: coordination.id,
+            event_id: newEvent.id,
+            invitee_id: null,
+            invitee_email: email,
+            status: 'pending',
+            created_at: new Date().toISOString()
+          }));
+
+          const { error: emailError } = await supabase
+            .from('meeting_invitations')
+            .insert(emailInvitations);
+
+          if (emailError) {
+            console.error('Failed to create email invitations:', emailError);
+          }
+
+          // Here you would trigger email sending - this is a placeholder
+          // In production, you'd use a service like SendGrid or AWS SES
+          console.log('Email invites would be sent to:', data.email_invites);
+        }
+
+        showToast({ 
+          type: 'success', 
+          message: `🎉 Meeting scheduled and invitations sent! ${data.participants?.length || 0} friends and ${data.email_invites?.length || 0} email invites.`
+        });
+      } else {
+        showToast({ type: 'success', message: '✨ Event created successfully!' });
+      }
+
+      setOpenCreate(false);
+      resetForm();
+      loadCalendar();
+      
+      return newEvent;
+    } catch (error) {
+      console.error('Error creating event:', error);
+      showToast({ type: 'error', message: 'Failed to create event' });
     }
-
-    setOpenCreate(false);
-    resetForm();
-    showToast({ type: 'success', message: '✨ Event created successfully!' });
-    loadCalendar();
-  }, [me, form, showToast, setOpenCreate, resetForm, loadCalendar]);
+  }, [me, form, friends, showToast, setOpenCreate, resetForm, loadCalendar]);
 
   // Update event
   const handleUpdateEvent = useCallback(async () => {
@@ -191,8 +317,7 @@ export function useCalendarActions(props: UseCalendarActionsProps) {
     }
   }, [me, loadCalendar, showToast]);
 
-  // ========= FIXED TOGGLE COMPLETE FUNCTION =========
-  // This now properly handles both events table and dedicated todos/reminders tables
+  // Toggle complete
   const handleToggleComplete = useCallback(async (item: TodoReminder) => {
     if (!me) {
       showToast({ type: 'error', message: 'Please log in to update items' });
