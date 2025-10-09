@@ -644,6 +644,7 @@ const EventCarpoolModal: React.FC<EventCarpoolModalProps> = ({
             userId={userId}
             showToast={showToast}
             isMobile={isMobile}
+            event={event}
           />
         </div>
 
