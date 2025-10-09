@@ -326,12 +326,36 @@ export default function CalendarModals({
         }}
       />
 
-      {/* Holiday Reminders Modal - NOW PROPERLY INTEGRATED! */}
+      {/* Holiday Reminders Modal - NOW WITH REMOVE FUNCTIONALITY! */}
       {showHolidayReminders && (
         <HolidayReminders
           onClose={() => setShowHolidayReminders?.(false)}
+          onRemoveFromCalendar={async (eventId: string) => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+              showToast?.({ type: 'error', message: 'Please log in first' });
+              return;
+            }
+            
+            const { error } = await supabase
+              .from('events')
+              .delete()
+              .eq('id', eventId)
+              .eq('created_by', user.id);
+            
+            if (!error) {
+              showToast?.({ type: 'success', message: '🗑️ Holiday removed' });
+              if (loadCalendar) {
+                await loadCalendar();
+              }
+            } else {
+              console.error('Failed to delete:', error);
+              showToast?.({ type: 'error', message: 'Failed to remove holiday' });
+            }
+          }}
           onAddToCalendar={handleAddHolidayToCalendar}
           existingEvents={events}
+          showToast={showToast}
         />
       )}
 
@@ -354,7 +378,7 @@ export default function CalendarModals({
         />
       )}
 
-      {/* Meeting Coordinator Modal */}
+      {/* Meeting Coordinator Modal - FIXED TO PROPERLY PASS EVENT DATA */}
       {showMeetingCoordinator && (
         <SmartMeetingCoordinator
           open={showMeetingCoordinator}
@@ -362,10 +386,38 @@ export default function CalendarModals({
           userId={me!}
           friends={friends}
           userEvents={events}
-          onSchedule={async (event) => {
-            handleCreateEvent();
-            setShowMeetingCoordinator(false);
+          onSchedule={async (eventData) => {
+            // FIXED: Now properly passes the complete event data
+            if (!eventData) {
+              console.error('No event data provided from meeting coordinator');
+              showToast?.({ 
+                type: 'error', 
+                message: 'Failed to get meeting details. Please try again.' 
+              });
+              return;
+            }
+            
+            try {
+              // The handleCreateEvent now accepts eventData parameter
+              // It will use this data instead of the form when provided
+              const result = await handleCreateEvent(eventData);
+              if (result) {
+                setShowMeetingCoordinator(false);
+                // Optionally show the created event details
+                if (result.id) {
+                  setSelected(result);
+                  setDetailsOpen(true);
+                }
+              }
+            } catch (error) {
+              console.error('Failed to schedule meeting:', error);
+              showToast?.({ 
+                type: 'error', 
+                message: 'Failed to schedule meeting. Please try again.' 
+              });
+            }
           }}
+          mobileMode={isMobile ? 'bottomSheet' : 'modal'}
         />
       )}
 
