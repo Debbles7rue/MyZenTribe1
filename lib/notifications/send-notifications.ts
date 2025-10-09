@@ -1,5 +1,5 @@
 // lib/notifications/send-notifications.ts
-// Functions to send notifications that work with your existing table structure
+// Complete file for sending all types of notifications
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -57,7 +57,9 @@ export async function sendNotification({
   }
 }
 
+// ============================================
 // CARPOOL NOTIFICATIONS
+// ============================================
 
 export async function sendCarpoolInvites({
   eventId,
@@ -107,7 +109,63 @@ export async function sendCarpoolInvites({
   }
 }
 
+export async function notifyCarpoolAccepted({
+  carpoolCreatorId,
+  accepterUserId,
+  accepterName,
+  eventTitle,
+  carpoolId,
+  eventId
+}: {
+  carpoolCreatorId: string;
+  accepterUserId: string;
+  accepterName: string;
+  eventTitle: string;
+  carpoolId: string;
+  eventId: string;
+}) {
+  return sendNotification({
+    userId: carpoolCreatorId,
+    type: 'carpool.accepted',
+    title: `${accepterName} joined your carpool`,
+    body: `${accepterName} accepted your carpool invitation for ${eventTitle}`,
+    targetUrl: `/calendar?event=${eventId}&openCarpool=${carpoolId}`,
+    entityId: carpoolId,
+    entityTable: 'carpool_groups',
+    actorId: accepterUserId
+  });
+}
+
+export async function notifyCarpoolSafeFriends({
+  userId,
+  eventId,
+  eventTitle,
+  friendNames,
+  friendCount
+}: {
+  userId: string;
+  eventId: string;
+  eventTitle: string;
+  friendNames: string[];
+  friendCount: number;
+}) {
+  const displayNames = friendNames.slice(0, 3).join(', ');
+  const others = friendCount > 3 ? ` and ${friendCount - 3} others` : '';
+  
+  return sendNotification({
+    userId,
+    type: 'carpool.safe_friends',
+    title: 'Carpool opportunity!',
+    body: `${displayNames}${others} are also interested in ${eventTitle}. Start a carpool together!`,
+    targetUrl: `/calendar?event=${eventId}&suggestCarpool=true`,
+    entityId: eventId,
+    entityTable: 'events'
+  });
+}
+
+// ============================================
 // FRIEND NOTIFICATIONS
+// ============================================
 
 export async function sendFriendRequest({
   targetUserId,
@@ -149,7 +207,9 @@ export async function sendFriendAccepted({
   });
 }
 
+// ============================================
 // EVENT NOTIFICATIONS
+// ============================================
 
 export async function sendEventInvite({
   invitedUserId,
@@ -200,7 +260,9 @@ export async function sendEventUpdate({
   });
 }
 
+// ============================================
 // COMMENT NOTIFICATIONS
+// ============================================
 
 export async function sendCommentNotification({
   contentOwnerId,
@@ -233,7 +295,75 @@ export async function sendCommentNotification({
   });
 }
 
+// ============================================
+// REACTION NOTIFICATIONS
+// ============================================
+
+export async function sendPostReaction({
+  postOwnerId,
+  reactorId,
+  reactorName,
+  postId,
+  reactionType,
+  contentType = 'post'
+}: {
+  postOwnerId: string;
+  reactorId: string;
+  reactorName: string;
+  postId: string;
+  reactionType: string; // like, love, laugh, etc.
+  contentType?: 'post' | 'album';
+}) {
+  const emoji = reactionType === 'like' ? '👍' : 
+                reactionType === 'love' ? '❤️' :
+                reactionType === 'laugh' ? '😂' : '👍';
+  
+  return sendNotification({
+    userId: postOwnerId,
+    type: `${contentType}.reaction`,
+    title: `${reactorName} reacted ${emoji} to your ${contentType}`,
+    body: 'View your post',
+    targetUrl: `/feed/${postId}`,
+    entityId: postId,
+    entityTable: `${contentType}s`,
+    actorId: reactorId
+  });
+}
+
+export async function sendCommentReaction({
+  commentOwnerId,
+  reactorId,
+  reactorName,
+  commentId,
+  postId,
+  reactionType
+}: {
+  commentOwnerId: string;
+  reactorId: string;
+  reactorName: string;
+  commentId: string;
+  postId: string;
+  reactionType: string;
+}) {
+  const emoji = reactionType === 'like' ? '👍' : 
+                reactionType === 'love' ? '❤️' :
+                reactionType === 'laugh' ? '😂' : '👍';
+  
+  return sendNotification({
+    userId: commentOwnerId,
+    type: 'comment.reaction',
+    title: `${reactorName} reacted ${emoji} to your comment`,
+    body: 'View the conversation',
+    targetUrl: `/feed/${postId}`,
+    entityId: commentId,
+    entityTable: 'comments',
+    actorId: reactorId
+  });
+}
+
+// ============================================
 // TAG NOTIFICATIONS
+// ============================================
 
 export async function sendTagNotification({
   taggedUserId,
@@ -250,7 +380,7 @@ export async function sendTagNotification({
 }) {
   return sendNotification({
     userId: taggedUserId,
-    type: 'post.tagged',
+    type: `${contentType}.tagged`,
     title: `${taggerName} tagged you in a ${contentType}`,
     body: 'View the post',
     targetUrl: `/feed/${contentId}`,
@@ -260,7 +390,9 @@ export async function sendTagNotification({
   });
 }
 
+// ============================================
 // CO-CREATOR NOTIFICATIONS
+// ============================================
 
 export async function sendCoCreatorInvite({
   invitedUserId,
@@ -289,7 +421,9 @@ export async function sendCoCreatorInvite({
   });
 }
 
+// ============================================
 // MESSAGE NOTIFICATIONS
+// ============================================
 
 export async function sendMessageNotification({
   recipientId,
@@ -313,7 +447,9 @@ export async function sendMessageNotification({
   });
 }
 
+// ============================================
 // GIFT NOTIFICATIONS
+// ============================================
 
 export async function sendGiftNotification({
   recipientId,
@@ -340,7 +476,9 @@ export async function sendGiftNotification({
   });
 }
 
+// ============================================
 // COMMUNITY NOTIFICATIONS
+// ============================================
 
 export async function sendCommunityInvite({
   invitedUserId,
@@ -367,36 +505,33 @@ export async function sendCommunityInvite({
   });
 }
 
-// CARPOOL SAFE FRIENDS NOTIFICATION
-
-export async function notifyCarpoolSafeFriends({
+export async function sendCommunityUpdate({
   userId,
-  eventId,
-  eventTitle,
-  friendNames,
-  friendCount
+  communityId,
+  communityName,
+  updateType
 }: {
   userId: string;
-  eventId: string;
-  eventTitle: string;
-  friendNames: string[];
-  friendCount: number;
+  communityId: string;
+  communityName: string;
+  updateType: string;
 }) {
-  const displayNames = friendNames.slice(0, 3).join(', ');
-  const others = friendCount > 3 ? ` and ${friendCount - 3} others` : '';
-  
   return sendNotification({
     userId,
-    type: 'carpool.safe_friends',
-    title: 'Carpool opportunity!',
-    body: `${displayNames}${others} are also interested in ${eventTitle}. Start a carpool together!`,
-    targetUrl: `/calendar?event=${eventId}&suggestCarpool=true`,
-    entityId: eventId,
-    entityTable: 'events'
+    type: 'community.update',
+    title: `Update in ${communityName}`,
+    body: updateType,
+    targetUrl: `/communities/${communityId}`,
+    entityId: communityId,
+    entityTable: 'communities'
   });
 }
 
-// BULK DELETE OLD READ NOTIFICATIONS (Utility function)
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+// Delete old read notifications to keep table clean
 export async function deleteOldReadNotifications(userId: string, daysOld = 30) {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);
@@ -410,6 +545,21 @@ export async function deleteOldReadNotifications(userId: string, daysOld = 30) {
     
   if (error) {
     console.error('Error deleting old notifications:', error);
+    return { success: false, error };
+  }
+  
+  return { success: true };
+}
+
+// Mark multiple notifications as read
+export async function markNotificationsRead(notificationIds: string[]) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .in('id', notificationIds);
+    
+  if (error) {
+    console.error('Error marking notifications as read:', error);
     return { success: false, error };
   }
   
