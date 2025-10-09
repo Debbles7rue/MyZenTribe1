@@ -15,6 +15,7 @@ interface Holiday {
 interface HolidayRemindersProps {
   onClose: () => void;
   onAddToCalendar: (holiday: Holiday) => Promise<boolean> | void;
+  onRemoveFromCalendar?: (eventId: string) => Promise<void>;
   existingEvents?: any[];
   showToast?: (toast: { type: string; message: string }) => void;
 }
@@ -33,6 +34,7 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Halloween", date: `${year}-10-31`, emoji: "🎃", description: "Tricks and treats", category: 'traditional', color: '#F97316' },
     { name: "Thanksgiving", date: `${year}-11-27`, emoji: "🦃", description: "Gratitude and pie", category: 'traditional', color: '#92400E' },
     { name: "Christmas", date: `${year}-12-25`, emoji: "🎄", description: "Joy to the world", category: 'traditional', color: '#059669' },
+    { name: "New Year's Eve", date: `${year}-12-31`, emoji: "🎉", description: "Out with the old, in with the new", category: 'traditional', color: '#FFD700' },
   ];
 
   const funHolidays: Holiday[] = [
@@ -114,7 +116,7 @@ const getCurrentYearHolidays = (year: number) => {
   };
 };
 
-export default function HolidayReminders({ onClose, onAddToCalendar, existingEvents = [], showToast }: HolidayRemindersProps) {
+export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFromCalendar, existingEvents = [], showToast }: HolidayRemindersProps) {
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -133,6 +135,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set());
   const [isAddingAll, setIsAddingAll] = useState(false);
   const [addProgress, setAddProgress] = useState(0);
+  const [showRemoveMode, setShowRemoveMode] = useState(false);
 
   // Get holiday data
   const { traditionalHolidays, funHolidays, specialDays, internationalHolidays } = useMemo(
@@ -177,40 +180,48 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
     ...personalEvents
   ], [traditionalHolidays, funHolidays, specialDays, internationalHolidays, personalEvents]);
 
+  // Get matching events for each holiday
+  const getMatchingEvents = useCallback((holiday: Holiday) => {
+    if (!existingEvents || existingEvents.length === 0) return [];
+    
+    return existingEvents.filter(event => {
+      if (!event.title) return false;
+      
+      const eventTitle = event.title.toLowerCase();
+      const holidayName = holiday.name.toLowerCase();
+      const holidayEmoji = holiday.emoji;
+      
+      // Check if event title matches the holiday
+      if (eventTitle.includes(holidayName) || 
+          eventTitle === `${holidayEmoji} ${holidayName}` ||
+          eventTitle === holidayName) {
+        // Check if it's for current or next year
+        const eventDate = new Date(event.start_time || event.start);
+        const eventYear = eventDate.getFullYear();
+        
+        if (eventYear === currentYear || eventYear === nextYear) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [existingEvents, currentYear, nextYear]);
+
   // Check which holidays are already added
   const addedHolidays = useMemo(() => {
     const added = new Set<string>();
     
-    if (!existingEvents || existingEvents.length === 0) return added;
-    
-    existingEvents.forEach(event => {
-      if (!event.title) return;
-      
-      // Extract holiday name by removing emoji if present
-      const eventTitle = event.title.toLowerCase();
-      
-      // Check each holiday to see if it matches this event
-      allHolidays.forEach(holiday => {
-        const holidayName = holiday.name.toLowerCase();
-        const holidayEmoji = holiday.emoji;
-        
-        // Check if event title contains the holiday name (with or without emoji)
-        if (eventTitle.includes(holidayName) || 
-            eventTitle === `${holidayEmoji} ${holidayName}` ||
-            eventTitle === holidayName) {
-          // Check if it's for current or next year
-          const eventDate = new Date(event.start_time || event.start);
-          const eventYear = eventDate.getFullYear();
-          
-          if (eventYear === currentYear || eventYear === nextYear) {
-            added.add(`${holiday.name}-${eventYear}`);
-          }
-        }
+    allHolidays.forEach(holiday => {
+      const matchingEvents = getMatchingEvents(holiday);
+      matchingEvents.forEach(event => {
+        const eventDate = new Date(event.start_time || event.start);
+        const eventYear = eventDate.getFullYear();
+        added.add(`${holiday.name}-${eventYear}`);
       });
     });
     
     return added;
-  }, [existingEvents, currentYear, nextYear, allHolidays]);
+  }, [allHolidays, getMatchingEvents]);
 
   const filteredHolidays = useMemo(() => {
     return activeCategory === 'all' 
@@ -278,6 +289,42 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
       setTimeout(() => {
         element.classList.remove('animate-pulse', 'bg-green-100', 'dark:bg-green-900/30');
       }, 1000);
+    }
+  };
+
+  const handleRemoveHoliday = async (holiday: Holiday, event: any) => {
+    if (!onRemoveFromCalendar) {
+      showToast?.({ 
+        type: 'error', 
+        message: 'Remove functionality not available. Please delete from calendar view.' 
+      });
+      return;
+    }
+
+    try {
+      await onRemoveFromCalendar(event.id);
+      
+      // Remove from recently added
+      const eventDate = new Date(event.start_time || event.start);
+      const eventYear = eventDate.getFullYear();
+      setRecentlyAdded(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(`${holiday.name}-${eventYear}`);
+        return newSet;
+      });
+      
+      showToast?.({ 
+        type: 'success', 
+        message: `Removed ${holiday.name} from ${eventYear}` 
+      });
+      
+      // Reload to refresh the UI
+      window.location.reload();
+    } catch (error) {
+      showToast?.({ 
+        type: 'error', 
+        message: 'Failed to remove holiday' 
+      });
     }
   };
 
@@ -380,15 +427,41 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                 Add holidays, birthdays, and fun celebrations to your calendar
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/20 rounded-lg"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowRemoveMode(!showRemoveMode)}
+                className={`text-white/80 hover:text-white transition-colors p-2 rounded-lg ${
+                  showRemoveMode ? 'bg-red-500/30' : 'hover:bg-white/20'
+                }`}
+                title={showRemoveMode ? 'Exit remove mode' : 'Remove holidays'}
+              >
+                {showRemoveMode ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={onClose}
+                className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/20 rounded-lg"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
+          
+          {/* Remove Mode Indicator */}
+          {showRemoveMode && (
+            <div className="mt-3 p-2 bg-red-500/30 rounded-lg text-sm">
+              🗑️ Remove mode active - Click on added holidays to remove them
+            </div>
+          )}
           
           {/* Progress bar when adding all */}
           {isAddingAll && (
@@ -525,11 +598,13 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
               today.setHours(0, 0, 0, 0);
               const isPast = date < today;
               
+              const matchingEvents = getMatchingEvents(holiday);
+              const hasCurrentYear = matchingEvents.some(e => new Date(e.start_time || e.start).getFullYear() === currentYear);
+              const hasNextYear = matchingEvents.some(e => new Date(e.start_time || e.start).getFullYear() === nextYear);
+              
               // Check if added for current year or next year
-              const isAddedThisYear = addedHolidays.has(`${holiday.name}-${currentYear}`) || 
-                                      recentlyAdded.has(`${holiday.name}-${currentYear}`);
-              const isAddedNextYear = addedHolidays.has(`${holiday.name}-${nextYear}`) || 
-                                      recentlyAdded.has(`${holiday.name}-${nextYear}`);
+              const isAddedThisYear = hasCurrentYear || recentlyAdded.has(`${holiday.name}-${currentYear}`);
+              const isAddedNextYear = hasNextYear || recentlyAdded.has(`${holiday.name}-${nextYear}`);
               
               // Determine what year we'd add it for
               const targetYear = isPast ? nextYear : currentYear;
@@ -545,6 +620,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-400' 
                       : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
                     }
+                    ${showRemoveMode && matchingEvents.length > 0 ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20' : ''}
                   `}
                   style={{
                     borderLeftWidth: '4px',
@@ -566,6 +642,11 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                             Past - Add for {nextYear}
                           </span>
                         )}
+                        {matchingEvents.length > 1 && (
+                          <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 px-2 py-0.5 rounded-full">
+                            {matchingEvents.length}x on calendar
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
                         {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} 
@@ -575,7 +656,22 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
                     
                     {/* Action buttons */}
                     <div className="flex items-center gap-2">
-                      {isAlreadyAdded ? (
+                      {showRemoveMode && matchingEvents.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {matchingEvents.map((event, idx) => {
+                            const eventYear = new Date(event.start_time || event.start).getFullYear();
+                            return (
+                              <button
+                                key={event.id || idx}
+                                onClick={() => handleRemoveHoliday(holiday, event)}
+                                className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-all"
+                              >
+                                Remove {eventYear}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : isAlreadyAdded ? (
                         <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
@@ -623,7 +719,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
               <span className="font-medium">{filteredHolidays.length} holidays</span>
               <span className="text-xs">
-                Click to add instantly • Past holidays add for next year
+                {showRemoveMode ? '🗑️ Click holidays to remove' : 'Click to add instantly • Past holidays add for next year'}
               </span>
             </div>
             <div className="flex gap-3">
@@ -633,13 +729,15 @@ export default function HolidayReminders({ onClose, onAddToCalendar, existingEve
               >
                 Close
               </button>
-              <button
-                onClick={addAllInCategory}
-                disabled={isAddingAll}
-                className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAddingAll ? 'Adding...' : `Add All ${activeCategory === 'all' ? 'Enabled' : categories.find(c => c.id === activeCategory)?.label} Holidays`}
-              </button>
+              {!showRemoveMode && (
+                <button
+                  onClick={addAllInCategory}
+                  disabled={isAddingAll}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAddingAll ? 'Adding...' : `Add All ${activeCategory === 'all' ? 'Enabled' : categories.find(c => c.id === activeCategory)?.label} Holidays`}
+                </button>
+              )}
             </div>
           </div>
         </div>
