@@ -682,10 +682,30 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Holiday Reminders Modal - FIXED TO ADD DIRECTLY TO CALENDAR */}
+        {/* Holiday Reminders Modal - WITH REMOVE FUNCTIONALITY */}
         {showHolidayReminders && (
           <HolidayReminders
             onClose={() => setShowHolidayReminders(false)}
+            onRemoveFromCalendar={async (eventId: string) => {
+              if (!me) {
+                showToast({ type: 'error', message: 'Please log in first' });
+                return;
+              }
+              
+              const { error } = await supabase
+                .from('events')
+                .delete()
+                .eq('id', eventId)
+                .eq('created_by', me);
+              
+              if (!error) {
+                showToast({ type: 'success', message: '🗑️ Holiday removed' });
+                await loadCalendar(); // Refresh the calendar
+              } else {
+                console.error('Failed to delete:', error);
+                showToast({ type: 'error', message: 'Failed to remove holiday' });
+              }
+            }}
             onAddToCalendar={async (holiday: any) => {
               if (!me) {
                 showToast({ type: 'error', message: 'Please log in first' });
