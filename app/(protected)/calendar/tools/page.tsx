@@ -18,7 +18,68 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// NEW: Carpool Management Types
+// NEW: Event Form Data Interface
+interface EventFormData {
+  title: string;
+  description: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  repeatOption: 'none' | 'daily' | 'weekly' | 'monthly' | 'custom';
+  customDays?: string[];
+  reminderOption: 'none' | '10min' | '30min' | '1hour' | '1day';
+  location?: string;
+  event_type: string;
+}
+
+// NEW: Time Block Interface
+interface TimeBlock {
+  id: string;
+  title: string;
+  color: string;
+  duration: number;
+}
+
+// NEW: Template Interface
+interface QuickTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  duration: number;
+  event_type: string;
+}
+
+// NEW: Time Blocks Definition
+const TIME_BLOCKS: TimeBlock[] = [
+  { id: 'deep-work', title: 'Deep Work', color: '#8B5CF6', duration: 90 },
+  { id: 'admin', title: 'Email & Admin', color: '#3B82F6', duration: 30 },
+  { id: 'break', title: 'Break', color: '#10B981', duration: 15 },
+  { id: 'meeting', title: 'Meeting', color: '#F59E0B', duration: 60 },
+  { id: 'lunch', title: 'Lunch Break', color: '#EC4899', duration: 60 },
+  { id: 'review', title: 'Daily Review', color: '#6366F1', duration: 30 },
+];
+
+// NEW: Quick Templates Definition
+const QUICK_TEMPLATES: QuickTemplate[] = [
+  { id: 'gratitude', name: 'Gratitude Journal', description: 'Write 3 things I\'m grateful for', icon: '📝', duration: 15, event_type: 'personal' },
+  { id: 'meditation', name: 'Meditation', description: 'Mindfulness practice', icon: '🧘', duration: 20, event_type: 'personal' },
+  { id: 'workout', name: 'Workout', description: 'Exercise session', icon: '💪', duration: 45, event_type: 'personal' },
+  { id: 'study', name: 'Study Session', description: 'Focused learning', icon: '📚', duration: 90, event_type: 'personal' },
+];
+
+// NEW: Weekdays for custom repeat
+const WEEKDAYS = [
+  { id: 'mon', label: 'Mon' },
+  { id: 'tue', label: 'Tue' },
+  { id: 'wed', label: 'Wed' },
+  { id: 'thu', label: 'Thu' },
+  { id: 'fri', label: 'Fri' },
+  { id: 'sat', label: 'Sat' },
+  { id: 'sun', label: 'Sun' },
+];
+
+// Carpool Management Types
 interface CarpoolGroup {
   id: string;
   event_id: string;
@@ -78,7 +139,24 @@ export default function CalendarToolsPage() {
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // NEW: Carpool Management State
+  // NEW: Event Form Modal States
+  const [showTimeBlockSelector, setShowTimeBlockSelector] = useState(false);
+  const [showQuickTemplateSelector, setShowQuickTemplateSelector] = useState(false);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [eventFormData, setEventFormData] = useState<EventFormData>({
+    title: '',
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    startTime: '09:00',
+    endTime: '10:00',
+    repeatOption: 'none',
+    customDays: [],
+    reminderOption: 'none',
+    event_type: 'personal'
+  });
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Carpool Management State
   const [carpoolGroups, setCarpoolGroups] = useState<CarpoolGroup[]>([]);
   const [carpoolStats, setCarpoolStats] = useState<CarpoolStats>({
     totalGroups: 0,
@@ -95,6 +173,10 @@ export default function CalendarToolsPage() {
 
   // Load user and data
   useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
     const initializeData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -130,12 +212,11 @@ export default function CalendarToolsPage() {
               friend_id: f.friend_id,
               name: f.profiles?.name || 'Unknown',
               avatar_url: f.profiles?.avatar_url,
-              safe_to_carpool: false // Default value
+              safe_to_carpool: false
             }));
             setFriends(formattedFriends);
           }
 
-          // NEW: Load carpool data
           await loadCarpoolData(user.id);
         }
       } catch (error) {
@@ -147,12 +228,12 @@ export default function CalendarToolsPage() {
     };
 
     initializeData();
+    return () => window.removeEventListener('resize', checkMobile);
   }, [showToast]);
 
-  // NEW: Load Carpool Data Function
+  // Load Carpool Data Function
   const loadCarpoolData = async (userId: string) => {
     try {
-      // Load carpool groups
       const { data: groups, error } = await supabase
         .from('carpool_groups')
         .select(`
@@ -168,7 +249,6 @@ export default function CalendarToolsPage() {
 
       if (error) throw error;
 
-      // Transform and enrich data
       const enrichedGroups: CarpoolGroup[] = (groups || []).map(group => {
         const event = group.events;
         const eventDate = new Date(event?.start_time || group.created_at);
@@ -177,17 +257,16 @@ export default function CalendarToolsPage() {
         let status: CarpoolGroup['status'] = 'upcoming';
         if (eventDate < now) {
           status = 'completed';
-        } else if (eventDate.getTime() - now.getTime() < 86400000) { // Within 24 hours
+        } else if (eventDate.getTime() - now.getTime() < 86400000) {
           status = 'active';
         }
 
-        // Parse participants if stored as JSON
         let participants: CarpoolParticipant[] = [];
         try {
           participants = JSON.parse(group.selected_friends || '[]').map((friendId: string, index: number) => ({
             id: `participant-${index}`,
             user_id: friendId,
-            name: `Friend ${index + 1}`, // In real app, would fetch from friends table
+            name: `Friend ${index + 1}`,
             role: friendId === group.driver_id ? 'driver' : 'passenger',
             status: 'confirmed',
             joined_at: group.created_at
@@ -196,9 +275,8 @@ export default function CalendarToolsPage() {
           console.warn('Failed to parse participants:', e);
         }
 
-        // Calculate savings (mock calculation)
-        const participantCount = participants.length + 1; // Include driver
-        const estimatedDistance = 20; // miles
+        const participantCount = participants.length + 1;
+        const estimatedDistance = 20;
         const gasPrice = 3.50;
         const mpg = 25;
         const totalCost = (estimatedDistance / mpg) * gasPrice;
@@ -227,7 +305,6 @@ export default function CalendarToolsPage() {
 
       setCarpoolGroups(enrichedGroups);
       
-      // Calculate stats
       const totalSavings = enrichedGroups.reduce((sum, group) => sum + group.total_savings, 0);
       const totalCO2Saved = enrichedGroups.reduce((sum, group) => sum + group.co2_saved, 0);
       const totalParticipants = enrichedGroups.reduce((sum, group) => sum + group.participants.length + 1, 0);
@@ -242,6 +319,144 @@ export default function CalendarToolsPage() {
 
     } catch (error) {
       console.error('Failed to load carpool data:', error);
+    }
+  };
+
+  // NEW: Calculate end time from duration
+  const calculateEndTime = (startTime: string, durationMinutes: number): string => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(hours, minutes, 0);
+    const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+    return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  // NEW: Handle quick template selection
+  const handleQuickTemplateSelect = (template: QuickTemplate) => {
+    const now = new Date();
+    const startTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const endTime = calculateEndTime(startTime, template.duration);
+
+    setEventFormData({
+      title: template.name,
+      description: template.description,
+      date: now.toISOString().split('T')[0],
+      startTime,
+      endTime,
+      repeatOption: 'none',
+      customDays: [],
+      reminderOption: 'none',
+      event_type: template.event_type
+    });
+    setShowQuickTemplateSelector(false);
+    setShowEventForm(true);
+  };
+
+  // NEW: Handle time block selection
+  const handleTimeBlockSelect = (block: TimeBlock) => {
+    const now = new Date();
+    const startTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const endTime = calculateEndTime(startTime, block.duration);
+
+    setEventFormData({
+      title: block.title,
+      description: `Time blocked for ${block.title}`,
+      date: now.toISOString().split('T')[0],
+      startTime,
+      endTime,
+      repeatOption: 'none',
+      customDays: [],
+      reminderOption: 'none',
+      event_type: 'personal'
+    });
+    setShowTimeBlockSelector(false);
+    setShowEventForm(true);
+  };
+
+  // NEW: Toggle custom day
+  const toggleCustomDay = (dayId: string) => {
+    setEventFormData(prev => ({
+      ...prev,
+      customDays: prev.customDays?.includes(dayId)
+        ? prev.customDays.filter(d => d !== dayId)
+        : [...(prev.customDays || []), dayId]
+    }));
+  };
+
+  // NEW: Handle event form submission
+  const handleEventFormSubmit = async () => {
+    if (!user) {
+      showToast({ type: 'error', message: 'Please log in first' });
+      return;
+    }
+
+    if (!eventFormData.title || !eventFormData.date || !eventFormData.startTime || !eventFormData.endTime) {
+      showToast({ type: 'error', message: 'Please fill in all required fields' });
+      return;
+    }
+
+    try {
+      const startDateTime = new Date(`${eventFormData.date}T${eventFormData.startTime}`);
+      const endDateTime = new Date(`${eventFormData.date}T${eventFormData.endTime}`);
+
+      let reminderTime = null;
+      if (eventFormData.reminderOption !== 'none') {
+        const reminderMinutes = {
+          '10min': 10,
+          '30min': 30,
+          '1hour': 60,
+          '1day': 1440
+        }[eventFormData.reminderOption] || 0;
+        reminderTime = new Date(startDateTime.getTime() - reminderMinutes * 60000);
+      }
+
+      const eventToCreate = {
+        title: eventFormData.title,
+        description: eventFormData.description,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
+        created_by: user.id,
+        visibility: 'private',
+        source: 'personal',
+        event_type: eventFormData.event_type,
+        location: eventFormData.location || null,
+        reminder_time: reminderTime,
+        recurrence_rule: eventFormData.repeatOption !== 'none' ? eventFormData.repeatOption : null,
+        recurrence_days: eventFormData.repeatOption === 'custom' ? eventFormData.customDays?.join(',') : null,
+        completed: false
+      };
+
+      const { error } = await supabase.from('events').insert(eventToCreate);
+
+      if (error) {
+        console.error('Error creating event:', error);
+        showToast({ type: 'error', message: 'Failed to create event' });
+        return;
+      }
+
+      showToast({ type: 'success', message: '✨ Event added to calendar!' });
+      setShowEventForm(false);
+      
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('*')
+        .eq('created_by', user.id);
+      if (eventsData) setEvents(eventsData);
+      
+      setEventFormData({
+        title: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        startTime: '09:00',
+        endTime: '10:00',
+        repeatOption: 'none',
+        customDays: [],
+        reminderOption: 'none',
+        event_type: 'personal'
+      });
+    } catch (error) {
+      console.error('Event creation error:', error);
+      showToast({ type: 'error', message: 'Failed to create event' });
     }
   };
 
@@ -263,12 +478,11 @@ export default function CalendarToolsPage() {
 
   const handleTimeBlockingClick = () => {
     console.log('Time Blocking clicked');
-    setShowTimeBlocking(true);
+    setShowTimeBlockSelector(true);
   };
 
   const handleCarpoolChatClick = () => {
     console.log('Carpool Chat clicked');
-    // Create a sample event for carpool demo
     const sampleEvent = {
       id: 'demo-event',
       title: 'Sample Event for Carpool',
@@ -280,13 +494,11 @@ export default function CalendarToolsPage() {
     setShowCarpoolChat(true);
   };
 
-  // NEW: Carpool Management Handler
   const handleCarpoolManagementClick = () => {
     console.log('Carpool Management clicked');
     setShowCarpoolManagement(true);
   };
 
-  // NEW: Create New Carpool Group Handler
   const handleCreateNewCarpoolGroup = () => {
     console.log('Create new carpool group clicked');
     setShowCreateCarpoolGroup(true);
@@ -297,7 +509,7 @@ export default function CalendarToolsPage() {
     setShowSettings(true);
   };
 
-  // Template apply handler - UPDATED TO ACTUALLY CREATE EVENTS
+  // Template apply handler
   const handleApplyTemplate = async (templateEvents: any[]) => {
     if (!user) {
       showToast({ type: 'error', message: 'Please log in first' });
@@ -318,7 +530,6 @@ export default function CalendarToolsPage() {
       showToast({ type: 'success', message: '✨ Template applied to calendar!' });
       setShowTemplates(false);
       
-      // Reload events to show new template events
       const { data: eventsData } = await supabase
         .from('events')
         .select('*')
@@ -340,7 +551,7 @@ export default function CalendarToolsPage() {
     setShowMeetingCoordinator(false);
   };
 
-  // NEW: Format date for carpool display
+  // Format date for carpool display
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'short',
@@ -349,7 +560,7 @@ export default function CalendarToolsPage() {
     });
   };
 
-  // NEW: Get status color for carpool groups
+  // Get status color for carpool groups
   const getStatusColor = (status: CarpoolGroup['status']) => {
     switch (status) {
       case 'upcoming': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
@@ -493,7 +704,7 @@ export default function CalendarToolsPage() {
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         
-        {/* Overview Stats - Enhanced with Carpool Data */}
+        {/* Overview Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-xl p-4 shadow-lg">
             <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{toolCategories.reduce((acc, cat) => acc + cat.tools.length, 0)}</div>
@@ -513,7 +724,7 @@ export default function CalendarToolsPage() {
           </div>
         </div>
 
-        {/* NEW: Carpool Summary Card */}
+        {/* Carpool Summary Card */}
         {carpoolStats.totalGroups > 0 && (
           <div className="bg-gradient-to-r from-green-400/20 to-blue-400/20 dark:from-green-600/20 dark:to-blue-600/20 rounded-xl p-6 mb-8 border border-green-200/50 dark:border-green-700/50">
             <div className="flex items-center justify-between mb-4">
@@ -620,9 +831,9 @@ export default function CalendarToolsPage() {
         </div>
       </div>
 
-      {/* REAL COMPONENT MODALS */}
+      {/* MODALS */}
 
-      {/* Calendar Analytics - Real Component */}
+      {/* Calendar Analytics */}
       {showAnalytics && user && (
         <CalendarAnalytics
           events={events}
@@ -631,18 +842,18 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* Event Templates - Real Component */}
+      {/* Event Templates */}
       {showTemplates && user && (
         <SmartTemplates
           open={showTemplates}
           onClose={() => setShowTemplates(false)}
           onApply={handleApplyTemplate}
           userId={user.id}
-          isMobile={typeof window !== 'undefined' ? window.innerWidth < 768 : false}
+          isMobile={isMobile}
         />
       )}
 
-      {/* Meeting Coordinator - Real Component */}
+      {/* Meeting Coordinator */}
       {showMeetingCoordinator && user && (
         <SmartMeetingCoordinator
           open={showMeetingCoordinator}
@@ -654,7 +865,209 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* NEW: Carpool Management Modal */}
+      {/* NEW: Time Block Selector Modal */}
+      {showTimeBlockSelector && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowTimeBlockSelector(false)}>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+          <div 
+            className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ${isMobile ? 'w-full' : 'max-w-2xl w-full'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 sm:p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>⏰ Time Blocks</h2>
+                  <p className="text-indigo-100 mt-1 text-sm sm:text-base">Choose a time block type</p>
+                </div>
+                <button onClick={() => setShowTimeBlockSelector(false)} className="p-2 rounded-full bg-white/20 hover:bg-white/30">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 sm:p-6">
+              <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
+                {TIME_BLOCKS.map((block) => (
+                  <button
+                    key={block.id}
+                    onClick={() => handleTimeBlockSelect(block)}
+                    className="p-3 sm:p-4 rounded-lg text-white font-medium hover:scale-105 transition-transform"
+                    style={{ backgroundColor: block.color }}
+                  >
+                    <div className="text-sm sm:text-base">{block.title}</div>
+                    <div className="text-xs opacity-90 mt-1">{block.duration} min</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Event Creation Form Modal */}
+      {showEventForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowEventForm(false)} />
+          <div 
+            className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden ${isMobile ? 'w-full max-h-[90vh]' : 'max-w-2xl w-full max-h-[90vh]'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6 text-white">
+              <div className="flex items-center justify-between">
+                <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>Create Event</h2>
+                <button onClick={() => setShowEventForm(false)} className="p-2 rounded-full bg-white/20 hover:bg-white/30">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-100px)] space-y-4">
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={eventFormData.title}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                  placeholder="Event title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <textarea
+                  value={eventFormData.description}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                  rows={3}
+                  placeholder="Event description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={eventFormData.date}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Time *</label>
+                  <input
+                    type="time"
+                    value={eventFormData.startTime}
+                    onChange={(e) => setEventFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Time *</label>
+                  <input
+                    type="time"
+                    value={eventFormData.endTime}
+                    onChange={(e) => setEventFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location (Optional)</label>
+                <input
+                  type="text"
+                  value={eventFormData.location || ''}
+                  onChange={(e) => setEventFormData(prev => ({ ...prev, location: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                  placeholder="Event location"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Repeat</label>
+                <div className={`grid gap-2 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  {['none', 'daily', 'weekly', 'monthly', 'custom'].map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setEventFormData(prev => ({ ...prev, repeatOption: option as any }))}
+                      className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium capitalize transition-colors ${
+                        eventFormData.repeatOption === option
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {eventFormData.repeatOption === 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Days</label>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAYS.map((day) => (
+                      <button
+                        key={day.id}
+                        onClick={() => toggleCustomDay(day.id)}
+                        className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                          eventFormData.customDays?.includes(day.id)
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Reminder</label>
+                <div className={`grid gap-2 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  {[
+                    { value: 'none', label: 'None' },
+                    { value: '10min', label: '10 min' },
+                    { value: '30min', label: '30 min' },
+                    { value: '1hour', label: '1 hour' },
+                    { value: '1day', label: '1 day' }
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setEventFormData(prev => ({ ...prev, reminderOption: option.value as any }))}
+                      className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                        eventFormData.reminderOption === option.value
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleEventFormSubmit}
+                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all text-sm sm:text-base"
+              >
+                Add to Calendar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Carpool Management Modal */}
       {showCarpoolManagement && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
@@ -671,7 +1084,6 @@ export default function CalendarToolsPage() {
                 </button>
               </div>
               
-              {/* Filter Tabs */}
               <div className="flex gap-2 mt-4">
                 {(['all', 'upcoming', 'active', 'completed'] as const).map((filter) => (
                   <button
@@ -696,10 +1108,7 @@ export default function CalendarToolsPage() {
                     <div
                       key={group.id}
                       className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setSelectedCarpoolGroup(group);
-                        // Could open detailed view here
-                      }}
+                      onClick={() => setSelectedCarpoolGroup(group)}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-semibold text-gray-900 dark:text-white">{group.event_title}</h3>
@@ -755,25 +1164,7 @@ export default function CalendarToolsPage() {
         </div>
       )}
 
-      {/* Placeholder Modals for Features Not Yet Implemented */}
-      {showTimeBlocking && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 m-4 max-w-md w-full">
-            <h3 className="text-lg font-bold mb-4">Time Blocking</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Time blocking feature will be implemented soon. This will allow you to schedule focused work sessions and protect your deep work time.
-            </p>
-            <button
-              onClick={() => setShowTimeBlocking(false)}
-              className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Carpool Chat - Real Component */}
+      {/* Carpool Chat */}
       {showCarpoolChat && (
         <EventCarpoolModal
           isOpen={showCarpoolChat}
@@ -789,7 +1180,6 @@ export default function CalendarToolsPage() {
             },
             createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
               showToast({ type: 'success', message: 'Carpool group created!' });
-              // Reload carpool data after creating new group
               if (user) {
                 await loadCarpoolData(user.id);
               }
@@ -797,10 +1187,11 @@ export default function CalendarToolsPage() {
             }
           }}
           showToast={showToast}
-          isMobile={typeof window !== 'undefined' ? window.innerWidth < 768 : false}
+          isMobile={isMobile}
         />
       )}
 
+      {/* Settings Placeholder */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 m-4 max-w-md w-full">
