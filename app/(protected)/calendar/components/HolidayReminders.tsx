@@ -101,7 +101,6 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Leap Day", date: `${year}-02-29`, emoji: "🐸", description: "Extra special (if leap year)", category: 'special', color: '#10B981' },
     { name: "National Pet Day", date: `${year}-04-11`, emoji: "🐾", description: "All pets deserve love", category: 'special', color: '#F59E0B' },
     { name: "National Bird Day", date: `${year}-01-05`, emoji: "🦜", description: "Tweet tweet!", category: 'special', color: '#06B6D4' },
-    { name: "Charlie Kirk Remembrance Day", date: `${year}-10-14`, emoji: "🕊️", description: "National Day of Remembrance", category: 'special', color: '#1F2937' },
   ];
 
   const internationalHolidays: Holiday[] = [
@@ -123,7 +122,6 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Yom Kippur", date: `${year}-10-12`, emoji: "📖", description: "Day of Atonement", category: 'international', color: '#8B5CF6' },
     { name: "Sukkot", date: `${year}-10-17`, emoji: "🌿", description: "Feast of Tabernacles", category: 'international', color: '#10B981' },
     { name: "Diwali", date: `${year}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
-    { name: "Day of the Dead", date: `${year}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
     { name: "Guy Fawkes Day", date: `${year}-11-05`, emoji: "🎆", description: "Bonfire Night (UK)", category: 'international', color: '#DC2626' },
     { name: "Remembrance Day (Canada)", date: `${year}-11-11`, emoji: "🌺", description: "Honor veterans", category: 'international', color: '#DC2626' },
     { name: "St. Lucia Day", date: `${year}-12-13`, emoji: "🕯️", description: "Festival of Light (Sweden)", category: 'international', color: '#FCD34D' },
@@ -275,7 +273,12 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
     });
   };
 
-  const handleAddHoliday = async (holiday: Holiday, forNextYear: boolean = false) => {
+  // FIXED: Added stopPropagation to prevent event bubbling
+  const handleAddHoliday = async (holiday: Holiday, forNextYear: boolean = false, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation(); // FIXED: Stop propagation
+    }
+    
     const date = new Date(holiday.date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -316,7 +319,12 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
     }
   };
 
-  const handleRemoveHoliday = async (holiday: Holiday, event: any) => {
+  // FIXED: Added stopPropagation to prevent event bubbling
+  const handleRemoveHoliday = async (holiday: Holiday, event: any, clickEvent?: React.MouseEvent) => {
+    if (clickEvent) {
+      clickEvent.stopPropagation(); // FIXED: Stop propagation
+    }
+    
     if (!onRemoveFromCalendar) {
       showToast?.({ 
         type: 'error', 
@@ -433,13 +441,22 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8"
+      onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation at root
+    >
       <div 
         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300" 
-        onClick={onClose} 
+        onClick={(e) => {
+          e.stopPropagation(); // FIXED: Stop propagation
+          onClose();
+        }} 
       />
       
-      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden">
+      <div 
+        className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden"
+        onClick={(e) => e.stopPropagation()} // FIXED: Prevent clicks inside modal from bubbling to backdrop
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-6">
           <div className="flex items-center justify-between">
@@ -453,7 +470,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowRemoveMode(!showRemoveMode)}
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  setShowRemoveMode(!showRemoveMode);
+                }}
                 className={`text-white/80 hover:text-white transition-colors p-2 rounded-lg ${
                   showRemoveMode ? 'bg-red-500/30' : 'hover:bg-white/20'
                 }`}
@@ -470,7 +490,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                 )}
               </button>
               <button
-                onClick={onClose}
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  onClose();
+                }}
                 className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/20 rounded-lg"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -507,7 +530,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
             {categories.map(cat => (
               <div key={cat.id} className="flex items-center gap-2">
                 <button
-                  onClick={() => setActiveCategory(cat.id)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // FIXED: Stop propagation
+                    setActiveCategory(cat.id);
+                  }}
                   className={`
                     px-4 py-2 rounded-full font-medium transition-all transform hover:scale-105
                     ${activeCategory === cat.id 
@@ -524,7 +550,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                     <input
                       type="checkbox"
                       checked={enabledCategories.has(cat.id)}
-                      onChange={() => toggleCategory(cat.id)}
+                      onChange={(e) => {
+                        e.stopPropagation(); // FIXED: Stop propagation
+                        toggleCategory(cat.id);
+                      }}
                       className="sr-only"
                     />
                     <div className={`
@@ -549,7 +578,10 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
           <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border-b dark:border-gray-700">
             {!showAddPersonal ? (
               <button
-                onClick={() => setShowAddPersonal(true)}
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  setShowAddPersonal(true);
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-all transform hover:scale-105"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -564,20 +596,32 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                     type="text"
                     placeholder="Name (e.g., Mom's Birthday)"
                     value={newPersonalEvent.name}
-                    onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, name: e.target.value })}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, name: e.target.value });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
                     className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   />
                   <input
                     type="date"
                     value={newPersonalEvent.date}
-                    onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, date: e.target.value })}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, date: e.target.value });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
                     className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   />
                 </div>
                 <div className="flex gap-3">
                   <select
                     value={newPersonalEvent.type}
-                    onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, type: e.target.value as any })}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, type: e.target.value as any });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
                     className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   >
                     <option value="birthday">🎂 Birthday</option>
@@ -588,18 +632,26 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                     type="text"
                     placeholder="Description (optional)"
                     value={newPersonalEvent.description}
-                    onChange={(e) => setNewPersonalEvent({ ...newPersonalEvent, description: e.target.value })}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, description: e.target.value });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
                     className="flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
                   />
                   <button
-                    onClick={savePersonalEvent}
+                    onClick={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      savePersonalEvent();
+                    }}
                     disabled={!newPersonalEvent.name || !newPersonalEvent.date}
                     className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105"
                   >
                     Save
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
                       setShowAddPersonal(false);
                       setNewPersonalEvent({ name: '', date: '', type: 'birthday', description: '' });
                     }}
@@ -650,6 +702,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                     borderLeftWidth: '4px',
                     borderLeftColor: holiday.color || '#6B7280'
                   }}
+                  onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation on holiday card
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{holiday.emoji}</span>
@@ -687,7 +740,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                             return (
                               <button
                                 key={event.id || idx}
-                                onClick={() => handleRemoveHoliday(holiday, event)}
+                                onClick={(e) => handleRemoveHoliday(holiday, event, e)}
                                 className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-all"
                               >
                                 Remove {eventYear}
@@ -707,14 +760,14 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                       ) : (
                         <>
                           <button
-                            onClick={() => handleAddHoliday(holiday, isPast)}
+                            onClick={(e) => handleAddHoliday(holiday, isPast, e)}
                             className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-md"
                           >
                             Add {isPast && `for ${targetYear}`}
                           </button>
                           {!isPast && !isAddedNextYear && (
                             <button
-                              onClick={() => handleAddHoliday(holiday, true)}
+                              onClick={(e) => handleAddHoliday(holiday, true, e)}
                               className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-all transform hover:scale-105"
                               title={`Also add for ${nextYear}`}
                             >
@@ -748,14 +801,20 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
             </div>
             <div className="flex gap-3">
               <button
-                onClick={onClose}
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  onClose();
+                }}
                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all transform hover:scale-105"
               >
                 Close
               </button>
               {!showRemoveMode && (
                 <button
-                  onClick={addAllInCategory}
+                  onClick={(e) => {
+                    e.stopPropagation(); // FIXED: Stop propagation
+                    addAllInCategory();
+                  }}
                   disabled={isAddingAll}
                   className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
