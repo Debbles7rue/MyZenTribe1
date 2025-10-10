@@ -169,7 +169,7 @@ export default function CalendarToolsPage() {
 
     initializeData();
     return () => window.removeEventListener('resize', checkMobile);
-  }, [showToast, router]);
+  }, [showToast]);
 
   // Load Carpool Data
   const loadCarpoolData = async (userId: string) => {
@@ -293,21 +293,11 @@ export default function CalendarToolsPage() {
     setShowEventForm(true);
   };
 
-  // Handler: Event Form Submitted - FIXED
+  // Handler: Event Form Submitted
   const handleEventFormSubmit = async (eventData: EventFormData) => {
-    console.log('Event form submitted with data:', eventData);
-    console.log('Current user:', user);
-    
     if (!user?.id) {
-      console.error('User check failed - user:', user);
-      showToast({ type: 'error', message: 'Authentication error. Please refresh and try again.' });
-      
-      // Try to reload user
-      const { data: { user: freshUser } } = await supabase.auth.getUser();
-      if (freshUser) {
-        setUser(freshUser);
-        showToast({ type: 'info', message: 'Please try again' });
-      }
+      console.log('User check failed:', user);
+      showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
 
@@ -342,13 +332,11 @@ export default function CalendarToolsPage() {
         completed: false
       };
 
-      console.log('Creating event:', eventToCreate);
-
       const { error } = await supabase.from('events').insert(eventToCreate);
 
       if (error) {
         console.error('Error creating event:', error);
-        showToast({ type: 'error', message: 'Failed to create event: ' + error.message });
+        showToast({ type: 'error', message: 'Failed to create event' });
         return;
       }
 
@@ -735,70 +723,56 @@ export default function CalendarToolsPage() {
         </div>
       </div>
 
-      {/* MODALS - All with proper z-index */}
+      {/* MODALS - All the existing modals */}
 
       {showAnalytics && user && (
-        <div className="fixed inset-0 z-[60]">
-          <CalendarAnalytics
-            events={events}
-            userId={user.id}
-            onClose={() => setShowAnalytics(false)}
-          />
-        </div>
+        <CalendarAnalytics
+          events={events}
+          userId={user.id}
+          onClose={() => setShowAnalytics(false)}
+        />
       )}
 
       {showTemplates && user && (
-        <div className="fixed inset-0 z-[60]">
-          <SmartTemplates
-            open={showTemplates}
-            onClose={() => setShowTemplates(false)}
-            onApply={handleApplyTemplate}
-            userId={user.id}
-            isMobile={isMobile}
-          />
-        </div>
+        <SmartTemplates
+          open={showTemplates}
+          onClose={() => setShowTemplates(false)}
+          onApply={handleApplyTemplate}
+          userId={user.id}
+          isMobile={isMobile}
+        />
       )}
 
       {showMeetingCoordinator && user && (
-        <div className="fixed inset-0 z-[60]">
-          <SmartMeetingCoordinator
-            open={showMeetingCoordinator}
-            onClose={() => setShowMeetingCoordinator(false)}
-            userId={user.id}
-            friends={friends}
-            userEvents={events}
-            onSchedule={handleScheduleMeeting}
-          />
-        </div>
+        <SmartMeetingCoordinator
+          open={showMeetingCoordinator}
+          onClose={() => setShowMeetingCoordinator(false)}
+          userId={user.id}
+          friends={friends}
+          userEvents={events}
+          onSchedule={handleScheduleMeeting}
+        />
       )}
 
       {/* NEW: Modular Components */}
-      {showTimeBlockSelector && (
-        <div className="fixed inset-0 z-[60]">
-          <TimeBlockSelector
-            isOpen={showTimeBlockSelector}
-            onClose={() => setShowTimeBlockSelector(false)}
-            onSelect={handleTimeBlockSelect}
-            isMobile={isMobile}
-          />
-        </div>
-      )}
+      <TimeBlockSelector
+        isOpen={showTimeBlockSelector}
+        onClose={() => setShowTimeBlockSelector(false)}
+        onSelect={handleTimeBlockSelect}
+        isMobile={isMobile}
+      />
 
-      {showEventForm && (
-        <div className="fixed inset-0 z-[70]">
-          <EventCreationForm
-            isOpen={showEventForm}
-            onClose={() => setShowEventForm(false)}
-            onSubmit={handleEventFormSubmit}
-            initialData={eventFormInitialData}
-            isMobile={isMobile}
-          />
-        </div>
-      )}
+      <EventCreationForm
+        isOpen={showEventForm}
+        onClose={() => setShowEventForm(false)}
+        onSubmit={handleEventFormSubmit}
+        initialData={eventFormInitialData}
+        isMobile={isMobile}
+      />
 
       {/* Carpool Management Modal */}
       {showCarpoolManagement && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             <div className="p-6 border-b dark:border-gray-700">
               <div className="flex items-center justify-between">
@@ -894,33 +868,31 @@ export default function CalendarToolsPage() {
       )}
 
       {showCarpoolChat && (
-        <div className="fixed inset-0 z-[60]">
-          <EventCarpoolModal
-            isOpen={showCarpoolChat}
-            onClose={() => setShowCarpoolChat(false)}
-            event={selectedCarpoolEvent}
-            userId={user?.id || null}
-            carpoolData={{
-              carpoolMatches: [],
-              friends: friends,
-              sendCarpoolInvite: async (matchId: string, message?: string) => {
-                showToast({ type: 'success', message: 'Carpool invite sent!' });
-                return { success: true, message: 'Invite sent successfully' };
-              },
-              createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
-                showToast({ type: 'success', message: 'Carpool group created!' });
-                if (user?.id) await loadCarpoolData(user.id);
-                return { success: true, groupId: Date.now().toString(), message: 'Group created successfully' };
-              }
-            }}
-            showToast={showToast}
-            isMobile={isMobile}
-          />
-        </div>
+        <EventCarpoolModal
+          isOpen={showCarpoolChat}
+          onClose={() => setShowCarpoolChat(false)}
+          event={selectedCarpoolEvent}
+          userId={user?.id || null}
+          carpoolData={{
+            carpoolMatches: [],
+            friends: friends,
+            sendCarpoolInvite: async (matchId: string, message?: string) => {
+              showToast({ type: 'success', message: 'Carpool invite sent!' });
+              return { success: true, message: 'Invite sent successfully' };
+            },
+            createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
+              showToast({ type: 'success', message: 'Carpool group created!' });
+              if (user?.id) await loadCarpoolData(user.id);
+              return { success: true, groupId: Date.now().toString(), message: 'Group created successfully' };
+            }
+          }}
+          showToast={showToast}
+          isMobile={isMobile}
+        />
       )}
 
       {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 m-4 max-w-md w-full">
             <h3 className="text-lg font-bold mb-4">Calendar Settings</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
