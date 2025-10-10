@@ -603,11 +603,11 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {/* Calendar or Feed View - FIXED: swipeHandlers only on calendar now */}
+            {/* Calendar or Feed View - FIXED: Removed swipeHandlers to allow clicks */}
             <div 
               className="flex-1" 
               ref={calendarRef}
-              {...(isMobile && mode === 'my' ? swipeHandlers : {})}
+              // REMOVED: swipeHandlers - was blocking calendar cell clicks
             >
               {mode === 'whats' && safeFeed.length > 0 ? (
                 <FeedView
