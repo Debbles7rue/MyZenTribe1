@@ -121,7 +121,6 @@ export default function CalendarToolsPage() {
     const initializeData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        console.log('🔍 User loaded in tools page:', user);
         setUser(user);
         
         if (user?.id) {
@@ -354,12 +353,35 @@ export default function CalendarToolsPage() {
   };
 
   // Other handlers
-  const handleTemplatesClick = () => setShowTemplates(true);
-  const handleAnalyticsClick = () => setShowAnalytics(true);
-  const handleMeetingCoordinatorClick = () => setShowMeetingCoordinator(true);
-  const handleTimeBlockingClick = () => setShowTimeBlockSelector(true);
-  const handleCarpoolManagementClick = () => setShowCarpoolManagement(true);
-  const handleSettingsClick = () => setShowSettings(true);
+  const handleTemplatesClick = () => {
+    console.log('Templates clicked');
+    setShowTemplates(true);
+  };
+  
+  const handleAnalyticsClick = () => {
+    console.log('Analytics clicked');
+    setShowAnalytics(true);
+  };
+  
+  const handleMeetingCoordinatorClick = () => {
+    console.log('Meeting Coordinator clicked');
+    setShowMeetingCoordinator(true);
+  };
+  
+  const handleTimeBlockingClick = () => {
+    console.log('Time Blocking clicked');
+    setShowTimeBlockSelector(true);
+  };
+  
+  const handleCarpoolManagementClick = () => {
+    console.log('Carpool Management clicked');
+    setShowCarpoolManagement(true);
+  };
+  
+  const handleSettingsClick = () => {
+    console.log('Settings clicked');
+    setShowSettings(true);
+  };
 
   const handleCarpoolChatClick = () => {
     const sampleEvent = {
@@ -374,8 +396,7 @@ export default function CalendarToolsPage() {
   };
 
   const handleApplyTemplate = async (templateEvents: any[]) => {
-    if (!user?.id) {
-      console.log('User check failed in template:', user);
+    if (!user) {
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
@@ -677,7 +698,7 @@ export default function CalendarToolsPage() {
 
       {/* MODALS - All the existing modals */}
 
-      {showAnalytics && user?.id && (
+      {showAnalytics && user && (
         <CalendarAnalytics
           events={events}
           userId={user.id}
@@ -685,7 +706,7 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {showTemplates && user?.id && (
+      {showTemplates && user && (
         <SmartTemplates
           open={showTemplates}
           onClose={() => setShowTemplates(false)}
@@ -695,7 +716,7 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {showMeetingCoordinator && user?.id && (
+      {showMeetingCoordinator && user && (
         <SmartMeetingCoordinator
           open={showMeetingCoordinator}
           onClose={() => setShowMeetingCoordinator(false)}
