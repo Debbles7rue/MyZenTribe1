@@ -82,28 +82,31 @@ const MoonPhaseDisplay: React.FC<MoonPhaseDisplayProps> = ({
         return (
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
             <defs>
-              <radialGradient id="light-gradient" cx="65%" cy="35%" r="50%">
-                <stop offset="0%" stopColor="#fef9e7" />
-                <stop offset="50%" stopColor="#faf5e4" />
-                <stop offset="100%" stopColor="#e8dfc7" />
+              <radialGradient id="light-gradient-first" cx="70%" cy="40%" r="55%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="30%" stopColor="#fffef7" />
+                <stop offset="60%" stopColor="#fef9e7" />
+                <stop offset="100%" stopColor="#fde68a" />
               </radialGradient>
-              <radialGradient id="dark-gradient" cx="35%" cy="35%" r="50%">
-                <stop offset="0%" stopColor="#3a4556" />
+              <radialGradient id="dark-gradient-first" cx="30%" cy="40%" r="55%">
+                <stop offset="0%" stopColor="#4a5568" />
                 <stop offset="100%" stopColor="#2d3748" />
               </radialGradient>
             </defs>
-            {/* Background circle */}
-            <circle cx="12" cy="12" r="10" fill="url(#dark-gradient)" stroke="#4a5568" strokeWidth="0.4"/>
-            {/* Light half (right side) - using path instead of weird bezier */}
+            {/* Outer subtle glow */}
+            <circle cx="12" cy="12" r="10.5" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.15"/>
+            {/* Background circle - dark side */}
+            <circle cx="12" cy="12" r="10" fill="url(#dark-gradient-first)" stroke="#4a5568" strokeWidth="0.4"/>
+            {/* Light half (right side) - much brighter */}
             <path 
               d="M 12 2 A 10 10 0 0 1 12 22 A 10 10 0 0 0 12 2" 
-              fill="url(#light-gradient)"
+              fill="url(#light-gradient-first)"
             />
-            {/* Crater on light side */}
-            <circle cx="15" cy="10" r="1.2" fill="#e2d5b8" opacity="0.5"/>
-            <circle cx="16" cy="15" r="0.8" fill="#e2d5b8" opacity="0.4"/>
-            {/* Subtle outer glow */}
-            <circle cx="12" cy="12" r="10.3" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.2"/>
+            {/* Craters on light side */}
+            <circle cx="15" cy="10" r="1.2" fill="#fde68a" opacity="0.6"/>
+            <circle cx="16" cy="15" r="0.8" fill="#fde68a" opacity="0.5"/>
+            {/* Terminator line enhancement for depth */}
+            <line x1="12" y1="2" x2="12" y2="22" stroke="#9ca3af" strokeWidth="0.3" opacity="0.3"/>
           </svg>
         );
       
@@ -137,28 +140,31 @@ const MoonPhaseDisplay: React.FC<MoonPhaseDisplayProps> = ({
         return (
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
             <defs>
-              <radialGradient id="light-gradient-last" cx="35%" cy="35%" r="50%">
-                <stop offset="0%" stopColor="#fef9e7" />
-                <stop offset="50%" stopColor="#faf5e4" />
-                <stop offset="100%" stopColor="#e8dfc7" />
+              <radialGradient id="light-gradient-last" cx="30%" cy="40%" r="55%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="30%" stopColor="#fffef7" />
+                <stop offset="60%" stopColor="#fef9e7" />
+                <stop offset="100%" stopColor="#fde68a" />
               </radialGradient>
-              <radialGradient id="dark-gradient-last" cx="65%" cy="35%" r="50%">
-                <stop offset="0%" stopColor="#3a4556" />
+              <radialGradient id="dark-gradient-last" cx="70%" cy="40%" r="55%">
+                <stop offset="0%" stopColor="#4a5568" />
                 <stop offset="100%" stopColor="#2d3748" />
               </radialGradient>
             </defs>
-            {/* Background circle */}
+            {/* Outer subtle glow */}
+            <circle cx="12" cy="12" r="10.5" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.15"/>
+            {/* Background circle - dark side */}
             <circle cx="12" cy="12" r="10" fill="url(#dark-gradient-last)" stroke="#4a5568" strokeWidth="0.4"/>
-            {/* Light half (left side) - clean semicircle */}
+            {/* Light half (left side) - much brighter */}
             <path 
               d="M 12 2 A 10 10 0 0 0 12 22 A 10 10 0 0 1 12 2" 
               fill="url(#light-gradient-last)"
             />
-            {/* Crater on light side */}
-            <circle cx="9" cy="10" r="1.2" fill="#e2d5b8" opacity="0.5"/>
-            <circle cx="8" cy="15" r="0.8" fill="#e2d5b8" opacity="0.4"/>
-            {/* Subtle outer glow */}
-            <circle cx="12" cy="12" r="10.3" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.2"/>
+            {/* Craters on light side */}
+            <circle cx="9" cy="10" r="1.2" fill="#fde68a" opacity="0.6"/>
+            <circle cx="8" cy="15" r="0.8" fill="#fde68a" opacity="0.5"/>
+            {/* Terminator line enhancement for depth */}
+            <line x1="12" y1="2" x2="12" y2="22" stroke="#9ca3af" strokeWidth="0.3" opacity="0.3"/>
           </svg>
         );
       
