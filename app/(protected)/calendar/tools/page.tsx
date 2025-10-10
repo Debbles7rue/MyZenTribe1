@@ -122,14 +122,7 @@ export default function CalendarToolsPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         
-        if (!user) {
-          console.error('No user found');
-          showToast({ type: 'error', message: 'Please log in to access calendar tools' });
-          router.push('/login');
-          return;
-        }
-        
-        console.log('User loaded:', user.id);
+        console.log('User loaded:', user?.id || 'No user found');
         setUser(user);
         
         if (user?.id) {
