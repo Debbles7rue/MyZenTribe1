@@ -289,7 +289,7 @@ export default function CalendarPage() {
     window.location.href = path;
   }, []);
 
-  // ===== MOBILE SWIPE GESTURES =====
+  // ===== MOBILE SWIPE GESTURES - FIXED: Removed onSwipeUp =====
   const swipeHandlers = useSwipeGestures({
     onSwipeLeft: () => {
       if (!isMobile) return;
@@ -309,11 +309,8 @@ export default function CalendarPage() {
       else newDate.setDate(newDate.getDate() - 1);
       setDate(newDate);
     },
-    onSwipeUp: () => {
-      if (!isMobile) return;
-      vibrate();
-      setOpenCreate(true);
-    },
+    // REMOVED: onSwipeUp that was opening event creator
+    // Users should use the FAB button instead
     onSwipeDown: async () => {
       if (!isMobile || isRefreshing) return;
       await handlePullToRefresh();
@@ -400,21 +397,36 @@ export default function CalendarPage() {
     }
   }, [isMobile, isRefreshing, mode, loadCalendar, loadFeed, showToast, vibrate, gamificationEnabled, addPoints]);
 
-  // ===== CALENDAR NAVIGATION =====
+  // ===== CALENDAR NAVIGATION - Enhanced with logging =====
   const onSelectSlot = useCallback((slotInfo: any) => {
-    if (batchMode) return;
+    console.log('📅 onSelectSlot triggered:', { 
+      action: slotInfo.action, 
+      start: slotInfo.start, 
+      view,
+      isMobile,
+      batchMode 
+    });
+    
+    if (batchMode) {
+      console.log('❌ Batch mode - ignoring click');
+      return;
+    }
     
     if (isMobile) {
       vibrate();
     }
     
+    // MOBILE: Month view switches to day view (no creator)
     if (view === 'month' && isMobile) {
+      console.log('📆 Month view - switching to day view');
       setDate(slotInfo.start);
       setView('day');
       return;
     }
     
+    // WEEK/DAY VIEW: Open event creator
     if (view === 'week' || view === 'day') {
+      console.log('✅ Opening event creator');
       const start = slotInfo.start || new Date();
       const end = slotInfo.end || new Date(start.getTime() + 3600000);
       
@@ -425,7 +437,7 @@ export default function CalendarPage() {
       }));
       setOpenCreate(true);
     }
-  }, [view, batchMode, isMobile, setForm, vibrate]);
+  }, [view, batchMode, isMobile, setForm, vibrate, setDate, setView]);
 
   // FIXED: onSelectEvent function to prevent r.includes error
   const onSelectEvent = useCallback((evt: any) => {
@@ -495,7 +507,7 @@ export default function CalendarPage() {
   return (
     <div 
       className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-blue-900 p-2 sm:p-4 relative transition-all duration-500"
-      {...(isMobile ? swipeHandlers : {})}
+      // REMOVED: swipeHandlers from here - now only on calendar grid
     >
       {/* Animated Background Blobs */}
       <AnimatedBackground />
@@ -591,8 +603,12 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {/* Calendar or Feed View */}
-            <div className="flex-1" ref={calendarRef}>
+            {/* Calendar or Feed View - FIXED: swipeHandlers only on calendar now */}
+            <div 
+              className="flex-1" 
+              ref={calendarRef}
+              {...(isMobile && mode === 'my' ? swipeHandlers : {})}
+            >
               {mode === 'whats' && safeFeed.length > 0 ? (
                 <FeedView
                   feed={safeFeed.filter((e: any) => !e._dismissed)}
