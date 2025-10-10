@@ -224,6 +224,7 @@ export default function CalendarModals({
   };
   
   // Modal wrapper component with better focus management and mobile optimization
+  // FIXED: Added stopPropagation to modal content to prevent click bubbling
   const Modal = ({ isOpen, onClose, title, children, size = 'lg' }: { 
     isOpen: boolean; 
     onClose: () => void; 
@@ -252,10 +253,16 @@ export default function CalendarModals({
     // Mobile-optimized modal
     if (isMobile) {
       return (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col">
+        <div 
+          className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col"
+          onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
+        >
           <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-4 py-3 flex items-center justify-between safe-area-top">
             <button
-              onClick={onClose}
+              onClick={(e) => {
+                e.stopPropagation(); // FIXED: Stop propagation
+                onClose();
+              }}
               className="text-gray-600 dark:text-gray-400 p-1"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,12 +280,24 @@ export default function CalendarModals({
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto">
         <div className="flex items-center justify-center min-h-screen px-4">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-          <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl ${sizeClasses[size]} w-full max-h-[90vh] overflow-y-auto`}>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
+            onClick={(e) => {
+              e.stopPropagation(); // FIXED: Stop propagation
+              onClose();
+            }} 
+          />
+          <div 
+            className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl ${sizeClasses[size]} w-full max-h-[90vh] overflow-y-auto`}
+            onClick={(e) => e.stopPropagation()} // FIXED: Prevent clicks inside modal from bubbling to backdrop
+          >
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
               <button
-                onClick={onClose}
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  onClose();
+                }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -591,7 +610,8 @@ export default function CalendarModals({
                 <span>🎯 Focus</span>
               </div>
               <button 
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
                   const now = new Date();
                   const endTime = new Date(now.getTime() + 20 * 60000);
                   setForm(prev => ({
@@ -624,7 +644,8 @@ export default function CalendarModals({
                 <span>🌟 Daily</span>
               </div>
               <button 
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
                   const now = new Date();
                   const endTime = new Date(now.getTime() + 15 * 60000);
                   setForm(prev => ({
@@ -657,7 +678,8 @@ export default function CalendarModals({
                 <span>👥 Team</span>
               </div>
               <button 
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
                   const now = new Date();
                   const endTime = new Date(now.getTime() + 15 * 60000);
                   setForm(prev => ({
@@ -683,7 +705,8 @@ export default function CalendarModals({
           {/* Create Custom Template */}
           <div className="border-t dark:border-gray-700 pt-4">
             <button 
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation(); // FIXED: Stop propagation
                 showToast?.({ type: 'info', message: 'Custom templates coming soon!' });
               }}
               className="w-full px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-purple-500 hover:text-purple-500 transition-all"
