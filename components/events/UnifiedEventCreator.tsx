@@ -272,11 +272,12 @@ export default function UnifiedEventCreator({
     <Dialog open={open} onClose={onClose} className="relative z-[999]">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
       
+      {/* MOBILE FIX: Changed container positioning for mobile */}
       <div className="fixed inset-0 overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4">
-          <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-xl transition-all">
+        <div className="flex min-h-full items-end sm:items-center justify-center p-0 sm:p-4">
+          <Dialog.Panel className="w-full max-w-2xl bg-white dark:bg-gray-900 sm:rounded-2xl shadow-xl max-h-[100dvh] sm:max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header - Mobile Friendly */}
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4 flex-shrink-0">
               <Dialog.Title className="text-xl font-bold text-white">
                 {editingEvent ? '✏️ Edit Event' : '✨ Create Event'}
                 {context === 'business' && ' (Business)'}
@@ -284,7 +285,8 @@ export default function UnifiedEventCreator({
               </Dialog.Title>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* MOBILE FIX: Scrollable body with extra padding */}
+            <div className="flex-1 p-6 space-y-4 overflow-y-auto pb-40 sm:pb-6">
               {/* Error Message */}
               {error && (
                 <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 rounded-lg text-red-800 dark:text-red-200">
@@ -387,7 +389,7 @@ export default function UnifiedEventCreator({
                   />
                 </div>
 
-                {/* Pre/Post Event Options - Mobile Optimized */}
+                {/* Pre/Post Event Options - Mobile Optimized - ALL ORIGINAL CLASSES PRESERVED */}
                 <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -751,18 +753,18 @@ export default function UnifiedEventCreator({
               </div>
             </div>
 
-            {/* Footer Actions - Mobile Friendly */}
-            <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 flex flex-col sm:flex-row gap-3 justify-end">
+            {/* MOBILE FIX: Footer Actions - Fixed at bottom, always visible */}
+            <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 flex flex-col-reverse sm:flex-row gap-3 justify-end flex-shrink-0 border-t dark:border-gray-700" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
               <button
                 onClick={onClose}
-                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
+                className="w-full sm:w-auto px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !form.title || !form.start}
-                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {saving ? 'Saving...' : (editingEvent ? 'Update Event' : 'Create Event')}
               </button>
