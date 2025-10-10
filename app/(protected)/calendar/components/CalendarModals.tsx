@@ -134,6 +134,28 @@ export default function CalendarModals({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   
+  // ===== NEW: HOLIDAY CELEBRATION HANDLER =====
+  const handleCelebrateHoliday = (holiday: DBEvent) => {
+    const holidayDate = new Date(holiday.start_time);
+    const endDate = new Date(holidayDate.getTime() + 2 * 60 * 60 * 1000);
+    
+    setForm(prev => ({
+      ...prev,
+      title: `${holiday.title} Celebration`,
+      description: `Let's celebrate ${holiday.title}! ${holiday.description || ''}`,
+      date: holidayDate.toISOString().split('T')[0],
+      time: `${holidayDate.getHours().toString().padStart(2, '0')}:${holidayDate.getMinutes().toString().padStart(2, '0')}`,
+      endTime: `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`,
+      location: '',
+      visibility: 'friends' as any,
+      event_type: 'celebration'
+    }));
+    
+    setDetailsOpen(false);
+    setOpenCreate(true);
+  };
+  // ===== END NEW =====
+  
   // HOLIDAY HANDLER - This is what makes holidays actually work!
   const handleAddHolidayToCalendar = async (holiday: {
     name: string;
@@ -273,14 +295,16 @@ export default function CalendarModals({
 
   return (
     <>
-      {/* Event Details Modal */}
+      {/* Event Details Modal - FIXED: Changed isOwner to currentUserId + added celebration handler */}
       <EventDetails 
         event={detailsOpen ? (selectedFeedEvent || selected) : null} 
         onClose={() => {
           setDetailsOpen(false);
         }}
         onEdit={handleEdit}
-        isOwner={selected?.created_by === me}
+        currentUserId={me}
+        onOpenCarpool={onOpenCarpoolSettings}
+        onCelebrateHoliday={handleCelebrateHoliday}
       />
 
       {/* Create Event Modal - Using UnifiedEventCreator */}
