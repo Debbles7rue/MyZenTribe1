@@ -388,33 +388,33 @@ export default function CalendarToolsPage() {
     setShowCarpoolChat(true);
   };
 
-  const handleApplyTemplate = async (templateEvents: any[]) => {
+  const handleApplyTemplate = async (templateData: any) => {
     if (!user) {
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
 
-    try {
-      const { error } = await supabase.from('events').insert(templateEvents);
-      
-      if (error) {
-        console.error('Error creating template events:', error);
-        showToast({ type: 'error', message: 'Failed to apply template' });
-        return;
-      }
-      
-      showToast({ type: 'success', message: '✨ Template applied to calendar!' });
-      setShowTemplates(false);
-      
-      const { data: eventsData } = await supabase
-        .from('events')
-        .select('*')
-        .eq('created_by', user.id);
-      if (eventsData) setEvents(eventsData);
-    } catch (error) {
-      console.error('Template application error:', error);
-      showToast({ type: 'error', message: 'Failed to apply template' });
-    }
+    // Extract the template's prepopulated data
+    const template = templateData.template;
+    const now = new Date();
+    const endTime = new Date(now.getTime() + template.duration * 60000);
+
+    // Set up the event form with template data
+    setEventFormInitialData({
+      title: template.prepopulatedData.title,
+      description: template.prepopulatedData.description,
+      date: now.toISOString().split('T')[0],
+      startTime: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+      endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`,
+      repeatOption: 'none',
+      customDays: [],
+      reminderOption: 'none',
+      event_type: template.prepopulatedData.event_type || 'personal'
+    });
+
+    // Close templates modal and open event form
+    setShowTemplates(false);
+    setShowEventForm(true);
   };
 
   const handleScheduleMeeting = async (meetingData: any) => {
