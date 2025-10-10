@@ -1,7 +1,7 @@
 // components/CalendarGrid.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Calendar as BigCalendar,
   View,
@@ -469,6 +469,49 @@ export default function CalendarGrid({
     );
   };
 
+  // NEW: Custom date cell wrapper to make entire cell clickable
+  const DateCellWrapper = useCallback(({ children, value }: any) => {
+    const handleCellClick = (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Don't intercept clicks on events or the date number link
+      if (
+        target.closest('.rbc-event') || 
+        target.closest('.rbc-event-content') ||
+        target.classList.contains('rbc-button-link')
+      ) {
+        return;
+      }
+      
+      // If clicking on the cell background, trigger slot selection
+      if (onSelectSlot && value) {
+        console.log('📅 Cell background clicked, triggering onSelectSlot for:', value);
+        onSelectSlot({
+          start: value,
+          end: value,
+          action: 'click',
+          slots: [value],
+          box: undefined
+        });
+      }
+    };
+
+    return (
+      <div 
+        className="rbc-day-bg-clickable" 
+        onClick={handleCellClick}
+        style={{ 
+          position: 'absolute',
+          inset: 0,
+          cursor: 'pointer',
+          zIndex: 0
+        }}
+      >
+        {children}
+      </div>
+    );
+  }, [onSelectSlot]);
+
   // Handle external drop (from sidebar)
   const handleDropFromOutside = ({ start, end, allDay }: any) => {
     if (onExternalDrop && externalDragType !== 'none' && !isMobile) {
@@ -589,6 +632,7 @@ export default function CalendarGrid({
           eventPropGetter={eventStyleGetter}
           components={{
             event: EventComponent,
+            dateCellWrapper: DateCellWrapper,
           }}
           resizable={!isMobile}
           popup
@@ -617,7 +661,7 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* FIXED STYLES - Calendar cells always white, text always dark */}
+      {/* FIXED STYLES - Calendar cells always white, text always dark + FULL CELL CLICKABLE */}
       <style jsx global>{`
         /* Base calendar container */
         .calendar-wrapper {
@@ -629,8 +673,35 @@ export default function CalendarGrid({
           background: rgba(255, 255, 255, 0.98) !important;
         }
         
-        /* CRITICAL FIX: Ensure calendar cells are clickable */
-        .custom-calendar .rbc-day-bg,
+        /* CRITICAL FIX: Make entire cell clickable */
+        .custom-calendar .rbc-day-bg {
+          cursor: pointer !important;
+          position: relative !important;
+        }
+        
+        .custom-calendar .rbc-day-bg-clickable {
+          position: absolute;
+          inset: 0;
+          cursor: pointer;
+          z-index: 0;
+        }
+        
+        /* Ensure date number is above clickable layer */
+        .custom-calendar .rbc-date-cell {
+          position: relative;
+          z-index: 2;
+          color: #374151;
+          pointer-events: auto;
+        }
+        
+        /* Ensure events are above clickable layer */
+        .custom-calendar .rbc-event,
+        .custom-calendar .rbc-event-content {
+          position: relative;
+          z-index: 3;
+          pointer-events: auto;
+        }
+        
         .custom-calendar .rbc-time-slot {
           cursor: pointer !important;
           position: relative !important;
@@ -721,18 +792,13 @@ export default function CalendarGrid({
           background: rgba(156, 163, 175, 0.05);
         }
         
-        /* FIXED: Date cells always dark text */
-        .custom-calendar .rbc-date-cell {
-          color: #374151;
-        }
-        
         /* Event hover effects (desktop only) */
         @media (hover: hover) {
           .custom-calendar .rbc-event:hover {
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.15);
             transition: all 0.2s;
-            z-index: 2;
+            z-index: 4;
           }
           
           /* Don't apply hover to moon phases */
