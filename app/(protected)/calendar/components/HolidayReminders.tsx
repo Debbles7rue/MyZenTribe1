@@ -101,6 +101,7 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Leap Day", date: `${year}-02-29`, emoji: "🐸", description: "Extra special (if leap year)", category: 'special', color: '#10B981' },
     { name: "National Pet Day", date: `${year}-04-11`, emoji: "🐾", description: "All pets deserve love", category: 'special', color: '#F59E0B' },
     { name: "National Bird Day", date: `${year}-01-05`, emoji: "🦜", description: "Tweet tweet!", category: 'special', color: '#06B6D4' },
+    { name: "Charlie Kirk Remembrance Day", date: `${year}-10-14`, emoji: "🕊️", description: "National Day of Remembrance", category: 'special', color: '#1F2937' },
   ];
 
   const internationalHolidays: Holiday[] = [
@@ -122,6 +123,7 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Yom Kippur", date: `${year}-10-12`, emoji: "📖", description: "Day of Atonement", category: 'international', color: '#8B5CF6' },
     { name: "Sukkot", date: `${year}-10-17`, emoji: "🌿", description: "Feast of Tabernacles", category: 'international', color: '#10B981' },
     { name: "Diwali", date: `${year}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
+    { name: "Day of the Dead", date: `${year}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
     { name: "Guy Fawkes Day", date: `${year}-11-05`, emoji: "🎆", description: "Bonfire Night (UK)", category: 'international', color: '#DC2626' },
     { name: "Remembrance Day (Canada)", date: `${year}-11-11`, emoji: "🌺", description: "Honor veterans", category: 'international', color: '#DC2626' },
     { name: "St. Lucia Day", date: `${year}-12-13`, emoji: "🕯️", description: "Festival of Light (Sweden)", category: 'international', color: '#FCD34D' },
@@ -790,22 +792,22 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer - FIXED: Mobile responsive layout */}
         <div className="p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 dark:text-gray-400">
               <span className="font-medium">{filteredHolidays.length} holidays</span>
               <span className="text-xs">
                 {showRemoveMode ? '🗑️ Click holidays to remove' : 'Click to add instantly • Past holidays add for next year'}
               </span>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={(e) => {
                   e.stopPropagation(); // FIXED: Stop propagation
                   onClose();
                 }}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all transform hover:scale-105"
+                className="w-full sm:w-auto px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all transform hover:scale-105"
               >
                 Close
               </button>
@@ -816,7 +818,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
                     addAllInCategory();
                   }}
                   disabled={isAddingAll}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {isAddingAll ? 'Adding...' : `Add All ${activeCategory === 'all' ? 'Enabled' : categories.find(c => c.id === activeCategory)?.label} Holidays`}
                 </button>
