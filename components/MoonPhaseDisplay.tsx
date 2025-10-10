@@ -57,43 +57,108 @@ const MoonPhaseDisplay: React.FC<MoonPhaseDisplayProps> = ({
     }
   };
 
-  // SVG paths for each moon phase
+  // Enhanced SVG designs for each moon phase
   const getMoonSVG = (phase: MoonPhaseType) => {
     switch (phase) {
       case 'moon-new':
         return (
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            <circle cx="12" cy="12" r="10" fill="#1f2937" stroke="#4b5563" strokeWidth="0.5"/>
-            <circle cx="12" cy="12" r="9" fill="none" stroke="#374151" strokeWidth="0.3" strokeDasharray="1 2" opacity="0.5"/>
+            <defs>
+              <radialGradient id="new-moon-gradient" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#2d3748" />
+                <stop offset="100%" stopColor="#1a202c" />
+              </radialGradient>
+            </defs>
+            {/* Outer glow */}
+            <circle cx="12" cy="12" r="10.5" fill="none" stroke="#4a5568" strokeWidth="0.3" opacity="0.3"/>
+            {/* Main moon body */}
+            <circle cx="12" cy="12" r="10" fill="url(#new-moon-gradient)" stroke="#4a5568" strokeWidth="0.4"/>
+            {/* Subtle surface texture */}
+            <circle cx="12" cy="12" r="9.5" fill="none" stroke="#374151" strokeWidth="0.2" strokeDasharray="2 3" opacity="0.4"/>
           </svg>
         );
       
       case 'moon-first':
         return (
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            <circle cx="12" cy="12" r="10" fill="#f3f4f6" stroke="#d1d5db" strokeWidth="0.5"/>
-            <path d="M12 2 Q17 7 12 12 Q17 17 12 22 Q7 17 12 12 Q7 7 12 2" fill="#1f2937"/>
-            <circle cx="12" cy="12" r="9.5" fill="none" stroke="#9ca3af" strokeWidth="0.3" opacity="0.4"/>
+            <defs>
+              <radialGradient id="light-gradient" cx="65%" cy="35%" r="50%">
+                <stop offset="0%" stopColor="#fef9e7" />
+                <stop offset="50%" stopColor="#faf5e4" />
+                <stop offset="100%" stopColor="#e8dfc7" />
+              </radialGradient>
+              <radialGradient id="dark-gradient" cx="35%" cy="35%" r="50%">
+                <stop offset="0%" stopColor="#3a4556" />
+                <stop offset="100%" stopColor="#2d3748" />
+              </radialGradient>
+            </defs>
+            {/* Background circle */}
+            <circle cx="12" cy="12" r="10" fill="url(#dark-gradient)" stroke="#4a5568" strokeWidth="0.4"/>
+            {/* Light half (right side) - using path instead of weird bezier */}
+            <path 
+              d="M 12 2 A 10 10 0 0 1 12 22 A 10 10 0 0 0 12 2" 
+              fill="url(#light-gradient)"
+            />
+            {/* Crater on light side */}
+            <circle cx="15" cy="10" r="1.2" fill="#e2d5b8" opacity="0.5"/>
+            <circle cx="16" cy="15" r="0.8" fill="#e2d5b8" opacity="0.4"/>
+            {/* Subtle outer glow */}
+            <circle cx="12" cy="12" r="10.3" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.2"/>
           </svg>
         );
       
       case 'moon-full':
         return (
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            <circle cx="12" cy="12" r="10" fill="#fef3c7" stroke="#fbbf24" strokeWidth="0.5"/>
-            <circle cx="9" cy="10" r="1.5" fill="#fde68a" opacity="0.4"/>
-            <circle cx="15" cy="14" r="2" fill="#fde68a" opacity="0.3"/>
-            <circle cx="11" cy="15" r="1" fill="#fde68a" opacity="0.5"/>
-            <circle cx="12" cy="12" r="9.5" fill="none" stroke="#f59e0b" strokeWidth="0.3" opacity="0.6"/>
+            <defs>
+              <radialGradient id="full-moon-gradient" cx="40%" cy="40%" r="60%">
+                <stop offset="0%" stopColor="#fffef7" />
+                <stop offset="40%" stopColor="#fef9e7" />
+                <stop offset="80%" stopColor="#fde68a" />
+                <stop offset="100%" stopColor="#fbbf24" />
+              </radialGradient>
+            </defs>
+            {/* Outer glow effect */}
+            <circle cx="12" cy="12" r="11" fill="#fef3c7" opacity="0.3"/>
+            <circle cx="12" cy="12" r="10.5" fill="#fef3c7" opacity="0.2"/>
+            {/* Main moon body */}
+            <circle cx="12" cy="12" r="10" fill="url(#full-moon-gradient)" stroke="#f59e0b" strokeWidth="0.3"/>
+            {/* Craters for realism */}
+            <circle cx="9" cy="9" r="1.5" fill="#fde68a" opacity="0.4"/>
+            <circle cx="15" cy="11" r="1.8" fill="#fde68a" opacity="0.35"/>
+            <circle cx="11" cy="15" r="1" fill="#fde68a" opacity="0.45"/>
+            <circle cx="16" cy="16" r="1.2" fill="#fde68a" opacity="0.4"/>
+            {/* Surface details */}
+            <ellipse cx="13" cy="13" rx="2.5" ry="1.5" fill="#fde68a" opacity="0.25" transform="rotate(-20 13 13)"/>
           </svg>
         );
       
       case 'moon-last':
         return (
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            <circle cx="12" cy="12" r="10" fill="#f3f4f6" stroke="#d1d5db" strokeWidth="0.5"/>
-            <path d="M12 2 Q7 7 12 12 Q7 17 12 22 Q17 17 12 12 Q17 7 12 2" fill="#1f2937"/>
-            <circle cx="12" cy="12" r="9.5" fill="none" stroke="#9ca3af" strokeWidth="0.3" opacity="0.4"/>
+            <defs>
+              <radialGradient id="light-gradient-last" cx="35%" cy="35%" r="50%">
+                <stop offset="0%" stopColor="#fef9e7" />
+                <stop offset="50%" stopColor="#faf5e4" />
+                <stop offset="100%" stopColor="#e8dfc7" />
+              </radialGradient>
+              <radialGradient id="dark-gradient-last" cx="65%" cy="35%" r="50%">
+                <stop offset="0%" stopColor="#3a4556" />
+                <stop offset="100%" stopColor="#2d3748" />
+              </radialGradient>
+            </defs>
+            {/* Background circle */}
+            <circle cx="12" cy="12" r="10" fill="url(#dark-gradient-last)" stroke="#4a5568" strokeWidth="0.4"/>
+            {/* Light half (left side) - clean semicircle */}
+            <path 
+              d="M 12 2 A 10 10 0 0 0 12 22 A 10 10 0 0 1 12 2" 
+              fill="url(#light-gradient-last)"
+            />
+            {/* Crater on light side */}
+            <circle cx="9" cy="10" r="1.2" fill="#e2d5b8" opacity="0.5"/>
+            <circle cx="8" cy="15" r="0.8" fill="#e2d5b8" opacity="0.4"/>
+            {/* Subtle outer glow */}
+            <circle cx="12" cy="12" r="10.3" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.2"/>
           </svg>
         );
       
