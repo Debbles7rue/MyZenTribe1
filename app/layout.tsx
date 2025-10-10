@@ -1,6 +1,6 @@
 // FILE NAME: layout.tsx
 // LOCATION: app/layout.tsx
-// INSTRUCTIONS: This preserves ALL your existing code and adds PWA support
+// INSTRUCTIONS: This preserves ALL your existing code and adds holiday notification support
 
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./globals.css";
@@ -9,6 +9,7 @@ import SiteHeader from "@/components/SiteHeader";
 import FirstRunGate from "@/components/FirstRunGate";
 import { ToastProvider } from "@/components/ToastProvider";
 import ElevenElevenFireworks from "@/components/ElevenElevenFireworks";
+import NotificationListener from "@/components/NotificationListener"; // NEW: Holiday celebrations!
 import Script from 'next/script';
 // Optional: Uncomment if you add the InstallPrompt component
 // import InstallPrompt from "@/components/InstallPrompt";
@@ -186,6 +187,10 @@ export default function RootLayout({
           <main className="page-wrap">{children}</main>
           {/* 11:11 Fireworks */}
           <ElevenElevenFireworks />
+          
+          {/* NEW: Holiday Celebration Listener - Shows confetti popups! 🎉 */}
+          <NotificationListener />
+          
           {/* Optional: Uncomment this line if you want to add the install prompt */}
           {/* <InstallPrompt /> */}
         </ToastProvider>
