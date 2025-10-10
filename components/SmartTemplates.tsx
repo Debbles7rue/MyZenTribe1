@@ -28,40 +28,13 @@ interface Template {
 }
 
 const TEMPLATES: Template[] = [
-  {
-    id: 'gratitude-journal',
-    name: 'Gratitude Journal',
-    description: 'Daily gratitude practice & reflection',
-    icon: '📝',
-    category: 'Wellness',
-    duration: 15,
-    prepopulatedData: {
-      title: 'Gratitude Journal',
-      description: 'Write 3 things I\'m grateful for today + reflection on positive moments',
-      duration: 15,
-      event_type: 'personal'
-    }
-  },
-  {
-    id: 'meditation-session',
-    name: 'Meditation Session',
-    description: 'Mindfulness and relaxation practice',
-    icon: '🧘',
-    category: 'Wellness',
-    duration: 20,
-    prepopulatedData: {
-      title: 'Meditation Session',
-      description: 'Mindfulness practice - breathing exercises, body scan, and relaxation',
-      duration: 20,
-      event_type: 'personal'
-    }
-  },
+  // 🌅 DAILY ROUTINES
   {
     id: 'morning-routine',
     name: 'Morning Routine',
     description: 'Start your day right with a structured morning',
     icon: '☀️',
-    category: 'Productivity',
+    category: 'Daily Routines',
     duration: 90,
     prepopulatedData: {
       title: 'Morning Routine',
@@ -71,11 +44,41 @@ const TEMPLATES: Template[] = [
     }
   },
   {
+    id: 'gratitude-journal',
+    name: 'Gratitude Journal',
+    description: 'Daily gratitude practice & reflection',
+    icon: '📝',
+    category: 'Daily Routines',
+    duration: 15,
+    prepopulatedData: {
+      title: 'Gratitude Journal',
+      description: 'Write 3 things I\'m grateful for today + reflection on positive moments',
+      duration: 15,
+      event_type: 'personal'
+    }
+  },
+  {
+    id: 'evening-wind-down',
+    name: 'Evening Wind-Down',
+    description: 'Relax and prepare for better sleep',
+    icon: '🌙',
+    category: 'Daily Routines',
+    duration: 90,
+    prepopulatedData: {
+      title: 'Evening Wind-Down',
+      description: 'Dinner (45 min) → Evening walk (30 min) → Prepare for bed (15 min)',
+      duration: 90,
+      event_type: 'personal'
+    }
+  },
+  
+  // 💪 HEALTH & WELLNESS
+  {
     id: 'workout-session',
     name: 'Workout Session',
     description: 'Stay fit with exercise',
     icon: '💪',
-    category: 'Health',
+    category: 'Health & Wellness',
     duration: 45,
     prepopulatedData: {
       title: 'Workout Session',
@@ -85,25 +88,55 @@ const TEMPLATES: Template[] = [
     }
   },
   {
-    id: 'meal-prep',
-    name: 'Meal Prep',
-    description: 'Organize your weekly meals efficiently',
-    icon: '🍱',
-    category: 'Health',
-    duration: 120,
+    id: 'meditation-session',
+    name: 'Meditation Session',
+    description: 'Mindfulness and relaxation practice',
+    icon: '🧘',
+    category: 'Health & Wellness',
+    duration: 20,
     prepopulatedData: {
-      title: 'Meal Prep Sunday',
-      description: 'Plan meals for the week, grocery list, batch cooking, and food storage',
-      duration: 120,
+      title: 'Meditation Session',
+      description: 'Mindfulness practice - breathing exercises, body scan, and relaxation',
+      duration: 20,
       event_type: 'personal'
     }
   },
+  {
+    id: 'walk-fresh-air',
+    name: 'Walk/Fresh Air',
+    description: 'Get outside and move',
+    icon: '🚶',
+    category: 'Health & Wellness',
+    duration: 30,
+    prepopulatedData: {
+      title: 'Walk & Fresh Air',
+      description: 'Take a refreshing walk outdoors - clear your mind and get some exercise',
+      duration: 30,
+      event_type: 'personal'
+    }
+  },
+  {
+    id: 'self-care',
+    name: 'Self-Care Time',
+    description: 'Nurture yourself',
+    icon: '🛁',
+    category: 'Health & Wellness',
+    duration: 60,
+    prepopulatedData: {
+      title: 'Self-Care Time',
+      description: 'Dedicated time for self-care - bath, skincare, relaxation, or anything that helps you recharge',
+      duration: 60,
+      event_type: 'personal'
+    }
+  },
+  
+  // 🎯 PRODUCTIVITY & LEARNING
   {
     id: 'study-session',
     name: 'Study Session',
     description: 'Productive study time with breaks',
     icon: '📚',
-    category: 'Productivity',
+    category: 'Productivity & Learning',
     duration: 125,
     prepopulatedData: {
       title: 'Study Session',
@@ -113,39 +146,41 @@ const TEMPLATES: Template[] = [
     }
   },
   {
-    id: 'evening-wind-down',
-    name: 'Evening Wind-Down',
-    description: 'Relax and prepare for better sleep',
-    icon: '🌙',
-    category: 'Wellness',
-    duration: 90,
+    id: 'reading-time',
+    name: 'Reading Time',
+    description: 'Dive into a good book',
+    icon: '📖',
+    category: 'Productivity & Learning',
+    duration: 45,
     prepopulatedData: {
-      title: 'Evening Wind-Down',
-      description: 'Dinner (45 min) → Evening walk (30 min) → Prepare for bed (15 min)',
-      duration: 90,
+      title: 'Reading Time',
+      description: 'Dedicated time to read - books, articles, or learning materials',
+      duration: 45,
       event_type: 'personal'
     }
   },
   {
-    id: 'deep-work',
-    name: 'Deep Work Block',
-    description: 'Focused work without distractions',
-    icon: '🎯',
-    category: 'Productivity',
-    duration: 90,
+    id: 'creative-hobby',
+    name: 'Creative/Hobby Time',
+    description: 'Pursue your passions',
+    icon: '🎨',
+    category: 'Productivity & Learning',
+    duration: 60,
     prepopulatedData: {
-      title: 'Deep Work',
-      description: 'Uninterrupted focus time for important projects. No emails, no meetings, no distractions.',
-      duration: 90,
-      event_type: 'work'
+      title: 'Creative Time',
+      description: 'Time for your hobbies - art, music, writing, crafts, or any creative pursuit',
+      duration: 60,
+      event_type: 'personal'
     }
   },
+  
+  // ❤️ PERSONAL LIFE
   {
     id: 'family-time',
     name: 'Family Time',
     description: 'Quality time with loved ones',
     icon: '👨‍👩‍👧‍👦',
-    category: 'Personal',
+    category: 'Personal Life',
     duration: 60,
     prepopulatedData: {
       title: 'Family Time',
@@ -155,25 +190,25 @@ const TEMPLATES: Template[] = [
     }
   },
   {
-    id: 'daily-standup',
-    name: 'Daily Standup',
-    description: '15-minute team sync meeting',
-    icon: '📅',
-    category: 'Work',
-    duration: 15,
+    id: 'meal-prep',
+    name: 'Meal Prep Sunday',
+    description: 'Organize your weekly meals efficiently',
+    icon: '🍱',
+    category: 'Personal Life',
+    duration: 120,
     prepopulatedData: {
-      title: 'Daily Standup',
-      description: 'Team sync to discuss progress and blockers',
-      duration: 15,
-      event_type: 'work'
+      title: 'Meal Prep Sunday',
+      description: 'Plan meals for the week, grocery list, batch cooking, and food storage',
+      duration: 120,
+      event_type: 'personal'
     }
   },
   {
-    id: 'custom-blank',
-    name: 'Custom Event',
-    description: 'Create your own custom event from scratch',
+    id: 'custom-template',
+    name: 'Custom Template',
+    description: 'Create your own recurring activity',
     icon: '✏️',
-    category: 'Custom',
+    category: 'Personal Life',
     duration: 60,
     prepopulatedData: {
       title: '',
@@ -243,12 +278,10 @@ export default function SmartTemplates({
   }, {} as Record<string, Template[]>);
 
   const categoryColors: Record<string, string> = {
-    Wellness: 'from-cyan-500 to-blue-500',
-    Health: 'from-green-500 to-emerald-500',
-    Productivity: 'from-purple-500 to-pink-500',
-    Personal: 'from-amber-500 to-orange-500',
-    Work: 'from-blue-500 to-indigo-500',
-    Custom: 'from-gray-500 to-slate-500'
+    'Daily Routines': 'from-orange-500 to-amber-500',
+    'Health & Wellness': 'from-green-500 to-emerald-500',
+    'Productivity & Learning': 'from-purple-500 to-pink-500',
+    'Personal Life': 'from-blue-500 to-cyan-500'
   };
 
   return (
