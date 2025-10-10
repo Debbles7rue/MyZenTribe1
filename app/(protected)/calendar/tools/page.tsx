@@ -93,6 +93,9 @@ export default function CalendarToolsPage() {
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventFormInitialData, setEventFormInitialData] = useState<Partial<EventFormData>>({});
 
+  // FIX #1: Add form key to force re-render when opening new form
+  const [eventFormKey, setEventFormKey] = useState(0);
+
   // Carpool Management State
   const [carpoolGroups, setCarpoolGroups] = useState<CarpoolGroup[]>([]);
   const [carpoolStats, setCarpoolStats] = useState<CarpoolStats>({
@@ -271,6 +274,7 @@ export default function CalendarToolsPage() {
     const startTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const endTime = calculateEndTime(startTime, block.duration);
 
+    // FIX #2: Clear previous data and increment key to force fresh form
     setEventFormInitialData({
       title: block.title,
       description: block.description || `Time blocked for ${block.title}`,
@@ -284,6 +288,7 @@ export default function CalendarToolsPage() {
     });
     
     setShowTimeBlockSelector(false);
+    setEventFormKey(prev => prev + 1); // Force new form instance
     setShowEventForm(true);
   };
 
@@ -346,6 +351,9 @@ export default function CalendarToolsPage() {
       
       showToast({ type: 'success', message: '✨ Event added to calendar!' });
       setShowEventForm(false);
+      
+      // FIX #3: Clear form data after successful submit
+      setEventFormInitialData({});
       
       // Reload events
       const { data: eventsData } = await supabase
@@ -427,6 +435,7 @@ export default function CalendarToolsPage() {
 
     // Close templates modal and open event form
     setShowTemplates(false);
+    setEventFormKey(prev => prev + 1); // Force new form instance
     setShowEventForm(true);
   };
 
@@ -704,7 +713,7 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* NEW: Modular Components */}
+      {/* NEW: Modular Components - FIX: Added key prop to force fresh instance */}
       <TimeBlockSelector
         isOpen={showTimeBlockSelector}
         onClose={() => setShowTimeBlockSelector(false)}
@@ -713,8 +722,12 @@ export default function CalendarToolsPage() {
       />
 
       <EventCreationForm
+        key={eventFormKey}
         isOpen={showEventForm}
-        onClose={() => setShowEventForm(false)}
+        onClose={() => {
+          setShowEventForm(false);
+          setEventFormInitialData({});
+        }}
         onSubmit={handleEventFormSubmit}
         initialData={eventFormInitialData}
         isMobile={isMobile}
