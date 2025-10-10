@@ -700,7 +700,7 @@ export default function EventDetails({
     );
   }
 
-  // REGULAR EVENT VIEW (continued in next part due to length...)
+  // REGULAR EVENT VIEW
   const modalContent = (
     <div 
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -822,11 +822,27 @@ export default function EventDetails({
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Starts:</span>
-                    <span className="font-medium">{event.start_time ? new Date(event.start_time).toLocaleString() : 'Not specified'}</span>
+                    <span className="font-medium">
+                      {new Date(event.start_time).toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Ends:</span>
-                    <span className="font-medium">{event.end_time ? new Date(event.end_time).toLocaleString() : 'Not specified'}</span>
+                    <span className="font-medium">
+                      {new Date(event.end_time).toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Duration:</span>
@@ -1029,9 +1045,11 @@ export default function EventDetails({
                         Edit
                       </button>
                     )}
-                    <button onClick={handleDelete} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium transition-colors">
-                      Delete
-                    </button>
+                    {onDelete && (
+                      <button onClick={handleDelete} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium transition-colors">
+                        Delete
+                      </button>
+                    )}
                   </>
                 )}
 
