@@ -5,20 +5,23 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
-// Import the actual calendar components
+// Import calendar components
 import CalendarAnalytics from '@/components/CalendarAnalytics';
 import SmartTemplates from '@/components/SmartTemplates';
 import SmartMeetingCoordinator from '@/components/SmartMeetingCoordinator';
 import EventCarpoolModal from '../components/EventCarpoolModal';
-import CarpoolFriendSelector from '@/components/CarpoolFriendSelector';
 import { useToast } from '@/components/ToastProvider';
+
+// Import our new modular components
+import EventCreationForm from '@/components/EventCreationForm';
+import TimeBlockSelector, { TimeBlock } from '@/components/TimeBlockSelector';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// NEW: Event Form Data Interface
+// Event Form Data Interface
 interface EventFormData {
   title: string;
   description: string;
@@ -31,53 +34,6 @@ interface EventFormData {
   location?: string;
   event_type: string;
 }
-
-// NEW: Time Block Interface
-interface TimeBlock {
-  id: string;
-  title: string;
-  color: string;
-  duration: number;
-}
-
-// NEW: Template Interface
-interface QuickTemplate {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  duration: number;
-  event_type: string;
-}
-
-// NEW: Time Blocks Definition
-const TIME_BLOCKS: TimeBlock[] = [
-  { id: 'deep-work', title: 'Deep Work', color: '#8B5CF6', duration: 90 },
-  { id: 'admin', title: 'Email & Admin', color: '#3B82F6', duration: 30 },
-  { id: 'break', title: 'Break', color: '#10B981', duration: 15 },
-  { id: 'meeting', title: 'Meeting', color: '#F59E0B', duration: 60 },
-  { id: 'lunch', title: 'Lunch Break', color: '#EC4899', duration: 60 },
-  { id: 'review', title: 'Daily Review', color: '#6366F1', duration: 30 },
-];
-
-// NEW: Quick Templates Definition
-const QUICK_TEMPLATES: QuickTemplate[] = [
-  { id: 'gratitude', name: 'Gratitude Journal', description: 'Write 3 things I\'m grateful for', icon: '📝', duration: 15, event_type: 'personal' },
-  { id: 'meditation', name: 'Meditation', description: 'Mindfulness practice', icon: '🧘', duration: 20, event_type: 'personal' },
-  { id: 'workout', name: 'Workout', description: 'Exercise session', icon: '💪', duration: 45, event_type: 'personal' },
-  { id: 'study', name: 'Study Session', description: 'Focused learning', icon: '📚', duration: 90, event_type: 'personal' },
-];
-
-// NEW: Weekdays for custom repeat
-const WEEKDAYS = [
-  { id: 'mon', label: 'Mon' },
-  { id: 'tue', label: 'Tue' },
-  { id: 'wed', label: 'Wed' },
-  { id: 'thu', label: 'Thu' },
-  { id: 'fri', label: 'Fri' },
-  { id: 'sat', label: 'Sat' },
-  { id: 'sun', label: 'Sun' },
-];
 
 // Carpool Management Types
 interface CarpoolGroup {
@@ -124,37 +80,24 @@ interface CarpoolStats {
 export default function CalendarToolsPage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [activeSection, setActiveSection] = useState('overview');
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<any[]>([]);
   const [friends, setFriends] = useState<any[]>([]);
-  const [selectedCarpoolEvent, setSelectedCarpoolEvent] = useState<any>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Modal states for actual components
+  // Modal states
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showMeetingCoordinator, setShowMeetingCoordinator] = useState(false);
-  const [showTimeBlocking, setShowTimeBlocking] = useState(false);
   const [showCarpoolChat, setShowCarpoolChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedCarpoolEvent, setSelectedCarpoolEvent] = useState<any>(null);
 
-  // NEW: Event Form Modal States
+  // NEW: Modular component states
   const [showTimeBlockSelector, setShowTimeBlockSelector] = useState(false);
-  const [showQuickTemplateSelector, setShowQuickTemplateSelector] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
-  const [eventFormData, setEventFormData] = useState<EventFormData>({
-    title: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    startTime: '09:00',
-    endTime: '10:00',
-    repeatOption: 'none',
-    customDays: [],
-    reminderOption: 'none',
-    event_type: 'personal'
-  });
-  const [isMobile, setIsMobile] = useState(false);
+  const [eventFormInitialData, setEventFormInitialData] = useState<Partial<EventFormData>>({});
 
   // Carpool Management State
   const [carpoolGroups, setCarpoolGroups] = useState<CarpoolGroup[]>([]);
@@ -168,8 +111,6 @@ export default function CalendarToolsPage() {
   const [showCarpoolManagement, setShowCarpoolManagement] = useState(false);
   const [selectedCarpoolGroup, setSelectedCarpoolGroup] = useState<CarpoolGroup | null>(null);
   const [carpoolFilter, setCarpoolFilter] = useState<'all' | 'upcoming' | 'active' | 'completed'>('all');
-  const [showCreateCarpoolGroup, setShowCreateCarpoolGroup] = useState(false);
-  const [selectedEventForCarpool, setSelectedEventForCarpool] = useState<any>(null);
 
   // Load user and data
   useEffect(() => {
@@ -180,20 +121,18 @@ export default function CalendarToolsPage() {
     const initializeData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
+        console.log('🔍 User loaded in tools page:', user);
         setUser(user);
         
-        if (user) {
-          // Load events for analytics
+        if (user?.id) {
+          // Load events
           const { data: eventsData } = await supabase
             .from('events')
             .select('*')
             .eq('created_by', user.id);
-          
-          if (eventsData) {
-            setEvents(eventsData);
-          }
+          if (eventsData) setEvents(eventsData);
 
-          // Load friends for meeting coordinator
+          // Load friends
           const { data: friendsData } = await supabase
             .from('friendships')
             .select(`
@@ -231,7 +170,7 @@ export default function CalendarToolsPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, [showToast]);
 
-  // Load Carpool Data Function
+  // Load Carpool Data
   const loadCarpoolData = async (userId: string) => {
     try {
       const { data: groups, error } = await supabase
@@ -322,7 +261,7 @@ export default function CalendarToolsPage() {
     }
   };
 
-  // NEW: Calculate end time from duration
+  // Calculate end time from start time and duration
   const calculateEndTime = (startTime: string, durationMinutes: number): string => {
     const [hours, minutes] = startTime.split(':').map(Number);
     const startDate = new Date();
@@ -331,36 +270,15 @@ export default function CalendarToolsPage() {
     return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  // NEW: Handle quick template selection
-  const handleQuickTemplateSelect = (template: QuickTemplate) => {
-    const now = new Date();
-    const startTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const endTime = calculateEndTime(startTime, template.duration);
-
-    setEventFormData({
-      title: template.name,
-      description: template.description,
-      date: now.toISOString().split('T')[0],
-      startTime,
-      endTime,
-      repeatOption: 'none',
-      customDays: [],
-      reminderOption: 'none',
-      event_type: template.event_type
-    });
-    setShowQuickTemplateSelector(false);
-    setShowEventForm(true);
-  };
-
-  // NEW: Handle time block selection
+  // Handler: Time Block Selected
   const handleTimeBlockSelect = (block: TimeBlock) => {
     const now = new Date();
     const startTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const endTime = calculateEndTime(startTime, block.duration);
 
-    setEventFormData({
+    setEventFormInitialData({
       title: block.title,
-      description: `Time blocked for ${block.title}`,
+      description: block.description || `Time blocked for ${block.title}`,
       date: now.toISOString().split('T')[0],
       startTime,
       endTime,
@@ -369,61 +287,45 @@ export default function CalendarToolsPage() {
       reminderOption: 'none',
       event_type: 'personal'
     });
-    setShowTimeBlockSelector(false);
     setShowEventForm(true);
   };
 
-  // NEW: Toggle custom day
-  const toggleCustomDay = (dayId: string) => {
-    setEventFormData(prev => ({
-      ...prev,
-      customDays: prev.customDays?.includes(dayId)
-        ? prev.customDays.filter(d => d !== dayId)
-        : [...(prev.customDays || []), dayId]
-    }));
-  };
-
-  // NEW: Handle event form submission
-  const handleEventFormSubmit = async () => {
-    if (!user || !user.id) {
-      console.log('User check failed:', user); // Debug line
+  // Handler: Event Form Submitted
+  const handleEventFormSubmit = async (eventData: EventFormData) => {
+    if (!user?.id) {
+      console.log('User check failed:', user);
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
 
-    if (!eventFormData.title || !eventFormData.date || !eventFormData.startTime || !eventFormData.endTime) {
-      showToast({ type: 'error', message: 'Please fill in all required fields' });
-      return;
-    }
-
     try {
-      const startDateTime = new Date(`${eventFormData.date}T${eventFormData.startTime}`);
-      const endDateTime = new Date(`${eventFormData.date}T${eventFormData.endTime}`);
+      const startDateTime = new Date(`${eventData.date}T${eventData.startTime}`);
+      const endDateTime = new Date(`${eventData.date}T${eventData.endTime}`);
 
       let reminderTime = null;
-      if (eventFormData.reminderOption !== 'none') {
+      if (eventData.reminderOption !== 'none') {
         const reminderMinutes = {
           '10min': 10,
           '30min': 30,
           '1hour': 60,
           '1day': 1440
-        }[eventFormData.reminderOption] || 0;
+        }[eventData.reminderOption] || 0;
         reminderTime = new Date(startDateTime.getTime() - reminderMinutes * 60000);
       }
 
       const eventToCreate = {
-        title: eventFormData.title,
-        description: eventFormData.description,
+        title: eventData.title,
+        description: eventData.description,
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),
         created_by: user.id,
         visibility: 'private',
         source: 'personal',
-        event_type: eventFormData.event_type,
-        location: eventFormData.location || null,
+        event_type: eventData.event_type,
+        location: eventData.location || null,
         reminder_time: reminderTime,
-        recurrence_rule: eventFormData.repeatOption !== 'none' ? eventFormData.repeatOption : null,
-        recurrence_days: eventFormData.repeatOption === 'custom' ? eventFormData.customDays?.join(',') : null,
+        recurrence_rule: eventData.repeatOption !== 'none' ? eventData.repeatOption : null,
+        recurrence_days: eventData.repeatOption === 'custom' ? eventData.customDays?.join(',') : null,
         completed: false
       };
 
@@ -438,52 +340,28 @@ export default function CalendarToolsPage() {
       showToast({ type: 'success', message: '✨ Event added to calendar!' });
       setShowEventForm(false);
       
+      // Reload events
       const { data: eventsData } = await supabase
         .from('events')
         .select('*')
         .eq('created_by', user.id);
       if (eventsData) setEvents(eventsData);
       
-      setEventFormData({
-        title: '',
-        description: '',
-        date: new Date().toISOString().split('T')[0],
-        startTime: '09:00',
-        endTime: '10:00',
-        repeatOption: 'none',
-        customDays: [],
-        reminderOption: 'none',
-        event_type: 'personal'
-      });
     } catch (error) {
       console.error('Event creation error:', error);
       showToast({ type: 'error', message: 'Failed to create event' });
     }
   };
 
-  // Handler functions
-  const handleTemplatesClick = () => {
-    console.log('Templates clicked');
-    setShowTemplates(true);
-  };
-
-  const handleAnalyticsClick = () => {
-    console.log('Analytics clicked');
-    setShowAnalytics(true);
-  };
-
-  const handleMeetingCoordinatorClick = () => {
-    console.log('Meeting Coordinator clicked');
-    setShowMeetingCoordinator(true);
-  };
-
-  const handleTimeBlockingClick = () => {
-    console.log('Time Blocking clicked');
-    setShowTimeBlockSelector(true);
-  };
+  // Other handlers
+  const handleTemplatesClick = () => setShowTemplates(true);
+  const handleAnalyticsClick = () => setShowAnalytics(true);
+  const handleMeetingCoordinatorClick = () => setShowMeetingCoordinator(true);
+  const handleTimeBlockingClick = () => setShowTimeBlockSelector(true);
+  const handleCarpoolManagementClick = () => setShowCarpoolManagement(true);
+  const handleSettingsClick = () => setShowSettings(true);
 
   const handleCarpoolChatClick = () => {
-    console.log('Carpool Chat clicked');
     const sampleEvent = {
       id: 'demo-event',
       title: 'Sample Event for Carpool',
@@ -495,32 +373,14 @@ export default function CalendarToolsPage() {
     setShowCarpoolChat(true);
   };
 
-  const handleCarpoolManagementClick = () => {
-    console.log('Carpool Management clicked');
-    setShowCarpoolManagement(true);
-  };
-
-  const handleCreateNewCarpoolGroup = () => {
-    console.log('Create new carpool group clicked');
-    setShowCreateCarpoolGroup(true);
-  };
-
-  const handleSettingsClick = () => {
-    console.log('Settings clicked');
-    setShowSettings(true);
-  };
-
-  // Template apply handler
   const handleApplyTemplate = async (templateEvents: any[]) => {
-    if (!user || !user.id) {
-      console.log('User check failed in template:', user); // Debug line
+    if (!user?.id) {
+      console.log('User check failed in template:', user);
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
 
     try {
-      console.log('Applying template events:', templateEvents);
-      
       const { error } = await supabase.from('events').insert(templateEvents);
       
       if (error) {
@@ -536,24 +396,19 @@ export default function CalendarToolsPage() {
         .from('events')
         .select('*')
         .eq('created_by', user.id);
-      
-      if (eventsData) {
-        setEvents(eventsData);
-      }
+      if (eventsData) setEvents(eventsData);
     } catch (error) {
       console.error('Template application error:', error);
       showToast({ type: 'error', message: 'Failed to apply template' });
     }
   };
 
-  // Meeting schedule handler
   const handleScheduleMeeting = async (meetingData: any) => {
     console.log('Scheduling meeting:', meetingData);
     showToast({ type: 'success', message: 'Meeting scheduled successfully!' });
     setShowMeetingCoordinator(false);
   };
 
-  // Format date for carpool display
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'short',
@@ -562,7 +417,6 @@ export default function CalendarToolsPage() {
     });
   };
 
-  // Get status color for carpool groups
   const getStatusColor = (status: CarpoolGroup['status']) => {
     switch (status) {
       case 'upcoming': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
@@ -573,7 +427,6 @@ export default function CalendarToolsPage() {
     }
   };
 
-  // Filter carpool groups
   const filteredCarpoolGroups = carpoolGroups.filter(group => 
     carpoolFilter === 'all' || group.status === carpoolFilter
   );
@@ -677,19 +530,14 @@ export default function CalendarToolsPage() {
               <button
                 onClick={() => router.back()}
                 className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-all duration-200"
-                aria-label="Go back"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Calendar Tools
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Advanced features and productivity tools
-                </p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calendar Tools</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Advanced features and productivity tools</p>
               </div>
             </div>
             
@@ -709,7 +557,9 @@ export default function CalendarToolsPage() {
         {/* Overview Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-xl p-4 shadow-lg">
-            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{toolCategories.reduce((acc, cat) => acc + cat.tools.length, 0)}</div>
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              {toolCategories.reduce((acc, cat) => acc + cat.tools.length, 0)}
+            </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Tools Available</div>
           </div>
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-xl p-4 shadow-lg">
@@ -764,12 +614,8 @@ export default function CalendarToolsPage() {
           {toolCategories.map((category) => (
             <div key={category.id} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-xl p-6 shadow-lg">
               <div className="mb-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                  {category.title}
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {category.description}
-                </p>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{category.title}</h2>
+                <p className="text-gray-600 dark:text-gray-400">{category.description}</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -787,9 +633,7 @@ export default function CalendarToolsPage() {
                         <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                           {tool.title}
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          {tool.description}
-                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{tool.description}</p>
                       </div>
                     </div>
                   </button>
@@ -801,9 +645,7 @@ export default function CalendarToolsPage() {
 
         {/* Quick Actions */}
         <div className="mt-8 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-xl p-6 shadow-lg">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-            Quick Actions
-          </h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
           <div className="flex flex-wrap gap-3">
             <button 
               onClick={handleTemplatesClick}
@@ -833,10 +675,9 @@ export default function CalendarToolsPage() {
         </div>
       </div>
 
-      {/* MODALS */}
+      {/* MODALS - All the existing modals */}
 
-      {/* Calendar Analytics */}
-      {showAnalytics && user && (
+      {showAnalytics && user?.id && (
         <CalendarAnalytics
           events={events}
           userId={user.id}
@@ -844,8 +685,7 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* Event Templates */}
-      {showTemplates && user && (
+      {showTemplates && user?.id && (
         <SmartTemplates
           open={showTemplates}
           onClose={() => setShowTemplates(false)}
@@ -855,8 +695,7 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* Meeting Coordinator */}
-      {showMeetingCoordinator && user && (
+      {showMeetingCoordinator && user?.id && (
         <SmartMeetingCoordinator
           open={showMeetingCoordinator}
           onClose={() => setShowMeetingCoordinator(false)}
@@ -867,207 +706,21 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* NEW: Time Block Selector Modal */}
-      {showTimeBlockSelector && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowTimeBlockSelector(false)}>
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-          <div 
-            className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ${isMobile ? 'w-full' : 'max-w-2xl w-full'}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 sm:p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>⏰ Time Blocks</h2>
-                  <p className="text-indigo-100 mt-1 text-sm sm:text-base">Choose a time block type</p>
-                </div>
-                <button onClick={() => setShowTimeBlockSelector(false)} className="p-2 rounded-full bg-white/20 hover:bg-white/30">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-4 sm:p-6">
-              <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
-                {TIME_BLOCKS.map((block) => (
-                  <button
-                    key={block.id}
-                    onClick={() => handleTimeBlockSelect(block)}
-                    className="p-3 sm:p-4 rounded-lg text-white font-medium hover:scale-105 transition-transform"
-                    style={{ backgroundColor: block.color }}
-                  >
-                    <div className="text-sm sm:text-base">{block.title}</div>
-                    <div className="text-xs opacity-90 mt-1">{block.duration} min</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* NEW: Modular Components */}
+      <TimeBlockSelector
+        isOpen={showTimeBlockSelector}
+        onClose={() => setShowTimeBlockSelector(false)}
+        onSelect={handleTimeBlockSelect}
+        isMobile={isMobile}
+      />
 
-      {/* NEW: Event Creation Form Modal */}
-      {showEventForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowEventForm(false)} />
-          <div 
-            className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden ${isMobile ? 'w-full max-h-[90vh]' : 'max-w-2xl w-full max-h-[90vh]'}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6 text-white">
-              <div className="flex items-center justify-between">
-                <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>Create Event</h2>
-                <button onClick={() => setShowEventForm(false)} className="p-2 rounded-full bg-white/20 hover:bg-white/30">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-100px)] space-y-4">
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title *</label>
-                <input
-                  type="text"
-                  value={eventFormData.title}
-                  onChange={(e) => setEventFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-                  placeholder="Event title"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                <textarea
-                  value={eventFormData.description}
-                  onChange={(e) => setEventFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-                  rows={3}
-                  placeholder="Event description"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date *</label>
-                <input
-                  type="date"
-                  value={eventFormData.date}
-                  onChange={(e) => setEventFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Time *</label>
-                  <input
-                    type="time"
-                    value={eventFormData.startTime}
-                    onChange={(e) => setEventFormData(prev => ({ ...prev, startTime: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Time *</label>
-                  <input
-                    type="time"
-                    value={eventFormData.endTime}
-                    onChange={(e) => setEventFormData(prev => ({ ...prev, endTime: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location (Optional)</label>
-                <input
-                  type="text"
-                  value={eventFormData.location || ''}
-                  onChange={(e) => setEventFormData(prev => ({ ...prev, location: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-                  placeholder="Event location"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Repeat</label>
-                <div className={`grid gap-2 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                  {['none', 'daily', 'weekly', 'monthly', 'custom'].map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setEventFormData(prev => ({ ...prev, repeatOption: option as any }))}
-                      className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium capitalize transition-colors ${
-                        eventFormData.repeatOption === option
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {eventFormData.repeatOption === 'custom' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Days</label>
-                  <div className="flex flex-wrap gap-2">
-                    {WEEKDAYS.map((day) => (
-                      <button
-                        key={day.id}
-                        onClick={() => toggleCustomDay(day.id)}
-                        className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                          eventFormData.customDays?.includes(day.id)
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        {day.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Reminder</label>
-                <div className={`grid gap-2 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                  {[
-                    { value: 'none', label: 'None' },
-                    { value: '10min', label: '10 min' },
-                    { value: '30min', label: '30 min' },
-                    { value: '1hour', label: '1 hour' },
-                    { value: '1day', label: '1 day' }
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => setEventFormData(prev => ({ ...prev, reminderOption: option.value as any }))}
-                      className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                        eventFormData.reminderOption === option.value
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={handleEventFormSubmit}
-                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all text-sm sm:text-base"
-              >
-                Add to Calendar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EventCreationForm
+        isOpen={showEventForm}
+        onClose={() => setShowEventForm(false)}
+        onSubmit={handleEventFormSubmit}
+        initialData={eventFormInitialData}
+        isMobile={isMobile}
+      />
 
       {/* Carpool Management Modal */}
       {showCarpoolManagement && (
@@ -1166,7 +819,6 @@ export default function CalendarToolsPage() {
         </div>
       )}
 
-      {/* Carpool Chat */}
       {showCarpoolChat && (
         <EventCarpoolModal
           isOpen={showCarpoolChat}
@@ -1182,9 +834,7 @@ export default function CalendarToolsPage() {
             },
             createCarpoolGroup: async (eventId: string, friendIds: string[], message?: string) => {
               showToast({ type: 'success', message: 'Carpool group created!' });
-              if (user) {
-                await loadCarpoolData(user.id);
-              }
+              if (user?.id) await loadCarpoolData(user.id);
               return { success: true, groupId: Date.now().toString(), message: 'Group created successfully' };
             }
           }}
@@ -1193,7 +843,6 @@ export default function CalendarToolsPage() {
         />
       )}
 
-      {/* Settings Placeholder */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 m-4 max-w-md w-full">
