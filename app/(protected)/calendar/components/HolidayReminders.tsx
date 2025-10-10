@@ -97,11 +97,9 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "April Fool's Day", date: `${year}-04-01`, emoji: "🃏", description: "Pranks allowed!", category: 'special', color: '#F59E0B' },
     { name: "St. Patrick's Day", date: `${year}-03-17`, emoji: "☘️", description: "Luck of the Irish", category: 'special', color: '#10B981' },
     { name: "Groundhog Day", date: `${year}-02-02`, emoji: "🦫", description: "6 more weeks?", category: 'special', color: '#92400E' },
-    { name: "Friday the 13th", date: `${year}-09-13`, emoji: "😱", description: "Spooky day", category: 'special', color: '#1F2937' },
     { name: "Leap Day", date: `${year}-02-29`, emoji: "🐸", description: "Extra special (if leap year)", category: 'special', color: '#10B981' },
     { name: "National Pet Day", date: `${year}-04-11`, emoji: "🐾", description: "All pets deserve love", category: 'special', color: '#F59E0B' },
     { name: "National Bird Day", date: `${year}-01-05`, emoji: "🦜", description: "Tweet tweet!", category: 'special', color: '#06B6D4' },
-    { name: "Charlie Kirk Remembrance Day", date: `${year}-10-14`, emoji: "🕊️", description: "National Day of Remembrance", category: 'special', color: '#1F2937' },
   ];
 
   const internationalHolidays: Holiday[] = [
