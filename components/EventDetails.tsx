@@ -5,6 +5,7 @@ import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/components/ToastProvider";
+import FriendSelector from "@/components/FriendSelector";
 import type { DBEvent } from "@/lib/types";
 
 interface EventDetailsProps {
@@ -57,13 +58,14 @@ export default function EventDetails({
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [isSendingComment, setIsSendingComment] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showFriendSelector, setShowFriendSelector] = useState(false);
+  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [canCarpool, setCanCarpool] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Check if this is a holiday
   const isHoliday = (event as any)?.event_type === 'holiday';
 
-  // Detect mobile
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
@@ -71,7 +73,6 @@ export default function EventDetails({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Fetch RSVP data and comments
   useEffect(() => {
     if (event && event.allows_rsvp) {
       fetchRSVPData();
@@ -80,9 +81,11 @@ export default function EventDetails({
       fetchEventMedia();
       fetchComments();
     }
-  }, [event, isHoliday]);
+    if (event && currentUserId && event.created_by !== currentUserId) {
+      checkCarpoolEligibility();
+    }
+  }, [event, isHoliday, currentUserId]);
 
-  // Subscribe to real-time comment updates
   useEffect(() => {
     if (!event?.id || isHoliday) return;
 
@@ -105,16 +108,20 @@ export default function EventDetails({
     };
   }, [event?.id, isHoliday]);
 
-  // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (showFriendSelector) {
+          setShowFriendSelector(false);
+        } else {
+          onClose();
+        }
+      }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
+  }, [onClose, showFriendSelector]);
 
-  // Lock body scroll when modal is open
   useEffect(() => {
     if (event) {
       document.body.style.overflow = 'hidden';
@@ -123,6 +130,24 @@ export default function EventDetails({
       };
     }
   }, [event]);
+
+  const checkCarpoolEligibility = async () => {
+    if (!event || !currentUserId) return;
+
+    try {
+      const { data } = await supabase
+        .from('friendships')
+        .select('safe_to_carpool')
+        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${event.created_by}),and(user_id.eq.${event.created_by},friend_id.eq.${currentUserId})`)
+        .eq('status', 'accepted')
+        .single();
+
+      setCanCarpool(data?.safe_to_carpool === true);
+    } catch (error) {
+      console.error('Error checking carpool eligibility:', error);
+      setCanCarpool(false);
+    }
+  };
 
   const fetchRSVPData = async () => {
     if (!event) return;
@@ -301,7 +326,74 @@ export default function EventDetails({
     }
   };
 
-  // Share Functions
+  const handleShareWithFriends = async () => {
+    if (!event || !currentUserId || selectedFriends.length === 0) {
+      showToast({ type: 'warning', message: 'Please select at least one friend' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get current user's name
+      const { data: userData } = await supabase
+        .from('profiles')
+        .select('full_name, avatar_url')
+        .eq('id', currentUserId)
+        .single();
+
+      const senderName = userData?.full_name || 'A friend';
+      const holidayEmoji = event.title.match(/[\u{1F300}-\u{1F9FF}]/u)?.[0] || '🎉';
+      const holidayName = event.title.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
+      const eventDate = new Date(event.start_time).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+
+      // Create notifications for each selected friend
+      const notifications = selectedFriends.map(friendId => ({
+        user_id: friendId,
+        actor_id: currentUserId,
+        type: 'holiday_share',
+        kind: 'celebration',
+        title: `${holidayEmoji} ${holidayName}!`,
+        body: `${senderName} wants to celebrate ${holidayName} with you!`,
+        entity_table: 'events',
+        entity_id: event.id,
+        metadata: {
+          holiday_name: holidayName,
+          holiday_emoji: holidayEmoji,
+          holiday_date: eventDate,
+          from_user_name: senderName,
+          from_user_avatar: userData?.avatar_url,
+          event_id: event.id
+        },
+        is_read: false,
+        created_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('notifications')
+        .insert(notifications);
+
+      if (error) throw error;
+
+      showToast({ 
+        type: 'success', 
+        message: `🎉 Shared with ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}!` 
+      });
+      
+      setShowFriendSelector(false);
+      setSelectedFriends([]);
+      setShowShareMenu(false);
+    } catch (error) {
+      console.error('Error sharing with friends:', error);
+      showToast({ type: 'error', message: 'Failed to share' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const shareToFacebook = () => {
     const url = `${window.location.origin}/event/${event?.id}`;
     const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
@@ -378,7 +470,6 @@ export default function EventDetails({
           />
 
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full animate-slideUp">
-            {/* Holiday Header */}
             <div className={`bg-gradient-to-r ${getHeaderColor()} text-white p-8 text-center`}>
               <div className="text-6xl mb-4">
                 {event.title.match(/[\u{1F300}-\u{1F9FF}]/u)?.[0] || '🎉'}
@@ -404,15 +495,11 @@ export default function EventDetails({
               </button>
             </div>
 
-            {/* Holiday Body */}
             <div className="p-6 space-y-4">
               {event.description && (
-                <p className="text-gray-600 text-center text-lg">
-                  {event.description}
-                </p>
+                <p className="text-gray-600 text-center text-lg">{event.description}</p>
               )}
 
-              {/* Action Buttons */}
               <div className="space-y-3 pt-4">
                 {onCelebrateHoliday && (
                   <button
@@ -427,12 +514,22 @@ export default function EventDetails({
                   </button>
                 )}
 
+                {currentUserId && (
+                  <button
+                    onClick={() => setShowFriendSelector(true)}
+                    className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 font-medium flex items-center justify-center gap-2 transition-all shadow-md"
+                  >
+                    <span className="text-xl">👥</span>
+                    <span>Share with Friends</span>
+                  </button>
+                )}
+
                 <button
-                  onClick={() => setShowShareMenu(true)}
+                  onClick={() => setShowShareMenu(!showShareMenu)}
                   className="w-full px-6 py-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 font-medium flex items-center justify-center gap-2 transition-colors"
                 >
                   <span className="text-xl">📤</span>
-                  <span>Share Holiday</span>
+                  <span>More Share Options</span>
                 </button>
 
                 {isCreator && onDelete && (
@@ -449,61 +546,76 @@ export default function EventDetails({
                 )}
               </div>
 
-              {/* Share Menu */}
               {showShareMenu && (
-                <>
-                  {isMobile ? (
-                    <div className="fixed inset-0 z-[1000]" onClick={() => setShowShareMenu(false)}>
-                      <div className="absolute inset-0 bg-black/40" />
-                      <div 
-                        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl animate-slideUpMobile"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="p-4">
-                          <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-                          <h3 className="text-lg font-semibold mb-4 text-center">Share Holiday</h3>
-                          <div className="space-y-2">
-                            <button onClick={shareToFacebook} className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex items-center justify-center gap-3 text-base font-medium">
-                              <span className="text-xl">📱</span> Share on Facebook
-                            </button>
-                            <button onClick={shareViaText} className="w-full px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center justify-center gap-3 text-base font-medium">
-                              <span className="text-xl">💬</span> Send via Text
-                            </button>
-                            <button onClick={shareViaEmail} className="w-full px-4 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 flex items-center justify-center gap-3 text-base font-medium">
-                              <span className="text-xl">📧</span> Send via Email
-                            </button>
-                            <button onClick={copyEventLink} className="w-full px-4 py-3 bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200 flex items-center justify-center gap-3 text-base font-medium">
-                              <span className="text-xl">🔗</span> Copy Link
-                            </button>
-                            <button onClick={() => setShowShareMenu(false)} className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 flex items-center justify-center gap-3 text-base font-medium mt-2">
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border-t pt-4 space-y-2 animate-slideIn">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Share via:</p>
-                      <button onClick={shareToFacebook} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2">
-                        📱 Facebook
-                      </button>
-                      <button onClick={shareViaText} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
-                        💬 Text Message
-                      </button>
-                      <button onClick={shareViaEmail} className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2">
-                        📧 Email
-                      </button>
-                      <button onClick={copyEventLink} className="w-full px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 flex items-center justify-center gap-2">
-                        🔗 Copy Link
-                      </button>
-                    </div>
-                  )}
-                </>
+                <div className="border-t pt-4 space-y-2 animate-slideIn">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Share externally via:</p>
+                  <button onClick={shareToFacebook} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2">
+                    📱 Facebook
+                  </button>
+                  <button onClick={shareViaText} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
+                    💬 Text Message
+                  </button>
+                  <button onClick={shareViaEmail} className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2">
+                    📧 Email
+                  </button>
+                  <button onClick={copyEventLink} className="w-full px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 flex items-center justify-center gap-2">
+                    🔗 Copy Link
+                  </button>
+                </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* Friend Selector Modal */}
+        {showFriendSelector && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setShowFriendSelector(false)}
+            />
+            <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-slideUp">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800">Share Holiday</h3>
+                <button
+                  onClick={() => setShowFriendSelector(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <p className="text-gray-600 mb-4">
+                Select friends to share this holiday celebration with:
+              </p>
+
+              <FriendSelector
+                value={selectedFriends}
+                onChange={setSelectedFriends}
+                multiple={true}
+                placeholder="Search friends..."
+              />
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowFriendSelector(false)}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleShareWithFriends}
+                  disabled={selectedFriends.length === 0 || loading}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+                >
+                  {loading ? 'Sharing...' : `Share with ${selectedFriends.length || 0}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <style jsx>{`
           @keyframes fadeIn {
@@ -518,21 +630,16 @@ export default function EventDetails({
             from { opacity: 0; height: 0; }
             to { opacity: 1; height: auto; }
           }
-          @keyframes slideUpMobile {
-            from { transform: translateY(100%); }
-            to { transform: translateY(0); }
-          }
           .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
           .animate-slideUp { animation: slideUp 0.3s ease-out; }
           .animate-slideIn { animation: slideIn 0.3s ease-out; }
-          .animate-slideUpMobile { animation: slideUpMobile 0.3s ease-out; }
         `}</style>
       </div>,
       document.body
     );
   }
 
-  // REGULAR EVENT VIEW
+  // REGULAR EVENT VIEW (continued in next part due to length...)
   const modalContent = (
     <div 
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -551,7 +658,6 @@ export default function EventDetails({
           ref={modalRef}
           className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slideUp"
         >
-          {/* Header */}
           <div className={`bg-gradient-to-r ${getHeaderColor()} text-white p-6`}>
             <div className="flex justify-between items-start">
               <div className="flex-1">
@@ -587,11 +693,9 @@ export default function EventDetails({
             )}
           </div>
 
-          {/* Body */}
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
             <div className="p-6 space-y-6">
               
-              {/* Pre-Event */}
               {preEvent && preEvent.title && (
                 <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-orange-200 rounded-xl p-4">
                   <div className="flex items-start gap-3">
@@ -616,7 +720,6 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* Images */}
               {imageUrls.length > 0 && imageUrls[0] && (
                 <div className="grid grid-cols-2 gap-2">
                   {imageUrls.map((url, index) => (
@@ -631,7 +734,6 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* Description */}
               {event.description && (
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-2">About this event</h3>
@@ -639,7 +741,6 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* Location */}
               {event.location && (
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-2">Location</h3>
@@ -655,7 +756,6 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* Time Details */}
               <div>
                 <h3 className="font-semibold text-gray-700 mb-2">When</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
@@ -689,7 +789,6 @@ export default function EventDetails({
                 </div>
               </div>
 
-              {/* Post-Event */}
               {postEvent && postEvent.title && (
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
                   <div className="flex items-start gap-3">
@@ -714,7 +813,6 @@ export default function EventDetails({
                 </div>
               )}
 
-              {/* Visibility */}
               <div>
                 <h3 className="font-semibold text-gray-700 mb-2">Visibility</h3>
                 <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm">
@@ -726,7 +824,6 @@ export default function EventDetails({
                 </div>
               </div>
 
-              {/* Comments */}
               <div className="border-t pt-6">
                 <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   💬 Comments & Discussion
@@ -798,7 +895,6 @@ export default function EventDetails({
             </div>
           </div>
 
-          {/* Footer */}
           <div className="bg-gray-50 px-6 py-4 border-t">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -825,7 +921,7 @@ export default function EventDetails({
                   </>
                 )}
 
-                {onOpenCarpool && !isReminder && !isTodo && (
+                {onOpenCarpool && !isReminder && !isTodo && canCarpool && (
                   <button onClick={() => onOpenCarpool(event)} className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium transition-colors flex items-center gap-2">
                     <span>🚗</span><span>Carpool</span>
                   </button>
@@ -887,7 +983,6 @@ export default function EventDetails({
         </div>
       </div>
 
-      {/* Mobile Share Sheet */}
       {showShareMenu && isMobile && (
         <div className="fixed inset-0 z-[1001]" onClick={() => setShowShareMenu(false)}>
           <div className="absolute inset-0 bg-black/40" />
