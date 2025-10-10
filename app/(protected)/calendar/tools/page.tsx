@@ -370,38 +370,22 @@ export default function CalendarToolsPage() {
 
   // Other handlers
   const handleTemplatesClick = () => {
-    console.log('Templates clicked - user:', user);
-    if (!user) {
-      showToast({ type: 'error', message: 'Please wait for data to load' });
-      return;
-    }
+    console.log('Templates clicked');
     setShowTemplates(true);
   };
   
   const handleAnalyticsClick = () => {
-    console.log('Analytics clicked - user:', user);
-    if (!user) {
-      showToast({ type: 'error', message: 'Please wait for data to load' });
-      return;
-    }
+    console.log('Analytics clicked');
     setShowAnalytics(true);
   };
   
   const handleMeetingCoordinatorClick = () => {
-    console.log('Meeting Coordinator clicked - user:', user);
-    if (!user) {
-      showToast({ type: 'error', message: 'Please wait for data to load' });
-      return;
-    }
+    console.log('Meeting Coordinator clicked');
     setShowMeetingCoordinator(true);
   };
   
   const handleTimeBlockingClick = () => {
-    console.log('Time Blocking clicked - user:', user);
-    if (!user) {
-      showToast({ type: 'error', message: 'Please wait for data to load' });
-      return;
-    }
+    console.log('Time Blocking clicked');
     setShowTimeBlockSelector(true);
   };
   
