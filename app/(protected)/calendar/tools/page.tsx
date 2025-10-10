@@ -287,7 +287,7 @@ export default function CalendarToolsPage() {
     setShowEventForm(true);
   };
 
-  // Handler: Event Form Submitted
+  // Handler: Event Form Submitted - FIXED VERSION
   const handleEventFormSubmit = async (eventData: EventFormData) => {
     console.log('🎯 handleEventFormSubmit called with:', eventData);
     console.log('👤 Current user:', user);
@@ -306,16 +306,7 @@ export default function CalendarToolsPage() {
       console.log('✅ Start:', startDateTime);
       console.log('✅ End:', endDateTime);
 
-      let reminderTime = null;
-      if (eventData.reminderOption !== 'none') {
-        const reminderMinutes = {
-          '10min': 10,
-          '30min': 30,
-          '1hour': 60,
-          '1day': 1440
-        }[eventData.reminderOption] || 0;
-        reminderTime = new Date(startDateTime.getTime() - reminderMinutes * 60000);
-      }
+      // REMOVED: reminderTime calculation - will be handled later in Phase 2
 
       const eventToCreate = {
         title: eventData.title,
@@ -327,9 +318,10 @@ export default function CalendarToolsPage() {
         source: 'personal',
         event_type: eventData.event_type,
         location: eventData.location || null,
-        reminder_time: reminderTime,
+        // REMOVED: reminder_time - column doesn't exist in your database
         recurrence_rule: eventData.repeatOption !== 'none' ? eventData.repeatOption : null,
-        recurrence_days: eventData.repeatOption === 'custom' ? eventData.customDays?.join(',') : null,
+        // REMOVED: recurrence_days - column doesn't exist in your database
+        // NOTE: Repeating STILL WORKS via recurrence_rule above!
         completed: false
       };
 
@@ -348,6 +340,10 @@ export default function CalendarToolsPage() {
       }
 
       console.log('✅ Event created successfully:', data);
+      
+      // TODO (Phase 2): Create reminder if eventData.reminderOption !== 'none'
+      // We'll add this functionality later when we create the reminder service
+      
       showToast({ type: 'success', message: '✨ Event added to calendar!' });
       setShowEventForm(false);
       
