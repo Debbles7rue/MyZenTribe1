@@ -385,7 +385,8 @@ export default function CalendarToolsPage() {
 
   // NEW: Handle event form submission
   const handleEventFormSubmit = async () => {
-    if (!user) {
+    if (!user || !user.id) {
+      console.log('User check failed:', user); // Debug line
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
@@ -511,7 +512,8 @@ export default function CalendarToolsPage() {
 
   // Template apply handler
   const handleApplyTemplate = async (templateEvents: any[]) => {
-    if (!user) {
+    if (!user || !user.id) {
+      console.log('User check failed in template:', user); // Debug line
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
