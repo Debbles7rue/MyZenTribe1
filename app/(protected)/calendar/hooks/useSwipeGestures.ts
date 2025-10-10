@@ -1,6 +1,7 @@
 // app/(protected)/calendar/hooks/useSwipeGestures.ts
+// COMPLETE REPLACEMENT - Enhanced with tap detection to prevent click interference
 
-import { useEffect, useRef } from 'react';
+import { useRef, useCallback } from 'react';
 
 interface SwipeHandlers {
   onSwipeLeft?: () => void;
@@ -9,53 +10,149 @@ interface SwipeHandlers {
   onSwipeDown?: () => void;
 }
 
-export function useSwipeGestures(handlers: SwipeHandlers) {
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const touchEndY = useRef<number | null>(null);
+interface SwipeResult {
+  onTouchStart: (e: React.TouchEvent) => void;
+  onTouchMove: (e: React.TouchEvent) => void;
+  onTouchEnd: (e: React.TouchEvent) => void;
+}
 
-  const minSwipeDistance = 50;
+const SWIPE_THRESHOLD = 50; // Minimum distance for swipe (in pixels)
+const TAP_THRESHOLD = 10; // Maximum movement for a tap (in pixels)
+const SWIPE_VELOCITY_THRESHOLD = 0.3; // Minimum velocity
+const MAX_SWIPE_TIME = 300; // Maximum time for a swipe (in ms)
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchEndX.current = null;
-    touchEndY.current = null;
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-  };
+export function useSwipeGestures(handlers: SwipeHandlers): SwipeResult {
+  const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
+  const touchEnd = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isSwiping = useRef(false);
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.targetTouches[0].clientX;
-    touchEndY.current = e.targetTouches[0].clientY;
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStartX.current || !touchStartY.current || !touchEndX.current || !touchEndY.current) {
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    // Don't interfere if touching a button, input, or interactive element
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'BUTTON' ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('[role="button"]')
+    ) {
+      console.log('🚫 Touch on interactive element - ignoring');
+      touchStart.current = null;
       return;
     }
 
-    const distanceX = touchStartX.current - touchEndX.current;
-    const distanceY = touchStartY.current - touchEndY.current;
-    const isLeftSwipe = distanceX > minSwipeDistance;
-    const isRightSwipe = distanceX < -minSwipeDistance;
-    const isUpSwipe = distanceY > minSwipeDistance;
-    const isDownSwipe = distanceY < -minSwipeDistance;
+    const touch = e.touches[0];
+    touchStart.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now()
+    };
+    touchEnd.current = null;
+    isSwiping.current = false;
+    
+    console.log('👆 Touch start:', touchStart.current);
+  }, []);
 
-    // Prioritize horizontal swipes over vertical
-    if (Math.abs(distanceX) > Math.abs(distanceY)) {
-      if (isRightSwipe && handlers.onSwipeRight) {
-        handlers.onSwipeRight();
-      } else if (isLeftSwipe && handlers.onSwipeLeft) {
-        handlers.onSwipeLeft();
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+
+    const touch = e.touches[0];
+    const currentX = touch.clientX;
+    const currentY = touch.clientY;
+    
+    const deltaX = Math.abs(currentX - touchStart.current.x);
+    const deltaY = Math.abs(currentY - touchStart.current.y);
+    
+    // If movement exceeds tap threshold, mark as swiping
+    if (deltaX > TAP_THRESHOLD || deltaY > TAP_THRESHOLD) {
+      isSwiping.current = true;
+      console.log('👉 Swiping detected:', { deltaX, deltaY });
+    }
+
+    touchEnd.current = {
+      x: currentX,
+      y: currentY,
+      time: Date.now()
+    };
+  }, []);
+
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current || !touchEnd.current) {
+      console.log('❌ No touch data - allowing normal click');
+      touchStart.current = null;
+      touchEnd.current = null;
+      isSwiping.current = false;
+      return;
+    }
+
+    const deltaX = touchEnd.current.x - touchStart.current.x;
+    const deltaY = touchEnd.current.y - touchStart.current.y;
+    const deltaTime = touchEnd.current.time - touchStart.current.time;
+    
+    const distanceX = Math.abs(deltaX);
+    const distanceY = Math.abs(deltaY);
+    const velocity = Math.max(distanceX, distanceY) / deltaTime;
+
+    console.log('🏁 Touch end:', {
+      deltaX,
+      deltaY,
+      deltaTime,
+      distanceX,
+      distanceY,
+      velocity,
+      isSwiping: isSwiping.current
+    });
+
+    // If this was just a tap (minimal movement), don't process as swipe
+    if (distanceX < TAP_THRESHOLD && distanceY < TAP_THRESHOLD) {
+      console.log('✅ Tap detected - allowing normal click');
+      touchStart.current = null;
+      touchEnd.current = null;
+      isSwiping.current = false;
+      return;
+    }
+
+    // Check if swipe is valid (sufficient distance and velocity)
+    if (
+      isSwiping.current &&
+      (distanceX > SWIPE_THRESHOLD || distanceY > SWIPE_THRESHOLD) &&
+      velocity > SWIPE_VELOCITY_THRESHOLD &&
+      deltaTime < MAX_SWIPE_TIME
+    ) {
+      // Determine swipe direction
+      if (distanceX > distanceY) {
+        // Horizontal swipe
+        if (deltaX > 0 && handlers.onSwipeRight) {
+          console.log('➡️ Swipe RIGHT');
+          e.preventDefault();
+          handlers.onSwipeRight();
+        } else if (deltaX < 0 && handlers.onSwipeLeft) {
+          console.log('⬅️ Swipe LEFT');
+          e.preventDefault();
+          handlers.onSwipeLeft();
+        }
+      } else {
+        // Vertical swipe
+        if (deltaY > 0 && handlers.onSwipeDown) {
+          console.log('⬇️ Swipe DOWN');
+          e.preventDefault();
+          handlers.onSwipeDown();
+        } else if (deltaY < 0 && handlers.onSwipeUp) {
+          console.log('⬆️ Swipe UP');
+          e.preventDefault();
+          handlers.onSwipeUp();
+        }
       }
     } else {
-      if (isDownSwipe && handlers.onSwipeDown) {
-        handlers.onSwipeDown();
-      } else if (isUpSwipe && handlers.onSwipeUp) {
-        handlers.onSwipeUp();
-      }
+      console.log('🚫 Swipe not valid - allowing normal click');
     }
-  };
+
+    touchStart.current = null;
+    touchEnd.current = null;
+    isSwiping.current = false;
+  }, [handlers]);
 
   return {
     onTouchStart,
