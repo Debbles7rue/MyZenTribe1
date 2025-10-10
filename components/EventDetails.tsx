@@ -350,9 +350,38 @@ export default function EventDetails({
         year: 'numeric'
       });
 
-      // Create notifications for each selected friend
+      // Try using database function first (if it exists)
+      try {
+        const { error: rpcError } = await supabase.rpc('share_holiday_with_friends', {
+          p_friend_ids: selectedFriends,
+          p_event_id: event.id,
+          p_holiday_name: holidayName,
+          p_holiday_emoji: holidayEmoji,
+          p_holiday_date: eventDate,
+          p_sender_name: senderName,
+          p_sender_avatar: userData?.avatar_url || ''
+        });
+
+        if (!rpcError) {
+          showToast({ 
+            type: 'success', 
+            message: `🎉 Shared with ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}!` 
+          });
+          setShowFriendSelector(false);
+          setSelectedFriends([]);
+          setShowShareMenu(false);
+          setLoading(false);
+          return;
+        }
+      } catch (rpcError) {
+        // Function doesn't exist, fall back to direct insert
+        console.log('Database function not found, using direct insert');
+      }
+
+      // Fallback: Direct insert (try with both user_id and recipient_id)
       const notifications = selectedFriends.map(friendId => ({
         user_id: friendId,
+        recipient_id: friendId, // Some schemas use this instead
         actor_id: currentUserId,
         type: 'holiday_share',
         kind: 'celebration',
@@ -372,11 +401,40 @@ export default function EventDetails({
         created_at: new Date().toISOString()
       }));
 
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('notifications')
-        .insert(notifications);
+        .insert(notifications)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        // Show detailed error for debugging
+        console.error('Notification insert error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        
+        // User-friendly error message
+        if (error.message.includes('policy')) {
+          showToast({ 
+            type: 'error', 
+            message: '🔒 Permission issue - check RLS policies' 
+          });
+        } else if (error.message.includes('violates')) {
+          showToast({ 
+            type: 'error', 
+            message: '⚠️ Database constraint error' 
+          });
+        } else {
+          showToast({ 
+            type: 'error', 
+            message: `Failed to share: ${error.message}` 
+          });
+        }
+        return;
+      }
 
       showToast({ 
         type: 'success', 
@@ -386,9 +444,12 @@ export default function EventDetails({
       setShowFriendSelector(false);
       setSelectedFriends([]);
       setShowShareMenu(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sharing with friends:', error);
-      showToast({ type: 'error', message: 'Failed to share' });
+      showToast({ 
+        type: 'error', 
+        message: `Failed to share: ${error.message || 'Unknown error'}` 
+      });
     } finally {
       setLoading(false);
     }
