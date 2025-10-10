@@ -1,5 +1,5 @@
 // components/SmartTemplates.tsx
-import React, { useState } from 'react';
+import React from 'react';
 
 interface SmartTemplatesProps {
   open: boolean;
@@ -193,13 +193,12 @@ export default function SmartTemplates({
   setOpenCreate,
   isMobile = false
 }: SmartTemplatesProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   
   if (!open) return null;
 
-  const handleApply = () => {
-    if (!selectedTemplate || !userId) {
-      console.error('Missing required data:', { selectedTemplate, userId });
+  const handleTemplateClick = (template: Template) => {
+    if (!userId) {
+      console.error('Missing userId');
       return;
     }
     
@@ -207,20 +206,19 @@ export default function SmartTemplates({
     // Prepopulate the form instead of creating events directly
     if (setForm && setOpenCreate) {
       const now = new Date();
-      const endTime = new Date(now.getTime() + selectedTemplate.duration * 60000);
+      const endTime = new Date(now.getTime() + template.duration * 60000);
       
       setForm((prev: any) => ({
         ...prev,
-        title: selectedTemplate.prepopulatedData.title,
-        description: selectedTemplate.prepopulatedData.description,
+        title: template.prepopulatedData.title,
+        description: template.prepopulatedData.description,
         date: now.toISOString().split('T')[0],
         time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
         endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`,
-        event_type: selectedTemplate.prepopulatedData.event_type || 'personal'
+        event_type: template.prepopulatedData.event_type || 'personal'
       }));
       
       onClose();
-      setSelectedTemplate(null);
       
       // Small delay to ensure modal closes before opening create modal
       setTimeout(() => {
@@ -229,12 +227,9 @@ export default function SmartTemplates({
     } else {
       // Otherwise, pass to onApply for direct event creation (tools page context)
       onApply({
-        template: selectedTemplate,
-        prepopulatedData: selectedTemplate.prepopulatedData
+        template: template,
+        prepopulatedData: template.prepopulatedData
       });
-      
-      onClose();
-      setSelectedTemplate(null);
     }
   };
 
@@ -252,7 +247,8 @@ export default function SmartTemplates({
     Health: 'from-green-500 to-emerald-500',
     Productivity: 'from-purple-500 to-pink-500',
     Personal: 'from-amber-500 to-orange-500',
-    Work: 'from-blue-500 to-indigo-500'
+    Work: 'from-blue-500 to-indigo-500',
+    Custom: 'from-gray-500 to-slate-500'
   };
 
   return (
@@ -271,7 +267,7 @@ export default function SmartTemplates({
             <div>
               <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>✨ Smart Templates</h2>
               <p className={`text-purple-100 mt-1 ${isMobile ? 'text-sm' : ''}`}>
-                Quick-start your perfect routine with customizable templates
+                Click any template to customize and add to your calendar
               </p>
             </div>
             <button
@@ -286,9 +282,9 @@ export default function SmartTemplates({
         </div>
         
         {/* Content */}
-        <div className={`p-4 sm:p-6 overflow-y-auto ${isMobile ? 'max-h-[calc(90vh-140px)]' : 'max-h-[calc(85vh-140px)]'}`}>
+        <div className={`p-4 sm:p-6 overflow-y-auto ${isMobile ? 'max-h-[calc(90vh-120px)]' : 'max-h-[calc(85vh-120px)]'}`}>
           {Object.entries(templatesByCategory).map(([category, templates]) => (
-            <div key={category} className="mb-6">
+            <div key={category} className="mb-6 last:mb-0">
               <h3 className={`font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2 ${
                 isMobile ? 'text-base' : 'text-lg'
               }`}>
@@ -302,12 +298,11 @@ export default function SmartTemplates({
                 {templates.map((template) => (
                   <button
                     key={template.id}
-                    onClick={() => setSelectedTemplate(template)}
-                    className={`p-3 sm:p-4 rounded-xl border-2 text-left transition-all hover:shadow-lg ${
-                      selectedTemplate?.id === template.id
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-750 hover:border-purple-300'
-                    }`}
+                    onClick={() => handleTemplateClick(template)}
+                    className="p-3 sm:p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 
+                             bg-white dark:bg-gray-750 hover:border-purple-500 hover:bg-purple-50 
+                             dark:hover:bg-purple-900/20 transition-all hover:shadow-lg text-left
+                             transform hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <div className={`mb-2 ${isMobile ? 'text-2xl' : 'text-3xl'}`}>{template.icon}</div>
                     <h3 className={`font-semibold text-gray-900 dark:text-white ${isMobile ? 'text-base' : ''}`}>
@@ -323,71 +318,17 @@ export default function SmartTemplates({
             </div>
           ))}
           
-          {/* Selected Template Details */}
-          {selectedTemplate && (
-            <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 sm:p-5 border-2 border-purple-200 dark:border-purple-700">
-              <h3 className={`font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2 ${
-                isMobile ? 'text-base' : ''
-              }`}>
-                <span className={isMobile ? 'text-xl' : 'text-2xl'}>{selectedTemplate.icon}</span>
-                {selectedTemplate.name} - Preview
-              </h3>
-              
-              <div className="space-y-2 mb-4">
-                <div className="flex items-start gap-2">
-                  <span className={`font-medium text-gray-600 dark:text-gray-400 min-w-[80px] ${
-                    isMobile ? 'text-xs' : 'text-sm'
-                  }`}>Title:</span>
-                  <span className={`text-gray-800 dark:text-gray-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                    {selectedTemplate.prepopulatedData.title}
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className={`font-medium text-gray-600 dark:text-gray-400 min-w-[80px] ${
-                    isMobile ? 'text-xs' : 'text-sm'
-                  }`}>Description:</span>
-                  <span className={`text-gray-800 dark:text-gray-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                    {selectedTemplate.prepopulatedData.description}
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className={`font-medium text-gray-600 dark:text-gray-400 min-w-[80px] ${
-                    isMobile ? 'text-xs' : 'text-sm'
-                  }`}>Duration:</span>
-                  <span className={`text-gray-800 dark:text-gray-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                    {selectedTemplate.duration} minutes
-                  </span>
-                </div>
-              </div>
-              
-              <div className={`flex items-start gap-2 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 ${
-                isMobile ? 'text-xs' : 'text-sm'
-              }`}>
-                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span>You'll be able to customize the date, time, and any details before adding to your calendar.</span>
+          {/* Info Banner */}
+          <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className={`text-blue-800 dark:text-blue-200 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                <strong>Tip:</strong> After selecting a template, you'll be able to customize the date, time, and any other details before adding it to your calendar.
               </div>
             </div>
-          )}
-          
-          {/* Apply Button */}
-          {selectedTemplate ? (
-            <button
-              onClick={handleApply}
-              className={`mt-4 w-full px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white 
-                       font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 
-                       transition-all transform hover:scale-[1.02] shadow-lg ${
-                         isMobile ? 'text-sm' : ''
-                       }`}
-            >
-              Customize & Add {selectedTemplate.name}
-            </button>
-          ) : (
-            <div className="mt-4 text-center py-8 text-gray-500 dark:text-gray-400">
-              <p className={isMobile ? 'text-sm' : ''}>Select a template above to get started!</p>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
