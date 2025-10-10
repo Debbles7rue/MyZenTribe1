@@ -289,15 +289,22 @@ export default function CalendarToolsPage() {
 
   // Handler: Event Form Submitted
   const handleEventFormSubmit = async (eventData: EventFormData) => {
+    console.log('🎯 handleEventFormSubmit called with:', eventData);
+    console.log('👤 Current user:', user);
+    
     if (!user?.id) {
-      console.log('User check failed:', user);
+      console.error('❌ User check failed:', user);
       showToast({ type: 'error', message: 'Please log in first' });
       return;
     }
 
     try {
+      console.log('📅 Creating date objects...');
       const startDateTime = new Date(`${eventData.date}T${eventData.startTime}`);
       const endDateTime = new Date(`${eventData.date}T${eventData.endTime}`);
+      
+      console.log('✅ Start:', startDateTime);
+      console.log('✅ End:', endDateTime);
 
       let reminderTime = null;
       if (eventData.reminderOption !== 'none') {
@@ -326,14 +333,21 @@ export default function CalendarToolsPage() {
         completed: false
       };
 
-      const { error } = await supabase.from('events').insert(eventToCreate);
+      console.log('📤 Sending to database:', eventToCreate);
+
+      const { data, error } = await supabase.from('events').insert(eventToCreate).select();
 
       if (error) {
-        console.error('Error creating event:', error);
-        showToast({ type: 'error', message: 'Failed to create event' });
+        console.error('❌ Database error FULL DETAILS:', JSON.stringify(error, null, 2));
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error details:', error.details);
+        console.error('❌ Error hint:', error.hint);
+        showToast({ type: 'error', message: `Failed: ${error.message}` });
         return;
       }
 
+      console.log('✅ Event created successfully:', data);
       showToast({ type: 'success', message: '✨ Event added to calendar!' });
       setShowEventForm(false);
       
@@ -342,11 +356,14 @@ export default function CalendarToolsPage() {
         .from('events')
         .select('*')
         .eq('created_by', user.id);
-      if (eventsData) setEvents(eventsData);
+      if (eventsData) {
+        console.log('📊 Reloaded events:', eventsData.length);
+        setEvents(eventsData);
+      }
       
-    } catch (error) {
-      console.error('Event creation error:', error);
-      showToast({ type: 'error', message: 'Failed to create event' });
+    } catch (error: any) {
+      console.error('💥 Unexpected error:', error);
+      showToast({ type: 'error', message: `Error: ${error.message || 'Failed to create event'}` });
     }
   };
 
