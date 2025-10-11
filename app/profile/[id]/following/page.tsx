@@ -1,3 +1,4 @@
+// app/profile/[id]/following/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -72,40 +73,55 @@ export default function FollowingPage() {
 
       setProfile(profileData);
 
-      // Load followed businesses
+      // Load followed businesses - FIXED QUERY
+      // First get the follower records for businesses
       const { data: followData, error: followError } = await supabase
         .from('followers')
-        .select(`
-          following_id,
-          created_at,
-          business_profiles!followers_following_id_fkey (
-            id,
-            display_name,
-            handle,
-            tagline,
-            logo_url,
-            verification_level,
-            follower_count,
-            visibility
-          )
-        `)
+        .select('following_id, created_at')
         .eq('follower_id', profileId)
-        .not('business_profiles.id', 'is', null)
-        .eq('business_profiles.visibility', 'public')
+        .eq('following_type', 'business')
         .order('created_at', { ascending: false });
 
       if (followError) {
-        console.error('Error loading followed businesses:', followError);
+        console.error('Error loading followers:', followError);
         throw new Error('Failed to load followed businesses');
       }
 
-      // Format the data
-      const businesses: FollowedBusiness[] = (followData || [])
-        .filter(item => item.business_profiles)
-        .map(item => ({
-          ...item.business_profiles,
-          created_at: item.created_at
-        }));
+      // If no follows, return empty array
+      if (!followData || followData.length === 0) {
+        setFollowedBusinesses([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get the business IDs
+      const businessIds = followData.map(f => f.following_id);
+
+      // Now fetch the actual business data
+      const { data: businessData, error: businessError } = await supabase
+        .from('business_profiles')
+        .select('id, display_name, handle, tagline, logo_url, verification_level, follower_count, visibility')
+        .in('id', businessIds)
+        .eq('visibility', 'public');
+
+      if (businessError) {
+        console.error('Error loading business data:', businessError);
+        throw new Error('Failed to load business details');
+      }
+
+      // Combine the data with created_at from followers
+      const businesses: FollowedBusiness[] = (businessData || []).map(business => {
+        const followRecord = followData.find(f => f.following_id === business.id);
+        return {
+          ...business,
+          created_at: followRecord?.created_at || new Date().toISOString()
+        };
+      });
+
+      // Sort by created_at (most recent first)
+      businesses.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
       setFollowedBusinesses(businesses);
     } catch (err: any) {
