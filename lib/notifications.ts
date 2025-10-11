@@ -109,6 +109,7 @@ export async function createNotification(data: {
   const { error } = await supabase
     .from("notifications")
     .insert({
+      user_id: data.recipient_id,        // ADDED: Set user_id for RLS policies
       recipient_id: data.recipient_id,
       type: data.type,
       title: data.title,
