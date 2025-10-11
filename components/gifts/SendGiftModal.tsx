@@ -108,37 +108,41 @@ export default function SendGiftModal({ gift, currentUserId, onClose, onSuccess 
 
       const senderName = isAnonymous ? 'Anonymous' : (currentUser?.full_name || 'Someone');
 
-      // Create the gift record (simulate payment success for now)
-      const { data, error } = await supabase
-        .from('sent_gifts')
-        .insert({
+      // Create Stripe checkout session
+      const response = await fetch('/api/create-gift-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           gift_id: gift.id,
-          sender_id: currentUserId,
+          gift_name: gift.name,
+          price_cents: gift.price_cents,
           recipient_id: selectedFriend.id,
+          recipient_name: selectedFriend.full_name,
+          sender_id: currentUserId,
           message: message.trim() || null,
           sender_name: senderName,
           is_anonymous: isAnonymous,
-          payment_status: 'completed', // TODO: Integrate with Stripe
-          stripe_payment_intent_id: `sim_${Date.now()}` // TODO: Real Stripe payment intent
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) {
-        console.error('Error sending gift:', error);
-        alert('Failed to send gift. Please try again.');
+      const data = await response.json();
+      
+      if (data.error) {
+        alert('Payment setup failed: ' + data.error);
         return;
       }
 
-      // Success! Show confetti or success message
-      onSuccess();
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
       
     } catch (err) {
       console.error('Error:', err);
       alert('Something went wrong. Please try again.');
-    } finally {
       setLoading(false);
     }
+    // Don't set loading to false here - user is being redirected
   }
 
   function getCategoryColor(category: string) {
@@ -166,7 +170,7 @@ export default function SendGiftModal({ gift, currentUserId, onClose, onSuccess 
             <div className="gift-emoji">{gift.emoji}</div>
             <div className="gift-info">
               <h3 className="gift-name">{gift.name}</h3>
-              <p className="gift-price">$1.00</p>
+              <p className="gift-price">${(gift.price_cents / 100).toFixed(2)}</p>
             </div>
           </div>
         </div>
@@ -313,7 +317,7 @@ export default function SendGiftModal({ gift, currentUserId, onClose, onSuccess 
                 </div>
                 <div className="summary-row total">
                   <span>Total:</span>
-                  <span>$1.00</span>
+                  <span>${(gift.price_cents / 100).toFixed(2)}</span>
                 </div>
               </div>
               
@@ -708,6 +712,26 @@ export default function SendGiftModal({ gift, currentUserId, onClose, onSuccess 
               padding: 1.5rem;
             }
             
+            .gift-preview {
+              flex-direction: column;
+              text-align: center;
+              gap: 0.75rem;
+            }
+            
+            .gift-emoji {
+              font-size: 2.5rem;
+              width: 3.5rem;
+              height: 3.5rem;
+            }
+            
+            .gift-info h3 {
+              font-size: 1.25rem;
+            }
+            
+            .gift-price {
+              font-size: 1.125rem;
+            }
+            
             .modal-body {
               padding: 1.5rem;
             }
@@ -715,10 +739,92 @@ export default function SendGiftModal({ gift, currentUserId, onClose, onSuccess 
             .steps-indicator {
               gap: 1rem;
               padding: 1rem;
+              flex-wrap: wrap;
+              justify-content: center;
+            }
+            
+            .step {
+              min-width: 4rem;
             }
             
             .step-actions {
               flex-direction: column;
+              gap: 0.75rem;
+            }
+            
+            .btn {
+              width: 100%;
+              padding: 0.875rem;
+            }
+            
+            .friends-list {
+              max-height: 10rem;
+            }
+            
+            .friend-item {
+              padding: 0.5rem;
+            }
+            
+            .friend-avatar {
+              width: 2rem;
+              height: 2rem;
+            }
+            
+            .friend-name {
+              font-size: 0.875rem;
+            }
+            
+            .message-input {
+              font-size: 16px; /* Prevent zoom on iOS */
+            }
+            
+            .search-input {
+              font-size: 16px; /* Prevent zoom on iOS */
+            }
+          }
+
+          @media (max-width: 480px) {
+            .modal-content {
+              margin: 0.25rem;
+            }
+            
+            .modal-header {
+              padding: 1rem;
+            }
+            
+            .modal-body {
+              padding: 1rem;
+            }
+            
+            .steps-indicator {
+              padding: 0.75rem;
+            }
+            
+            .step-number {
+              width: 1.75rem;
+              height: 1.75rem;
+              font-size: 0.875rem;
+            }
+            
+            .step-label {
+              font-size: 0.75rem;
+            }
+            
+            .gift-summary {
+              padding: 1rem;
+            }
+            
+            .summary-row {
+              font-size: 0.875rem;
+              margin-bottom: 0.5rem;
+            }
+            
+            .payment-notice {
+              padding: 0.75rem;
+            }
+            
+            .friends-list {
+              max-height: 8rem;
             }
           }
         `}</style>
