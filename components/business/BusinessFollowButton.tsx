@@ -1,3 +1,4 @@
+// components/business/BusinessFollowButton.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,6 +13,7 @@ interface Props {
   variant?: 'primary' | 'secondary' | 'outline';
   showCount?: boolean;
   className?: string;
+  onFollowChanged?: () => void;
 }
 
 export default function BusinessFollowButton({ 
@@ -20,7 +22,8 @@ export default function BusinessFollowButton({
   size = 'medium',
   variant = 'primary',
   showCount = true,
-  className = ''
+  className = '',
+  onFollowChanged
 }: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [followStatus, setFollowStatus] = useState<FollowStatus>({
@@ -37,12 +40,19 @@ export default function BusinessFollowButton({
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showToastMessage, setShowToastMessage] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   // Get current user
   useEffect(() => {
     async function getCurrentUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
+      console.log('🔍 BusinessFollowButton: Getting current user...');
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('❌ Error getting user:', error);
+      }
+      const userId = user?.id || null;
+      console.log('👤 Current user ID:', userId || 'Not logged in');
+      setCurrentUserId(userId);
     }
     getCurrentUser();
   }, []);
@@ -70,6 +80,7 @@ export default function BusinessFollowButton({
           filter: `following_id=eq.${businessId}`
         },
         () => {
+          console.log('🔄 Real-time update: follower changed');
           loadFollowStatus();
         }
       )
@@ -82,6 +93,7 @@ export default function BusinessFollowButton({
           filter: `business_id=eq.${businessId}`
         },
         () => {
+          console.log('🔄 Real-time update: feedback changed');
           loadFeedbackStats();
         }
       )
@@ -94,6 +106,7 @@ export default function BusinessFollowButton({
           filter: `id=eq.${businessId}`
         },
         () => {
+          console.log('🔄 Real-time update: business profile changed');
           loadFollowStatus();
         }
       )
@@ -108,6 +121,7 @@ export default function BusinessFollowButton({
     if (!businessId) return;
 
     try {
+      console.log('📊 Loading follow status for business:', businessId);
       setLoading(true);
       setError(null);
 
@@ -119,25 +133,31 @@ export default function BusinessFollowButton({
         .single();
 
       if (businessError) {
+        console.error('❌ Error loading business:', businessError);
         throw businessError;
       }
+
+      console.log('✅ Business data loaded, follower_count:', business?.follower_count);
 
       // Check if current user is following (if logged in)
       let isFollowing = false;
       if (currentUserId) {
+        console.log('🔍 Checking if user is following...');
         const { data: followData, error: followError } = await supabase
           .from('followers')
           .select('id')
           .eq('follower_id', currentUserId)
           .eq('following_id', businessId)
           .eq('following_type', 'business')
-          .single();
+          .maybeSingle();
 
-        if (followError && followError.code !== 'PGRST116') {
-          throw followError;
+        if (followError) {
+          console.error('❌ Error checking follow status:', followError);
+          // Don't throw, just log
         }
 
         isFollowing = !!followData;
+        console.log('✅ Is following:', isFollowing);
       }
 
       setFollowStatus({
@@ -145,7 +165,7 @@ export default function BusinessFollowButton({
         followerCount: business?.follower_count || 0
       });
     } catch (err: any) {
-      console.error('Error loading follow status:', err);
+      console.error('❌ Error loading follow status:', err);
       setError(err.message || 'Failed to load follow status');
     } finally {
       setLoading(false);
@@ -163,7 +183,8 @@ export default function BusinessFollowButton({
         .eq('business_id', businessId);
 
       if (feedbackError) {
-        throw feedbackError;
+        console.error('Error loading feedback:', feedbackError);
+        return; // Don't throw, feedback is optional
       }
 
       const stats: FeedbackStats = {
@@ -189,13 +210,21 @@ export default function BusinessFollowButton({
   }
 
   async function toggleFollow() {
+    console.log('🔘 Follow button clicked!');
+    console.log('Current user ID:', currentUserId);
+    console.log('Business ID:', businessId);
+    console.log('Is currently following:', followStatus.isFollowing);
+
     if (!currentUserId) {
-      // Redirect to login or show auth modal
+      console.log('❌ No user logged in, redirecting to signin...');
       window.location.href = '/auth/signin';
       return;
     }
 
-    if (actionLoading) return;
+    if (actionLoading) {
+      console.log('⏳ Action already in progress, ignoring click');
+      return;
+    }
 
     try {
       setActionLoading(true);
@@ -203,6 +232,7 @@ export default function BusinessFollowButton({
 
       if (followStatus.isFollowing) {
         // Unfollow
+        console.log('👎 Unfollowing business...');
         const { error } = await supabase
           .from('followers')
           .delete()
@@ -210,17 +240,27 @@ export default function BusinessFollowButton({
           .eq('following_id', businessId)
           .eq('following_type', 'business');
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Unfollow error:', error);
+          throw error;
+        }
 
+        console.log('✅ Successfully unfollowed!');
         setFollowStatus(prev => ({
           isFollowing: false,
           followerCount: Math.max(0, prev.followerCount - 1)
         }));
 
-        // Optional: Show success message
         showToast(`Unfollowed ${businessName || 'business'}`, 'success');
+        
+        // Call parent callback if provided
+        if (onFollowChanged) {
+          console.log('🔄 Calling onFollowChanged callback');
+          onFollowChanged();
+        }
       } else {
         // Follow
+        console.log('👍 Following business...');
         const { error } = await supabase
           .from('followers')
           .insert({
@@ -229,20 +269,31 @@ export default function BusinessFollowButton({
             following_type: 'business'
           });
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Follow error:', error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
+          throw error;
+        }
 
+        console.log('✅ Successfully followed!');
         setFollowStatus(prev => ({
           isFollowing: true,
           followerCount: prev.followerCount + 1
         }));
 
-        // Optional: Show success message
         showToast(`Now following ${businessName || 'business'}!`, 'success');
+        
+        // Call parent callback if provided
+        if (onFollowChanged) {
+          console.log('🔄 Calling onFollowChanged callback');
+          onFollowChanged();
+        }
       }
     } catch (err: any) {
-      console.error('Error toggling follow:', err);
-      setError(err.message || 'Failed to update follow status');
-      showToast('Something went wrong. Please try again.', 'error');
+      console.error('❌ Error toggling follow:', err);
+      const errorMessage = err.message || 'Failed to update follow status';
+      setError(errorMessage);
+      showToast(errorMessage, 'error');
     } finally {
       setActionLoading(false);
     }
@@ -261,11 +312,10 @@ export default function BusinessFollowButton({
     showToast('Feedback submitted successfully!', 'success');
   }
 
-  // Simple toast notification (you can replace with your toast system)
   function showToast(message: string, type: 'success' | 'error') {
-    // If you have a toast system, use it here
-    // For now, we'll use a simple alert (replace with your toast implementation)
     console.log(`Toast: ${type.toUpperCase()} - ${message}`);
+    setShowToastMessage({ message, type });
+    setTimeout(() => setShowToastMessage(null), 3000);
   }
 
   // Size configurations
@@ -300,9 +350,9 @@ export default function BusinessFollowButton({
       feedback: 'bg-gray-200 hover:bg-gray-300 text-gray-900 border-gray-200'
     },
     outline: {
-      following: 'border-green-600 text-green-600 hover:bg-green-50',
-      notFollowing: 'border-purple-600 text-purple-600 hover:bg-purple-50',
-      feedback: 'border-blue-600 text-blue-600 hover:bg-blue-50'
+      following: 'border-green-600 text-green-600 hover:bg-green-50 bg-white',
+      notFollowing: 'border-purple-600 text-purple-600 hover:bg-purple-50 bg-white',
+      feedback: 'border-blue-600 text-blue-600 hover:bg-blue-50 bg-white'
     }
   };
 
@@ -320,84 +370,98 @@ export default function BusinessFollowButton({
 
   return (
     <>
-      <div className="inline-flex items-center gap-2 flex-wrap">
-        {/* Follow Button */}
-        <button
-          onClick={toggleFollow}
-          disabled={actionLoading || !currentUserId}
-          className={`
-            inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200
-            ${config.button}
-            ${followStatus.isFollowing ? colors.following : colors.notFollowing}
-            ${actionLoading ? 'opacity-50 cursor-wait' : 'hover:shadow-md active:scale-95'}
-            ${!currentUserId ? 'opacity-75' : ''}
-            ${className}
-          `}
-          aria-label={followStatus.isFollowing ? `Unfollow ${businessName}` : `Follow ${businessName}`}
-        >
-          {actionLoading ? (
-            <div className={`${config.icon} animate-spin rounded-full border-2 border-current border-t-transparent`} />
-          ) : (
-            <span className={config.icon}>
-              {followStatus.isFollowing ? '✓' : '+'}
-            </span>
-          )}
-          <span className={config.text}>
-            {followStatus.isFollowing ? 'Following' : 'Follow'}
-          </span>
-        </button>
-
-        {/* Give Feedback Button - Only shown if user is following */}
-        {followStatus.isFollowing && currentUserId && (
+      <div className="relative inline-flex flex-col gap-2">
+        <div className="inline-flex items-center gap-2 flex-wrap">
+          {/* Follow Button */}
           <button
-            onClick={handleGiveFeedback}
+            onClick={toggleFollow}
+            disabled={actionLoading || !currentUserId}
             className={`
               inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200
               ${config.button}
-              ${colors.feedback}
-              hover:shadow-md active:scale-95
+              ${followStatus.isFollowing ? colors.following : colors.notFollowing}
+              ${actionLoading ? 'opacity-50 cursor-wait' : 'hover:shadow-md active:scale-95'}
+              ${!currentUserId ? 'opacity-75' : ''}
+              ${className}
             `}
-            aria-label={`Give feedback for ${businessName}`}
+            aria-label={followStatus.isFollowing ? `Unfollow ${businessName}` : `Follow ${businessName}`}
           >
-            <span className={config.icon}>
-              {feedbackStats.hasUserFeedback ? '✏️' : '💬'}
-            </span>
+            {actionLoading ? (
+              <div className={`${config.icon} animate-spin rounded-full border-2 border-current border-t-transparent`} />
+            ) : (
+              <span className={config.icon}>
+                {followStatus.isFollowing ? '✓' : '+'}
+              </span>
+            )}
             <span className={config.text}>
-              {feedbackStats.hasUserFeedback ? 'Update Feedback' : 'Give Feedback'}
+              {followStatus.isFollowing ? 'Following' : 'Follow'}
             </span>
           </button>
-        )}
 
-        {/* Follower Count */}
-        {showCount && (
-          <span className={`text-gray-600 ${config.text} font-medium`}>
-            {followStatus.followerCount.toLocaleString()} 
-            {followStatus.followerCount === 1 ? ' follower' : ' followers'}
-          </span>
-        )}
-
-        {/* Feedback Stats - Mobile Friendly */}
-        {feedbackStats.total > 0 && (
-          <span className={`text-gray-500 ${config.text} text-xs sm:text-sm`}>
-            {feedbackStats.positive > 0 && (
-              <span className="text-green-600">
-                {feedbackStats.positive} 👍
+          {/* Give Feedback Button - Only shown if user is following */}
+          {followStatus.isFollowing && currentUserId && (
+            <button
+              onClick={handleGiveFeedback}
+              className={`
+                inline-flex items-center gap-2 rounded-lg border font-medium transition-all duration-200
+                ${config.button}
+                ${colors.feedback}
+                hover:shadow-md active:scale-95
+              `}
+              aria-label={`Give feedback for ${businessName}`}
+            >
+              <span className={config.icon}>
+                {feedbackStats.hasUserFeedback ? '✏️' : '💬'}
               </span>
-            )}
-            {feedbackStats.positive > 0 && feedbackStats.negative > 0 && (
-              <span className="mx-1">•</span>
-            )}
-            {feedbackStats.negative > 0 && (
-              <span className="text-red-600">
-                {feedbackStats.negative} 👎
+              <span className={config.text}>
+                {feedbackStats.hasUserFeedback ? 'Update Feedback' : 'Give Feedback'}
               </span>
-            )}
-          </span>
-        )}
+            </button>
+          )}
 
+          {/* Follower Count */}
+          {showCount && (
+            <span className={`text-gray-600 ${config.text} font-medium`}>
+              {followStatus.followerCount.toLocaleString()} 
+              {followStatus.followerCount === 1 ? ' follower' : ' followers'}
+            </span>
+          )}
+
+          {/* Feedback Stats - Mobile Friendly */}
+          {feedbackStats.total > 0 && (
+            <span className={`text-gray-500 ${config.text} text-xs sm:text-sm`}>
+              {feedbackStats.positive > 0 && (
+                <span className="text-green-600">
+                  {feedbackStats.positive} 👍
+                </span>
+              )}
+              {feedbackStats.positive > 0 && feedbackStats.negative > 0 && (
+                <span className="mx-1">•</span>
+              )}
+              {feedbackStats.negative > 0 && (
+                <span className="text-red-600">
+                  {feedbackStats.negative} 👎
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* Error Message - More visible */}
         {error && (
-          <div className="absolute top-full left-0 mt-1 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-sm whitespace-nowrap z-10">
-            {error}
+          <div className="w-full p-3 bg-red-100 border-2 border-red-400 rounded-lg text-red-800 text-sm font-medium shadow-lg">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {/* Toast Notification */}
+        {showToastMessage && (
+          <div className={`
+            fixed top-4 right-4 left-4 sm:left-auto sm:w-96 p-4 rounded-lg shadow-2xl z-50 
+            ${showToastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'} 
+            text-white font-medium animate-slide-in
+          `}>
+            {showToastMessage.type === 'success' ? '✅' : '❌'} {showToastMessage.message}
           </div>
         )}
       </div>
@@ -411,6 +475,22 @@ export default function BusinessFollowButton({
         existingFeedback={feedbackStats.userFeedback}
         onFeedbackSubmitted={handleFeedbackSubmitted}
       />
+
+      <style jsx>{`
+        @keyframes slide-in {
+          from {
+            transform: translateY(-100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+      `}</style>
     </>
   );
 }
