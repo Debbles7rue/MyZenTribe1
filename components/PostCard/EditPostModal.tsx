@@ -1,4 +1,4 @@
-// components/PostCard/EditPostModal.tsx - Mobile-Optimized with ALL Features Preserved
+// components/PostCard/EditPostModal.tsx - FIXED: Mobile save button always accessible
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -643,7 +643,7 @@ export default function EditPostModal({
           </div>
         </div>
 
-        {/* Mobile Action Bar - FIXED: Changed position from absolute to fixed */}
+        {/* FIXED: Mobile Action Bar - Now with proper z-index and safe-area support */}
         <div className="mobile-action-bar">
           <div className="mobile-actions">
             <button onClick={onClose} className="mobile-cancel-button">
@@ -991,6 +991,7 @@ export default function EditPostModal({
           flex: 1;
           overflow-y: auto;
           padding: 0;
+          -webkit-overflow-scrolling: touch;
         }
 
         .tab-content {
@@ -1432,7 +1433,7 @@ export default function EditPostModal({
           to { transform: rotate(360deg); }
         }
 
-        /* Mobile Action Bar - FIXED: Changed from absolute to fixed */}
+        /* FIXED: Mobile Action Bar with proper positioning and safe-area support */
         .mobile-action-bar {
           display: none;
           position: fixed;
@@ -1441,8 +1442,8 @@ export default function EditPostModal({
           right: 0;
           background: white;
           border-top: 1px solid #e5e7eb;
-          padding: 16px 20px;
-          z-index: 10;
+          padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+          z-index: 9999;
           box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
         }
 
@@ -1528,16 +1529,14 @@ export default function EditPostModal({
         @media (max-width: 768px) {
           .edit-modal-overlay {
             padding: 0;
-            align-items: flex-start;
+            align-items: flex-end;
           }
 
           .edit-modal-container {
             margin: 0;
             max-height: 100vh;
-            height: 100vh;
-            border-radius: 0;
+            min-height: 100vh;
             border-radius: 20px 20px 0 0;
-            margin-top: 20px;
             position: relative;
           }
 
@@ -1570,7 +1569,8 @@ export default function EditPostModal({
 
           .edit-modal-body {
             flex-direction: column;
-            padding-bottom: 120px;
+            /* FIXED: Add extra padding for action bar + safe area */
+            padding-bottom: calc(140px + env(safe-area-inset-bottom));
           }
 
           .sidebar {
@@ -1588,7 +1588,7 @@ export default function EditPostModal({
           .tab-content {
             padding: 24px 20px;
             max-width: none;
-            min-height: calc(100vh - 300px);
+            min-height: calc(100vh - 360px);
           }
 
           .content-header h3 {
