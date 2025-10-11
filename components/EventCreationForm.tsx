@@ -20,8 +20,10 @@ interface EventCreationFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (eventData: EventFormData) => void;
+  onDelete?: () => void; // NEW: Optional delete handler
   initialData?: Partial<EventFormData>;
   isMobile?: boolean;
+  isEditMode?: boolean; // NEW: Flag to show we're editing vs creating
 }
 
 const WEEKDAYS = [
@@ -38,8 +40,10 @@ export default function EventCreationForm({
   isOpen,
   onClose,
   onSubmit,
+  onDelete, // NEW: Destructure delete handler
   initialData,
-  isMobile = false
+  isMobile = false,
+  isEditMode = false // NEW: Destructure edit mode flag
 }: EventCreationFormProps) {
   const [formData, setFormData] = useState<EventFormData>({
     title: '',
@@ -53,6 +57,8 @@ export default function EventCreationForm({
     event_type: 'personal',
     location: ''
   });
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Update form when initialData changes
   useEffect(() => {
@@ -79,6 +85,7 @@ export default function EventCreationForm({
         event_type: 'personal',
         location: ''
       });
+      setShowDeleteConfirm(false);
     }
   }, [isOpen]);
 
@@ -99,6 +106,13 @@ export default function EventCreationForm({
     onSubmit(formData);
   };
 
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete();
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -114,7 +128,9 @@ export default function EventCreationForm({
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6 text-white">
           <div className="flex items-center justify-between">
-            <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>Create Event</h2>
+            <h2 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>
+              {isEditMode ? 'Edit Event' : 'Create Event'}
+            </h2>
             <button 
               onClick={onClose} 
               className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
@@ -287,13 +303,50 @@ export default function EventCreationForm({
             </div>
           </div>
 
-          {/* Submit Button */}
-          <button
-            onClick={handleSubmit}
-            className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all text-sm sm:text-base shadow-lg hover:shadow-xl"
-          >
-            Add to Calendar
-          </button>
+          {/* Action Buttons */}
+          <div className="space-y-3 pt-4">
+            {/* Submit Button */}
+            <button
+              onClick={handleSubmit}
+              className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all text-sm sm:text-base shadow-lg hover:shadow-xl"
+            >
+              {isEditMode ? 'Update Event' : 'Add to Calendar'}
+            </button>
+
+            {/* Delete Button - Only shown in edit mode */}
+            {isEditMode && onDelete && (
+              <>
+                {!showDeleteConfirm ? (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full px-6 py-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium rounded-xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-all text-sm sm:text-base"
+                  >
+                    🗑️ Delete Event
+                  </button>
+                ) : (
+                  <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4 space-y-3">
+                    <p className="text-sm text-red-900 dark:text-red-200 font-medium text-center">
+                      Are you sure you want to delete this event?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                      >
+                        Yes, Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
