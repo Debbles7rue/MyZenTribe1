@@ -190,11 +190,12 @@ export default function FindFriendsPage() {
 
     const businessIds = businesses.map(b => b.id);
     
-    // Check if following any of these businesses
+    // FIXED: Also filter by following_type to only get business follows
     const { data: follows } = await supabase
       .from('followers')
       .select('following_id')
       .eq('follower_id', currentUserId)
+      .eq('following_type', 'business')
       .in('following_id', businessIds);
 
     const statuses: FollowStatus = {};
@@ -316,36 +317,49 @@ export default function FindFriendsPage() {
     if (!currentUserId) return;
 
     const isCurrentlyFollowing = followStatuses[businessId];
+    console.log('🔘 Toggle follow business:', businessId, 'Currently following:', isCurrentlyFollowing);
 
     try {
       if (isCurrentlyFollowing) {
         // Unfollow
+        console.log('👎 Unfollowing business...');
         const { error } = await supabase
           .from('followers')
           .delete()
           .eq('follower_id', currentUserId)
-          .eq('following_id', businessId);
+          .eq('following_id', businessId)
+          .eq('following_type', 'business');
 
         if (!error) {
+          console.log('✅ Successfully unfollowed');
           setFollowStatuses(prev => ({
             ...prev,
             [businessId]: false
           }));
+        } else {
+          console.error('❌ Unfollow error:', error);
+          throw error;
         }
       } else {
-        // Follow
+        // Follow - FIXED: Added following_type!
+        console.log('👍 Following business...');
         const { error } = await supabase
           .from('followers')
           .insert({
             follower_id: currentUserId,
-            following_id: businessId
+            following_id: businessId,
+            following_type: 'business'  // FIXED: This was missing!
           });
 
         if (!error) {
+          console.log('✅ Successfully followed');
           setFollowStatuses(prev => ({
             ...prev,
             [businessId]: true
           }));
+        } else {
+          console.error('❌ Follow error:', error);
+          throw error;
         }
       }
     } catch (error) {
