@@ -587,6 +587,50 @@ export default function CalendarPage() {
     }
   }, [me, selected, showToast, loadCalendar, gamificationEnabled, addPoints]);
 
+  // FIX #2: Handler for simple event deletion (MOBILE OPTIMIZED)
+  const handleSimpleEventDelete = useCallback(async () => {
+    if (!selected || !me) {
+      showToast({ type: 'error', message: 'Cannot delete event' });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete "${selected.title}"?`)) {
+      return;
+    }
+
+    try {
+      console.log('🗑️ Deleting event:', selected.id);
+
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', selected.id)
+        .eq('created_by', me);
+
+      if (error) {
+        console.error('❌ Delete failed:', error);
+        showToast({ type: 'error', message: `Failed: ${error.message}` });
+        return;
+      }
+
+      console.log('✅ Event deleted successfully');
+      showToast({ type: 'success', message: '🗑️ Event deleted!' });
+      
+      setShowSimpleEventEdit(false);
+      setSimpleEventInitialData({});
+      setSelected(null);
+      await loadCalendar();
+      
+      if (gamificationEnabled) {
+        addPoints(5, 'event-delete');
+      }
+      
+    } catch (error: any) {
+      console.error('💥 Error:', error);
+      showToast({ type: 'error', message: `Error: ${error.message}` });
+    }
+  }, [selected, me, showToast, loadCalendar, gamificationEnabled, addPoints, setSelected]);
+
   const calendarEvents = useMemo(() => 
     mode === 'my' ? safeEvents : [],
     [mode, safeEvents]
@@ -908,8 +952,10 @@ export default function CalendarPage() {
             setSimpleEventInitialData({});
           }}
           onSubmit={handleSimpleEventFormSubmit}
+          onDelete={handleSimpleEventDelete}
           initialData={simpleEventInitialData}
           isMobile={isMobile}
+          isEditMode={true}
         />
 
         {/* All Other Modals */}
