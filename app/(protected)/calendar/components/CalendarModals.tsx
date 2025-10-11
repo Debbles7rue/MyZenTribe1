@@ -134,6 +134,65 @@ export default function CalendarModals({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   
+  // FIX #2: Create wrapper function to intelligently route edit requests
+  const handleEditWithRouting = (event: DBEvent) => {
+    console.log('🔧 handleEditWithRouting called for event:', event);
+    
+    // Check if event came from templates/time blocks (simple events)
+    // Simple events are personal events without RSVP functionality
+    const isSimpleEvent = event.source === 'personal' && !event.allows_rsvp;
+    
+    console.log('📋 Event analysis:', {
+      source: event.source,
+      allows_rsvp: event.allows_rsvp,
+      isSimpleEvent
+    });
+    
+    if (isSimpleEvent) {
+      console.log('✅ Detected simple event - routing to simple edit mode');
+      
+      // TODO: When EventCreationForm is integrated into main calendar page,
+      // this should open that form instead of UnifiedEventCreator
+      // For now, we'll use UnifiedEventCreator but could add a flag
+      
+      // Populate form with event data
+      setForm(prev => ({
+        ...prev,
+        title: event.title || "",
+        description: event.description || "",
+        location: event.location || "",
+        date: new Date(event.start_time).toISOString().split('T')[0],
+        time: new Date(event.start_time).toLocaleTimeString('en-US', { 
+          hour12: false, 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        endTime: new Date(event.end_time).toLocaleTimeString('en-US', { 
+          hour12: false, 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        event_type: event.event_type || "",
+        visibility: event.visibility,
+        background_color: event.background_color
+      }));
+      
+      // For now, still use UnifiedEventCreator
+      // In the future, this would route to EventCreationForm
+      handleEdit(event);
+      
+      showToast?.({ 
+        type: 'info', 
+        message: 'Editing simple event. Full simple edit mode coming soon!' 
+      });
+    } else {
+      console.log('✅ Detected complex event - routing to full editor');
+      
+      // Use UnifiedEventCreator for complex events (normal flow)
+      handleEdit(event);
+    }
+  };
+  
   // ===== NEW: HOLIDAY CELEBRATION HANDLER =====
   const handleCelebrateHoliday = (holiday: DBEvent) => {
     const holidayDate = new Date(holiday.start_time);
@@ -314,13 +373,13 @@ export default function CalendarModals({
 
   return (
     <>
-      {/* Event Details Modal - FIXED: Changed isOwner to currentUserId + added celebration handler */}
+      {/* Event Details Modal - FIXED: Changed isOwner to currentUserId + added celebration handler + ROUTING */}
       <EventDetails 
         event={detailsOpen ? (selectedFeedEvent || selected) : null} 
         onClose={() => {
           setDetailsOpen(false);
         }}
-        onEdit={handleEdit}
+        onEdit={handleEditWithRouting}
         currentUserId={me}
         onOpenCarpool={onOpenCarpoolSettings}
         onCelebrateHoliday={handleCelebrateHoliday}
