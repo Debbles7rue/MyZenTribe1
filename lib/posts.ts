@@ -720,4 +720,254 @@ export function timeAgo(iso: string) {
   const w = Math.floor(d / 7);
   if (w < 52) return `${w}w ago`;
   return new Date(iso).toLocaleDateString();
+
+  // ============================================
+// UNIVERSAL COMMENT SYSTEM
+// Add these functions to the END of lib/posts.ts
+// ============================================
+
+export type EntityType = 'post' | 'album' | 'gallery' | 'event' | 'good_news' | 'photo';
+
+export interface Comment {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  parent_id?: string | null;
+  author?: {
+    full_name: string;
+    avatar_url: string;
+  };
+  replies?: Comment[];
+}
+
+// Map entity types to their table names and column names
+const COMMENT_CONFIG = {
+  post: { table: 'post_comments', idColumn: 'post_id', parentColumn: 'parent_comment_id', bodyColumn: 'body' },
+  album: { table: 'album_comments', idColumn: 'album_id', parentColumn: 'parent_id', bodyColumn: 'body' },
+  gallery: { table: 'gallery_comments', idColumn: 'gallery_item_id', parentColumn: 'parent_id', bodyColumn: 'text' },
+  event: { table: 'event_comments', idColumn: 'event_id', parentColumn: 'parent_id', bodyColumn: 'body' },
+  good_news: { table: 'good_news_comments', idColumn: 'post_id', parentColumn: 'parent_id', bodyColumn: 'content' },
+  photo: { table: 'photo_comments', idColumn: 'media_id', parentColumn: 'parent_id', bodyColumn: 'body' }
+};
+
+/**
+ * Get all comments for an entity (posts, albums, events, galleries, etc.)
+ */
+export async function getComments(entityType: EntityType, entityId: string) {
+  try {
+    const config = COMMENT_CONFIG[entityType];
+    if (!config) {
+      return { comments: [], error: 'Invalid entity type' };
+    }
+
+    // Get all comments for this entity
+    const { data: commentsData, error: commentsError } = await supabase
+      .from(config.table)
+      .select('id, user_id, created_at, ' + config.bodyColumn + ', ' + config.parentColumn)
+      .eq(config.idColumn, entityId)
+      .order('created_at', { ascending: true });
+    
+    if (commentsError) {
+      console.error(`Error loading ${entityType} comments:`, commentsError);
+      return { comments: [], error: commentsError.message };
+    }
+    
+    if (!commentsData || commentsData.length === 0) {
+      return { comments: [], error: null };
+    }
+    
+    // Get unique user IDs
+    const userIds = [...new Set(commentsData.map((c: any) => c.user_id))];
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', userIds);
+    
+    // Create profile map
+    const profilesMap = new Map();
+    if (profilesData) {
+      profilesData.forEach(profile => {
+        profilesMap.set(profile.id, {
+          full_name: profile.full_name || 'User',
+          avatar_url: profile.avatar_url || '/default-avatar.png'
+        });
+      });
+    }
+    
+    // Format comments with consistent structure
+    const formattedComments: Comment[] = commentsData.map((comment: any) => ({
+      id: comment.id,
+      body: comment[config.bodyColumn],
+      created_at: comment.created_at,
+      user_id: comment.user_id,
+      parent_id: comment[config.parentColumn] || null,
+      author: profilesMap.get(comment.user_id) || {
+        full_name: 'User',
+        avatar_url: '/default-avatar.png'
+      }
+    }));
+    
+    // Build threaded structure (parent comments with nested replies)
+    const commentMap = new Map<string, Comment>();
+    const rootComments: Comment[] = [];
+    
+    // First pass: create map and identify root comments
+    formattedComments.forEach(comment => {
+      commentMap.set(comment.id, { ...comment, replies: [] });
+      if (!comment.parent_id) {
+        rootComments.push(commentMap.get(comment.id)!);
+      }
+    });
+    
+    // Second pass: build reply tree
+    formattedComments.forEach(comment => {
+      if (comment.parent_id) {
+        const parent = commentMap.get(comment.parent_id);
+        if (parent) {
+          parent.replies = parent.replies || [];
+          parent.replies.push(commentMap.get(comment.id)!);
+        }
+      }
+    });
+    
+    return { comments: rootComments, error: null };
+  } catch (error) {
+    console.error(`Error loading ${entityType} comments:`, error);
+    return { comments: [], error: 'Failed to load comments' };
+  }
+}
+
+/**
+ * Add a comment or reply to an entity
+ */
+export async function addEntityComment(
+  entityType: EntityType, 
+  entityId: string, 
+  body: string,
+  parentId?: string | null
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: 'Not signed in' };
+  
+  if (!body.trim()) {
+    return { ok: false, error: 'Comment cannot be empty' };
+  }
+  
+  const config = COMMENT_CONFIG[entityType];
+  if (!config) {
+    return { ok: false, error: 'Invalid entity type' };
+  }
+  
+  try {
+    const insertData: any = {
+      [config.idColumn]: entityId,
+      user_id: uid,
+      [config.bodyColumn]: body.trim()
+    };
+    
+    // Add parent_id if this is a reply
+    if (parentId) {
+      insertData[config.parentColumn] = parentId;
+    }
+    
+    // Special case for photo comments - need post_id
+    if (entityType === 'photo') {
+      const { data: media } = await supabase
+        .from('post_media')
+        .select('post_id')
+        .eq('id', entityId)
+        .single();
+      
+      if (media) {
+        insertData.post_id = media.post_id;
+      }
+    }
+    
+    const { data, error } = await supabase
+      .from(config.table)
+      .insert(insertData)
+      .select()
+      .single();
+      
+    if (!error) {
+      console.log(`${entityType} comment added successfully:`, data);
+    } else {
+      console.error(`Error adding ${entityType} comment:`, error);
+    }
+      
+    return { ok: !error, data, error: error?.message || null };
+  } catch (err) {
+    console.error(`${entityType} comment error:`, err);
+    return { ok: false, error: 'Failed to add comment' };
+  }
+}
+
+/**
+ * Update a comment
+ */
+export async function updateEntityComment(
+  entityType: EntityType,
+  commentId: string,
+  body: string
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: 'Not signed in' };
+  
+  if (!body.trim()) {
+    return { ok: false, error: 'Comment cannot be empty' };
+  }
+  
+  const config = COMMENT_CONFIG[entityType];
+  if (!config) {
+    return { ok: false, error: 'Invalid entity type' };
+  }
+  
+  try {
+    const updateData: any = {
+      [config.bodyColumn]: body.trim(),
+      is_edited: true,
+      edited_at: new Date().toISOString()
+    };
+    
+    const { error } = await supabase
+      .from(config.table)
+      .update(updateData)
+      .eq('id', commentId)
+      .eq('user_id', uid);
+    
+    return { ok: !error, error: error?.message || null };
+  } catch (err) {
+    console.error(`Error updating ${entityType} comment:`, err);
+    return { ok: false, error: 'Failed to update comment' };
+  }
+}
+
+/**
+ * Delete a comment
+ */
+export async function deleteEntityComment(
+  entityType: EntityType,
+  commentId: string
+) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: 'Not signed in' };
+  
+  const config = COMMENT_CONFIG[entityType];
+  if (!config) {
+    return { ok: false, error: 'Invalid entity type' };
+  }
+  
+  try {
+    const { error } = await supabase
+      .from(config.table)
+      .delete()
+      .eq('id', commentId)
+      .eq('user_id', uid);
+    
+    return { ok: !error, error: error?.message || null };
+  } catch (err) {
+    console.error(`Error deleting ${entityType} comment:`, err);
+    return { ok: false, error: 'Failed to delete comment' };
+  }
 }
