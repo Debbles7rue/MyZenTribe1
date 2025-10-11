@@ -208,6 +208,7 @@ export default function CalendarPage() {
     friends: safeFriends,
     showToast,
     loadCalendar,
+    loadFeed,  // ← ADDED THIS LINE
     resetForm,
     setOpenCreate,
     setOpenEdit,
