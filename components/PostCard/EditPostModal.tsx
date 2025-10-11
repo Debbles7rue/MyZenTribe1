@@ -643,7 +643,7 @@ export default function EditPostModal({
           </div>
         </div>
 
-        {/* Mobile Action Bar */}
+        {/* Mobile Action Bar - FIXED: Changed position from absolute to fixed */}
         <div className="mobile-action-bar">
           <div className="mobile-actions">
             <button onClick={onClose} className="mobile-cancel-button">
@@ -1432,10 +1432,10 @@ export default function EditPostModal({
           to { transform: rotate(360deg); }
         }
 
-        /* Mobile Action Bar */
+        /* Mobile Action Bar - FIXED: Changed from absolute to fixed */}
         .mobile-action-bar {
           display: none;
-          position: absolute;
+          position: fixed;
           bottom: 0;
           left: 0;
           right: 0;
