@@ -292,7 +292,7 @@ export default function CalendarToolsPage() {
     setShowEventForm(true);
   };
 
-  // Handler: Event Form Submitted - FIXED VERSION
+  // Handler: Event Form Submitted - FIXED VERSION WITH RECURRING EVENTS
   const handleEventFormSubmit = async (eventData: EventFormData) => {
     console.log('🎯 handleEventFormSubmit called with:', eventData);
     console.log('👤 Current user:', user);
@@ -311,8 +311,6 @@ export default function CalendarToolsPage() {
       console.log('✅ Start:', startDateTime);
       console.log('✅ End:', endDateTime);
 
-      // REMOVED: reminderTime calculation - will be handled later in Phase 2
-
       const eventToCreate = {
         title: eventData.title,
         description: eventData.description,
@@ -323,10 +321,7 @@ export default function CalendarToolsPage() {
         source: 'personal',
         event_type: eventData.event_type,
         location: eventData.location || null,
-        // REMOVED: reminder_time - column doesn't exist in your database
         recurrence_rule: eventData.repeatOption !== 'none' ? eventData.repeatOption : null,
-        // REMOVED: recurrence_days - column doesn't exist in your database
-        // NOTE: Repeating STILL WORKS via recurrence_rule above!
         completed: false
       };
 
@@ -345,11 +340,69 @@ export default function CalendarToolsPage() {
       }
 
       console.log('✅ Event created successfully:', data);
+
+      // FIX #3: CREATE RECURRING EVENTS FOR CUSTOM DAYS
+      if (eventData.repeatOption === 'custom' && eventData.customDays && eventData.customDays.length > 0) {
+        console.log('🔄 Creating recurring events for custom days:', eventData.customDays);
+        
+        const dayMap: { [key: string]: number } = { 
+          mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 
+        };
+        
+        const baseDate = new Date(`${eventData.date}T${eventData.startTime}`);
+        const baseDayOfWeek = baseDate.getDay();
+        
+        const eventsToCreate = [];
+        
+        // Create events for each selected day in the next 4 weeks
+        for (let week = 0; week < 4; week++) {
+          for (const day of eventData.customDays) {
+            const targetDay = dayMap[day];
+            
+            // Calculate days to add from base date
+            let daysToAdd = targetDay - baseDayOfWeek + (week * 7);
+            if (week === 0 && daysToAdd <= 0) {
+              daysToAdd += 7; // Skip current week if day already passed
+            }
+            
+            if (daysToAdd === 0) continue; // Skip the original day
+            
+            const newStartDate = new Date(baseDate);
+            newStartDate.setDate(newStartDate.getDate() + daysToAdd);
+            
+            const newEndDate = new Date(`${eventData.date}T${eventData.endTime}`);
+            newEndDate.setDate(newEndDate.getDate() + daysToAdd);
+            
+            eventsToCreate.push({
+              ...eventToCreate,
+              start_time: newStartDate.toISOString(),
+              end_time: newEndDate.toISOString()
+            });
+          }
+        }
+        
+        if (eventsToCreate.length > 0) {
+          console.log(`📅 Creating ${eventsToCreate.length} recurring events...`);
+          const { error: recurError } = await supabase.from('events').insert(eventsToCreate);
+          
+          if (recurError) {
+            console.error('❌ Error creating recurring events:', recurError);
+            showToast({ 
+              type: 'warning', 
+              message: 'Main event created, but some recurring events failed' 
+            });
+          } else {
+            console.log('✅ All recurring events created successfully');
+            showToast({ 
+              type: 'success', 
+              message: `✨ Event and ${eventsToCreate.length} recurring events added!` 
+            });
+          }
+        }
+      } else {
+        showToast({ type: 'success', message: '✨ Event added to calendar!' });
+      }
       
-      // TODO (Phase 2): Create reminder if eventData.reminderOption !== 'none'
-      // We'll add this functionality later when we create the reminder service
-      
-      showToast({ type: 'success', message: '✨ Event added to calendar!' });
       setShowEventForm(false);
       
       // FIX #3: Clear form data after successful submit
