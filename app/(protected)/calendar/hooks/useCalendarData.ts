@@ -103,17 +103,23 @@ export function useCalendarData() {
         setTodos([]);
       }
       
-      // Load friends
-      const { data: friendsData } = await supabase
-        .from('friends')
-        .select('*')
-        .eq('user_id', me);
+      // Load friends with carpool info
+      const { data: friendshipsData } = await supabase
+        .from('friendships')
+        .select(`
+          friend_id,
+          safe_to_carpool,
+          friend:profiles!friendships_friend_id_fkey(id, full_name, avatar_url)
+        `)
+        .eq('user_id', me)
+        .eq('status', 'accepted');
       
-      if (friendsData && Array.isArray(friendsData)) {
-        setFriends(friendsData.map(f => ({
+      if (friendshipsData && Array.isArray(friendshipsData)) {
+        setFriends(friendshipsData.map((f: any) => ({
           friend_id: f.friend_id,
-          name: f.friend_name || 'Friend',
-          avatar: f.friend_avatar || null,
+          name: f.friend?.full_name || 'Friend',
+          avatar: f.friend?.avatar_url || null,
+          safe_to_carpool: f.safe_to_carpool || false,
           lastCarpoolDate: null
         })));
       } else {
@@ -132,25 +138,59 @@ export function useCalendarData() {
     }
   }, [me]);
 
-  // Load feed data
+  // FIXED: Load feed data WITH user's RSVP status
   const loadFeed = useCallback(async () => {
     if (!me) return;
     
     try {
-      // Load community and friend events
-      const { data: feedData } = await supabase
+      // Load public/friends events with RSVP counts and user's status
+      const { data: feedData, error } = await supabase
         .from('events')
-        .select('*')
+        .select(`
+          *,
+          going_count:event_rsvps!event_rsvps_event_id_fkey(count),
+          interested_count:event_rsvps!event_rsvps_event_id_fkey(count),
+          user_rsvp:event_rsvps!event_rsvps_event_id_fkey(status)
+        `)
         .neq('created_by', me)
         .in('visibility', ['public', 'friends'])
+        .gte('start_time', new Date().toISOString())
         .order('start_time', { ascending: true })
-        .limit(20);
+        .limit(50);
       
+      if (error) {
+        console.error('Error loading feed:', error);
+        setFeed([]);
+        return;
+      }
+
       if (feedData && Array.isArray(feedData)) {
-        setFeed(feedData.map(e => ({
-          ...e,
-          _dismissed: false
-        })));
+        // Process the data to get proper counts and user status
+        const processedFeed = await Promise.all(
+          feedData.map(async (event: any) => {
+            // Get accurate counts
+            const { data: rsvps } = await supabase
+              .from('event_rsvps')
+              .select('status, user_id')
+              .eq('event_id', event.id);
+
+            const goingCount = rsvps?.filter(r => r.status === 'going').length || 0;
+            const interestedCount = rsvps?.filter(r => r.status === 'interested').length || 0;
+            const userRsvp = rsvps?.find(r => r.user_id === me);
+
+            return {
+              ...event,
+              going_count: goingCount,
+              interested_count: interestedCount,
+              user_rsvp_status: userRsvp?.status || null,
+              user_going: userRsvp?.status === 'going',
+              user_interested: userRsvp?.status === 'interested',
+              _dismissed: false
+            };
+          })
+        );
+
+        setFeed(processedFeed);
       } else {
         setFeed([]);
       }
@@ -167,6 +207,31 @@ export function useCalendarData() {
       loadFeed();
     }
   }, [me, loadCalendar, loadFeed]);
+
+  // Set up real-time subscription for feed updates
+  useEffect(() => {
+    if (!me) return;
+
+    const channel = supabase
+      .channel('feed-rsvps')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_rsvps'
+        },
+        () => {
+          // Refresh feed when any RSVP changes
+          loadFeed();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [me, loadFeed]);
 
   // Reset form
   const resetForm = useCallback(() => {
