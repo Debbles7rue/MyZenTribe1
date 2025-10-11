@@ -65,6 +65,7 @@ export default function EventDetails({
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isHoliday = (event as any)?.event_type === 'holiday';
+  const isSimpleEvent = event?.source === 'personal' && !(event as any)?.allows_rsvp;
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -77,17 +78,17 @@ export default function EventDetails({
     if (event && event.allows_rsvp) {
       fetchRSVPData();
     }
-    if (event && !isHoliday) {
+    if (event && !isHoliday && !isSimpleEvent) {
       fetchEventMedia();
       fetchComments();
     }
     if (event && currentUserId && event.created_by !== currentUserId) {
       checkCarpoolEligibility();
     }
-  }, [event, isHoliday, currentUserId]);
+  }, [event, isHoliday, isSimpleEvent, currentUserId]);
 
   useEffect(() => {
-    if (!event?.id || isHoliday) return;
+    if (!event?.id || isHoliday || isSimpleEvent) return;
 
     const channel = supabase
       .channel(`event-comments-${event.id}`)
@@ -106,7 +107,7 @@ export default function EventDetails({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [event?.id, isHoliday]);
+  }, [event?.id, isHoliday, isSimpleEvent]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -334,7 +335,6 @@ export default function EventDetails({
 
     setLoading(true);
     try {
-      // Get current user's name
       const { data: userData } = await supabase
         .from('profiles')
         .select('full_name, avatar_url')
@@ -350,7 +350,6 @@ export default function EventDetails({
         year: 'numeric'
       });
 
-      // Try using database function first (if it exists)
       try {
         const { error: rpcError } = await supabase.rpc('share_holiday_with_friends', {
           p_friend_ids: selectedFriends,
@@ -374,14 +373,12 @@ export default function EventDetails({
           return;
         }
       } catch (rpcError) {
-        // Function doesn't exist, fall back to direct insert
         console.log('Database function not found, using direct insert');
       }
 
-      // Fallback: Direct insert (try with both user_id and recipient_id)
       const notifications = selectedFriends.map(friendId => ({
         user_id: friendId,
-        recipient_id: friendId, // Some schemas use this instead
+        recipient_id: friendId,
         actor_id: currentUserId,
         type: 'holiday_share',
         kind: 'celebration',
@@ -407,32 +404,11 @@ export default function EventDetails({
         .select();
 
       if (error) {
-        // Show detailed error for debugging
         console.error('Notification insert error:', error);
-        console.error('Error details:', {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
+        showToast({ 
+          type: 'error', 
+          message: `Failed to share: ${error.message}` 
         });
-        
-        // User-friendly error message
-        if (error.message.includes('policy')) {
-          showToast({ 
-            type: 'error', 
-            message: '🔒 Permission issue - check RLS policies' 
-          });
-        } else if (error.message.includes('violates')) {
-          showToast({ 
-            type: 'error', 
-            message: '⚠️ Database constraint error' 
-          });
-        } else {
-          showToast({ 
-            type: 'error', 
-            message: `Failed to share: ${error.message}` 
-          });
-        }
         return;
       }
 
@@ -502,6 +478,32 @@ export default function EventDetails({
     setShowShareMenu(false);
   };
 
+  // FIXED: Format duration helper
+  const formatDuration = (startTime: string, endTime: string): string => {
+    try {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return 'Invalid time';
+      }
+      
+      const minutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+      
+      if (minutes < 0) return 'Invalid duration';
+      if (minutes < 60) return `${minutes} minutes`;
+      
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      
+      if (mins === 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+      return `${hours}h ${mins}m`;
+    } catch (error) {
+      console.error('Error formatting duration:', error);
+      return 'N/A';
+    }
+  };
+
   if (!event) return null;
 
   const isCreator = currentUserId && event.created_by === currentUserId;
@@ -519,7 +521,7 @@ export default function EventDetails({
     return 'from-purple-600 to-blue-600';
   };
 
-  // HOLIDAY SPECIAL VIEW
+  // HOLIDAY SPECIAL VIEW (unchanged)
   if (isHoliday) {
     return ReactDOM.createPortal(
       <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
@@ -628,7 +630,6 @@ export default function EventDetails({
           </div>
         </div>
 
-        {/* Friend Selector Modal */}
         {showFriendSelector && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div 
@@ -700,7 +701,7 @@ export default function EventDetails({
     );
   }
 
-  // REGULAR EVENT VIEW
+  // REGULAR EVENT VIEW - FIXED FOR SIMPLE EVENTS
   const modalContent = (
     <div 
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -717,8 +718,9 @@ export default function EventDetails({
 
         <div 
           ref={modalRef}
-          className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slideUp"
+          className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slideUp"
         >
+          {/* Header */}
           <div className={`bg-gradient-to-r ${getHeaderColor()} text-white p-6`}>
             <div className="flex justify-between items-start">
               <div className="flex-1">
@@ -727,17 +729,15 @@ export default function EventDetails({
                   {isTodo && '✅ '}
                   {event.title}
                 </h2>
-                <div className="flex items-center gap-4 text-sm opacity-90">
-                  {event.start_time && (
-                    <>
-                      <span>📅 {new Date(event.start_time).toLocaleDateString()}</span>
-                      <span>⏰ {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </>
-                  )}
-                  {(event as any).source === 'business' && (
-                    <span className="bg-white/20 px-2 py-1 rounded text-xs">BUSINESS EVENT</span>
-                  )}
-                </div>
+                {event.start_time && (
+                  <div className="flex items-center gap-4 text-sm opacity-90">
+                    <span>📅 {new Date(event.start_time).toLocaleDateString()}</span>
+                    <span>⏰ {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                )}
+                {(event as any).source === 'business' && (
+                  <span className="inline-block mt-2 bg-white/20 px-2 py-1 rounded text-xs">BUSINESS EVENT</span>
+                )}
               </div>
               <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors" aria-label="Close">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -746,7 +746,7 @@ export default function EventDetails({
               </button>
             </div>
 
-            {event.allows_rsvp && event.rsvp_count_visible && (
+            {event.allows_rsvp && (event as any).rsvp_count_visible && (
               <div className="mt-4 flex items-center gap-4 text-sm">
                 <span className="bg-white/20 px-3 py-1 rounded-full">✓ {rsvpData.going} going</span>
                 <span className="bg-white/20 px-3 py-1 rounded-full">☆ {rsvpData.interested} interested</span>
@@ -754,145 +754,67 @@ export default function EventDetails({
             )}
           </div>
 
+          {/* Content */}
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
             <div className="p-6 space-y-6">
               
-              {preEvent && preEvent.title && (
-                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-orange-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">🍽️</span>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-orange-900 mb-1">Pre-Event Gathering</h3>
-                      <p className="font-medium text-orange-800">{preEvent.title}</p>
-                      <div className="mt-2 space-y-1 text-sm text-orange-700">
-                        <div className="flex items-center gap-2">
-                          <span>📅</span>
-                          <span>{new Date(preEvent.time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        {preEvent.location && (
-                          <div className="flex items-center gap-2">
-                            <span>📍</span>
-                            <span>{preEvent.location}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {imageUrls.length > 0 && imageUrls[0] && (
-                <div className="grid grid-cols-2 gap-2">
-                  {imageUrls.map((url, index) => (
-                    <img
-                      key={index}
-                      src={url}
-                      alt={`Event image ${index + 1}`}
-                      className="w-full h-40 object-cover rounded-lg hover:opacity-90 cursor-pointer transition-opacity"
-                      onClick={() => window.open(url, '_blank')}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {event.description && (
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">About this event</h3>
-                  <p className="text-gray-600 whitespace-pre-wrap">{event.description}</p>
-                </div>
-              )}
-
-              {event.location && (
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Location</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">📍</span>
-                    <div>
-                      <p className="text-gray-600">{event.location}</p>
-                      {event.hide_address_until_rsvp && rsvpData.userStatus !== 'going' && (
-                        <p className="text-sm text-gray-400 mt-1">Full address visible after RSVP</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
+              {/* FIXED: Always show When section with proper formatting */}
               <div>
-                <h3 className="font-semibold text-gray-700 mb-2">When</h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Starts:</span>
-                    <span className="font-medium">
-                      {new Date(event.start_time).toLocaleString([], {
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-lg">When</h3>
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Starts:</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {event.start_time ? new Date(event.start_time).toLocaleString([], {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
-                      })}
+                      }) : 'Not set'}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Ends:</span>
-                    <span className="font-medium">
-                      {new Date(event.end_time).toLocaleString([], {
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Ends:</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {event.end_time ? new Date(event.end_time).toLocaleString([], {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
-                      })}
+                      }) : 'Not set'}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Duration:</span>
-                    <span className="font-medium">
-                      {(() => {
-                        try {
-                          const start = new Date(event.start_time);
-                          const end = new Date(event.end_time);
-                          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                            const minutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
-                            if (minutes < 60) return `${minutes} minutes`;
-                            const hours = Math.floor(minutes / 60);
-                            const mins = minutes % 60;
-                            return mins > 0 ? `${hours}h ${mins}m` : `${hours} hour${hours !== 1 ? 's' : ''}`;
-                          }
-                        } catch {}
-                        return 'N/A';
-                      })()}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Duration:</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {event.start_time && event.end_time ? formatDuration(event.start_time, event.end_time) : 'N/A'}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {postEvent && postEvent.title && (
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">☕</span>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-purple-900 mb-1">Post-Event Gathering</h3>
-                      <p className="font-medium text-purple-800">{postEvent.title}</p>
-                      <div className="mt-2 space-y-1 text-sm text-purple-700">
-                        <div className="flex items-center gap-2">
-                          <span>📅</span>
-                          <span>{new Date(postEvent.time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        {postEvent.location && (
-                          <div className="flex items-center gap-2">
-                            <span>📍</span>
-                            <span>{postEvent.location}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+              {event.description && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Description</h3>
+                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{event.description}</p>
+                </div>
+              )}
+
+              {event.location && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Location</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">📍</span>
+                    <p className="text-gray-600 dark:text-gray-400">{event.location}</p>
                   </div>
                 </div>
               )}
 
               <div>
-                <h3 className="font-semibold text-gray-700 mb-2">Visibility</h3>
-                <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Visibility</h3>
+                <div className="inline-flex items-center gap-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1 rounded-full text-sm">
                   <span>
                     {event.visibility === 'private' && '🔒 Private'}
                     {event.visibility === 'friends' && '👥 Friends'}
@@ -901,79 +823,83 @@ export default function EventDetails({
                 </div>
               </div>
 
-              <div className="border-t pt-6">
-                <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  💬 Comments & Discussion
-                  {comments.length > 0 && (
-                    <span className="text-sm bg-gray-100 px-2 py-1 rounded-full font-normal">{comments.length}</span>
-                  )}
-                </h3>
+              {/* FIXED: Only show comments for complex events, not simple ones */}
+              {!isSimpleEvent && (
+                <div className="border-t dark:border-gray-700 pt-6">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                    💬 Comments & Discussion
+                    {comments.length > 0 && (
+                      <span className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full font-normal">{comments.length}</span>
+                    )}
+                  </h3>
 
-                <div className="space-y-3 mb-4" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {isLoadingComments ? (
-                    <div className="text-center py-4 text-gray-500">Loading comments...</div>
-                  ) : comments.length > 0 ? (
-                    comments.map((comment) => (
-                      <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-start gap-3">
-                          {comment.user?.avatar_url ? (
-                            <img src={comment.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs">👤</div>
-                          )}
-                          <div className="flex-1">
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-medium text-sm text-gray-900">{comment.user?.full_name || 'Anonymous'}</span>
-                              <span className="text-xs text-gray-500">
-                                {new Date(comment.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </span>
+                  <div className="space-y-3 mb-4" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    {isLoadingComments ? (
+                      <div className="text-center py-4 text-gray-500">Loading comments...</div>
+                    ) : comments.length > 0 ? (
+                      comments.map((comment) => (
+                        <div key={comment.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                          <div className="flex items-start gap-3">
+                            {comment.user?.avatar_url ? (
+                              <img src={comment.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-xs">👤</div>
+                            )}
+                            <div className="flex-1">
+                              <div className="flex items-baseline gap-2">
+                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{comment.user?.full_name || 'Anonymous'}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {new Date(comment.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{comment.body}</p>
                             </div>
-                            <p className="mt-1 text-sm text-gray-700">{comment.body}</p>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <p>No comments yet</p>
+                        <p className="text-sm mt-1">Be the first to comment!</p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p>No comments yet</p>
-                      <p className="text-sm mt-1">Be the first to comment!</p>
+                    )}
+                  </div>
+
+                  {currentUserId ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendComment();
+                          }
+                        }}
+                        placeholder="Write a comment..."
+                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        disabled={isSendingComment}
+                      />
+                      <button
+                        onClick={handleSendComment}
+                        disabled={!newComment.trim() || isSendingComment}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                      >
+                        {isSendingComment ? '...' : 'Post'}
+                      </button>
                     </div>
+                  ) : (
+                    <div className="text-center py-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-600 dark:text-gray-400">Please sign in to comment</div>
                   )}
                 </div>
-
-                {currentUserId ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendComment();
-                        }
-                      }}
-                      placeholder="Write a comment..."
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      disabled={isSendingComment}
-                    />
-                    <button
-                      onClick={handleSendComment}
-                      disabled={!newComment.trim() || isSendingComment}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                    >
-                      {isSendingComment ? '...' : 'Post'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-center py-4 bg-gray-50 rounded-lg text-gray-600">Please sign in to comment</div>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
-          <div className="bg-gray-50 px-6 py-4 border-t">
-            <div className="flex items-center justify-between">
+          {/* Footer Actions */}
+          <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 border-t dark:border-gray-700">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 {event.allows_rsvp && !isCreator && (
                   <>
@@ -981,7 +907,7 @@ export default function EventDetails({
                       onClick={() => handleRSVP('going')}
                       disabled={loading}
                       className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        rsvpData.userStatus === 'going' ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        rsvpData.userStatus === 'going' ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300'
                       } disabled:opacity-50`}
                     >
                       {rsvpData.userStatus === 'going' ? '✓ Going' : 'Going'}
@@ -990,70 +916,41 @@ export default function EventDetails({
                       onClick={() => handleRSVP('interested')}
                       disabled={loading}
                       className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        rsvpData.userStatus === 'interested' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        rsvpData.userStatus === 'interested' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300'
                       } disabled:opacity-50`}
                     >
                       {rsvpData.userStatus === 'interested' ? '☆ Interested' : 'Interested'}
                     </button>
                   </>
                 )}
-
-                {onOpenCarpool && !isReminder && !isTodo && canCarpool && (
-                  <button onClick={() => onOpenCarpool(event)} className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium transition-colors flex items-center gap-2">
-                    <span>🚗</span><span>Carpool</span>
-                  </button>
-                )}
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowShareMenu(!showShareMenu)}
-                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
-                    title="Share"
+                {isCreator && onEdit && (
+                  <button 
+                    onClick={() => {
+                      console.log('✏️ Edit button clicked for event:', event.id);
+                      onEdit(event);
+                    }} 
+                    className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 font-medium transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                    </svg>
+                    ✏️ Edit
                   </button>
-
-                  {showShareMenu && !isMobile && (
-                    <div className="absolute bottom-full right-0 mb-2 bg-white rounded-lg shadow-xl border p-2 min-w-48 space-y-1 z-10">
-                      <button onClick={shareToFacebook} className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-2">
-                        <span>📱</span> Facebook
-                      </button>
-                      <button onClick={shareViaText} className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-2">
-                        <span>💬</span> Text
-                      </button>
-                      <button onClick={shareViaEmail} className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-2">
-                        <span>📧</span> Email
-                      </button>
-                      <button onClick={copyEventLink} className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-2">
-                        <span>🔗</span> Copy Link
-                      </button>
-                      <button onClick={copyEventDetails} className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-2">
-                        <span>📋</span> Copy Details
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {isCreator && (
-                  <>
-                    {onEdit && (
-                      <button onClick={() => onEdit(event)} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium transition-colors">
-                        Edit
-                      </button>
-                    )}
-                    {onDelete && (
-                      <button onClick={handleDelete} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium transition-colors">
-                        Delete
-                      </button>
-                    )}
-                  </>
                 )}
-
-                <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors">
+                
+                {isCreator && onDelete && (
+                  <button 
+                    onClick={handleDelete} 
+                    className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 font-medium transition-colors"
+                  >
+                    🗑️ Delete
+                  </button>
+                )}
+                
+                <button 
+                  onClick={onClose} 
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                >
                   Close
                 </button>
               </div>
@@ -1061,38 +958,6 @@ export default function EventDetails({
           </div>
         </div>
       </div>
-
-      {showShareMenu && isMobile && (
-        <div className="fixed inset-0 z-[1001]" onClick={() => setShowShareMenu(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl animate-slideUpMobile" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 pb-8">
-              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-4 text-center">Share Event</h3>
-              <div className="space-y-2">
-                <button onClick={shareToFacebook} className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex items-center justify-center gap-3 text-base font-medium">
-                  <span className="text-xl">📱</span> Share on Facebook
-                </button>
-                <button onClick={shareViaText} className="w-full px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center justify-center gap-3 text-base font-medium">
-                  <span className="text-xl">💬</span> Send via Text
-                </button>
-                <button onClick={shareViaEmail} className="w-full px-4 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 flex items-center justify-center gap-3 text-base font-medium">
-                  <span className="text-xl">📧</span> Send via Email
-                </button>
-                <button onClick={copyEventLink} className="w-full px-4 py-3 bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200 flex items-center justify-center gap-3 text-base font-medium">
-                  <span className="text-xl">🔗</span> Copy Link
-                </button>
-                <button onClick={copyEventDetails} className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 flex items-center justify-center gap-3 text-base font-medium">
-                  <span className="text-xl">📋</span> Copy Details
-                </button>
-                <button onClick={() => setShowShareMenu(false)} className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 flex items-center justify-center gap-3 text-base font-medium mt-2">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style jsx>{`
         @keyframes fadeIn {
@@ -1103,13 +968,8 @@ export default function EventDetails({
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes slideUpMobile {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
         .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
         .animate-slideUp { animation: slideUp 0.3s ease-out; }
-        .animate-slideUpMobile { animation: slideUpMobile 0.3s ease-out; }
       `}</style>
     </div>
   );
