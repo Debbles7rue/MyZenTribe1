@@ -1,4 +1,10 @@
-import React, { useState, useEffect } from 'react';
+// components/BusinessCalendar.tsx
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import UnifiedEventCreator from '@/components/events/UnifiedEventCreator';
+import type { DBEvent } from '@/lib/eventManager';
 import { 
   Calendar, Clock, ChevronLeft, ChevronRight, Plus, X, Users, 
   MapPin, DollarSign, CalendarDays, Check, AlertCircle, Settings,
@@ -7,6 +13,12 @@ import {
 } from 'lucide-react';
 
 // Type definitions
+interface BusinessCalendarProps {
+  businessId: string;
+  userId?: string | null;
+  isOwner?: boolean;
+}
+
 interface BusinessSettings {
   service_type: 'events' | 'appointments' | 'both';
   appointments_enabled: boolean;
@@ -79,12 +91,13 @@ interface BookingFormData {
   notes: string;
 }
 
-export default function BusinessCalendar() {
+export default function BusinessCalendar({ businessId, userId, isOwner = false }: BusinessCalendarProps) {
   // State Management
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [events, setEvents] = useState<Event[]>([]);
+  const [dbEvents, setDbEvents] = useState<DBEvent[]>([]);
   const [services, setServices] = useState<Service[]>([
     { id: '1', name: 'Consultation', duration: 30, price: 50, color: '#9333ea', description: 'Initial consultation', active: true },
     { id: '2', name: 'Full Service', duration: 60, price: 100, color: '#3b82f6', description: 'Complete service package', active: true },
@@ -93,6 +106,7 @@ export default function BusinessCalendar() {
   
   // UI State
   const [showDayView, setShowDayView] = useState(false);
+  const [showEventCreator, setShowEventCreator] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
@@ -100,8 +114,10 @@ export default function BusinessCalendar() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [editingDbEvent, setEditingDbEvent] = useState<DBEvent | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [isBusinessView, setIsBusinessView] = useState(true);
+  const [isBusinessView, setIsBusinessView] = useState(isOwner);
+  const [loading, setLoading] = useState(false);
   
   // Form State
   const [eventFormData, setEventFormData] = useState<EventFormData>({
@@ -139,6 +155,62 @@ export default function BusinessCalendar() {
     blocked_dates: [],
     time_slot_duration: 30
   });
+
+  // Load events from Supabase
+  const loadEvents = async () => {
+    if (!businessId) return;
+    
+    setLoading(true);
+    try {
+      console.log('📅 Loading events for business:', businessId);
+      
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('host_business_id', businessId)
+        .order('start_time', { ascending: true });
+
+      if (error) throw error;
+
+      console.log('✅ Loaded events:', data?.length || 0);
+      setDbEvents(data || []);
+    } catch (error) {
+      console.error('❌ Error loading events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    loadEvents();
+  }, [businessId]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!businessId) return;
+
+    const channel = supabase
+      .channel(`business-events-${businessId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'events',
+          filter: `host_business_id=eq.${businessId}`
+        },
+        () => {
+          console.log('🔄 Event changed, reloading...');
+          loadEvents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [businessId]);
 
   // Initialize form when editing
   useEffect(() => {
@@ -199,12 +271,31 @@ export default function BusinessCalendar() {
     return days;
   };
 
-  // Get events for a specific date
+  // Get events for a specific date (combine DB events and local appointments)
   const getEventsForDate = (date: Date) => {
-    return events.filter(event => {
+    const localEvents = events.filter(event => {
       const eventDate = new Date(event.date);
       return eventDate.toDateString() === date.toDateString();
     });
+
+    const dbEventsForDate = dbEvents
+      .filter(event => {
+        const eventDate = new Date(event.start_time);
+        return eventDate.toDateString() === date.toDateString();
+      })
+      .map(dbEvent => ({
+        id: dbEvent.id,
+        title: dbEvent.title,
+        date: new Date(dbEvent.start_time),
+        time: new Date(dbEvent.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        endTime: dbEvent.end_time ? new Date(dbEvent.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+        description: dbEvent.description || undefined,
+        location: dbEvent.location || undefined,
+        type: 'event' as const,
+        isPrivate: dbEvent.visibility === 'private'
+      }));
+
+    return [...localEvents, ...dbEventsForDate];
   };
 
   // Get available time slots for a date
@@ -258,7 +349,7 @@ export default function BusinessCalendar() {
     }
   };
 
-  // Save event
+  // Save event (local demo event)
   const handleSaveEvent = () => {
     const eventData: Partial<Event> = {
       title: eventFormData.title,
@@ -293,9 +384,30 @@ export default function BusinessCalendar() {
     });
   };
 
-  // Delete event
+  // Delete local event
   const deleteEvent = (eventId: string) => {
     setEvents(events.filter(e => e.id !== eventId));
+  };
+
+  // Delete DB event
+  const deleteDbEvent = async (eventId: string) => {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId)
+        .eq('host_business_id', businessId);
+
+      if (error) throw error;
+
+      console.log('🗑️ Event deleted');
+      loadEvents();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event');
+    }
   };
 
   // Create appointment
@@ -354,6 +466,14 @@ export default function BusinessCalendar() {
     setServices(services.filter(s => s.id !== serviceId));
   };
 
+  // Handle event created from UnifiedEventCreator
+  const handleEventSuccess = (event: DBEvent) => {
+    console.log('✅ Event saved:', event.title);
+    loadEvents();
+    setShowEventCreator(false);
+    setEditingDbEvent(null);
+  };
+
   const calendarDays = getCalendarDays();
   const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -364,33 +484,35 @@ export default function BusinessCalendar() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           {/* View Toggle */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-              <button
-                onClick={() => setIsBusinessView(true)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  isBusinessView 
-                    ? 'bg-white dark:bg-gray-700 text-purple-600 shadow-sm' 
-                    : 'text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <Settings className="w-4 h-4 inline mr-1" />
-                Business View
-              </button>
-              <button
-                onClick={() => setIsBusinessView(false)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  !isBusinessView 
-                    ? 'bg-white dark:bg-gray-700 text-purple-600 shadow-sm' 
-                    : 'text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <Eye className="w-4 h-4 inline mr-1" />
-                Customer View
-              </button>
-            </div>
+            {isOwner && (
+              <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <button
+                  onClick={() => setIsBusinessView(true)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    isBusinessView 
+                      ? 'bg-white dark:bg-gray-700 text-purple-600 shadow-sm' 
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <Settings className="w-4 h-4 inline mr-1" />
+                  Business View
+                </button>
+                <button
+                  onClick={() => setIsBusinessView(false)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    !isBusinessView 
+                      ? 'bg-white dark:bg-gray-700 text-purple-600 shadow-sm' 
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <Eye className="w-4 h-4 inline mr-1" />
+                  Customer View
+                </button>
+              </div>
+            )}
             
             {/* Service Type Selector (Business View Only) */}
-            {isBusinessView && (
+            {isBusinessView && isOwner && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-600">Calendar Type:</span>
                 <select
@@ -407,7 +529,7 @@ export default function BusinessCalendar() {
           </div>
 
           {/* Business Management Buttons */}
-          {isBusinessView && (
+          {isBusinessView && isOwner && (
             <div className="flex items-center gap-2">
               {settings.service_type !== 'events' && (
                 <button
@@ -482,6 +604,14 @@ export default function BusinessCalendar() {
           </div>
         </div>
       </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-8 text-center mb-4">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Loading events...</p>
+        </div>
+      )}
 
       {/* Calendar Grid */}
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm">
@@ -588,11 +718,11 @@ export default function BusinessCalendar() {
                       <CalendarDays className="w-5 h-5 text-purple-600" />
                       Events
                     </h4>
-                    {isBusinessView && (
+                    {isBusinessView && isOwner && (
                       <button
                         onClick={() => {
-                          setEditingEvent(null);
-                          setShowEventForm(true);
+                          setEditingDbEvent(null);
+                          setShowEventCreator(true);
                         }}
                         className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 text-sm"
                       >
@@ -626,19 +756,33 @@ export default function BusinessCalendar() {
                                 </p>
                               )}
                             </div>
-                            {isBusinessView && (
+                            {isBusinessView && isOwner && (
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => {
-                                    setEditingEvent(event);
-                                    setShowEventForm(true);
+                                    // Find if this is a DB event
+                                    const dbEvent = dbEvents.find(e => e.id === event.id);
+                                    if (dbEvent) {
+                                      setEditingDbEvent(dbEvent);
+                                      setShowEventCreator(true);
+                                    } else {
+                                      setEditingEvent(event);
+                                      setShowEventForm(true);
+                                    }
                                   }}
                                   className="p-1 hover:bg-purple-200 dark:hover:bg-purple-800 rounded"
                                 >
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                                 <button
-                                  onClick={() => deleteEvent(event.id)}
+                                  onClick={() => {
+                                    const dbEvent = dbEvents.find(e => e.id === event.id);
+                                    if (dbEvent) {
+                                      deleteDbEvent(event.id);
+                                    } else {
+                                      deleteEvent(event.id);
+                                    }
+                                  }}
                                   className="p-1 hover:bg-red-200 dark:hover:bg-red-800 rounded text-red-600"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -807,7 +951,7 @@ export default function BusinessCalendar() {
         </div>
       )}
 
-      {/* Event Creation/Edit Modal */}
+      {/* Event Creation/Edit Modal (Local Demo Events) */}
       {showEventForm && selectedDate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
@@ -901,6 +1045,114 @@ export default function BusinessCalendar() {
                 className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
               >
                 {editingEvent ? 'Save Changes' : 'Create Event'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unified Event Creator (Supabase Events) */}
+      {showEventCreator && userId && (
+        <UnifiedEventCreator
+          open={showEventCreator}
+          onClose={() => {
+            setShowEventCreator(false);
+            setEditingDbEvent(null);
+          }}
+          userId={userId}
+          context="business"
+          businessId={businessId}
+          editingEvent={editingDbEvent || undefined}
+          onSuccess={handleEventSuccess}
+          defaultDate={selectedDate || undefined}
+          defaultVisibility="public"
+        />
+      )}
+
+      {/* Customer Booking Form */}
+      {showBookingForm && selectedDate && selectedTimeSlot && selectedService && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Confirm Booking</h3>
+            
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <h4 className="font-medium mb-2">Booking Details</h4>
+                <div className="space-y-1 text-sm">
+                  <p><strong>Service:</strong> {selectedService.name}</p>
+                  <p><strong>Date:</strong> {selectedDate.toLocaleDateString()}</p>
+                  <p><strong>Time:</strong> {selectedTimeSlot}</p>
+                  <p><strong>Duration:</strong> {selectedService.duration} minutes</p>
+                  <p><strong>Price:</strong> ${selectedService.price}</p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Your Name *</label>
+                <input
+                  type="text"
+                  value={bookingFormData.name}
+                  onChange={(e) => setBookingFormData({...bookingFormData, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
+                  placeholder="Enter your name"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Email *</label>
+                <input
+                  type="email"
+                  value={bookingFormData.email}
+                  onChange={(e) => setBookingFormData({...bookingFormData, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
+                  placeholder="your@email.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={bookingFormData.phone}
+                  onChange={(e) => setBookingFormData({...bookingFormData, phone: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Notes</label>
+                <textarea
+                  rows={3}
+                  value={bookingFormData.notes}
+                  onChange={(e) => setBookingFormData({...bookingFormData, notes: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
+                  placeholder="Any special requests or notes..."
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowBookingForm(false);
+                  setSelectedTimeSlot('');
+                  setBookingFormData({
+                    name: '',
+                    email: '',
+                    phone: '',
+                    notes: ''
+                  });
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBookAppointment}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Confirm Booking
               </button>
             </div>
           </div>
@@ -1223,96 +1475,6 @@ export default function BusinessCalendar() {
                   Save Settings
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Customer Booking Form */}
-      {showBookingForm && selectedDate && selectedTimeSlot && selectedService && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Confirm Booking</h3>
-            
-            <div className="space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <h4 className="font-medium mb-2">Booking Details</h4>
-                <div className="space-y-1 text-sm">
-                  <p><strong>Service:</strong> {selectedService.name}</p>
-                  <p><strong>Date:</strong> {selectedDate.toLocaleDateString()}</p>
-                  <p><strong>Time:</strong> {selectedTimeSlot}</p>
-                  <p><strong>Duration:</strong> {selectedService.duration} minutes</p>
-                  <p><strong>Price:</strong> ${selectedService.price}</p>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Your Name *</label>
-                <input
-                  type="text"
-                  value={bookingFormData.name}
-                  onChange={(e) => setBookingFormData({...bookingFormData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
-                  placeholder="Enter your name"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Email *</label>
-                <input
-                  type="email"
-                  value={bookingFormData.email}
-                  onChange={(e) => setBookingFormData({...bookingFormData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
-                  placeholder="your@email.com"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
-                <input
-                  type="tel"
-                  value={bookingFormData.phone}
-                  onChange={(e) => setBookingFormData({...bookingFormData, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
-                  placeholder="(555) 123-4567"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Notes</label>
-                <textarea
-                  rows={3}
-                  value={bookingFormData.notes}
-                  onChange={(e) => setBookingFormData({...bookingFormData, notes: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800"
-                  placeholder="Any special requests or notes..."
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowBookingForm(false);
-                  setSelectedTimeSlot('');
-                  setBookingFormData({
-                    name: '',
-                    email: '',
-                    phone: '',
-                    notes: ''
-                  });
-                }}
-                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBookAppointment}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Confirm Booking
-              </button>
             </div>
           </div>
         </div>
