@@ -168,6 +168,7 @@ export default function CalendarGrid({
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showLegend, setShowLegend] = useState(true); // NEW: State to control legend visibility
   const themeStyles = getThemeStyles(theme);
 
   // Detect mobile device
@@ -532,6 +533,9 @@ export default function CalendarGrid({
     touchSlop: 10,
   } : {};
 
+  // Check if we should show the legend
+  const shouldShowLegend = context === 'business' || dbUiEvents.some(e => e.resource?.hasPreEvent || e.resource?.hasPostEvent);
+
   if (!mounted) {
     return (
       <div className="flex items-center justify-center h-[650px]">
@@ -554,8 +558,8 @@ export default function CalendarGrid({
         padding: isMobile ? '0.5rem' : '1rem',
       }}
     >
-      {/* Legend for pre/post event indicators */}
-      {(context === 'business' || dbUiEvents.some(e => e.resource?.hasPreEvent || e.resource?.hasPostEvent)) && (
+      {/* FIXED: Legend for pre/post event indicators - NOW MINIMIZABLE */}
+      {shouldShowLegend && (
         <div
           style={{
             position: "absolute",
@@ -564,21 +568,44 @@ export default function CalendarGrid({
             background: "rgba(255,255,255,0.95)",
             backdropFilter: "blur(8px)",
             borderRadius: "8px",
-            padding: "6px 10px",
+            padding: showLegend ? "6px 10px" : "4px 8px",
             fontSize: "11px",
             border: "1px solid rgba(0,0,0,0.1)",
             zIndex: 10,
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            transition: "all 0.2s ease",
+            maxWidth: showLegend ? "200px" : "40px",
           }}
         >
-          <div style={{ fontWeight: 600, marginBottom: "4px", color: "#374151" }}>
-            Event Indicators:
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {showLegend && (
+              <div style={{ fontWeight: 600, color: "#374151", marginRight: "8px" }}>
+                Event Indicators:
+              </div>
+            )}
+            <button
+              onClick={() => setShowLegend(!showLegend)}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px",
+                fontSize: "14px",
+                color: "#6b7280",
+                lineHeight: 1,
+              }}
+              title={showLegend ? "Minimize" : "Show legend"}
+            >
+              {showLegend ? "−" : "?"}
+            </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px", color: "#6b7280" }}>
-            <div>🍽️ = Pre-event gathering</div>
-            <div>☕ = Post-event gathering</div>
-            {context === 'business' && <div>BIZ = Business event</div>}
-          </div>
+          {showLegend && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px", color: "#6b7280", marginTop: "4px" }}>
+              <div>🍽️ = Pre-event gathering</div>
+              <div>☕ = Post-event gathering</div>
+              {context === 'business' && <div>BIZ = Business event</div>}
+            </div>
+          )}
         </div>
       )}
 
@@ -661,7 +688,7 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* FIXED STYLES - Calendar cells always white, text always dark + FULL CELL CLICKABLE */}
+      {/* FIXED STYLES - Calendar cells always white, text always dark + FULL CELL CLICKABLE + TIME LABELS */}
       <style jsx global>{`
         /* Base calendar container */
         .calendar-wrapper {
@@ -955,6 +982,32 @@ export default function CalendarGrid({
         .custom-calendar .rbc-current-time-indicator {
           background-color: #ef4444;
           height: 2px;
+        }
+        
+        /* NEW FIX: Time labels in Day/Week view - ENSURE THEY SHOW */
+        .custom-calendar .rbc-time-header-gutter {
+          background: #f9fafb;
+          border-right: 1px solid #e5e7eb;
+        }
+        
+        .custom-calendar .rbc-label {
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 500;
+          color: #6b7280 !important;
+          text-align: right;
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+        }
+        
+        .custom-calendar .rbc-time-gutter {
+          background: #f9fafb;
+        }
+        
+        .custom-calendar .rbc-timeslot-group {
+          min-height: 40px;
+          border-left: 1px solid #e5e7eb;
         }
         
         /* FIXED: Agenda view always dark text */
