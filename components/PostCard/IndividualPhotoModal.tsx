@@ -1,10 +1,21 @@
-// components/PostCard/IndividualPhotoModal.tsx - Mobile-Optimized with ALL Features Preserved
+// components/PostCard/IndividualPhotoModal.tsx - Mobile-Optimized with REAL Photo Interactions
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { addComment } from "@/lib/posts";
+import { addPhotoComment, getPhotoComments, toggleMediaLike, getMediaLikes } from "@/lib/posts";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./styles.module.css";
+
+interface PhotoComment {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  author: {
+    full_name: string;
+    avatar_url: string;
+  };
+}
 
 interface IndividualPhotoModalProps {
   photo: {url: string; type: 'image' | 'video'; id?: string};
@@ -21,6 +32,14 @@ export default function IndividualPhotoModal({
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [hasImageError, setHasImageError] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  
+  // Photo-specific state
+  const [comments, setComments] = useState<PhotoComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likedByMe, setLikedByMe] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
+  
   const modalRef = useRef<HTMLDivElement>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,6 +51,30 @@ export default function IndividualPhotoModal({
     };
     getCurrentUser();
   }, []);
+
+  // Load photo comments and likes when photo ID is available
+  useEffect(() => {
+    if (photo.id) {
+      loadPhotoData();
+    }
+  }, [photo.id]);
+
+  const loadPhotoData = async () => {
+    if (!photo.id) return;
+    
+    setLoadingComments(true);
+    
+    // Load comments
+    const { comments: photoComments } = await getPhotoComments(photo.id);
+    setComments(photoComments);
+    
+    // Load likes
+    const { count, liked_by_me } = await getMediaLikes(photo.id);
+    setLikeCount(count);
+    setLikedByMe(liked_by_me);
+    
+    setLoadingComments(false);
+  };
 
   // Auto-hide controls on mobile after interaction
   useEffect(() => {
@@ -46,16 +89,44 @@ export default function IndividualPhotoModal({
     return () => clearTimeout(timer);
   }, [showControls]);
 
-  // Handle adding a comment (simplified - just shows functionality)
+  // Handle liking a photo
+  const handleLike = async () => {
+    if (isLiking || !currentUserId || !photo.id) return;
+    setIsLiking(true);
+    
+    try {
+      const result = await toggleMediaLike(photo.id);
+      if (result.ok) {
+        setLikedByMe(!likedByMe);
+        setLikeCount(likedByMe ? likeCount - 1 : likeCount + 1);
+        
+        // Haptic feedback
+        if ('vibrate' in navigator) {
+          navigator.vibrate(50);
+        }
+      }
+    } catch (error) {
+      console.error('Error liking photo:', error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  // Handle adding a comment
   const handleAddComment = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!commentText.trim() || isCommenting || !currentUserId) return;
+    if (!commentText.trim() || isCommenting || !currentUserId || !photo.id) return;
     
     setIsCommenting(true);
     try {
-      // For now, just show an alert - you can connect this to your actual comment system later
-      alert(`Comment added: "${commentText.trim()}"`);
-      setCommentText("");
+      const result = await addPhotoComment(photo.id, commentText.trim());
+      if (result.ok) {
+        setCommentText("");
+        // Reload comments to show the new one
+        await loadPhotoData();
+      } else {
+        alert("Failed to add comment: " + (result.error || "Unknown error"));
+      }
     } catch (error) {
       console.error('Error adding photo comment:', error);
       alert("Failed to add comment");
@@ -75,10 +146,7 @@ export default function IndividualPhotoModal({
       }
     };
 
-    // FIXED: Add event listener to document, but prevent default scroll behavior on modal
     document.addEventListener('keydown', handleKeyDown);
-    
-    // FIXED: Prevent body scroll without setting overflow: hidden which can cause layout issues
     const originalStyle = window.getComputedStyle(document.body).overflow;
     document.body.style.overflow = 'hidden';
     
@@ -109,14 +177,12 @@ export default function IndividualPhotoModal({
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
-    // FIXED: Only close if clicking the overlay itself, not the modal content
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
   const handleModalClick = (e: React.MouseEvent) => {
-    // FIXED: Prevent clicks inside modal from bubbling up to overlay
     e.stopPropagation();
     setShowControls(true);
   };
@@ -125,7 +191,6 @@ export default function IndividualPhotoModal({
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setCommentText(e.target.value);
     
-    // Auto-resize
     const textarea = e.target;
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
@@ -214,26 +279,24 @@ export default function IndividualPhotoModal({
             )}
           </div>
           
-          {/* Interactions Side - FIXED: Allow scrolling inside this container */}
+          {/* Interactions Side */}
           <div className={styles.interactionsSide}>
             <div className="content-section">
               <h3>Interact with this {photo.type}</h3>
               
-              {/* Enhanced Quick Actions */}
+              {/* Quick Actions with Real Data */}
               <div className="quick-actions">
                 <button 
-                  className="action-button like-button"
-                  onClick={() => {
-                    // Haptic feedback
-                    if ('vibrate' in navigator) {
-                      navigator.vibrate(50);
-                    }
-                    alert('Like functionality coming soon!');
-                  }}
+                  className={`action-button like-button ${likedByMe ? 'liked' : ''}`}
+                  onClick={handleLike}
+                  disabled={isLiking || !currentUserId}
                   title="Like this media"
                 >
-                  <span className="action-icon">🤍</span>
-                  <span className="action-text">Like</span>
+                  <span className="action-icon">{likedByMe ? '❤️' : '🤍'}</span>
+                  <span className="action-text">
+                    {likedByMe ? 'Liked' : 'Like'}
+                    {likeCount > 0 && ` (${likeCount})`}
+                  </span>
                 </button>
                 <button 
                   className="action-button share-button"
@@ -250,14 +313,43 @@ export default function IndividualPhotoModal({
                       commentInputRef.current.focus();
                     }
                   }}
-                  title="Add caption or comment"
+                  title="Add comment"
                 >
-                  <span className="action-icon">✏️</span>
-                  <span className="action-text">Caption</span>
+                  <span className="action-icon">💬</span>
+                  <span className="action-text">
+                    Comment {comments.length > 0 && `(${comments.length})`}
+                  </span>
                 </button>
               </div>
 
-              {/* Enhanced Comment Section */}
+              {/* Existing Comments */}
+              {comments.length > 0 && (
+                <div className="comments-list">
+                  <h4>Comments ({comments.length})</h4>
+                  <div className="comments-container">
+                    {comments.map((comment) => (
+                      <div key={comment.id} className="comment-item">
+                        <img 
+                          src={comment.author.avatar_url} 
+                          alt="" 
+                          className="comment-avatar"
+                        />
+                        <div className="comment-content">
+                          <div className="comment-header">
+                            <span className="comment-author">{comment.author.full_name}</span>
+                            <span className="comment-time">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="comment-body">{comment.body}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Comment Section */}
               <div className="comment-section">
                 <h4>Add a comment</h4>
                 <p className="comment-hint">Share your thoughts about this {photo.type}</p>
@@ -307,34 +399,8 @@ export default function IndividualPhotoModal({
                   <div className="login-prompt">
                     <div className="login-icon">🔐</div>
                     <p>Please log in to comment on this {photo.type}</p>
-                    <button className="login-button" onClick={() => alert('Login functionality coming soon!')}>
-                      Sign In
-                    </button>
                   </div>
                 )}
-              </div>
-
-              {/* Enhanced Future Features */}
-              <div className="future-features">
-                <h4>Coming Soon</h4>
-                <div className="feature-grid">
-                  <div className="feature-item">
-                    <span className="feature-icon">👍</span>
-                    <span className="feature-text">Reactions</span>
-                  </div>
-                  <div className="feature-item">
-                    <span className="feature-icon">💬</span>
-                    <span className="feature-text">View Comments</span>
-                  </div>
-                  <div className="feature-item">
-                    <span className="feature-icon">🏷️</span>
-                    <span className="feature-text">Tag Friends</span>
-                  </div>
-                  <div className="feature-item">
-                    <span className="feature-icon">🎨</span>
-                    <span className="feature-text">Edit Photo</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -469,7 +535,7 @@ export default function IndividualPhotoModal({
           touch-action: manipulation;
         }
 
-        .action-button:hover {
+        .action-button:hover:not(:disabled) {
           background: #f9fafb;
           border-color: #6366f1;
           color: #6366f1;
@@ -477,8 +543,19 @@ export default function IndividualPhotoModal({
           box-shadow: 0 4px 12px rgba(99,102,241,0.15);
         }
 
-        .action-button:active {
+        .action-button:active:not(:disabled) {
           transform: translateY(0);
+        }
+
+        .action-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .action-button.liked {
+          background: #fef2f2;
+          border-color: #ef4444;
+          color: #ef4444;
         }
 
         .action-icon {
@@ -488,6 +565,74 @@ export default function IndividualPhotoModal({
         .action-text {
           font-size: 12px;
           font-weight: 600;
+        }
+
+        .comments-list {
+          margin-bottom: 24px;
+          padding: 20px;
+          background: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+        }
+
+        .comments-list h4 {
+          margin: 0 0 16px 0;
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .comments-container {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .comment-item {
+          display: flex;
+          gap: 12px;
+          padding: 12px;
+          background: white;
+          border-radius: 8px;
+        }
+
+        .comment-avatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+        }
+
+        .comment-content {
+          flex: 1;
+        }
+
+        .comment-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+
+        .comment-author {
+          font-size: 13px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .comment-time {
+          font-size: 11px;
+          color: #9ca3af;
+        }
+
+        .comment-body {
+          margin: 0;
+          font-size: 14px;
+          color: #6b7280;
+          line-height: 1.5;
         }
 
         .comment-section {
@@ -610,72 +755,6 @@ export default function IndividualPhotoModal({
           font-size: 32px;
         }
 
-        .login-button {
-          padding: 10px 20px;
-          background: #6366f1;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          min-height: 40px;
-          -webkit-tap-highlight-color: transparent;
-          touch-action: manipulation;
-        }
-
-        .login-button:hover {
-          background: #4f46e5;
-          transform: translateY(-1px);
-        }
-
-        .login-button:active {
-          transform: translateY(0);
-        }
-
-        .future-features {
-          padding: 20px;
-          background: #f8fafc;
-          border-radius: 12px;
-          border: 1px solid #e5e7eb;
-        }
-
-        .future-features h4 {
-          margin: 0 0 16px 0;
-          font-size: 14px;
-          font-weight: 600;
-          color: #374151;
-          text-align: center;
-        }
-
-        .feature-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-
-        .feature-item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          padding: 12px;
-          background: white;
-          border-radius: 8px;
-          border: 1px solid #f3f4f6;
-        }
-
-        .feature-icon {
-          font-size: 20px;
-        }
-
-        .feature-text {
-          font-size: 12px;
-          font-weight: 500;
-          color: #6b7280;
-        }
-
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -716,28 +795,13 @@ export default function IndividualPhotoModal({
           }
 
           .comment-textarea {
-            font-size: 16px; /* Prevents zoom on iOS */
+            font-size: 16px;
             padding: 12px;
           }
 
-          .feature-grid {
-            grid-template-columns: 1fr;
-            gap: 8px;
-          }
-
-          .feature-item {
-            flex-direction: row;
-            justify-content: flex-start;
-            gap: 12px;
-            padding: 10px 12px;
-          }
-
-          .feature-icon {
-            font-size: 18px;
-          }
-
-          .feature-text {
-            font-size: 13px;
+          .comment-avatar {
+            width: 32px;
+            height: 32px;
           }
         }
 
@@ -781,36 +845,6 @@ export default function IndividualPhotoModal({
 
           .keyboard-hint {
             font-size: 10px;
-          }
-        }
-
-        /* Touch device optimizations */
-        @media (hover: none) and (pointer: coarse) {
-          .modal-close,
-          .retry-button,
-          .action-button,
-          .comment-submit,
-          .login-button {
-            -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
-          }
-        }
-
-        /* Landscape mobile optimizations */
-        @media (max-height: 500px) and (orientation: landscape) {
-          .content-section {
-            padding: 12px;
-          }
-
-          .quick-actions {
-            margin-bottom: 16px;
-          }
-
-          .comment-section {
-            margin-bottom: 16px;
-          }
-
-          .future-features {
-            padding: 12px;
           }
         }
       `}</style>
