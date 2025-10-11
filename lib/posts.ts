@@ -1,4 +1,4 @@
-// lib/posts.ts
+// lib/posts.ts - FIXED: Shows only posts from friends in home feed
 import { supabase } from "@/lib/supabaseClient";
 
 export type MediaItem = {
@@ -38,14 +38,48 @@ export async function me() {
   return data.user?.id ?? null;
 }
 
+// FIXED: Only show posts from friends in home feed
 export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
+  // First, get the user's friends list
+  const { data: friendships, error: friendError } = await supabase
+    .from("friendships")
+    .select("friend_id, user_id")
+    .or(`user_id.eq.${uid},friend_id.eq.${uid}`)
+    .eq('status', 'accepted');
+
+  if (friendError) {
+    console.error("Error fetching friends:", friendError);
+    return { rows: [], error: friendError.message };
+  }
+
+  // Extract friend IDs
+  const friendIds = new Set<string>();
+  if (friendships) {
+    friendships.forEach(f => {
+      // Add the friend's ID (not your own)
+      if (f.user_id === uid) {
+        friendIds.add(f.friend_id);
+      } else {
+        friendIds.add(f.user_id);
+      }
+    });
+  }
+
+  // Always include own posts
+  friendIds.add(uid);
+
+  // Convert to array for the query
+  const userIds = Array.from(friendIds);
+
+  // Build the query - show posts from friends and self
   let q = supabase
     .from("posts")
     .select("*")
-    .or(`user_id.eq.${uid},visibility.eq.public`)
+    .in("user_id", userIds)
+    .or(`visibility.eq.public,visibility.eq.friends,user_id.eq.${uid}`)
     .order("created_at", { ascending: false })
     .limit(limit);
 
