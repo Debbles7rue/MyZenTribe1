@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/components/ToastProvider";
 import FriendSelector from "@/components/FriendSelector";
 import type { DBEvent } from "@/lib/types";
+import { createNotification } from "@/lib/notifications";
 
 interface EventDetailsProps {
   event: DBEvent | null;
@@ -421,6 +422,34 @@ export default function EventDetails({
 
       setNewComment('');
       showToast({ type: 'success', message: '💬 Comment posted!' });
+
+      // Send notification to event creator (if not commenting on own event)
+      if (event.created_by && event.created_by !== currentUserId) {
+        try {
+          // Get commenter's name
+          const { data: commenterProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUserId)
+            .single();
+
+          const commenterName = commenterProfile?.full_name || 'Someone';
+
+          await createNotification({
+            recipient_id: event.created_by,
+            type: 'event.comment',
+            title: 'New Event Comment',
+            body: `${commenterName} commented on your event "${event.title}"`,
+            target_url: `/event/${event.id}`,
+            entity_table: 'events',
+            entity_id: event.id,
+            actor_id: currentUserId
+          });
+        } catch (notifError) {
+          console.error('Error sending comment notification:', notifError);
+          // Don't fail the comment if notification fails
+        }
+      }
     } catch (err) {
       console.error('Error sending comment:', err);
       showToast({ type: 'error', message: 'Failed to post comment' });
@@ -437,7 +466,9 @@ export default function EventDetails({
 
     setLoading(true);
     try {
-      if (rsvpData.userStatus === status) {
+      const wasRemoving = rsvpData.userStatus === status;
+      
+      if (wasRemoving) {
         // Remove RSVP
         const { error } = await supabase
           .from("event_rsvps")
@@ -464,6 +495,35 @@ export default function EventDetails({
           type: 'success', 
           message: status === 'going' ? "✅ You're going!" : "⭐ Marked as interested" 
         });
+
+        // Send notification to event creator (if not RSVPing to own event)
+        if (event.created_by && event.created_by !== currentUserId) {
+          try {
+            // Get RSVP user's name
+            const { data: rsvpUserProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', currentUserId)
+              .single();
+
+            const rsvpUserName = rsvpUserProfile?.full_name || 'Someone';
+            const statusText = status === 'going' ? 'is going to' : 'is interested in';
+
+            await createNotification({
+              recipient_id: event.created_by,
+              type: 'event.rsvp',
+              title: 'New RSVP',
+              body: `${rsvpUserName} ${statusText} your event "${event.title}"`,
+              target_url: `/event/${event.id}`,
+              entity_table: 'events',
+              entity_id: event.id,
+              actor_id: currentUserId
+            });
+          } catch (notifError) {
+            console.error('Error sending RSVP notification:', notifError);
+            // Don't fail the RSVP if notification fails
+          }
+        }
       }
       
       // Refetch RSVP data after successful update
