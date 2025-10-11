@@ -16,6 +16,7 @@ interface UseCalendarActionsProps {
   friends: Friend[];
   showToast: (toast: any) => void;
   loadCalendar: () => Promise<void>;
+  loadFeed?: () => Promise<void>;
   resetForm: () => void;
   setOpenCreate: (open: boolean) => void;
   setOpenEdit: (open: boolean) => void;
@@ -40,6 +41,7 @@ export function useCalendarActions(props: UseCalendarActionsProps) {
     friends,
     showToast,
     loadCalendar,
+    loadFeed,
     resetForm,
     setOpenCreate,
     setOpenEdit,
@@ -496,39 +498,135 @@ export function useCalendarActions(props: UseCalendarActionsProps) {
     }
   }, [me, showToast, loadCalendar]);
 
-  // Show interest
+  // FIXED: Show interest - uses event_rsvps table, toggleable
   const handleShowInterest = useCallback(async (event: FeedEvent) => {
-    const { error } = await supabase.from("events").insert({
-      ...event,
-      id: undefined,
-      created_by: me,
-      original_event_id: event.id,
-      interested: true,
-      title: `[Interested] ${event.title}`,
-    });
-
-    if (!error) {
-      showToast({ type: 'success', message: '✨ Added to calendar as interested!' });
-      loadCalendar();
+    if (!me) {
+      showToast({ type: 'warning', message: 'Please sign in to show interest' });
+      return;
     }
-  }, [me, showToast, loadCalendar]);
 
-  // RSVP
+    try {
+      // Check current status
+      const currentStatus = (event as any).user_rsvp_status;
+
+      if (currentStatus === 'interested') {
+        // Remove interest
+        const { error } = await supabase
+          .from('event_rsvps')
+          .delete()
+          .eq('event_id', event.id)
+          .eq('user_id', me);
+
+        if (error) throw error;
+        showToast({ type: 'success', message: '❌ Interest removed' });
+      } else {
+        // Add/update interest
+        const { error } = await supabase
+          .from('event_rsvps')
+          .upsert({
+            event_id: event.id,
+            user_id: me,
+            status: 'interested'
+          }, {
+            onConflict: 'event_id,user_id'
+          });
+
+        if (error) throw error;
+        showToast({ type: 'success', message: '⭐ Marked as interested!' });
+      }
+
+      // Refresh feed to show updated status
+      if (loadFeed) {
+        await loadFeed();
+      }
+    } catch (error: any) {
+      console.error('Error updating interest:', error);
+      showToast({ type: 'error', message: error.message || 'Failed to update interest' });
+    }
+  }, [me, showToast, loadFeed]);
+
+  // FIXED: RSVP - uses event_rsvps table, toggleable, adds to calendar when going
   const handleRSVP = useCallback(async (event: FeedEvent) => {
-    const { error } = await supabase.from("events").insert({
-      ...event,
-      id: undefined,
-      created_by: me,
-      original_event_id: event.id,
-      rsvp: true,
-      title: `[RSVP] ${event.title}`,
-    });
-
-    if (!error) {
-      showToast({ type: 'success', message: '🎉 RSVP confirmed! Added to calendar.' });
-      loadCalendar();
+    if (!me) {
+      showToast({ type: 'warning', message: 'Please sign in to RSVP' });
+      return;
     }
-  }, [me, showToast, loadCalendar]);
+
+    try {
+      // Check current status
+      const currentStatus = (event as any).user_rsvp_status;
+
+      if (currentStatus === 'going') {
+        // Remove RSVP
+        const { error: rsvpError } = await supabase
+          .from('event_rsvps')
+          .delete()
+          .eq('event_id', event.id)
+          .eq('user_id', me);
+
+        if (rsvpError) throw rsvpError;
+
+        // Also remove from user's calendar if it was added
+        const { error: calError } = await supabase
+          .from('events')
+          .delete()
+          .eq('original_event_id', event.id)
+          .eq('created_by', me);
+
+        if (calError && calError.code !== 'PGRST116') {
+          console.warn('No calendar entry to remove:', calError);
+        }
+
+        showToast({ type: 'success', message: '❌ RSVP removed' });
+      } else {
+        // Add/update RSVP
+        const { error: rsvpError } = await supabase
+          .from('event_rsvps')
+          .upsert({
+            event_id: event.id,
+            user_id: me,
+            status: 'going'
+          }, {
+            onConflict: 'event_id,user_id'
+          });
+
+        if (rsvpError) throw rsvpError;
+
+        // Add to user's calendar
+        const { error: calError } = await supabase
+          .from('events')
+          .insert({
+            title: event.title,
+            description: event.description,
+            location: event.location,
+            start_time: event.start_time,
+            end_time: event.end_time,
+            created_by: me,
+            visibility: 'private',
+            source: 'rsvp',
+            original_event_id: event.id,
+            event_type: event.event_type,
+            image_path: event.image_path,
+            completed: false
+          });
+
+        if (calError && calError.code !== '23505') { // Ignore duplicate errors
+          throw calError;
+        }
+
+        showToast({ type: 'success', message: '✅ RSVP confirmed! Added to your calendar.' });
+      }
+
+      // Refresh both calendar and feed
+      await loadCalendar();
+      if (loadFeed) {
+        await loadFeed();
+      }
+    } catch (error: any) {
+      console.error('Error updating RSVP:', error);
+      showToast({ type: 'error', message: error.message || 'Failed to update RSVP' });
+    }
+  }, [me, showToast, loadCalendar, loadFeed]);
 
   // Dismiss feed event
   const dismissFeedEvent = useCallback((eventId: string) => {
