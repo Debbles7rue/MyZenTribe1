@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 export type MediaItem = {
   url: string;
   type: 'image' | 'video';
-  id?: string; // Add ID for photo-specific interactions
+  id?: string;
 };
 
 export type Post = {
@@ -42,11 +42,10 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const uid = await me();
   if (!uid) return { rows: [], error: "Not signed in" as const };
 
-  // FIXED: Add proper filtering for home feed
   let q = supabase
     .from("posts")
     .select("*")
-    .or(`user_id.eq.${uid},visibility.eq.public`) // Show my posts + public posts
+    .or(`user_id.eq.${uid},visibility.eq.public`)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -66,7 +65,6 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const ids = posts.map((p: any) => p.id);
   const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
 
-  // Get author profiles
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, full_name, avatar_url")
@@ -74,7 +72,6 @@ export async function listHomeFeed(limit = 20, before?: string) {
 
   const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
 
-  // Get co-creator info if they exist
   const coCreatorIds = posts
     .filter((p: any) => p.co_creators && p.co_creators.length > 0)
     .flatMap((p: any) => p.co_creators);
@@ -92,32 +89,27 @@ export async function listHomeFeed(limit = 20, before?: string) {
     coCreatorProfiles.map((p: any) => [p.id, p])
   );
 
-  // Try to get likes and comments
   let likeCountBy: Record<string, number> = {};
   let myLikeSet = new Set<string>();
   let commentCountBy: Record<string, number> = {};
 
   try {
-    // Get all likes for these posts
     const { data: likeCounts } = await supabase
       .from("post_likes")
       .select("post_id")
       .in("post_id", ids);
 
-    // Get my likes
     const { data: myLikes } = await supabase
       .from("post_likes")
       .select("post_id")
       .eq("user_id", uid)
       .in("post_id", ids);
 
-    // Get all comments for these posts
     const { data: commentCounts } = await supabase
       .from("post_comments")
       .select("post_id")
       .in("post_id", ids);
 
-    // Count likes per post
     if (likeCounts) {
       likeCounts.forEach((like: any) => {
         likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
@@ -128,7 +120,6 @@ export async function listHomeFeed(limit = 20, before?: string) {
       myLikeSet = new Set(myLikes.map((r: any) => r.post_id));
     }
     
-    // Count comments per post
     if (commentCounts) {
       commentCounts.forEach((comment: any) => {
         commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
@@ -138,11 +129,9 @@ export async function listHomeFeed(limit = 20, before?: string) {
     console.log("Error fetching likes/comments:", e);
   }
 
-  // Get additional media from post_media table - FIXED with IDs
   let mediaByPost: Record<string, MediaItem[]> = {};
   
   try {
-    // Query all post media at once (much more efficient)
     const { data: allMediaRows, error: mediaError } = await supabase
       .from("post_media")
       .select("id, post_id, storage_path, type")
@@ -150,13 +139,11 @@ export async function listHomeFeed(limit = 20, before?: string) {
       .order("sort_order", { ascending: true });
     
     if (!mediaError && allMediaRows) {
-      // Group media by post_id
       for (const media of allMediaRows) {
         if (!mediaByPost[media.post_id]) {
           mediaByPost[media.post_id] = [];
         }
         
-        // Get public URL from storage path
         const { data } = supabase.storage
           .from('post-media')
           .getPublicUrl(media.storage_path);
@@ -164,7 +151,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
         mediaByPost[media.post_id].push({
           url: data.publicUrl,
           type: media.type as 'image' | 'video',
-          id: media.id // Include media ID for photo-specific interactions
+          id: media.id
         });
       }
       
@@ -174,11 +161,9 @@ export async function listHomeFeed(limit = 20, before?: string) {
     console.log("Error fetching media:", e);
   }
 
-  // Build the rows with all the data we have
   const rows: Post[] = posts.map((p: any) => {
     const postMedia = mediaByPost[p.id] || [];
     
-    // Log what we're adding to each post
     if (postMedia.length > 0) {
       console.log(`Post ${p.id} has ${postMedia.length} additional media items`);
     }
@@ -189,7 +174,7 @@ export async function listHomeFeed(limit = 20, before?: string) {
       body: p.body,
       image_url: p.image_url || null,
       video_url: p.video_url || null,
-      privacy: p.visibility || p.privacy || 'public', // Handle both field names
+      privacy: p.visibility || p.privacy || 'public',
       created_at: p.created_at,
       allow_share: p.allow_share ?? true,
       co_creators: p.co_creators || null,
@@ -229,12 +214,11 @@ export async function createPost(
   const postData: any = {
     user_id: uid,
     body,
-    visibility: privacy,  // Database expects 'visibility', not 'privacy'
+    visibility: privacy,
     allow_share: options?.allow_share ?? true,
     co_creators: options?.co_creators || null,
   };
 
-  // Handle single media for backward compatibility
   if (options?.image_url) {
     postData.image_url = options.image_url;
   }
@@ -242,11 +226,9 @@ export async function createPost(
     postData.video_url = options.video_url;
   }
 
-  // If we have multiple media, use the first one as the main image/video
   if (options?.media && options.media.length > 0) {
     const firstMedia = options.media[0];
     
-    // Get public URL for the first media to store in main fields
     const { data } = supabase.storage
       .from('post-media')
       .getPublicUrl(firstMedia.url);
@@ -269,11 +251,10 @@ export async function createPost(
     return { ok: false, error: error.message };
   }
 
-  // Add ALL media to post_media table
   if (options?.media && options.media.length > 0) {
     const allMedia = options.media.map((m, index) => ({
       post_id: data.id,
-      storage_path: m.url,  // This should be the storage path
+      storage_path: m.url,
       type: m.type,
       sort_order: index,
       created_by: uid,
@@ -286,13 +267,11 @@ export async function createPost(
 
     if (mediaError) {
       console.error("Error adding media:", mediaError);
-      // Don't fail the whole post, just log the error
     } else {
       console.log(`Added ${allMedia.length} media items to post ${data.id}`);
     }
   }
 
-  // Send notifications to co-creators
   if (options?.co_creators && options.co_creators.length > 0) {
     await sendCoCreatorNotifications(data.id, uid, options.co_creators);
   }
@@ -311,7 +290,6 @@ export async function updatePost(
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
 
-  // Check if user is creator or co-creator
   const { data: post } = await supabase
     .from("posts")
     .select("user_id, co_creators")
@@ -325,7 +303,6 @@ export async function updatePost(
 
   if (!canEdit) return { ok: false, error: "Not authorized to edit this post" };
 
-  // Convert privacy to visibility for database
   const dbUpdates: any = { ...updates };
   if (updates.privacy) {
     dbUpdates.visibility = updates.privacy;
@@ -344,7 +321,6 @@ export async function deletePost(postId: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
 
-  // Only the original creator can delete
   const { data: post } = await supabase
     .from("posts")
     .select("user_id")
@@ -355,22 +331,17 @@ export async function deletePost(postId: string) {
     return { ok: false, error: "Not authorized to delete this post" };
   }
 
-  // Delete associated media from storage and database
   const { data: mediaItems } = await supabase
     .from("post_media")
     .select("storage_path")
     .eq("post_id", postId);
 
   if (mediaItems && mediaItems.length > 0) {
-    // Delete from storage
     const filePaths = mediaItems.map(item => item.storage_path);
     await supabase.storage.from("post-media").remove(filePaths);
-    
-    // Delete from database
     await supabase.from("post_media").delete().eq("post_id", postId);
   }
   
-  // Delete the post (likes and comments should cascade delete)
   const { error } = await supabase
     .from("posts")
     .delete()
@@ -387,7 +358,6 @@ export async function addMediaToPost(
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
 
-  // Check if user can edit
   const { data: post } = await supabase
     .from("posts")
     .select("user_id, co_creators")
@@ -401,7 +371,6 @@ export async function addMediaToPost(
 
   if (!canEdit) return { ok: false, error: "Not authorized to add media to this post" };
 
-  // Get current max sort_order
   const { data: existingMedia } = await supabase
     .from("post_media")
     .select("sort_order")
@@ -413,12 +382,11 @@ export async function addMediaToPost(
     ? (existingMedia[0].sort_order || 0) + 1 
     : 0;
 
-  // Add to post_media table
   const { error } = await supabase
     .from("post_media")
     .insert({
       post_id: postId,
-      storage_path: url,  // This should be the storage path, not public URL
+      storage_path: url,
       type: mediaType,    
       created_by: uid,
       uploaded_by: uid,
@@ -436,8 +404,7 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
   const uid = await me();
   if (!uid) return { url: null, error: "Not signed in" };
 
-  // File validation
-  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 50 * 1024 * 1024; // 5MB for images, 50MB for videos
+  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 50 * 1024 * 1024;
   if (file.size > maxSize) {
     return { 
       url: null, 
@@ -445,11 +412,10 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
     };
   }
 
-  // FIXED: Better file extension handling
   const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const fileName = `${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-  console.log(`Uploading ${type}: ${fileName}`); // Add logging
+  console.log(`Uploading ${type}: ${fileName}`);
 
   const { data, error } = await supabase.storage
     .from('post-media')
@@ -463,14 +429,11 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
     return { url: null, error: error.message };
   }
 
-  console.log(`Upload successful: ${data.path}`); // Add logging
+  console.log(`Upload successful: ${data.path}`);
 
-  // Return the storage path, not the public URL
-  // This will be stored in the database
   return { url: data.path, error: null };
 }
 
-// POST-LEVEL INTERACTIONS (existing)
 export async function toggleLike(post_id: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
@@ -513,7 +476,7 @@ export async function addComment(post_id: string, body: string) {
       .insert({ 
         post_id, 
         user_id: uid, 
-        body: body.trim() // Ensure trimmed
+        body: body.trim()
       })
       .select()
       .single();
@@ -531,7 +494,6 @@ export async function addComment(post_id: string, body: string) {
   }
 }
 
-// PHOTO-LEVEL INTERACTIONS (new!)
 export async function toggleMediaLike(media_id: string, reaction_type: string = 'like') {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in", liked: false };
@@ -591,7 +553,6 @@ export async function addPhotoComment(media_id: string, body: string) {
   console.log(`Adding comment to photo ${media_id}: "${body}"`);
   
   try {
-    // Get the post_id from the media
     const { data: media } = await supabase
       .from("post_media")
       .select("post_id")
@@ -628,7 +589,6 @@ export async function addPhotoComment(media_id: string, body: string) {
 
 export async function getPhotoComments(media_id: string) {
   try {
-    // First get all comments for this media
     const { data: commentsData, error: commentsError } = await supabase
       .from("photo_comments")
       .select("id, body, created_at, user_id")
@@ -644,14 +604,12 @@ export async function getPhotoComments(media_id: string) {
       return { comments: [], error: null };
     }
     
-    // Then fetch profile data for each unique user_id
     const userIds = [...new Set(commentsData.map(c => c.user_id))];
     const { data: profilesData } = await supabase
       .from("profiles")
       .select("id, full_name, avatar_url")
       .in("id", userIds);
     
-    // Create a map of user profiles
     const profilesMap = new Map();
     if (profilesData) {
       profilesData.forEach(profile => {
@@ -662,7 +620,6 @@ export async function getPhotoComments(media_id: string) {
       });
     }
     
-    // Combine comments with their profile data
     const formattedComments = commentsData.map((comment) => ({
       id: comment.id,
       body: comment.body,
@@ -686,7 +643,6 @@ export async function sendCoCreatorNotifications(
   creatorId: string,
   coCreatorIds: string[]
 ) {
-  // Get creator info
   const { data: creator } = await supabase
     .from("profiles")
     .select("full_name")
@@ -695,7 +651,6 @@ export async function sendCoCreatorNotifications(
 
   const creatorName = creator?.full_name || "Someone";
 
-  // Send notifications to each co-creator
   const notifications = coCreatorIds.map(userId => ({
     user_id: userId,
     type: 'co_creator_invite',
@@ -720,11 +675,7 @@ export function timeAgo(iso: string) {
   const w = Math.floor(d / 7);
   if (w < 52) return `${w}w ago`;
   return new Date(iso).toLocaleDateString();
-
-  // ============================================
-// UNIVERSAL COMMENT SYSTEM
-// Add these functions to the END of lib/posts.ts
-// ============================================
+}
 
 export type EntityType = 'post' | 'album' | 'gallery' | 'event' | 'good_news' | 'photo';
 
@@ -741,7 +692,6 @@ export interface Comment {
   replies?: Comment[];
 }
 
-// Map entity types to their table names and column names
 const COMMENT_CONFIG = {
   post: { table: 'post_comments', idColumn: 'post_id', parentColumn: 'parent_comment_id', bodyColumn: 'body' },
   album: { table: 'album_comments', idColumn: 'album_id', parentColumn: 'parent_id', bodyColumn: 'body' },
@@ -751,9 +701,6 @@ const COMMENT_CONFIG = {
   photo: { table: 'photo_comments', idColumn: 'media_id', parentColumn: 'parent_id', bodyColumn: 'body' }
 };
 
-/**
- * Get all comments for an entity (posts, albums, events, galleries, etc.)
- */
 export async function getComments(entityType: EntityType, entityId: string) {
   try {
     const config = COMMENT_CONFIG[entityType];
@@ -761,7 +708,6 @@ export async function getComments(entityType: EntityType, entityId: string) {
       return { comments: [], error: 'Invalid entity type' };
     }
 
-    // Get all comments for this entity
     const { data: commentsData, error: commentsError } = await supabase
       .from(config.table)
       .select('id, user_id, created_at, ' + config.bodyColumn + ', ' + config.parentColumn)
@@ -777,14 +723,12 @@ export async function getComments(entityType: EntityType, entityId: string) {
       return { comments: [], error: null };
     }
     
-    // Get unique user IDs
     const userIds = [...new Set(commentsData.map((c: any) => c.user_id))];
     const { data: profilesData } = await supabase
       .from('profiles')
       .select('id, full_name, avatar_url')
       .in('id', userIds);
     
-    // Create profile map
     const profilesMap = new Map();
     if (profilesData) {
       profilesData.forEach(profile => {
@@ -795,7 +739,6 @@ export async function getComments(entityType: EntityType, entityId: string) {
       });
     }
     
-    // Format comments with consistent structure
     const formattedComments: Comment[] = commentsData.map((comment: any) => ({
       id: comment.id,
       body: comment[config.bodyColumn],
@@ -808,11 +751,9 @@ export async function getComments(entityType: EntityType, entityId: string) {
       }
     }));
     
-    // Build threaded structure (parent comments with nested replies)
     const commentMap = new Map<string, Comment>();
     const rootComments: Comment[] = [];
     
-    // First pass: create map and identify root comments
     formattedComments.forEach(comment => {
       commentMap.set(comment.id, { ...comment, replies: [] });
       if (!comment.parent_id) {
@@ -820,7 +761,6 @@ export async function getComments(entityType: EntityType, entityId: string) {
       }
     });
     
-    // Second pass: build reply tree
     formattedComments.forEach(comment => {
       if (comment.parent_id) {
         const parent = commentMap.get(comment.parent_id);
@@ -838,9 +778,6 @@ export async function getComments(entityType: EntityType, entityId: string) {
   }
 }
 
-/**
- * Add a comment or reply to an entity
- */
 export async function addEntityComment(
   entityType: EntityType, 
   entityId: string, 
@@ -866,12 +803,10 @@ export async function addEntityComment(
       [config.bodyColumn]: body.trim()
     };
     
-    // Add parent_id if this is a reply
     if (parentId) {
       insertData[config.parentColumn] = parentId;
     }
     
-    // Special case for photo comments - need post_id
     if (entityType === 'photo') {
       const { data: media } = await supabase
         .from('post_media')
@@ -903,9 +838,6 @@ export async function addEntityComment(
   }
 }
 
-/**
- * Update a comment
- */
 export async function updateEntityComment(
   entityType: EntityType,
   commentId: string,
@@ -943,9 +875,6 @@ export async function updateEntityComment(
   }
 }
 
-/**
- * Delete a comment
- */
 export async function deleteEntityComment(
   entityType: EntityType,
   commentId: string
