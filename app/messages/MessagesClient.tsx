@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { createNotification } from "@/lib/notifications";
 
 type Friend = { id: string; full_name: string | null; avatar_url: string | null };
 type Msg = { id: number; sender_id: string; recipient_id: string; body: string; created_at: string };
@@ -148,14 +149,45 @@ export default function MessagesClient() {
     const supabase = supabaseRef.current;
     const text = body.trim();
     setBody("");
+    
     const { error } = await supabase
       .from("messages")
       .insert({ sender_id: userId, recipient_id: to, body: text });
+    
     if (error) {
       alert(error.message);
       setBody(text);
       return;
     }
+    
+    // Send notification to recipient
+    try {
+      // Get sender's name
+      const { data: senderProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .single();
+
+      const senderName = senderProfile?.full_name || 'Someone';
+      
+      // Create preview (first 50 chars of message)
+      const preview = text.length > 50 ? text.substring(0, 50) + '...' : text;
+
+      await createNotification({
+        recipient_id: to,
+        type: 'message.new',
+        title: `New message from ${senderName}`,
+        body: preview,
+        target_url: `/messages?to=${userId}`,
+        entity_table: 'messages',
+        actor_id: userId
+      });
+    } catch (notifError) {
+      console.error('Error sending message notification:', notifError);
+      // Don't fail the message if notification fails
+    }
+    
     await loadThread(userId, to);
   }
 
