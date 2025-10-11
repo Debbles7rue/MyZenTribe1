@@ -36,6 +36,31 @@ interface Comment {
   };
 }
 
+interface Attendee {
+  id: string;
+  full_name?: string;
+  avatar_url?: string;
+}
+
+interface SatelliteProposal {
+  id: string;
+  event_id: string;
+  proposer_id: string;
+  title: string;
+  description?: string;
+  location?: string;
+  start_time: string;
+  end_time?: string;
+  type: 'pre_event' | 'post_event';
+  created_at: string;
+  proposer?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+  rsvp_count?: number;
+  user_rsvp?: boolean;
+}
+
 export default function EventDetails({ 
   event, 
   onClose, 
@@ -62,6 +87,16 @@ export default function EventDetails({
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [canCarpool, setCanCarpool] = useState(false);
+  const [attendees, setAttendees] = useState<{going: Attendee[], interested: Attendee[]}>({going: [], interested: []});
+  const [satelliteProposals, setSatelliteProposals] = useState<SatelliteProposal[]>([]);
+  const [showProposalForm, setShowProposalForm] = useState<'pre_event' | 'post_event' | null>(null);
+  const [proposalFormData, setProposalFormData] = useState({
+    title: '',
+    description: '',
+    location: '',
+    start_time: '',
+    end_time: ''
+  });
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isHoliday = (event as any)?.event_type === 'holiday';
@@ -77,10 +112,14 @@ export default function EventDetails({
   useEffect(() => {
     if (event && event.allows_rsvp) {
       fetchRSVPData();
+      if ((event as any).rsvp_count_visible) {
+        fetchAttendees();
+      }
     }
     if (event && !isHoliday && !isSimpleEvent) {
       fetchEventMedia();
       fetchComments();
+      fetchSatelliteProposals();
     }
     if (event && currentUserId && event.created_by !== currentUserId) {
       checkCarpoolEligibility();
@@ -110,9 +149,60 @@ export default function EventDetails({
   }, [event?.id, isHoliday, isSimpleEvent]);
 
   useEffect(() => {
+    if (!event?.id || !event.allows_rsvp) return;
+
+    const channel = supabase
+      .channel(`event-rsvps-${event.id}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'event_rsvps', 
+          filter: `event_id=eq.${event.id}` 
+        },
+        () => {
+          fetchRSVPData();
+          if ((event as any).rsvp_count_visible) {
+            fetchAttendees();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [event?.id, event?.allows_rsvp]);
+
+  useEffect(() => {
+    if (!event?.id) return;
+
+    const channel = supabase
+      .channel(`event-satellites-${event.id}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'event_satellite_proposals', 
+          filter: `event_id=eq.${event.id}` 
+        },
+        () => fetchSatelliteProposals()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [event?.id]);
+
+  useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showFriendSelector) {
+        if (showProposalForm) {
+          setShowProposalForm(null);
+        } else if (showFriendSelector) {
           setShowFriendSelector(false);
         } else {
           onClose();
@@ -121,7 +211,7 @@ export default function EventDetails({
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose, showFriendSelector]);
+  }, [onClose, showFriendSelector, showProposalForm]);
 
   useEffect(() => {
     if (event) {
@@ -154,10 +244,15 @@ export default function EventDetails({
     if (!event) return;
 
     try {
-      const { data: rsvps } = await supabase
+      const { data: rsvps, error } = await supabase
         .from("event_rsvps")
         .select("status, user_id")
         .eq("event_id", event.id);
+
+      if (error) {
+        console.error("Error fetching RSVP data:", error);
+        return;
+      }
 
       if (rsvps) {
         const going = rsvps.filter(r => r.status === 'going').length;
@@ -172,6 +267,34 @@ export default function EventDetails({
       }
     } catch (error) {
       console.error("Error fetching RSVP data:", error);
+    }
+  };
+
+  const fetchAttendees = async () => {
+    if (!event?.id || !event.allows_rsvp) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('event_rsvps')
+        .select(`
+          status,
+          user:profiles!event_rsvps_user_id_fkey(id, full_name, avatar_url)
+        `)
+        .eq('event_id', event.id);
+
+      if (error) {
+        console.error('Error fetching attendees:', error);
+        return;
+      }
+
+      if (data) {
+        setAttendees({
+          going: data.filter(r => r.status === 'going').map(r => r.user).filter(Boolean) as Attendee[],
+          interested: data.filter(r => r.status === 'interested').map(r => r.user).filter(Boolean) as Attendee[]
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching attendees:', err);
     }
   };
 
@@ -216,13 +339,64 @@ export default function EventDetails({
         .eq('event_id', event.id)
         .order('created_at', { ascending: true });
 
-      if (!error && data) {
+      if (error) {
+        console.error('Error loading comments:', error);
+        showToast({ type: 'error', message: 'Failed to load comments' });
+        return;
+      }
+
+      if (data) {
         setComments(data as any);
       }
     } catch (err) {
       console.error('Error loading comments:', err);
     } finally {
       setIsLoadingComments(false);
+    }
+  };
+
+  const fetchSatelliteProposals = async () => {
+    if (!event?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('event_satellite_proposals')
+        .select(`
+          *,
+          proposer:profiles!event_satellite_proposals_proposer_id_fkey(full_name, avatar_url)
+        `)
+        .eq('event_id', event.id)
+        .order('start_time', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching satellite proposals:', error);
+        return;
+      }
+
+      if (data) {
+        const proposalsWithRsvps = await Promise.all(
+          data.map(async (proposal) => {
+            const { data: rsvps } = await supabase
+              .from('event_satellite_rsvps')
+              .select('user_id')
+              .eq('proposal_id', proposal.id);
+
+            const userRsvp = currentUserId 
+              ? rsvps?.some(r => r.user_id === currentUserId)
+              : false;
+
+            return {
+              ...proposal,
+              rsvp_count: rsvps?.length || 0,
+              user_rsvp: userRsvp
+            };
+          })
+        );
+
+        setSatelliteProposals(proposalsWithRsvps);
+      }
+    } catch (err) {
+      console.error('Error fetching satellite proposals:', err);
     }
   };
 
@@ -239,10 +413,14 @@ export default function EventDetails({
           body: newComment.trim()
         });
 
-      if (!error) {
-        setNewComment('');
-        showToast({ type: 'success', message: 'Comment posted!' });
+      if (error) {
+        console.error('Error sending comment:', error);
+        showToast({ type: 'error', message: 'Failed to post comment' });
+        return;
       }
+
+      setNewComment('');
+      showToast({ type: 'success', message: '💬 Comment posted!' });
     } catch (err) {
       console.error('Error sending comment:', err);
       showToast({ type: 'error', message: 'Failed to post comment' });
@@ -260,46 +438,123 @@ export default function EventDetails({
     setLoading(true);
     try {
       if (rsvpData.userStatus === status) {
-        await supabase
+        // Remove RSVP
+        const { error } = await supabase
           .from("event_rsvps")
           .delete()
           .eq("event_id", event.id)
           .eq("user_id", currentUserId);
 
-        setRsvpData(prev => ({
-          ...prev,
-          [status]: prev[status] - 1,
-          userStatus: null
-        }));
-
-        showToast({ type: 'success', message: 'RSVP removed' });
+        if (error) throw error;
+        showToast({ type: 'success', message: '❌ RSVP removed' });
       } else {
-        await supabase
+        // Add/update RSVP
+        const { error } = await supabase
           .from("event_rsvps")
           .upsert({
             event_id: event.id,
             user_id: currentUserId,
             status
+          }, {
+            onConflict: 'event_id,user_id'
           });
 
-        setRsvpData(prev => ({
-          going: status === 'going' 
-            ? prev.going + (prev.userStatus === 'interested' ? 0 : 1)
-            : prev.going - (prev.userStatus === 'going' ? 1 : 0),
-          interested: status === 'interested'
-            ? prev.interested + (prev.userStatus === 'going' ? 0 : 1)
-            : prev.interested - (prev.userStatus === 'interested' ? 1 : 0),
-          userStatus: status
-        }));
-
+        if (error) throw error;
         showToast({ 
           type: 'success', 
           message: status === 'going' ? "✅ You're going!" : "⭐ Marked as interested" 
         });
       }
-    } catch (error) {
+      
+      // Refetch RSVP data after successful update
+      await fetchRSVPData();
+      if ((event as any).rsvp_count_visible) {
+        await fetchAttendees();
+      }
+    } catch (error: any) {
       console.error("Error updating RSVP:", error);
-      showToast({ type: 'error', message: 'Failed to update RSVP' });
+      showToast({ type: 'error', message: error.message || 'Failed to update RSVP' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSatelliteRSVP = async (proposalId: string, currentStatus: boolean) => {
+    if (!currentUserId) {
+      showToast({ type: 'warning', message: 'Please sign in to RSVP' });
+      return;
+    }
+
+    try {
+      if (currentStatus) {
+        // Remove RSVP
+        const { error } = await supabase
+          .from('event_satellite_rsvps')
+          .delete()
+          .eq('proposal_id', proposalId)
+          .eq('user_id', currentUserId);
+
+        if (error) throw error;
+        showToast({ type: 'success', message: 'RSVP removed' });
+      } else {
+        // Add RSVP
+        const { error } = await supabase
+          .from('event_satellite_rsvps')
+          .insert({
+            proposal_id: proposalId,
+            user_id: currentUserId
+          });
+
+        if (error) throw error;
+        showToast({ type: 'success', message: "✅ You're in!" });
+      }
+
+      // Refetch proposals
+      await fetchSatelliteProposals();
+    } catch (error: any) {
+      console.error('Error updating satellite RSVP:', error);
+      showToast({ type: 'error', message: error.message || 'Failed to update RSVP' });
+    }
+  };
+
+  const handleCreateProposal = async () => {
+    if (!currentUserId || !event?.id || !showProposalForm) return;
+
+    if (!proposalFormData.title.trim() || !proposalFormData.start_time) {
+      showToast({ type: 'warning', message: 'Please fill in required fields' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('event_satellite_proposals')
+        .insert({
+          event_id: event.id,
+          proposer_id: currentUserId,
+          title: proposalFormData.title.trim(),
+          description: proposalFormData.description.trim() || null,
+          location: proposalFormData.location.trim() || null,
+          start_time: proposalFormData.start_time,
+          end_time: proposalFormData.end_time || null,
+          type: showProposalForm
+        });
+
+      if (error) throw error;
+
+      showToast({ type: 'success', message: '🎉 Proposal created!' });
+      setShowProposalForm(null);
+      setProposalFormData({
+        title: '',
+        description: '',
+        location: '',
+        start_time: '',
+        end_time: ''
+      });
+      await fetchSatelliteProposals();
+    } catch (error: any) {
+      console.error('Error creating proposal:', error);
+      showToast({ type: 'error', message: error.message || 'Failed to create proposal' });
     } finally {
       setLoading(false);
     }
@@ -478,7 +733,6 @@ export default function EventDetails({
     setShowShareMenu(false);
   };
 
-  // FIXED: Format duration helper
   const formatDuration = (startTime: string, endTime: string): string => {
     try {
       const start = new Date(startTime);
@@ -510,8 +764,6 @@ export default function EventDetails({
   const eventType = (event as any).event_type;
   const isReminder = eventType === 'reminder';
   const isTodo = eventType === 'todo';
-  const preEvent = (event as any).pre_event;
-  const postEvent = (event as any).post_event;
 
   const getHeaderColor = () => {
     if (isHoliday) return 'from-yellow-500 to-orange-600';
@@ -521,7 +773,7 @@ export default function EventDetails({
     return 'from-purple-600 to-blue-600';
   };
 
-  // HOLIDAY SPECIAL VIEW (unchanged)
+  // HOLIDAY SPECIAL VIEW
   if (isHoliday) {
     return ReactDOM.createPortal(
       <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
@@ -701,7 +953,7 @@ export default function EventDetails({
     );
   }
 
-  // REGULAR EVENT VIEW - FIXED FOR SIMPLE EVENTS
+  // REGULAR EVENT VIEW
   const modalContent = (
     <div 
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -718,28 +970,49 @@ export default function EventDetails({
 
         <div 
           ref={modalRef}
-          className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slideUp"
+          className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden animate-slideUp"
         >
           {/* Header */}
           <div className={`bg-gradient-to-r ${getHeaderColor()} text-white p-6`}>
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h2 id="event-title" className="text-2xl font-bold mb-2">
+                <h2 id="event-title" className="text-2xl md:text-3xl font-bold mb-2">
                   {isReminder && '🔔 '}
                   {isTodo && '✅ '}
                   {event.title}
                 </h2>
                 {event.start_time && (
-                  <div className="flex items-center gap-4 text-sm opacity-90">
-                    <span>📅 {new Date(event.start_time).toLocaleDateString()}</span>
-                    <span>⏰ {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <div className="flex flex-wrap items-center gap-3 md:gap-4 text-sm opacity-90">
+                    <span className="flex items-center gap-1">
+                      📅 {new Date(event.start_time).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      ⏰ {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {event.end_time && (
+                      <span className="flex items-center gap-1">
+                        ⏱️ {formatDuration(event.start_time, event.end_time)}
+                      </span>
+                    )}
                   </div>
                 )}
-                {(event as any).source === 'business' && (
-                  <span className="inline-block mt-2 bg-white/20 px-2 py-1 rounded text-xs">BUSINESS EVENT</span>
-                )}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {(event as any).source === 'business' && (
+                    <span className="inline-block bg-white/20 px-2 py-1 rounded text-xs font-medium">BUSINESS EVENT</span>
+                  )}
+                  <span className="inline-block bg-white/20 px-2 py-1 rounded text-xs font-medium">
+                    {event.visibility === 'private' && '🔒 Private'}
+                    {event.visibility === 'friends' && '👥 Friends'}
+                    {event.visibility === 'everyone' && '🌍 Public'}
+                  </span>
+                </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors" aria-label="Close">
+              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors ml-4" aria-label="Close">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -747,9 +1020,13 @@ export default function EventDetails({
             </div>
 
             {event.allows_rsvp && (event as any).rsvp_count_visible && (
-              <div className="mt-4 flex items-center gap-4 text-sm">
-                <span className="bg-white/20 px-3 py-1 rounded-full">✓ {rsvpData.going} going</span>
-                <span className="bg-white/20 px-3 py-1 rounded-full">☆ {rsvpData.interested} interested</span>
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                <span className="bg-white/20 px-3 py-1.5 rounded-full font-medium">
+                  ✓ {rsvpData.going} going
+                </span>
+                <span className="bg-white/20 px-3 py-1.5 rounded-full font-medium">
+                  ☆ {rsvpData.interested} interested
+                </span>
               </div>
             )}
           </div>
@@ -758,14 +1035,17 @@ export default function EventDetails({
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
             <div className="p-6 space-y-6">
               
-              {/* FIXED: Always show When section with proper formatting */}
+              {/* When Section */}
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-lg">When</h3>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-lg flex items-center gap-2">
+                  📅 When
+                </h3>
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-600">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Starts:</span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                    <span className="text-gray-600 dark:text-gray-400 font-medium">Starts:</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
                       {event.start_time ? new Date(event.start_time).toLocaleString([], {
+                        weekday: 'short',
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -775,9 +1055,10 @@ export default function EventDetails({
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Ends:</span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                    <span className="text-gray-600 dark:text-gray-400 font-medium">Ends:</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
                       {event.end_time ? new Date(event.end_time).toLocaleString([], {
+                        weekday: 'short',
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -786,81 +1067,270 @@ export default function EventDetails({
                       }) : 'Not set'}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Duration:</span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                    <span className="text-gray-600 dark:text-gray-400 font-medium">Duration:</span>
+                    <span className="font-bold text-purple-600 dark:text-purple-400">
                       {event.start_time && event.end_time ? formatDuration(event.start_time, event.end_time) : 'N/A'}
                     </span>
                   </div>
                 </div>
               </div>
 
+              {/* Description */}
               {event.description && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Description</h3>
-                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{event.description}</p>
-                </div>
-              )}
-
-              {event.location && (
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Location</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">📍</span>
-                    <p className="text-gray-600 dark:text-gray-400">{event.location}</p>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-lg flex items-center gap-2">
+                    📝 Description
+                  </h3>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{event.description}</p>
                   </div>
                 </div>
               )}
 
-              <div>
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Visibility</h3>
-                <div className="inline-flex items-center gap-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1 rounded-full text-sm">
-                  <span>
-                    {event.visibility === 'private' && '🔒 Private'}
-                    {event.visibility === 'friends' && '👥 Friends'}
-                    {event.visibility === 'everyone' && '🌍 Everyone'}
-                  </span>
+              {/* Location */}
+              {event.location && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-lg flex items-center gap-2">
+                    📍 Location
+                  </h3>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-start gap-3">
+                      <span className="text-3xl">📍</span>
+                      <div className="flex-1">
+                        <p className="text-gray-700 dark:text-gray-300 font-medium">{event.location}</p>
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 text-sm hover:underline mt-1 inline-block"
+                        >
+                          Open in Maps →
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* FIXED: Only show comments for complex events, not simple ones */}
+              {/* Attendees List */}
+              {event.allows_rsvp && (event as any).rsvp_count_visible && (attendees.going.length > 0 || attendees.interested.length > 0) && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-lg flex items-center gap-2">
+                    👥 Attendees
+                  </h3>
+                  <div className="space-y-4">
+                    {attendees.going.length > 0 && (
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                        <p className="font-medium text-green-800 dark:text-green-300 mb-3 flex items-center gap-2">
+                          ✅ Going ({attendees.going.length})
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {attendees.going.map((attendee) => (
+                            <div key={attendee.id} className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-full px-3 py-1.5 border border-green-200 dark:border-green-700">
+                              {attendee.avatar_url ? (
+                                <img src={attendee.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-6 h-6 bg-green-200 dark:bg-green-700 rounded-full flex items-center justify-center text-xs">
+                                  {attendee.full_name?.charAt(0) || '?'}
+                                </div>
+                              )}
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {attendee.full_name || 'Anonymous'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {attendees.interested.length > 0 && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                        <p className="font-medium text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                          ⭐ Interested ({attendees.interested.length})
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {attendees.interested.map((attendee) => (
+                            <div key={attendee.id} className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-full px-3 py-1.5 border border-blue-200 dark:border-blue-700">
+                              {attendee.avatar_url ? (
+                                <img src={attendee.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-6 h-6 bg-blue-200 dark:bg-blue-700 rounded-full flex items-center justify-center text-xs">
+                                  {attendee.full_name?.charAt(0) || '?'}
+                                </div>
+                              )}
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {attendee.full_name || 'Anonymous'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Satellite Events (Pre/Post Activities) */}
+              {!isSimpleEvent && currentUserId && (
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg flex items-center gap-2">
+                      🎯 Pre/Post Activities
+                    </h3>
+                    {!isCreator && event.allows_rsvp && rsvpData.userStatus === 'going' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowProposalForm('pre_event')}
+                          className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 text-sm font-medium transition-colors"
+                        >
+                          + Before
+                        </button>
+                        <button
+                          onClick={() => setShowProposalForm('post_event')}
+                          className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 text-sm font-medium transition-colors"
+                        >
+                          + After
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {satelliteProposals.length > 0 ? (
+                    <div className="space-y-3">
+                      {satelliteProposals.map((proposal) => (
+                        <div key={proposal.id} className={`rounded-lg p-4 border ${
+                          proposal.type === 'pre_event' 
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' 
+                            : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+                        }`}>
+                          <div className="flex justify-between items-start gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-lg">
+                                  {proposal.type === 'pre_event' ? '⏰' : '🎉'}
+                                </span>
+                                <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                                  {proposal.title}
+                                </h4>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  proposal.type === 'pre_event'
+                                    ? 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                    : 'bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200'
+                                }`}>
+                                  {proposal.type === 'pre_event' ? 'Before' : 'After'}
+                                </span>
+                              </div>
+                              
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                Proposed by {proposal.proposer?.full_name || 'Anonymous'}
+                              </p>
+
+                              {proposal.description && (
+                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">{proposal.description}</p>
+                              )}
+
+                              <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  ⏰ {new Date(proposal.start_time).toLocaleString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                                {proposal.location && (
+                                  <span className="flex items-center gap-1">
+                                    📍 {proposal.location}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1 font-medium">
+                                  👥 {proposal.rsvp_count || 0} interested
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleSatelliteRSVP(proposal.id, proposal.user_rsvp || false)}
+                              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors whitespace-nowrap ${
+                                proposal.user_rsvp
+                                  ? 'bg-green-500 text-white hover:bg-green-600'
+                                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                              }`}
+                            >
+                              {proposal.user_rsvp ? '✓ In' : 'Join'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-6 text-center border border-gray-200 dark:border-gray-600">
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                        {!isCreator && event.allows_rsvp && rsvpData.userStatus === 'going' ? (
+                          <>No pre/post activities yet. Want to grab dinner before or drinks after? Click + to propose one!</>
+                        ) : (
+                          <>No pre/post activities proposed yet</>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Comments Section */}
               {!isSimpleEvent && (
                 <div className="border-t dark:border-gray-700 pt-6">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 text-lg flex items-center gap-2">
                     💬 Comments & Discussion
                     {comments.length > 0 && (
-                      <span className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full font-normal">{comments.length}</span>
+                      <span className="text-sm bg-gray-200 dark:bg-gray-700 px-2.5 py-1 rounded-full font-normal">
+                        {comments.length}
+                      </span>
                     )}
                   </h3>
 
                   <div className="space-y-3 mb-4" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                     {isLoadingComments ? (
-                      <div className="text-center py-4 text-gray-500">Loading comments...</div>
+                      <div className="text-center py-8 text-gray-500">
+                        <div className="animate-spin w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                        Loading comments...
+                      </div>
                     ) : comments.length > 0 ? (
                       comments.map((comment) => (
-                        <div key={comment.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                        <div key={comment.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600 hover:border-purple-300 dark:hover:border-purple-700 transition-colors">
                           <div className="flex items-start gap-3">
                             {comment.user?.avatar_url ? (
-                              <img src={comment.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                              <img src={comment.user.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600" />
                             ) : (
-                              <div className="w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-xs">👤</div>
+                              <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white font-semibold">
+                                {comment.user?.full_name?.charAt(0) || '?'}
+                              </div>
                             )}
                             <div className="flex-1">
-                              <div className="flex items-baseline gap-2">
-                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{comment.user?.full_name || 'Anonymous'}</span>
+                              <div className="flex items-baseline gap-2 mb-1">
+                                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                  {comment.user?.full_name || 'Anonymous'}
+                                </span>
                                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {new Date(comment.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  {new Date(comment.created_at).toLocaleString([], { 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
                                 </span>
                               </div>
-                              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{comment.body}</p>
+                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{comment.body}</p>
                             </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <p>No comments yet</p>
-                        <p className="text-sm mt-1">Be the first to comment!</p>
+                      <div className="text-center py-12 bg-gray-50 dark:bg-gray-700/30 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                        <div className="text-4xl mb-3">💬</div>
+                        <p className="text-gray-500 dark:text-gray-400 font-medium">No comments yet</p>
+                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Be the first to start the conversation!</p>
                       </div>
                     )}
                   </div>
@@ -878,19 +1348,21 @@ export default function EventDetails({
                           }
                         }}
                         placeholder="Write a comment..."
-                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all"
                         disabled={isSendingComment}
                       />
                       <button
                         onClick={handleSendComment}
                         disabled={!newComment.trim() || isSendingComment}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all shadow-md hover:shadow-lg"
                       >
                         {isSendingComment ? '...' : 'Post'}
                       </button>
                     </div>
                   ) : (
-                    <div className="text-center py-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-600 dark:text-gray-400">Please sign in to comment</div>
+                    <div className="text-center py-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-gray-600 dark:text-gray-400 font-medium">Please sign in to comment</p>
+                    </div>
                   )}
                 </div>
               )}
@@ -900,24 +1372,28 @@ export default function EventDetails({
           {/* Footer Actions */}
           <div className="bg-gray-50 dark:bg-gray-800 px-6 py-4 border-t dark:border-gray-700">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {event.allows_rsvp && !isCreator && (
                   <>
                     <button
                       onClick={() => handleRSVP('going')}
                       disabled={loading}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        rsvpData.userStatus === 'going' ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300'
-                      } disabled:opacity-50`}
+                      className={`px-5 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md ${
+                        rsvpData.userStatus === 'going' 
+                          ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300' 
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       {rsvpData.userStatus === 'going' ? '✓ Going' : 'Going'}
                     </button>
                     <button
                       onClick={() => handleRSVP('interested')}
                       disabled={loading}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        rsvpData.userStatus === 'interested' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300'
-                      } disabled:opacity-50`}
+                      className={`px-5 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md ${
+                        rsvpData.userStatus === 'interested' 
+                          ? 'bg-blue-500 text-white hover:bg-blue-600 ring-2 ring-blue-300' 
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       {rsvpData.userStatus === 'interested' ? '☆ Interested' : 'Interested'}
                     </button>
@@ -925,14 +1401,14 @@ export default function EventDetails({
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {isCreator && onEdit && (
                   <button 
                     onClick={() => {
                       console.log('✏️ Edit button clicked for event:', event.id);
                       onEdit(event);
                     }} 
-                    className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 font-medium transition-colors"
+                    className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 font-medium transition-colors shadow-sm"
                   >
                     ✏️ Edit
                   </button>
@@ -941,7 +1417,7 @@ export default function EventDetails({
                 {isCreator && onDelete && (
                   <button 
                     onClick={handleDelete} 
-                    className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 font-medium transition-colors"
+                    className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 font-medium transition-colors shadow-sm"
                   >
                     🗑️ Delete
                   </button>
@@ -949,7 +1425,7 @@ export default function EventDetails({
                 
                 <button 
                   onClick={onClose} 
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                  className="px-5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors shadow-sm"
                 >
                   Close
                 </button>
@@ -958,6 +1434,112 @@ export default function EventDetails({
           </div>
         </div>
       </div>
+
+      {/* Proposal Form Modal */}
+      {showProposalForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowProposalForm(null)}
+          />
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-slideUp">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                {showProposalForm === 'pre_event' ? '⏰ Propose Pre-Event' : '🎉 Propose Post-Event'}
+              </h3>
+              <button
+                onClick={() => setShowProposalForm(null)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Title *
+                </label>
+                <input
+                  type="text"
+                  value={proposalFormData.title}
+                  onChange={(e) => setProposalFormData({...proposalFormData, title: e.target.value})}
+                  placeholder={showProposalForm === 'pre_event' ? 'e.g., Dinner before the show' : 'e.g., Drinks after'}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={proposalFormData.description}
+                  onChange={(e) => setProposalFormData({...proposalFormData, description: e.target.value})}
+                  placeholder="Add details..."
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={proposalFormData.location}
+                  onChange={(e) => setProposalFormData({...proposalFormData, location: e.target.value})}
+                  placeholder="Where?"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Start Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={proposalFormData.start_time}
+                  onChange={(e) => setProposalFormData({...proposalFormData, start_time: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  End Time (optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={proposalFormData.end_time}
+                  onChange={(e) => setProposalFormData({...proposalFormData, end_time: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowProposalForm(null)}
+                  className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateProposal}
+                  disabled={!proposalFormData.title.trim() || !proposalFormData.start_time || loading}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all"
+                >
+                  {loading ? 'Creating...' : 'Create Proposal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes fadeIn {
