@@ -21,6 +21,12 @@ interface Props {
   defaultVisibility?: Visibility;
 }
 
+interface Community {
+  id: string;
+  name: string;
+  title?: string;
+}
+
 // Extended form type to include pre/post events
 interface ExtendedEventForm extends EventForm {
   pre_event?: {
@@ -34,6 +40,7 @@ interface ExtendedEventForm extends EventForm {
     location?: string;
   };
   cover_photo?: string;
+  community_ids?: string[]; // Multiple communities
 }
 
 export default function UnifiedEventCreator({
@@ -70,7 +77,8 @@ export default function UnifiedEventCreator({
     tags: [],
     pre_event: undefined,
     post_event: undefined,
-    cover_photo: ''
+    cover_photo: '',
+    community_ids: []
   });
 
   // UI state
@@ -84,6 +92,71 @@ export default function UnifiedEventCreator({
   const [showPreEvent, setShowPreEvent] = useState(false);
   const [showPostEvent, setShowPostEvent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Community state
+  const [availableCommunities, setAvailableCommunities] = useState<Community[]>([]);
+  const [loadingCommunities, setLoadingCommunities] = useState(false);
+  const [showCommunitySection, setShowCommunitySection] = useState(false);
+
+  // Load communities when component opens
+  useEffect(() => {
+    if (open && (context === 'business' || context === 'community')) {
+      loadAvailableCommunities();
+    }
+  }, [open, context, businessId, userId]);
+
+  // Load communities the business/user is part of
+  const loadAvailableCommunities = async () => {
+    setLoadingCommunities(true);
+    try {
+      if (context === 'business' && businessId) {
+        // Load communities this business is part of
+        const { data, error } = await supabase
+          .from('business_communities')
+          .select(`
+            community_id,
+            communities (
+              id,
+              name,
+              title
+            )
+          `)
+          .eq('business_id', businessId);
+
+        if (!error && data) {
+          const communities = data
+            .map(bc => bc.communities)
+            .filter(Boolean) as Community[];
+          setAvailableCommunities(communities);
+        }
+      } else {
+        // Load communities the user is a member of
+        const { data, error } = await supabase
+          .from('community_members')
+          .select(`
+            community_id,
+            communities (
+              id,
+              name,
+              title
+            )
+          `)
+          .eq('user_id', userId)
+          .eq('status', 'active');
+
+        if (!error && data) {
+          const communities = data
+            .map(cm => cm.communities)
+            .filter(Boolean) as Community[];
+          setAvailableCommunities(communities);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading communities:', error);
+    } finally {
+      setLoadingCommunities(false);
+    }
+  };
 
   // Initialize form when editing
   useEffect(() => {
@@ -109,14 +182,20 @@ export default function UnifiedEventCreator({
         tags: editingEvent.tags || [],
         pre_event: (editingEvent as any).pre_event,
         post_event: (editingEvent as any).post_event,
-        cover_photo: (editingEvent as any).cover_photo || editingEvent.image_path || ''
+        cover_photo: (editingEvent as any).cover_photo || editingEvent.image_path || '',
+        community_ids: []
       });
+      
       if (editingEvent.image_path || (editingEvent as any).cover_photo) {
         setImagePreview(editingEvent.image_path || (editingEvent as any).cover_photo);
       }
+      
       // Set pre/post event visibility if they exist
       if ((editingEvent as any).pre_event) setShowPreEvent(true);
       if ((editingEvent as any).post_event) setShowPostEvent(true);
+
+      // Load existing community associations
+      loadEventCommunities(editingEvent.id);
     } else if (defaultDate) {
       const startStr = defaultDate.toISOString().slice(0, 16);
       const endDate = new Date(defaultDate.getTime() + 60 * 60 * 1000);
@@ -127,6 +206,28 @@ export default function UnifiedEventCreator({
       }));
     }
   }, [editingEvent, defaultDate]);
+
+  // Load communities this event is shared with
+  const loadEventCommunities = async (eventId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('event_communities')
+        .select('community_id')
+        .eq('event_id', eventId);
+
+      if (!error && data) {
+        setForm(prev => ({
+          ...prev,
+          community_ids: data.map(ec => ec.community_id)
+        }));
+        if (data.length > 0) {
+          setShowCommunitySection(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading event communities:', error);
+    }
+  };
 
   // Set context-specific defaults
   useEffect(() => {
@@ -186,6 +287,21 @@ export default function UnifiedEventCreator({
     setShowTemplates(false);
   };
 
+  // Toggle community selection
+  const toggleCommunity = (communityId: string) => {
+    setForm(prev => {
+      const currentIds = prev.community_ids || [];
+      const isSelected = currentIds.includes(communityId);
+      
+      return {
+        ...prev,
+        community_ids: isSelected
+          ? currentIds.filter(id => id !== communityId)
+          : [...currentIds, communityId]
+      };
+    });
+  };
+
   // Handle save
   const handleSave = async () => {
     setError('');
@@ -214,6 +330,32 @@ export default function UnifiedEventCreator({
         throw result.error;
       }
 
+      // Save community associations if any selected
+      if (result.data && form.community_ids && form.community_ids.length > 0) {
+        // Delete existing associations if editing
+        if (editingEvent) {
+          await supabase
+            .from('event_communities')
+            .delete()
+            .eq('event_id', result.data.id);
+        }
+
+        // Insert new associations
+        const communityLinks = form.community_ids.map(communityId => ({
+          event_id: result.data!.id,
+          community_id: communityId
+        }));
+
+        const { error: linkError } = await supabase
+          .from('event_communities')
+          .insert(communityLinks);
+
+        if (linkError) {
+          console.error('Error linking communities:', linkError);
+          // Don't fail the whole operation, just log it
+        }
+      }
+
       if (result.data && onSuccess) {
         onSuccess(result.data);
       }
@@ -240,12 +382,14 @@ export default function UnifiedEventCreator({
         tags: [],
         pre_event: undefined,
         post_event: undefined,
-        cover_photo: ''
+        cover_photo: '',
+        community_ids: []
       });
       setImagePreview(null);
       setShowAdvanced(false);
       setShowPreEvent(false);
       setShowPostEvent(false);
+      setShowCommunitySection(false);
       onClose();
     } catch (error: any) {
       setError(error.message || 'Failed to save event');
@@ -388,6 +532,67 @@ export default function UnifiedEventCreator({
                     placeholder="Where is this happening?"
                   />
                 </div>
+
+                {/* COMMUNITY SELECTION - NEW FEATURE */}
+                {availableCommunities.length > 0 && (
+                  <div className="space-y-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={showCommunitySection}
+                          onChange={(e) => {
+                            setShowCommunitySection(e.target.checked);
+                            if (!e.target.checked) {
+                              setForm(prev => ({ ...prev, community_ids: [] }));
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-blue-500 focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          📢 Share with Communities
+                        </span>
+                      </label>
+                    </div>
+
+                    {showCommunitySection && (
+                      <div className="ml-6 space-y-2 animate-in slide-in-from-top-1">
+                        {loadingCommunities ? (
+                          <div className="text-sm text-gray-500 py-2">Loading communities...</div>
+                        ) : (
+                          <>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                              Select which communities can see this event:
+                            </p>
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {availableCommunities.map(community => (
+                                <label
+                                  key={community.id}
+                                  className="flex items-center gap-2 p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded cursor-pointer transition-colors"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={form.community_ids?.includes(community.id)}
+                                    onChange={() => toggleCommunity(community.id)}
+                                    className="w-4 h-4 rounded text-blue-500 focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                                    {community.title || community.name}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                            {form.community_ids && form.community_ids.length > 0 && (
+                              <div className="mt-2 text-xs text-blue-700 dark:text-blue-300 font-medium">
+                                ✓ Sharing with {form.community_ids.length} communit{form.community_ids.length === 1 ? 'y' : 'ies'}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Pre/Post Event Options - Mobile Optimized - ALL ORIGINAL CLASSES PRESERVED */}
                 <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
