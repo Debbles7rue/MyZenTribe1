@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 export type MediaItem = {
   url: string;
   type: 'image' | 'video';
+  id?: string; // Add ID for photo-specific interactions
 };
 
 export type Post = {
@@ -137,14 +138,14 @@ export async function listHomeFeed(limit = 20, before?: string) {
     console.log("Error fetching likes/comments:", e);
   }
 
-  // Get additional media from post_media table - FIXED
+  // Get additional media from post_media table - FIXED with IDs
   let mediaByPost: Record<string, MediaItem[]> = {};
   
   try {
     // Query all post media at once (much more efficient)
     const { data: allMediaRows, error: mediaError } = await supabase
       .from("post_media")
-      .select("post_id, storage_path, type")
+      .select("id, post_id, storage_path, type")
       .in("post_id", ids)
       .order("sort_order", { ascending: true });
     
@@ -162,7 +163,8 @@ export async function listHomeFeed(limit = 20, before?: string) {
         
         mediaByPost[media.post_id].push({
           url: data.publicUrl,
-          type: media.type as 'image' | 'video'
+          type: media.type as 'image' | 'video',
+          id: media.id // Include media ID for photo-specific interactions
         });
       }
       
@@ -468,6 +470,7 @@ export async function uploadMedia(file: File, type: 'image' | 'video') {
   return { url: data.path, error: null };
 }
 
+// POST-LEVEL INTERACTIONS (existing)
 export async function toggleLike(post_id: string) {
   const uid = await me();
   if (!uid) return { ok: false, error: "Not signed in" };
@@ -525,6 +528,156 @@ export async function addComment(post_id: string, body: string) {
   } catch (err) {
     console.error('Comment error:', err);
     return { ok: false, error: 'Failed to add comment' };
+  }
+}
+
+// PHOTO-LEVEL INTERACTIONS (new!)
+export async function toggleMediaLike(media_id: string, reaction_type: string = 'like') {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in", liked: false };
+
+  const { data: existing } = await supabase
+    .from("media_likes")
+    .select("media_id")
+    .eq("media_id", media_id)
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("media_likes")
+      .delete()
+      .eq("media_id", media_id)
+      .eq("user_id", uid);
+    return { ok: !error, liked: false, error: error?.message || null };
+  } else {
+    const { error } = await supabase
+      .from("media_likes")
+      .insert({ media_id, user_id: uid, reaction_type });
+    return { ok: !error, liked: true, error: error?.message || null };
+  }
+}
+
+export async function getMediaLikes(media_id: string) {
+  const uid = await me();
+  
+  const { data, error } = await supabase
+    .from("media_likes")
+    .select("user_id, reaction_type")
+    .eq("media_id", media_id);
+
+  if (error) {
+    console.error('Error fetching media likes:', error);
+    return { likes: [], liked_by_me: false, count: 0 };
+  }
+
+  const liked_by_me = uid ? data.some(like => like.user_id === uid) : false;
+  
+  return {
+    likes: data || [],
+    liked_by_me,
+    count: data?.length || 0
+  };
+}
+
+export async function addPhotoComment(media_id: string, body: string) {
+  const uid = await me();
+  if (!uid) return { ok: false, error: "Not signed in" };
+  
+  if (!body.trim()) {
+    return { ok: false, error: "Comment cannot be empty" };
+  }
+  
+  console.log(`Adding comment to photo ${media_id}: "${body}"`);
+  
+  try {
+    // Get the post_id from the media
+    const { data: media } = await supabase
+      .from("post_media")
+      .select("post_id")
+      .eq("id", media_id)
+      .single();
+
+    if (!media) {
+      return { ok: false, error: "Media not found" };
+    }
+
+    const { data, error } = await supabase
+      .from("photo_comments")
+      .insert({ 
+        post_id: media.post_id,
+        media_id,
+        user_id: uid, 
+        body: body.trim()
+      })
+      .select()
+      .single();
+      
+    if (!error) {
+      console.log(`Photo comment added successfully:`, data);
+    } else {
+      console.error(`Error adding photo comment:`, error);
+    }
+      
+    return { ok: !error, data, error: error?.message || null };
+  } catch (err) {
+    console.error('Photo comment error:', err);
+    return { ok: false, error: 'Failed to add photo comment' };
+  }
+}
+
+export async function getPhotoComments(media_id: string) {
+  try {
+    // First get all comments for this media
+    const { data: commentsData, error: commentsError } = await supabase
+      .from("photo_comments")
+      .select("id, body, created_at, user_id")
+      .eq("media_id", media_id)
+      .order("created_at", { ascending: true });
+    
+    if (commentsError) {
+      console.error('Error loading photo comments:', commentsError);
+      return { comments: [], error: commentsError.message };
+    }
+    
+    if (!commentsData || commentsData.length === 0) {
+      return { comments: [], error: null };
+    }
+    
+    // Then fetch profile data for each unique user_id
+    const userIds = [...new Set(commentsData.map(c => c.user_id))];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", userIds);
+    
+    // Create a map of user profiles
+    const profilesMap = new Map();
+    if (profilesData) {
+      profilesData.forEach(profile => {
+        profilesMap.set(profile.id, {
+          full_name: profile.full_name || 'User',
+          avatar_url: profile.avatar_url || '/default-avatar.png'
+        });
+      });
+    }
+    
+    // Combine comments with their profile data
+    const formattedComments = commentsData.map((comment) => ({
+      id: comment.id,
+      body: comment.body,
+      created_at: comment.created_at,
+      user_id: comment.user_id,
+      author: profilesMap.get(comment.user_id) || {
+        full_name: 'User',
+        avatar_url: '/default-avatar.png'
+      }
+    }));
+    
+    return { comments: formattedComments, error: null };
+  } catch (error) {
+    console.error('Error loading photo comments:', error);
+    return { comments: [], error: 'Failed to load comments' };
   }
 }
 
