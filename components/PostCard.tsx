@@ -103,39 +103,62 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     }
   }, [post.image_url, post.video_url, post.additional_media]);
   
+  // FIXED: Changed from !inner to LEFT JOIN for better compatibility with RLS policies
   const loadComments = async () => {
     if (loadingComments) return;
     setLoadingComments(true);
     
     try {
-      const { data, error } = await supabase
+      // First, get all comments for this post
+      const { data: commentsData, error: commentsError } = await supabase
         .from("post_comments")
-        .select(`
-          id,
-          body,
-          created_at,
-          user_id,
-          profiles!inner(
-            full_name,
-            avatar_url
-          )
-        `)
+        .select("id, body, created_at, user_id")
         .eq("post_id", post.id)
         .order("created_at", { ascending: true });
       
-      if (!error && data) {
-        const formattedComments = data.map((comment: any) => ({
-          id: comment.id,
-          body: comment.body,
-          created_at: comment.created_at,
-          user_id: comment.user_id,
-          author: {
-            full_name: comment.profiles.full_name || 'User',
-            avatar_url: comment.profiles.avatar_url || '/default-avatar.png'
-          }
-        }));
-        setComments(formattedComments);
+      if (commentsError) {
+        console.error('Error loading comments:', commentsError);
+        setLoadingComments(false);
+        return;
       }
+      
+      if (!commentsData || commentsData.length === 0) {
+        setComments([]);
+        setLoadingComments(false);
+        return;
+      }
+      
+      // Then, fetch profile data separately for each unique user_id
+      const userIds = [...new Set(commentsData.map(c => c.user_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", userIds);
+      
+      // Create a map of user profiles
+      const profilesMap = new Map();
+      if (profilesData) {
+        profilesData.forEach(profile => {
+          profilesMap.set(profile.id, {
+            full_name: profile.full_name || 'User',
+            avatar_url: profile.avatar_url || '/default-avatar.png'
+          });
+        });
+      }
+      
+      // Combine comments with their profile data
+      const formattedComments = commentsData.map((comment) => ({
+        id: comment.id,
+        body: comment.body,
+        created_at: comment.created_at,
+        user_id: comment.user_id,
+        author: profilesMap.get(comment.user_id) || {
+          full_name: 'User',
+          avatar_url: '/default-avatar.png'
+        }
+      }));
+      
+      setComments(formattedComments);
     } catch (error) {
       console.error('Error loading comments:', error);
     } finally {
