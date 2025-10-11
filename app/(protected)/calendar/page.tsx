@@ -31,6 +31,8 @@ import MoodTracker from "./components/MoodTracker";
 import HolidayReminders from "./components/HolidayReminders";
 // REMOVED: CalendarDebugger import
 import CarpoolSettings from "./components/CarpoolSettings"; // NEW IMPORT
+// FIX #2: Import EventCreationForm for simple event editing
+import EventCreationForm from "@/components/EventCreationForm";
 import { Mode, TodoReminder, Friend, CarpoolMatch } from "./types";
 
 // Dynamic import for CalendarGrid to prevent SSR issues
@@ -73,6 +75,11 @@ export default function CalendarPage() {
   const [batchMode, setBatchMode] = useState(false);
   const [selectedBatchEvents, setSelectedBatchEvents] = useState<Set<string>>(new Set());
   const [gamificationEnabled, setGamificationEnabled] = useState(false);
+  
+  // FIX #2: New states for simple event editing
+  const [showSimpleEventEdit, setShowSimpleEventEdit] = useState(false);
+  const [simpleEventFormKey, setSimpleEventFormKey] = useState(0);
+  const [simpleEventInitialData, setSimpleEventInitialData] = useState<any>({});
   
   // Lists sidebar state
   const [showListsSidebar, setShowListsSidebar] = useState(false);
@@ -484,6 +491,102 @@ export default function CalendarPage() {
     setShowCarpoolChat(true);
   }, [setSelectedCarpoolEvent]);
 
+  // FIX #2: Handler for simple event form submission (MOBILE OPTIMIZED)
+  const handleSimpleEventFormSubmit = useCallback(async (eventData: any) => {
+    console.log('🎯 Simple event form submitted:', eventData);
+    
+    if (!me) {
+      showToast({ type: 'error', message: 'Please log in first' });
+      return;
+    }
+
+    try {
+      // Convert form data to database format
+      const startDateTime = new Date(`${eventData.date}T${eventData.startTime}`);
+      const endDateTime = new Date(`${eventData.date}T${eventData.endTime}`);
+      
+      const eventToUpdate = {
+        title: eventData.title,
+        description: eventData.description,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
+        location: eventData.location || null,
+        event_type: eventData.event_type,
+        recurrence_rule: eventData.repeatOption !== 'none' ? eventData.repeatOption : null,
+      };
+
+      console.log('📤 Updating event:', selected?.id);
+
+      const { error } = await supabase
+        .from('events')
+        .update(eventToUpdate)
+        .eq('id', selected?.id)
+        .eq('created_by', me);
+
+      if (error) {
+        console.error('❌ Update failed:', error);
+        showToast({ type: 'error', message: `Failed: ${error.message}` });
+        return;
+      }
+
+      console.log('✅ Event updated successfully');
+      
+      // Handle recurring events if custom days selected
+      if (eventData.repeatOption === 'custom' && eventData.customDays?.length > 0) {
+        const dayMap: { [key: string]: number } = { 
+          mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 
+        };
+        
+        const baseDate = new Date(`${eventData.date}T${eventData.startTime}`);
+        const baseDayOfWeek = baseDate.getDay();
+        const eventsToCreate = [];
+        
+        for (let week = 0; week < 4; week++) {
+          for (const day of eventData.customDays) {
+            const targetDay = dayMap[day];
+            let daysToAdd = targetDay - baseDayOfWeek + (week * 7);
+            if (week === 0 && daysToAdd <= 0) daysToAdd += 7;
+            if (daysToAdd === 0) continue;
+            
+            const newStartDate = new Date(baseDate);
+            newStartDate.setDate(newStartDate.getDate() + daysToAdd);
+            const newEndDate = new Date(`${eventData.date}T${eventData.endTime}`);
+            newEndDate.setDate(newEndDate.getDate() + daysToAdd);
+            
+            eventsToCreate.push({
+              ...eventToUpdate,
+              start_time: newStartDate.toISOString(),
+              end_time: newEndDate.toISOString(),
+              created_by: me
+            });
+          }
+        }
+        
+        if (eventsToCreate.length > 0) {
+          await supabase.from('events').insert(eventsToCreate);
+          showToast({ 
+            type: 'success', 
+            message: `✨ Event updated with ${eventsToCreate.length} recurring instances!` 
+          });
+        }
+      } else {
+        showToast({ type: 'success', message: '✨ Event updated!' });
+      }
+      
+      setShowSimpleEventEdit(false);
+      setSimpleEventInitialData({});
+      await loadCalendar();
+      
+      if (gamificationEnabled) {
+        addPoints(10, 'event-edit');
+      }
+      
+    } catch (error: any) {
+      console.error('💥 Error:', error);
+      showToast({ type: 'error', message: `Error: ${error.message}` });
+    }
+  }, [me, selected, showToast, loadCalendar, gamificationEnabled, addPoints]);
+
   const calendarEvents = useMemo(() => 
     mode === 'my' ? safeEvents : [],
     [mode, safeEvents]
@@ -796,6 +899,19 @@ export default function CalendarPage() {
           showToast={showToast}
         />
 
+        {/* FIX #2: Simple Event Edit Form - MOBILE OPTIMIZED */}
+        <EventCreationForm
+          key={simpleEventFormKey}
+          isOpen={showSimpleEventEdit}
+          onClose={() => {
+            setShowSimpleEventEdit(false);
+            setSimpleEventInitialData({});
+          }}
+          onSubmit={handleSimpleEventFormSubmit}
+          initialData={simpleEventInitialData}
+          isMobile={isMobile}
+        />
+
         {/* All Other Modals */}
         <CalendarModals
           openCreate={openCreate}
@@ -849,20 +965,69 @@ export default function CalendarPage() {
           }}
           handleUpdateEvent={handleUpdateEvent}
           handleEdit={(event: any) => {
-            setSelected(event);
-            setForm({
-              ...form,
-              title: event.title || "",
-              description: event.description || "",
-              location: event.location || "",
-              start: new Date(event.start_time).toISOString().slice(0, 16),
-              end: new Date(event.end_time).toISOString().slice(0, 16),
-              visibility: event.visibility,
-              event_type: event.event_type || ""
+            // FIX #2: INTELLIGENT ROUTING - Check if simple or complex event
+            const isSimpleEvent = event.source === 'personal' && !event.allows_rsvp;
+            
+            console.log('🔧 handleEdit called:', {
+              eventId: event.id,
+              source: event.source,
+              allows_rsvp: event.allows_rsvp,
+              isSimpleEvent
             });
-            setOpenEdit(true);
-            setDetailsOpen(false);
-            vibrate();
+            
+            if (isSimpleEvent) {
+              // Route to simple event form (MOBILE OPTIMIZED)
+              console.log('✅ Opening simple event editor');
+              
+              const startDate = new Date(event.start_time);
+              const endDate = new Date(event.end_time);
+              
+              setSimpleEventInitialData({
+                title: event.title || '',
+                description: event.description || '',
+                location: event.location || '',
+                date: startDate.toISOString().split('T')[0],
+                startTime: startDate.toLocaleTimeString('en-US', { 
+                  hour12: false, 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                }),
+                endTime: endDate.toLocaleTimeString('en-US', { 
+                  hour12: false, 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                }),
+                event_type: event.event_type || 'personal',
+                repeatOption: event.recurrence_rule || 'none',
+                customDays: [],
+                reminderOption: 'none'
+              });
+              
+              setSelected(event);
+              setSimpleEventFormKey(prev => prev + 1); // Force fresh form
+              setShowSimpleEventEdit(true);
+              setDetailsOpen(false);
+              vibrate();
+              
+            } else {
+              // Route to complex event editor (UnifiedEventCreator)
+              console.log('✅ Opening complex event editor');
+              
+              setSelected(event);
+              setForm({
+                ...form,
+                title: event.title || "",
+                description: event.description || "",
+                location: event.location || "",
+                start: new Date(event.start_time).toISOString().slice(0, 16),
+                end: new Date(event.end_time).toISOString().slice(0, 16),
+                visibility: event.visibility,
+                event_type: event.event_type || ""
+              });
+              setOpenEdit(true);
+              setDetailsOpen(false);
+              vibrate();
+            }
           }}
           handleApplyTemplate={handleApplyTemplate}
           createQuickItem={createQuickItem}
