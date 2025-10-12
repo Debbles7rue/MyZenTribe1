@@ -183,7 +183,7 @@ export default function AlbumCanvas({
     return (
       <div
         ref={canvasRef}
-        className="relative border-2 border-gray-300 rounded-lg"
+        className="relative border-2 border-gray-300 rounded-lg canvas-single-page"
         style={{
           minHeight: '500px',
           backgroundColor: currentPage.backgroundColor,
@@ -196,7 +196,7 @@ export default function AlbumCanvas({
         }}
       >
         {currentPage.elements.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+          <div className="absolute inset-0 flex items-center justify-center text-gray-400 empty-canvas">
             <div className="text-center">
               <p className="text-3xl mb-2">📸</p>
               <p className="text-lg">Add content to this page</p>
@@ -218,27 +218,66 @@ export default function AlbumCanvas({
             />
           ))
         )}
+
+        <style jsx>{`
+          /* Mobile Optimizations - Single Page */
+          @media (max-width: 768px) {
+            .canvas-single-page {
+              min-height: 400px !important;
+              touch-action: none;
+            }
+
+            .empty-canvas p {
+              font-size: 14px;
+            }
+
+            .empty-canvas p:first-child {
+              font-size: 2rem;
+            }
+          }
+
+          @media (max-width: 480px) {
+            .canvas-single-page {
+              min-height: 350px !important;
+            }
+
+            .empty-canvas p {
+              font-size: 13px;
+            }
+
+            .empty-canvas p:first-child {
+              font-size: 1.75rem;
+            }
+          }
+
+          /* Landscape mobile */
+          @media (max-width: 768px) and (orientation: landscape) {
+            .canvas-single-page {
+              min-height: 300px !important;
+            }
+          }
+        `}</style>
       </div>
     );
   }
 
   // Vertical Multi-Page View (for editing)
   return (
-    <div ref={canvasRef} className="space-y-8">
+    <div ref={canvasRef} className="space-y-8 canvas-multi-page">
       {pages.map((page, pageIndex) => (
         <div 
           key={page.id} 
-          className={`border-4 rounded-lg p-4 transition-all ${
+          className={`border-4 rounded-lg p-4 transition-all page-container ${
             pageIndex === currentPageIndex 
               ? 'border-purple-500 shadow-xl' 
               : 'border-dashed border-purple-300'
           }`}
         >
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-lg">📄 Page {pageIndex + 1}</h3>
+          <div className="flex items-center justify-between mb-2 page-header">
+            <h3 className="font-semibold text-lg page-title">📄 Page {pageIndex + 1}</h3>
             <button
               onClick={() => onSetCurrentPage(pageIndex)}
-              className={`px-3 py-1 rounded transition-all ${
+              className={`px-3 py-1 rounded transition-all edit-page-button ${
                 pageIndex === currentPageIndex 
                   ? 'bg-purple-500 text-white' 
                   : 'bg-gray-200 hover:bg-gray-300'
@@ -249,7 +288,7 @@ export default function AlbumCanvas({
           </div>
 
           <div
-            className="relative border-2 border-gray-300 rounded-lg"
+            className="relative border-2 border-gray-300 rounded-lg page-canvas"
             style={{
               minHeight: '500px',
               backgroundColor: page.backgroundColor,
@@ -262,11 +301,11 @@ export default function AlbumCanvas({
             }}
           >
             {page.elements.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400 empty-page">
                 <div className="text-center">
                   <p className="text-3xl mb-2">📸</p>
                   <p className="text-lg">Add content to this page</p>
-                  <p className="text-sm mt-2">
+                  <p className="text-sm mt-2 helper-text">
                     {pageIndex === currentPageIndex 
                       ? 'Click the buttons above to add photos, frames, and decorations' 
                       : 'Click "Edit This Page" to add content'}
@@ -293,6 +332,114 @@ export default function AlbumCanvas({
           </div>
         </div>
       ))}
+
+      <style jsx>{`
+        /* Mobile Optimizations - Multi-Page */
+        @media (max-width: 768px) {
+          .canvas-multi-page {
+            gap: 1.5rem;
+          }
+
+          .page-container {
+            padding: 0.75rem;
+            border-width: 3px;
+          }
+
+          .page-header {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .page-title {
+            font-size: 1rem;
+          }
+
+          .edit-page-button {
+            padding: 0.625rem 0.875rem;
+            font-size: 13px;
+            touch-action: manipulation;
+            white-space: nowrap;
+          }
+
+          .page-canvas {
+            min-height: 400px !important;
+            touch-action: none;
+          }
+
+          .empty-page {
+            padding: 1rem;
+          }
+
+          .empty-page p {
+            font-size: 14px;
+          }
+
+          .empty-page p:first-child {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+          }
+
+          .helper-text {
+            font-size: 12px;
+            padding: 0 1rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .canvas-multi-page {
+            gap: 1rem;
+          }
+
+          .page-container {
+            padding: 0.5rem;
+            border-width: 2px;
+          }
+
+          .page-title {
+            font-size: 0.875rem;
+          }
+
+          .edit-page-button {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 12px;
+          }
+
+          .page-canvas {
+            min-height: 350px !important;
+          }
+
+          .empty-page p {
+            font-size: 13px;
+          }
+
+          .empty-page p:first-child {
+            font-size: 1.75rem;
+          }
+
+          .helper-text {
+            font-size: 11px;
+          }
+        }
+
+        /* Landscape mobile */
+        @media (max-width: 768px) and (orientation: landscape) {
+          .page-canvas {
+            min-height: 300px !important;
+          }
+        }
+
+        /* Better touch support */
+        @media (hover: none) and (pointer: coarse) {
+          .page-canvas {
+            touch-action: none;
+          }
+
+          .edit-page-button {
+            min-height: 44px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
