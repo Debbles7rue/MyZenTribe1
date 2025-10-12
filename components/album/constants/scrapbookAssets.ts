@@ -172,14 +172,88 @@ export const FRAME_STYLES: {
     background: '#1a1a1a',
     category: 'decorative'
   },
-  cork: {
-    name: '📌 Cork Board',
-    border: '16px solid #c19a6b',
-    shadow: '0 4px 8px rgba(0,0,0,0.3)',
-    background: 'radial-gradient(circle, #d2b48c 0%, #c19a6b 100%)',
-    padding: '16px',
+  rainbow: {
+    name: '🌈 Rainbow',
+    border: '8px solid transparent',
+    shadow: '0 0 0 8px rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.2)',
+    background: 'linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)',
+    padding: '8px',
     category: 'decorative'
   },
+  notebook: {
+    name: '📓 Notebook',
+    border: '8px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    background: 'repeating-linear-gradient(white 0px, white 24px, #e0e0e0 24px, #e0e0e0 25px)',
+    padding: '8px',
+    category: 'decorative'
+  },
+  watercolor: {
+    name: '🎨 Watercolor',
+    border: 'none',
+    shadow: '0 4px 12px rgba(139,92,246,0.3)',
+    clipPath: 'polygon(1% 3%, 5% 0%, 10% 2%, 15% 0%, 20% 3%, 25% 1%, 30% 2%, 35% 0%, 40% 2%, 45% 1%, 50% 0%, 55% 2%, 60% 1%, 65% 0%, 70% 3%, 75% 1%, 80% 2%, 85% 0%, 90% 3%, 95% 1%, 99% 2%, 100% 5%, 98% 10%, 100% 15%, 99% 20%, 100% 25%, 98% 30%, 100% 35%, 99% 40%, 100% 45%, 98% 50%, 100% 55%, 99% 60%, 100% 65%, 98% 70%, 100% 75%, 99% 80%, 100% 85%, 98% 90%, 99% 95%, 97% 99%, 95% 100%, 90% 98%, 85% 100%, 80% 99%, 75% 100%, 70% 98%, 65% 100%, 60% 99%, 55% 100%, 50% 98%, 45% 100%, 40% 99%, 35% 100%, 30% 98%, 25% 100%, 20% 99%, 15% 100%, 10% 98%, 5% 99%, 2% 97%, 0% 95%, 2% 90%, 0% 85%, 1% 80%, 0% 75%, 2% 70%, 0% 65%, 1% 60%, 0% 55%, 2% 50%, 0% 45%, 1% 40%, 0% 35%, 2% 30%, 0% 25%, 1% 20%, 0% 15%, 2% 10%, 0% 5%)',
+    background: 'linear-gradient(135deg, rgba(139,92,246,0.1), rgba(236,72,153,0.1))',
+    padding: '12px',
+    category: 'decorative'
+  },
+  glitter: {
+    name: '✨ Gold Glitter',
+    border: '10px solid transparent',
+    shadow: '0 0 20px rgba(255,215,0,0.6), 0 4px 8px rgba(0,0,0,0.3)',
+    background: 'radial-gradient(circle at 20% 50%, #ffd700 0%, transparent 50%), radial-gradient(circle at 80% 20%, #ffed4e 0%, transparent 50%), radial-gradient(circle at 40% 80%, #ffd700 0%, transparent 50%), radial-gradient(circle at 60% 60%, #ffed4e 0%, transparent 50%), linear-gradient(135deg, #ffd700, #ffed4e)',
+    padding: '10px',
+    category: 'decorative'
+  },
+  metallic: {
+    name: '🌙 Silver Metallic',
+    border: '8px solid transparent',
+    shadow: '0 4px 8px rgba(192,192,192,0.5)',
+    background: 'linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 25%, #e8e8e8 50%, #c0c0c0 75%, #e8e8e8 100%)',
+    padding: '8px',
+    category: 'decorative'
+  },
+  comic: {
+    name: '📚 Comic Book',
+    border: '6px solid #000',
+    shadow: '4px 4px 0px #ffff00, 8px 8px 0px #000',
+    background: 'white',
+    padding: '6px',
+    category: 'decorative'
+  },
+  confetti: {
+    name: '🎊 Confetti',
+    border: '10px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    background: 'radial-gradient(circle at 10% 20%, #ff6b9d 0%, transparent 30%), radial-gradient(circle at 90% 80%, #ffc371 0%, transparent 30%), radial-gradient(circle at 70% 30%, #c3a6ff 0%, transparent 30%), radial-gradient(circle at 30% 70%, #6effc3 0%, transparent 30%), radial-gradient(circle at 50% 50%, #ff9a9e 0%, transparent 30%), white',
+    padding: '10px',
+    category: 'decorative'
+  },
+  stitched: {
+    name: '🧵 Stitched',
+    border: '8px solid #f5f5f5',
+    shadow: '0 0 0 2px #333, 0 4px 8px rgba(0,0,0,0.2)',
+    background: 'repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(51,51,51,0.1) 10px, rgba(51,51,51,0.1) 11px)',
+    padding: '8px',
+    category: 'decorative'
+  },
+  brushstroke: {
+    name: '🖌️ Brush Strokes',
+    border: 'none',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    clipPath: 'polygon(2% 5%, 8% 2%, 15% 4%, 22% 1%, 30% 3%, 38% 2%, 45% 4%, 52% 1%, 60% 3%, 68% 2%, 75% 4%, 82% 1%, 90% 3%, 95% 5%, 98% 10%, 100% 18%, 99% 25%, 100% 33%, 98% 40%, 100% 48%, 99% 55%, 100% 63%, 98% 70%, 100% 78%, 99% 85%, 97% 92%, 94% 97%, 88% 99%, 82% 98%, 75% 99%, 68% 97%, 60% 99%, 52% 98%, 45% 99%, 38% 97%, 30% 99%, 22% 98%, 15% 99%, 8% 97%, 3% 94%, 1% 88%, 2% 82%, 0% 75%, 2% 68%, 1% 60%, 0% 52%, 2% 45%, 1% 38%, 0% 30%, 2% 22%, 1% 15%, 0% 8%)',
+    background: 'white',
+    padding: '12px',
+    category: 'decorative'
+  },
+  carnival: {
+    name: '🎪 Carnival',
+    border: '12px solid transparent',
+    shadow: '0 4px 8px rgba(0,0,0,0.3)',
+    background: 'repeating-linear-gradient(45deg, #ff0000 0px, #ff0000 20px, #ffffff 20px, #ffffff 40px, #ff0000 40px, #ff0000 60px, #ffff00 60px, #ffff00 80px)',
+    padding: '12px',
+    category: 'decorative'
+  }
   
   // SHAPE CROPS
   circle: {
