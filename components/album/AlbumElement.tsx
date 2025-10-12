@@ -53,15 +53,22 @@ export default function AlbumElement({
       {/* Frame with Photo */}
       {element.type === 'frame' && element.frameStyle && (
         <div 
-          className="w-full h-full flex items-center justify-center"
+          className="w-full h-full flex items-center justify-center overflow-hidden"
           style={{
-            ...FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES],
+            padding: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].padding,
+            background: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].background,
+            border: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].border,
+            borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius,
             boxShadow: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].shadow
           }}
         >
-          <div className="w-full h-full overflow-hidden" style={{
-            borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius
-          }}>
+          <div 
+            className="w-full h-full overflow-hidden" 
+            style={{
+              borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius,
+              clipPath: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].clipPath
+            }}
+          >
             <img 
               src={element.content} 
               alt="" 
@@ -144,7 +151,9 @@ export default function AlbumElement({
               }}
             />
           ) : (
-            <span>{element.content.split(' - ')[0]}</span>
+            <span style={{ fontSize: `${Math.min(element.width, element.height) * 0.8}px` }}>
+              {element.content.split(' - ')[0]}
+            </span>
           )}
         </div>
       )}
