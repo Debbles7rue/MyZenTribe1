@@ -70,7 +70,19 @@ export const STICKER_LIBRARY = {
 };
 
 // Frame Styles
-export const FRAME_STYLES = {
+export const FRAME_STYLES: {
+  [key: string]: {
+    name: string;
+    border?: string;
+    shadow: string;
+    padding?: string;
+    background?: string;
+    borderRadius?: string;
+    clipPath?: string;
+    category: 'decorative' | 'shape';
+    isPureShape?: boolean;
+  }
+} = {
   // DECORATIVE FRAMES
   polaroid: {
     name: '📷 Polaroid',
