@@ -120,7 +120,7 @@ export default function AlbumElement({
         <div 
           className="flex items-center justify-center w-full h-full"
           style={{ 
-            fontSize: `${element.fontSize}px`,
+            fontSize: `${Math.min(element.width, element.height) * 0.8}px`,
             lineHeight: 1
           }}
         >
