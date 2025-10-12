@@ -240,18 +240,18 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
   const currentPage = pages[currentPageIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 album-viewer">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">{album.title}</h1>
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-4 album-header">
+          <div className="flex justify-between items-start header-content">
+            <div className="header-info">
+              <h1 className="text-3xl font-bold mb-2 album-title">{album.title}</h1>
               {album.description && (
-                <p className="text-gray-600 mb-4">{album.description}</p>
+                <p className="text-gray-600 mb-4 album-description">{album.description}</p>
               )}
               
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-4 text-sm text-gray-500 album-meta">
                 <div className="flex items-center gap-2">
                   {album.creator?.avatar_url && (
                     <img 
@@ -269,7 +269,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 header-actions">
               {canEdit && (
                 <button
                   onClick={openEditor}
@@ -289,11 +289,11 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
 
           {/* Collaboration Invite Banner */}
           {inviteStatus === 'pending' && (
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg invite-banner">
               <p className="text-yellow-800 mb-3">
                 You've been invited to collaborate on this album!
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 invite-actions">
                 <button
                   onClick={acceptInvite}
                   className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
@@ -312,7 +312,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
 
           {/* Collaborators List */}
           {collaborators.length > 0 && (
-            <div className="mt-4">
+            <div className="mt-4 collaborators-section">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">Collaborators:</h3>
               <div className="flex flex-wrap gap-2">
                 {collaborators.map(collab => (
@@ -344,12 +344,12 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
 
         {/* Album Page Viewer - BOOK FLIP STYLE */}
         {currentPage ? (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4 page-viewer">
+            <div className="flex justify-between items-center mb-4 page-header">
+              <h2 className="text-xl font-semibold page-title">
                 📖 Page {currentPageIndex + 1} of {pages.length}
               </h2>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-500 page-template-badge">
                 {currentPage.template !== 'freeform' && (
                   <span className="px-2 py-1 bg-purple-100 text-purple-600 rounded">
                     {currentPage.template} layout
@@ -360,7 +360,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
 
             {/* Page Canvas */}
             <div 
-              className="relative border-2 border-gray-200 rounded-lg overflow-hidden shadow-inner"
+              className="relative border-2 border-gray-200 rounded-lg overflow-hidden shadow-inner page-canvas"
               style={{
                 minHeight: '600px',
                 backgroundColor: currentPage.background_color || '#ffffff'
@@ -389,7 +389,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
             </div>
 
             {/* Comments Section */}
-            <div className="mt-6">
+            <div className="mt-6 comments-section">
               <AlbumPageComments
                 pageId={currentPage.id}
                 albumId={params.id}
@@ -405,19 +405,19 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
 
         {/* Page Navigation - BOOK FLIP STYLE */}
         {pages.length > 1 && (
-          <div className="bg-white rounded-xl shadow-lg p-4">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-xl shadow-lg p-4 page-navigation">
+            <div className="flex items-center justify-between nav-controls">
               <button
                 onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
                 disabled={currentPageIndex === 0}
-                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2"
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2 nav-button"
               >
                 <span className="text-xl">←</span>
                 <span>Previous</span>
               </button>
 
               {/* Page Numbers */}
-              <div className="flex gap-2 overflow-x-auto max-w-md">
+              <div className="flex gap-2 overflow-x-auto max-w-md page-numbers">
                 {pages.map((_, index) => (
                   <button
                     key={index}
@@ -436,7 +436,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
               <button
                 onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
                 disabled={currentPageIndex === pages.length - 1}
-                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2"
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2 nav-button"
               >
                 <span>Next</span>
                 <span className="text-xl">→</span>
@@ -444,7 +444,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
             </div>
 
             {/* Page Counter */}
-            <div className="text-center mt-3 text-sm text-gray-500">
+            <div className="text-center mt-3 text-sm text-gray-500 page-counter">
               Page {currentPageIndex + 1} of {pages.length}
             </div>
           </div>
@@ -452,7 +452,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
 
         {/* Quick Actions */}
         {pages.length > 0 && (
-          <div className="mt-4 text-center space-y-2">
+          <div className="mt-4 text-center space-y-2 tips-section">
             <p className="text-sm text-gray-600">
               💡 Tip: Use arrow keys to navigate between pages
             </p>
@@ -486,6 +486,201 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
           font-weight: 500;
           border: none;
           cursor: pointer;
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .album-viewer {
+            padding: 0.5rem;
+          }
+
+          .album-header {
+            padding: 1rem;
+          }
+
+          .header-content {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .header-info {
+            width: 100%;
+          }
+
+          .album-title {
+            font-size: 1.5rem;
+            line-height: 1.3;
+          }
+
+          .album-description {
+            font-size: 14px;
+          }
+
+          .album-meta {
+            flex-wrap: wrap;
+            font-size: 12px;
+            gap: 0.5rem;
+          }
+
+          .album-meta span {
+            white-space: nowrap;
+          }
+
+          .header-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .header-actions button {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .invite-banner {
+            padding: 0.875rem;
+          }
+
+          .invite-actions {
+            flex-direction: column;
+          }
+
+          .invite-actions button {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .collaborators-section {
+            font-size: 14px;
+          }
+
+          .page-viewer {
+            padding: 0.75rem;
+          }
+
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+
+          .page-title {
+            font-size: 1.125rem;
+          }
+
+          .page-template-badge {
+            font-size: 12px;
+          }
+
+          .page-canvas {
+            min-height: 400px !important;
+          }
+
+          .comments-section {
+            margin-top: 1rem;
+          }
+
+          .page-navigation {
+            padding: 0.75rem;
+          }
+
+          .nav-controls {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .nav-button {
+            width: 100%;
+            justify-content: center;
+            padding: 0.875rem 1rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .page-numbers {
+            width: 100%;
+            max-width: 100%;
+            justify-content: center;
+            padding: 0.5rem 0;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .page-numbers::-webkit-scrollbar {
+            height: 4px;
+          }
+
+          .page-numbers::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 2px;
+          }
+
+          .page-numbers button {
+            min-width: 36px;
+            height: 36px;
+            font-size: 14px;
+            flex-shrink: 0;
+          }
+
+          .page-counter {
+            font-size: 13px;
+          }
+
+          .tips-section {
+            padding: 0 0.5rem;
+          }
+
+          .tips-section p {
+            font-size: 13px;
+          }
+        }
+
+        /* Small mobile screens */
+        @media (max-width: 480px) {
+          .album-title {
+            font-size: 1.25rem;
+          }
+
+          .album-meta {
+            font-size: 11px;
+          }
+
+          .page-title {
+            font-size: 1rem;
+          }
+
+          .page-canvas {
+            min-height: 350px !important;
+          }
+
+          .nav-button {
+            padding: 0.75rem;
+            font-size: 13px;
+          }
+
+          .nav-button span:not(.text-xl) {
+            display: none;
+          }
+
+          .page-numbers button {
+            min-width: 32px;
+            height: 32px;
+            font-size: 13px;
+          }
+        }
+
+        /* Landscape mobile orientation */
+        @media (max-width: 768px) and (orientation: landscape) {
+          .page-canvas {
+            min-height: 300px !important;
+          }
+
+          .album-title {
+            font-size: 1.25rem;
+          }
         }
       `}</style>
     </div>
