@@ -46,6 +46,7 @@ export default function CreateAlbumPage() {
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showTextEditor, setShowTextEditor] = useState(false);
   const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
+  const [showInsertPageMenu, setShowInsertPageMenu] = useState(false);
 
   // Get user on mount
   useEffect(() => {
@@ -288,7 +289,7 @@ export default function CreateAlbumPage() {
     setPages(updatedPages);
   }
 
-  // Add new page
+  // Add new page (to end)
   function addNewPage() {
     if (pages.length >= 100) {
       alert('Maximum 100 pages allowed');
@@ -302,6 +303,27 @@ export default function CreateAlbumPage() {
       template: 'freeform'
     }]);
     setCurrentPageIndex(pages.length);
+  }
+
+  // Insert page at specific position
+  function insertPageAt(position: number) {
+    if (pages.length >= 100) {
+      alert('Maximum 100 pages allowed');
+      return;
+    }
+
+    const newPage: AlbumPage = {
+      id: `page-${Date.now()}`,
+      elements: [],
+      backgroundColor: '#ffffff',
+      template: 'freeform'
+    };
+
+    const updatedPages = [...pages];
+    updatedPages.splice(position, 0, newPage);
+    setPages(updatedPages);
+    setCurrentPageIndex(position);
+    setShowInsertPageMenu(false);
   }
 
   // Save album
@@ -418,8 +440,8 @@ export default function CreateAlbumPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
-      <div className="flex">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 mobile-album-create">
+      <div className="flex album-layout">
         {/* Sticky Sidebar Toolbar */}
         <StickySidebarToolbar
           currentTemplate={pages[currentPageIndex]?.template || 'freeform'}
@@ -437,9 +459,9 @@ export default function CreateAlbumPage() {
         />
 
         {/* Main Content */}
-        <div className="flex-1 max-w-5xl mx-auto">
+        <div className="flex-1 max-w-5xl mx-auto album-main-content">
           {/* Header */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4 album-header">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
               ✨ Create Scrapbook Album
             </h1>
@@ -498,10 +520,10 @@ export default function CreateAlbumPage() {
           </div>
 
           {/* Canvas */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4 album-canvas-container">
+            <div className="flex items-center justify-between mb-4 canvas-header">
               <h2 className="text-xl font-semibold">📖 All Pages (Editing View)</h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 canvas-actions">
                 {selectedElement && (
                   <>
                     <button
@@ -542,19 +564,66 @@ export default function CreateAlbumPage() {
               showAllPages={true}
             />
 
-            {/* Add New Page Button */}
-            {pages.length < 100 && (
-              <button
-                onClick={addNewPage}
-                className="w-full mt-8 py-8 border-4 border-dashed border-purple-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all"
-              >
-                <span className="text-2xl">➕ Add New Page</span>
-              </button>
-            )}
+            {/* Page Management Buttons */}
+            <div className="mt-8 space-y-4">
+              {/* Add New Page at End */}
+              {pages.length < 100 && (
+                <button
+                  onClick={addNewPage}
+                  className="w-full py-8 border-4 border-dashed border-purple-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all add-page-btn"
+                >
+                  <span className="text-2xl">➕ Add New Page (at end)</span>
+                </button>
+              )}
+
+              {/* Insert Page Button */}
+              {pages.length < 100 && pages.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowInsertPageMenu(!showInsertPageMenu)}
+                    className="w-full py-6 border-4 border-dashed border-blue-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all insert-page-btn"
+                  >
+                    <span className="text-xl">📄 Insert Page Between Existing Pages</span>
+                  </button>
+
+                  {/* Insert Page Dropdown Menu */}
+                  {showInsertPageMenu && (
+                    <div className="absolute z-10 w-full mt-2 bg-white border-2 border-blue-400 rounded-lg shadow-xl max-h-64 overflow-y-auto insert-menu">
+                      <div className="p-2">
+                        <div className="text-sm font-semibold text-gray-600 px-3 py-2 border-b">
+                          Insert new page after:
+                        </div>
+                        {pages.map((_, index) => (
+                          <button
+                            key={index}
+                            onClick={() => insertPageAt(index + 1)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors rounded-lg"
+                          >
+                            <span className="font-medium">Page {index + 1}</span>
+                            <span className="text-sm text-gray-500 ml-2">
+                              (Insert after this)
+                            </span>
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => insertPageAt(0)}
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors rounded-lg border-t"
+                        >
+                          <span className="font-medium">Beginning</span>
+                          <span className="text-sm text-gray-500 ml-2">
+                            (Insert as first page)
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Actions */}
-          <div className="flex justify-between mb-8">
+          <div className="flex justify-between mb-8 album-actions">
             <button
               onClick={() => router.push('/profile')}
               className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
@@ -611,6 +680,158 @@ export default function CreateAlbumPage() {
         onClose={() => setShowBackgroundPicker(false)}
         onChange={changeBackground}
       />
+
+      <style jsx>{`
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .mobile-album-create {
+            padding: 0.5rem;
+          }
+
+          .album-layout {
+            flex-direction: column;
+          }
+
+          .album-main-content {
+            width: 100%;
+            max-width: 100%;
+            padding: 0;
+          }
+
+          .album-header {
+            padding: 1rem;
+            border-radius: 0.75rem;
+          }
+
+          .album-header h1 {
+            font-size: 1.5rem;
+            line-height: 1.3;
+          }
+
+          .album-header input,
+          .album-header select,
+          .album-header textarea {
+            font-size: 16px; /* Prevents iOS zoom */
+            padding: 0.75rem;
+          }
+
+          .album-canvas-container {
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+          }
+
+          .canvas-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+          }
+
+          .canvas-header h2 {
+            font-size: 1.125rem;
+          }
+
+          .canvas-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .canvas-actions button,
+          .canvas-actions select {
+            width: 100%;
+            font-size: 14px;
+            padding: 0.75rem;
+            touch-action: manipulation;
+          }
+
+          .add-page-btn {
+            padding: 3rem 1rem;
+            margin-top: 1.5rem;
+          }
+
+          .add-page-btn span {
+            font-size: 1.25rem;
+          }
+
+          .insert-page-btn {
+            padding: 2rem 1rem;
+          }
+
+          .insert-page-btn span {
+            font-size: 1.125rem;
+          }
+
+          .insert-menu {
+            max-height: 50vh;
+          }
+
+          .insert-menu button {
+            padding: 0.875rem 1rem;
+            font-size: 14px;
+          }
+
+          .album-actions {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .album-actions button {
+            width: 100%;
+            padding: 1rem;
+            font-size: 16px;
+            touch-action: manipulation;
+          }
+        }
+
+        /* Small mobile screens */
+        @media (max-width: 480px) {
+          .album-header h1 {
+            font-size: 1.25rem;
+          }
+
+          .album-header {
+            padding: 0.75rem;
+          }
+
+          .album-canvas-container {
+            padding: 0.5rem;
+          }
+
+          .canvas-header h2 {
+            font-size: 1rem;
+          }
+
+          .add-page-btn {
+            padding: 2rem 0.75rem;
+          }
+
+          .add-page-btn span {
+            font-size: 1.125rem;
+          }
+
+          .insert-page-btn {
+            padding: 1.5rem 0.75rem;
+          }
+
+          .insert-page-btn span {
+            font-size: 1rem;
+          }
+        }
+
+        /* Landscape mobile orientation */
+        @media (max-width: 768px) and (orientation: landscape) {
+          .album-header h1 {
+            font-size: 1.25rem;
+          }
+
+          .add-page-btn {
+            padding: 2rem 1rem;
+          }
+
+          .insert-page-btn {
+            padding: 1.5rem 1rem;
+          }
+        }
+      `}</style>
     </div>
   );
 }
