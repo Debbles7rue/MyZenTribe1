@@ -281,6 +281,122 @@ export default function AlbumCreator() {
           opacity: 0.5;
           cursor: not-allowed;
         }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .album-creator {
+            padding: 0.5rem;
+          }
+
+          .toolbar {
+            padding: 0.75rem;
+            gap: 0.75rem;
+          }
+
+          .title-input {
+            width: 100%;
+            min-width: unset;
+            padding: 0.75rem;
+            font-size: 16px; /* Prevents zoom on iOS */
+          }
+
+          .tool-buttons {
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .tool-btn {
+            flex: 1;
+            min-width: calc(50% - 0.25rem);
+            padding: 0.75rem 0.5rem;
+            font-size: 14px;
+            white-space: nowrap;
+            touch-action: manipulation; /* Better touch response */
+          }
+
+          .template-select {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 16px; /* Prevents zoom on iOS */
+            border-radius: 0.375rem;
+            border: 1px solid #e5e7eb;
+          }
+
+          .album-canvas {
+            padding: 0.5rem;
+            min-height: 400px;
+            border-radius: 0.5rem;
+          }
+
+          .page-container {
+            height: 400px;
+            touch-action: none; /* Better for drag interactions */
+          }
+
+          .element {
+            touch-action: none;
+          }
+
+          .element img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          .page-nav {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.5rem;
+          }
+
+          .page-nav button {
+            padding: 0.75rem 1rem;
+            font-size: 14px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 0.375rem;
+            touch-action: manipulation;
+            cursor: pointer;
+          }
+
+          .page-nav span {
+            width: 100%;
+            text-align: center;
+            font-size: 14px;
+            order: -1; /* Move to top on mobile */
+          }
+
+          .save-btn {
+            width: calc(100% - 1rem);
+            margin: 1rem 0.5rem;
+            padding: 1rem;
+            font-size: 16px;
+            touch-action: manipulation;
+          }
+        }
+
+        /* Small mobile screens */
+        @media (max-width: 480px) {
+          .tool-btn {
+            font-size: 13px;
+            padding: 0.625rem 0.375rem;
+          }
+
+          .album-canvas {
+            padding: 0.25rem;
+            min-height: 350px;
+          }
+
+          .page-container {
+            height: 350px;
+          }
+
+          .page-nav button {
+            font-size: 13px;
+            padding: 0.625rem 0.75rem;
+          }
+        }
       `}</style>
     </div>
   );
