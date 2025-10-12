@@ -71,61 +71,188 @@ export const STICKER_LIBRARY = {
 
 // Frame Styles
 export const FRAME_STYLES = {
+  // DECORATIVE FRAMES
   polaroid: {
     name: '📷 Polaroid',
     border: '12px solid white',
     shadow: '0 4px 8px rgba(0,0,0,0.3)',
     padding: '12px 12px 40px 12px',
-    background: 'white'
+    background: 'white',
+    category: 'decorative'
   },
   vintage: {
     name: '🖼️ Vintage',
     border: '8px solid #d4a574',
     shadow: '0 2px 4px rgba(0,0,0,0.2)',
     padding: '8px',
-    background: '#f5e6d3'
+    background: '#f5e6d3',
+    category: 'decorative'
   },
   torn: {
     name: '📄 Torn Paper',
     border: 'none',
     shadow: '0 3px 6px rgba(0,0,0,0.2)',
     clipPath: 'polygon(0 2%, 3% 0, 97% 0, 100% 3%, 100% 97%, 98% 100%, 2% 100%, 0 98%)',
-    background: 'white'
+    background: 'white',
+    category: 'decorative'
   },
   floral: {
     name: '🌸 Floral',
     border: '6px solid #ffc0cb',
     shadow: '0 2px 4px rgba(255,192,203,0.4)',
     borderRadius: '20px',
-    background: '#fff0f5'
+    background: '#fff0f5',
+    category: 'decorative'
   },
   film: {
     name: '🎞️ Film Strip',
     border: '8px solid #333',
     shadow: '0 3px 6px rgba(0,0,0,0.3)',
     background: 'repeating-linear-gradient(90deg, transparent, transparent 8px, #333 8px, #333 12px)',
-    padding: '8px'
+    padding: '8px',
+    category: 'decorative'
   },
   scalloped: {
     name: '✂️ Scalloped',
     border: '4px solid #fff',
     shadow: '0 2px 4px rgba(0,0,0,0.2)',
     borderRadius: '50% 50% 50% 50% / 10% 10% 10% 10%',
-    background: 'white'
+    background: 'white',
+    category: 'decorative'
   },
   stamp: {
     name: '📮 Postage Stamp',
     border: '3px dashed #d32f2f',
     shadow: '0 2px 4px rgba(0,0,0,0.2)',
     padding: '6px',
-    background: 'white'
+    background: 'white',
+    category: 'decorative'
   },
   rustic: {
     name: '🪵 Rustic Wood',
     border: '10px solid #8b4513',
     shadow: '0 4px 8px rgba(0,0,0,0.3)',
     background: 'linear-gradient(45deg, #8b4513 25%, #a0522d 25%, #a0522d 50%, #8b4513 50%, #8b4513 75%, #a0522d 75%, #a0522d)',
-    padding: '10px'
+    padding: '10px',
+    category: 'decorative'
+  },
+  double: {
+    name: '🎨 Double Border',
+    border: '8px solid white',
+    shadow: '0 0 0 3px #8b5cf6, 0 4px 8px rgba(0,0,0,0.2)',
+    padding: '8px',
+    background: 'white',
+    category: 'decorative'
+  },
+  gold: {
+    name: '✨ Gold Frame',
+    border: '12px solid #ffd700',
+    shadow: '0 4px 8px rgba(255,215,0,0.4)',
+    background: 'linear-gradient(135deg, #ffd700, #ffed4e, #ffd700)',
+    padding: '12px',
+    category: 'decorative'
+  },
+  neon: {
+    name: '💫 Neon Glow',
+    border: '4px solid #ff00ff',
+    shadow: '0 0 20px #ff00ff, 0 0 40px #ff00ff',
+    padding: '8px',
+    background: '#1a1a1a',
+    category: 'decorative'
+  },
+  cork: {
+    name: '📌 Cork Board',
+    border: '16px solid #c19a6b',
+    shadow: '0 4px 8px rgba(0,0,0,0.3)',
+    background: 'radial-gradient(circle, #d2b48c 0%, #c19a6b 100%)',
+    padding: '16px',
+    category: 'decorative'
+  },
+  
+  // SHAPE CROPS
+  circle: {
+    name: '⭕ Circle',
+    clipPath: 'circle(50% at 50% 50%)',
+    border: '4px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    category: 'shape'
+  },
+  star: {
+    name: '⭐ Star',
+    clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
+    border: '4px solid #ffd700',
+    shadow: '0 4px 8px rgba(255,215,0,0.4)',
+    category: 'shape'
+  },
+  heart: {
+    name: '💕 Heart',
+    clipPath: 'path("M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z")',
+    border: '4px solid #ff69b4',
+    shadow: '0 4px 8px rgba(255,105,180,0.4)',
+    category: 'shape'
+  },
+  hexagon: {
+    name: '⬡ Hexagon',
+    clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+    border: '4px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    category: 'shape'
+  },
+  octagon: {
+    name: '⬢ Octagon',
+    clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+    border: '4px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    category: 'shape'
+  },
+  diamond: {
+    name: '💎 Diamond',
+    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+    border: '4px solid #00d4ff',
+    shadow: '0 4px 8px rgba(0,212,255,0.4)',
+    category: 'shape'
+  },
+  cloud: {
+    name: '☁️ Cloud',
+    clipPath: 'polygon(0% 35%, 7% 25%, 15% 18%, 30% 15%, 45% 15%, 60% 18%, 75% 25%, 88% 35%, 95% 50%, 93% 65%, 85% 75%, 70% 82%, 50% 85%, 30% 82%, 15% 75%, 7% 65%, 3% 50%)',
+    border: '4px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    category: 'shape'
+  },
+  shield: {
+    name: '🛡️ Shield',
+    clipPath: 'polygon(50% 0%, 100% 20%, 100% 60%, 50% 100%, 0% 60%, 0% 20%)',
+    border: '4px solid #4169e1',
+    shadow: '0 4px 8px rgba(65,105,225,0.4)',
+    category: 'shape'
+  },
+  flower: {
+    name: '🌼 Flower',
+    clipPath: 'polygon(50% 0%, 55% 20%, 75% 15%, 65% 35%, 85% 40%, 70% 50%, 85% 60%, 65% 65%, 75% 85%, 55% 80%, 50% 100%, 45% 80%, 25% 85%, 35% 65%, 15% 60%, 30% 50%, 15% 40%, 35% 35%, 25% 15%, 45% 20%)',
+    border: '4px solid #ff69b4',
+    shadow: '0 4px 8px rgba(255,105,180,0.4)',
+    category: 'shape'
+  },
+  speech: {
+    name: '💬 Speech Bubble',
+    clipPath: 'polygon(0% 0%, 100% 0%, 100% 75%, 75% 75%, 75% 100%, 50% 75%, 0% 75%)',
+    border: '4px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    category: 'shape'
+  },
+  ticket: {
+    name: '🎫 Ticket Stub',
+    clipPath: 'polygon(0% 0%, 90% 0%, 95% 5%, 100% 5%, 100% 15%, 95% 15%, 95% 85%, 100% 85%, 100% 95%, 95% 95%, 90% 100%, 0% 100%)',
+    border: '3px dashed #9c27b0',
+    shadow: '0 2px 4px rgba(156,39,176,0.3)',
+    category: 'shape'
+  },
+  triangle: {
+    name: '▲ Triangle',
+    clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+    border: '4px solid white',
+    shadow: '0 4px 8px rgba(0,0,0,0.2)',
+    category: 'shape'
   }
 };
 
