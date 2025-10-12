@@ -186,7 +186,7 @@ export const FRAME_STYLES = {
   },
   heart: {
     name: '💕 Heart',
-    clipPath: 'path("M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z")',
+    clipPath: 'polygon(50% 15%, 60% 5%, 75% 5%, 90% 20%, 90% 40%, 75% 60%, 50% 90%, 25% 60%, 10% 40%, 10% 20%, 25% 5%, 40% 5%)',
     border: '4px solid #ff69b4',
     shadow: '0 4px 8px rgba(255,105,180,0.4)',
     category: 'shape'
@@ -367,3 +367,14 @@ export function getWashiTapeStyle(decoration: string) {
     return 'repeating-linear-gradient(45deg, #ffd700, #ffd700 5px, #ffed4e 5px, #ffed4e 10px)';
   }
 }
+
+// Helper function to get frames by category
+export function getFramesByCategory(category: 'decorative' | 'shape') {
+  return Object.entries(FRAME_STYLES).filter(([_, style]) => style.category === category);
+}
+
+// Get all frame categories
+export const FRAME_CATEGORIES = {
+  decorative: '🎨 Decorative Frames',
+  shape: '⭐ Shape Crops'
+};
