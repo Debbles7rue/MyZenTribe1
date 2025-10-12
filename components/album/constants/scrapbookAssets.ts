@@ -253,7 +253,7 @@ export const FRAME_STYLES: {
     background: 'repeating-linear-gradient(45deg, #ff0000 0px, #ff0000 20px, #ffffff 20px, #ffffff 40px, #ff0000 40px, #ff0000 60px, #ffff00 60px, #ffff00 80px)',
     padding: '12px',
     category: 'decorative'
-  }
+  },
   
   // SHAPE CROPS
   circle: {
