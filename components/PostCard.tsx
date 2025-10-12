@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { Post, toggleLike, addComment, deletePost } from "@/lib/posts";
 import { supabase } from "@/lib/supabaseClient";
+import { createNotification } from "@/lib/notifications";
 import PhotoGrid from "./PostCard/PhotoGrid";
 import PostLightbox from "./PostCard/PostLightbox";
 import IndividualPhotoModal from "./PostCard/IndividualPhotoModal";
@@ -198,6 +199,70 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
       if (result.ok) {
         setCommentText("");
         await loadComments();
+        
+        // Send notification to post owner (if not commenting on own post)
+        if (post.user_id && post.user_id !== currentUserId) {
+          try {
+            // Get commenter's name
+            const { data: commenterProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', currentUserId)
+              .single();
+
+            const commenterName = commenterProfile?.full_name || 'Someone';
+
+            await createNotification({
+              recipient_id: post.user_id,
+              type: 'post.comment',
+              title: 'New Comment',
+              body: `${commenterName} commented on your post`,
+              target_url: `/post/${post.id}`,
+              entity_table: 'posts',
+              entity_id: post.id,
+              actor_id: currentUserId
+            });
+          } catch (notifError) {
+            console.error('Error sending comment notification:', notifError);
+            // Don't fail the comment if notification fails
+          }
+        }
+
+        // Send notifications to co-creators (if they exist and aren't the commenter)
+        if (post.co_creators && post.co_creators.length > 0) {
+          try {
+            // Get commenter's name
+            const { data: commenterProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', currentUserId)
+              .single();
+
+            const commenterName = commenterProfile?.full_name || 'Someone';
+
+            // Send to each co-creator (except the commenter)
+            const notificationPromises = post.co_creators
+              .filter(coCreatorId => coCreatorId !== currentUserId)
+              .map(coCreatorId => 
+                createNotification({
+                  recipient_id: coCreatorId,
+                  type: 'post.comment',
+                  title: 'New Comment',
+                  body: `${commenterName} commented on a post you co-created`,
+                  target_url: `/post/${post.id}`,
+                  entity_table: 'posts',
+                  entity_id: post.id,
+                  actor_id: currentUserId
+                })
+              );
+
+            await Promise.all(notificationPromises);
+          } catch (notifError) {
+            console.error('Error sending co-creator notifications:', notifError);
+            // Don't fail the comment if notifications fail
+          }
+        }
+        
         if (onChanged) {
           setTimeout(() => onChanged(), 100);
         }
