@@ -1,48 +1,21 @@
 // app/albums/create/page.tsx
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import FriendSelector from '@/components/FriendSelector';
 
-// Types
-type AlbumElement = {
-  id: string;
-  type: 'photo' | 'video' | 'text' | 'sticker';
-  content: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotation: number;
-  zIndex: number;
-  fontSize?: number;
-  fontColor?: string;
-  fontFamily?: string;
-};
-
-type AlbumPage = {
-  id: string;
-  elements: AlbumElement[];
-  backgroundColor: string;
-  backgroundImage?: string;
-  template: string;
-};
-
-// Expanded sticker library
-const STICKER_LIBRARY = {
-  emotions: ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😜', '🤪', '😝', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕'],
-  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️'],
-  celebration: ['🎉', '🎊', '🎈', '🎁', '🎂', '🎄', '🎃', '🎆', '🎇', '🧨', '✨', '🎐', '🎀', '🎗️', '🎟️', '🎫', '🎖️', '🏆', '🏅', '🥇', '🥈', '🥉'],
-  nature: ['🌸', '💮', '🏵️', '🌺', '🌻', '🌷', '🌹', '🥀', '🌼', '🌵', '🌲', '🌳', '🌴', '🌱', '🌿', '☘️', '🍀', '🍁', '🍂', '🍃', '🌾', '🌙', '☀️', '⭐', '🌟', '✨', '⚡', '🔥', '💫', '🌈'],
-  animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄', '🐴', '🐝', '🦋', '🐌', '🐞', '🐢', '🐙', '🦀', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈'],
-  food: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑', '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🍿', '🍩', '🍪', '🎂', '🍰', '🧁', '🍫', '🍬', '🍭', '🍮'],
-  activities: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🎮', '🎯', '🎲', '🎰', '🎳', '🎸', '🎵', '🎶', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎻', '🎬', '🎨', '🎭', '🎪', '🎟️', '🎫'],
-  travel: ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🚚', '🚛', '🚜', '🛵', '🏍️', '🚲', '🛴', '✈️', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛳️', '⛴️', '🚢', '🗺️', '🗿', '🗽', '🗼', '🏰', '🏯', '🎡', '🎢', '🎠'],
-  objects: ['💌', '📌', '📍', '📎', '🔗', '📏', '📐', '✂️', '🗃️', '🗄️', '🗑️', '🔒', '🔓', '🔏', '🔐', '🔑', '🗝️', '🔨', '🪓', '⛏️', '⚒️', '🛠️', '🗡️', '⚔️', '💣', '🪃', '🏹', '🛡️', '🪚', '🔧', '🪛', '🔩', '⚙️', '🗜️', '⚖️', '🔗', '⛓️', '🪝', '🧰', '🧲', '🪜', '⚗️', '🧪', '🧫', '🧬', '🔬', '🔭', '📡'],
-  symbols: ['💋', '💯', '💢', '💥', '💫', '💦', '💨', '🕳️', '💤', '👋', '✋', '🖐️', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤝', '🙏']
-};
+// Import our new components
+import { AlbumPage, AlbumElement } from '@/components/album/constants/scrapbookAssets';
+import AlbumCanvas from '@/components/album/AlbumCanvas';
+import AlbumToolbar from '@/components/album/AlbumToolbar';
+import FramePicker from '@/components/album/modals/FramePicker';
+import LabelEditor from '@/components/album/modals/LabelEditor';
+import DecorationPicker from '@/components/album/modals/DecorationPicker';
+import StickerPicker from '@/components/album/modals/StickerPicker';
+import TextEditor from '@/components/album/modals/TextEditor';
+import BackgroundPicker from '@/components/album/modals/BackgroundPicker';
 
 export default function CreateAlbumPage() {
   const router = useRouter();
@@ -50,13 +23,13 @@ export default function CreateAlbumPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   
-  // Album data
+  // Album metadata
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [privacy, setPrivacy] = useState<'private' | 'public'>('private');
   const [collaborators, setCollaborators] = useState<string[]>([]);
   
-  // Pages
+  // Pages and elements
   const [pages, setPages] = useState<AlbumPage[]>([{
     id: 'page-1',
     elements: [],
@@ -64,22 +37,15 @@ export default function CreateAlbumPage() {
     template: 'freeform'
   }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  
-  // UI states
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
-  const [draggedElement, setDraggedElement] = useState<string | null>(null);
+  
+  // Modal states
+  const [showFramePicker, setShowFramePicker] = useState(false);
+  const [showLabelEditor, setShowLabelEditor] = useState(false);
+  const [showDecorationPicker, setShowDecorationPicker] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showTextEditor, setShowTextEditor] = useState(false);
   const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
-  const [editingText, setEditingText] = useState('');
-  const [textStyle, setTextStyle] = useState({
-    fontSize: 24,
-    fontColor: '#000000',
-    fontFamily: 'Arial'
-  });
-
-  // Refs
-  const canvasRef = useRef<HTMLDivElement>(null);
 
   // Get user on mount
   useEffect(() => {
@@ -102,7 +68,6 @@ export default function CreateAlbumPage() {
         const fileExt = file.name.split('.').pop();
         const fileName = `${userId}/album-${Date.now()}-${i}.${fileExt}`;
         
-        // Upload to storage
         const { data, error } = await supabase.storage
           .from('post-media')
           .upload(fileName, file);
@@ -128,14 +93,8 @@ export default function CreateAlbumPage() {
         }
       }
 
-      // Add elements to current page
       if (newElements.length > 0) {
-        const updatedPages = [...pages];
-        updatedPages[currentPageIndex] = {
-          ...currentPage,
-          elements: [...currentPage.elements, ...newElements]
-        };
-        setPages(updatedPages);
+        updatePageElements(currentPageIndex, [...currentPage.elements, ...newElements]);
       }
     } catch (error) {
       console.error('Upload failed:', error);
@@ -145,28 +104,77 @@ export default function CreateAlbumPage() {
     }
   }
 
-  // Add text element
-  function addTextElement() {
-    if (!editingText.trim()) return;
+  // Update element on a specific page
+  function updateElement(pageIndex: number, elementId: string, updates: Partial<AlbumElement>) {
+    const updatedPages = [...pages];
+    const elementIndex = updatedPages[pageIndex].elements.findIndex(el => el.id === elementId);
+    
+    if (elementIndex !== -1) {
+      updatedPages[pageIndex].elements[elementIndex] = {
+        ...updatedPages[pageIndex].elements[elementIndex],
+        ...updates
+      };
+      setPages(updatedPages);
+    }
+  }
 
+  // Update all elements on a page
+  function updatePageElements(pageIndex: number, elements: AlbumElement[]) {
+    const updatedPages = [...pages];
+    updatedPages[pageIndex].elements = elements;
+    setPages(updatedPages);
+  }
+
+  // Add frame to selected photo
+  function addFrame(frameStyle: string) {
+    if (!selectedElement) return;
+    
+    const element = pages[currentPageIndex].elements.find(el => el.id === selectedElement);
+    if (element && (element.type === 'photo' || element.type === 'frame')) {
+      updateElement(currentPageIndex, selectedElement, {
+        type: 'frame',
+        frameStyle
+      });
+    }
+  }
+
+  // Add text
+  function addText(text: string, style: { fontSize: number; fontColor: string; fontFamily: string }) {
     const element: AlbumElement = {
       id: `text-${Date.now()}`,
       type: 'text',
-      content: editingText,
+      content: text,
       x: 30,
       y: 40,
       width: 30,
       height: 10,
       rotation: 0,
       zIndex: pages[currentPageIndex].elements.length,
-      ...textStyle
+      ...style
     };
 
-    const updatedPages = [...pages];
-    updatedPages[currentPageIndex].elements.push(element);
-    setPages(updatedPages);
-    setShowTextEditor(false);
-    setEditingText('');
+    updatePageElements(currentPageIndex, [...pages[currentPageIndex].elements, element]);
+  }
+
+  // Add label
+  function addLabel(text: string, labelStyle: string) {
+    const element: AlbumElement = {
+      id: `label-${Date.now()}`,
+      type: 'label',
+      content: text,
+      x: 35,
+      y: 45,
+      width: 20,
+      height: 8,
+      rotation: 0,
+      zIndex: pages[currentPageIndex].elements.length,
+      labelStyle,
+      fontSize: 18,
+      fontColor: '#000000',
+      fontFamily: 'Arial'
+    };
+
+    updatePageElements(currentPageIndex, [...pages[currentPageIndex].elements, element]);
   }
 
   // Add sticker
@@ -184,68 +192,46 @@ export default function CreateAlbumPage() {
       fontSize: 48
     };
 
-    const updatedPages = [...pages];
-    updatedPages[currentPageIndex].elements.push(element);
-    setPages(updatedPages);
-    setShowStickerPicker(false);
+    updatePageElements(currentPageIndex, [...pages[currentPageIndex].elements, element]);
   }
 
-  // Delete element
-  function deleteElement(elementId: string) {
-    const updatedPages = [...pages];
-    updatedPages[currentPageIndex].elements = updatedPages[currentPageIndex].elements
-      .filter(el => el.id !== elementId);
-    setPages(updatedPages);
+  // Add decoration
+  function addDecoration(decoration: string) {
+    const element: AlbumElement = {
+      id: `decoration-${Date.now()}`,
+      type: 'decoration',
+      content: decoration,
+      x: 40 + Math.random() * 20,
+      y: 40 + Math.random() * 20,
+      width: decoration.includes('Washi Tape') ? 30 : 8,
+      height: decoration.includes('Washi Tape') ? 3 : 8,
+      rotation: 0,
+      zIndex: pages[currentPageIndex].elements.length,
+      decorationType: decoration,
+      fontSize: 32
+    };
+
+    updatePageElements(currentPageIndex, [...pages[currentPageIndex].elements, element]);
+  }
+
+  // Delete selected element
+  function deleteElement() {
+    if (!selectedElement) return;
+    
+    const updatedElements = pages[currentPageIndex].elements.filter(el => el.id !== selectedElement);
+    updatePageElements(currentPageIndex, updatedElements);
     setSelectedElement(null);
-  }
-
-  // Handle element drag
-  function handleElementMouseDown(elementId: string, e: React.MouseEvent) {
-    e.preventDefault();
-    setSelectedElement(elementId);
-    setDraggedElement(elementId);
-
-    const element = pages[currentPageIndex].elements.find(el => el.id === elementId);
-    if (!element || !canvasRef.current) return;
-
-    const canvas = canvasRef.current.getBoundingClientRect();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const initialX = element.x;
-    const initialY = element.y;
-
-    function handleMouseMove(e: MouseEvent) {
-      const deltaX = ((e.clientX - startX) / canvas.width) * 100;
-      const deltaY = ((e.clientY - startY) / canvas.height) * 100;
-
-      const updatedPages = [...pages];
-      const element = updatedPages[currentPageIndex].elements.find(el => el.id === elementId);
-      if (element) {
-        element.x = Math.max(0, Math.min(90, initialX + deltaX));
-        element.y = Math.max(0, Math.min(90, initialY + deltaY));
-        setPages([...updatedPages]);
-      }
-    }
-
-    function handleMouseUp() {
-      setDraggedElement(null);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    }
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
   }
 
   // Apply template
   function applyTemplate(template: string) {
     const updatedPages = [...pages];
-    const currentPage = updatedPages[currentPageIndex];
-    currentPage.template = template;
+    updatedPages[currentPageIndex].template = template;
 
-    // Rearrange existing photos based on template
-    if (template === 'grid' && currentPage.elements.length > 0) {
-      const photos = currentPage.elements.filter(el => el.type === 'photo');
+    // Auto-arrange photos based on template
+    const photos = updatedPages[currentPageIndex].elements.filter(el => el.type === 'photo' || el.type === 'frame');
+    
+    if (template === 'grid' && photos.length > 0) {
       photos.forEach((photo, i) => {
         if (i < 4) {
           photo.x = (i % 2) * 48 + 2;
@@ -254,8 +240,7 @@ export default function CreateAlbumPage() {
           photo.height = 46;
         }
       });
-    } else if (template === 'feature' && currentPage.elements.length > 0) {
-      const photos = currentPage.elements.filter(el => el.type === 'photo');
+    } else if (template === 'feature' && photos.length > 0) {
       if (photos[0]) {
         photos[0].x = 10;
         photos[0].y = 10;
@@ -268,24 +253,6 @@ export default function CreateAlbumPage() {
         photo.width = 35;
         photo.height = 25;
       });
-    } else if (template === 'mosaic' && currentPage.elements.length > 0) {
-      const photos = currentPage.elements.filter(el => el.type === 'photo');
-      const positions = [
-        { x: 2, y: 2, w: 30, h: 45 },
-        { x: 34, y: 2, w: 30, h: 30 },
-        { x: 66, y: 2, w: 32, h: 60 },
-        { x: 2, y: 49, w: 30, h: 45 },
-        { x: 34, y: 34, w: 30, h: 30 },
-        { x: 34, y: 66, w: 30, h: 30 }
-      ];
-      photos.forEach((photo, i) => {
-        if (i < positions.length) {
-          photo.x = positions[i].x;
-          photo.y = positions[i].y;
-          photo.width = positions[i].w;
-          photo.height = positions[i].h;
-        }
-      });
     }
 
     setPages(updatedPages);
@@ -296,7 +263,6 @@ export default function CreateAlbumPage() {
     const updatedPages = [...pages];
     updatedPages[currentPageIndex].backgroundColor = color;
     setPages(updatedPages);
-    setShowBackgroundPicker(false);
   }
 
   // Add new page
@@ -315,7 +281,7 @@ export default function CreateAlbumPage() {
     setCurrentPageIndex(pages.length);
   }
 
-  // FIXED Save album function
+  // Save album
   async function saveAlbum() {
     if (!userId) {
       alert('You must be logged in to save an album');
@@ -333,50 +299,36 @@ export default function CreateAlbumPage() {
     }
 
     setSaving(true);
-    console.log('Starting save process...');
 
     try {
-      // Find first photo for cover image
+      // Find cover image
       let coverImage = null;
       for (const page of pages) {
-        const photo = page.elements.find(el => el.type === 'photo');
+        const photo = page.elements.find(el => el.type === 'photo' || el.type === 'frame');
         if (photo) {
           coverImage = photo.content;
           break;
         }
       }
 
-      // Create album with ONLY the columns that exist in your table
-      const albumData = {
-        title: title.trim(),
-        description: description?.trim() || null,
-        privacy,
-        creator_id: userId,
-        cover_image: coverImage,
-        page_count: pages.length,
-        status: 'published',
-        published_at: new Date().toISOString()
-        // REMOVED: is_collaborative, allow_comments, allow_download
-      };
-
-      console.log('Creating album...');
-
+      // Create album
       const { data: album, error: albumError } = await supabase
         .from('albums')
-        .insert(albumData)
+        .insert({
+          title: title.trim(),
+          description: description?.trim() || null,
+          privacy,
+          creator_id: userId,
+          cover_image: coverImage,
+          page_count: pages.length,
+          status: 'published',
+          published_at: new Date().toISOString()
+        })
         .select()
         .single();
 
-      if (albumError) {
-        console.error('Album creation error:', albumError);
-        throw new Error(`Failed to create album: ${albumError.message}`);
-      }
-
-      if (!album) {
-        throw new Error('No album data returned');
-      }
-
-      console.log('Album created:', album.id);
+      if (albumError) throw new Error(`Failed to create album: ${albumError.message}`);
+      if (!album) throw new Error('No album data returned');
 
       // Save pages and elements
       for (let i = 0; i < pages.length; i++) {
@@ -395,7 +347,6 @@ export default function CreateAlbumPage() {
 
         if (pageError) throw pageError;
 
-        // Save elements for this page
         if (page.elements.length > 0 && savedPage) {
           const elements = page.elements.map((el, index) => ({
             page_id: savedPage.id,
@@ -420,7 +371,7 @@ export default function CreateAlbumPage() {
         }
       }
 
-      // Add collaborators if any
+      // Add collaborators
       if (collaborators.length > 0) {
         const collabData = collaborators.map(friendId => ({
           album_id: album.id,
@@ -432,7 +383,7 @@ export default function CreateAlbumPage() {
         await supabase.from('album_collaborators').insert(collabData);
       }
 
-      alert(`Album "${title}" created successfully!`);
+      alert(`Album "${title}" created successfully! ✨`);
       router.push('/profile');
       
     } catch (error: any) {
@@ -443,15 +394,13 @@ export default function CreateAlbumPage() {
     }
   }
 
-  const currentPage = pages[currentPageIndex];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
-            Create Album
+            ✨ Create Scrapbook Album
           </h1>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -508,205 +457,62 @@ export default function CreateAlbumPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <div className="flex flex-wrap gap-2">
-            <label className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg cursor-pointer hover:opacity-90">
-              {uploading ? 'Uploading...' : '📷 Add Photos/Videos'}
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={(e) => e.target.files && handleMediaUpload(e.target.files)}
-                className="hidden"
-                disabled={uploading}
-              />
-            </label>
-            
-            <button
-              onClick={() => setShowTextEditor(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              📝 Add Text
-            </button>
-            
-            <button
-              onClick={() => setShowStickerPicker(true)}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-            >
-              ✨ Stickers
-            </button>
-            
-            <button
-              onClick={() => setShowBackgroundPicker(true)}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-            >
-              🎨 Background
-            </button>
-
-            <select
-              value={currentPage.template}
-              onChange={(e) => applyTemplate(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="freeform">🎨 Freeform</option>
-              <option value="grid">⊞ Grid (2x2)</option>
-              <option value="feature">⭐ Feature</option>
-              <option value="mosaic">🎭 Mosaic</option>
-            </select>
-          </div>
-        </div>
+        <AlbumToolbar
+          currentTemplate={pages[currentPageIndex]?.template || 'freeform'}
+          uploading={uploading}
+          canDeletePage={pages.length > 1}
+          onPhotoUpload={handleMediaUpload}
+          onOpenFramePicker={() => setShowFramePicker(true)}
+          onOpenTextEditor={() => setShowTextEditor(true)}
+          onOpenLabelEditor={() => setShowLabelEditor(true)}
+          onOpenStickerPicker={() => setShowStickerPicker(true)}
+          onOpenDecorationPicker={() => setShowDecorationPicker(true)}
+          onOpenBackgroundPicker={() => setShowBackgroundPicker(true)}
+          onTemplateChange={applyTemplate}
+          showDeletePage={false}
+        />
 
         {/* Canvas */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Page {currentPageIndex + 1} of {pages.length}</h2>
+            <h2 className="text-xl font-semibold">📖 All Pages (Editing View)</h2>
             {selectedElement && (
               <button
-                onClick={() => deleteElement(selectedElement)}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                onClick={deleteElement}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
               >
                 🗑️ Delete Selected
               </button>
             )}
           </div>
 
-          <div
-            ref={canvasRef}
-            className="relative border-2 border-dashed border-gray-300 rounded-lg"
-            style={{
-              minHeight: '500px',
-              backgroundColor: currentPage.backgroundColor,
-              cursor: draggedElement ? 'grabbing' : 'default'
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setSelectedElement(null);
-              }
-            }}
-          >
-            {currentPage.elements.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <p className="text-3xl mb-2">📸</p>
-                  <p className="text-lg">Add photos or videos to this page</p>
-                  <p className="text-sm mt-2">Click the buttons above to get started</p>
-                </div>
-              </div>
-            ) : (
-              currentPage.elements.map((element) => (
-                <div
-                  key={element.id}
-                  className={`absolute transition-all ${
-                    selectedElement === element.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-                  }`}
-                  style={{
-                    left: `${element.x}%`,
-                    top: `${element.y}%`,
-                    width: `${element.width}%`,
-                    height: `${element.height}%`,
-                    transform: `rotate(${element.rotation}deg)`,
-                    zIndex: element.zIndex,
-                    cursor: draggedElement === element.id ? 'grabbing' : 'move'
-                  }}
-                  onMouseDown={(e) => handleElementMouseDown(element.id, e)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedElement(element.id);
-                  }}
-                >
-                  {element.type === 'photo' && (
-                    <img 
-                      src={element.content} 
-                      alt="" 
-                      className="w-full h-full object-cover rounded-lg shadow-lg"
-                      draggable={false}
-                    />
-                  )}
-                  {element.type === 'video' && (
-                    <video 
-                      src={element.content}
-                      controls
-                      className="w-full h-full object-cover rounded-lg shadow-lg"
-                    />
-                  )}
-                  {element.type === 'text' && (
-                    <div 
-                      className="p-2"
-                      style={{
-                        fontSize: `${element.fontSize}px`,
-                        color: element.fontColor,
-                        fontFamily: element.fontFamily,
-                        textShadow: '2px 2px 4px rgba(0,0,0,0.1)'
-                      }}
-                    >
-                      {element.content}
-                    </div>
-                  )}
-                  {element.type === 'sticker' && (
-                    <div 
-                      className="flex items-center justify-center w-full h-full"
-                      style={{ fontSize: `${element.fontSize}px` }}
-                    >
-                      {element.content}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+          <AlbumCanvas
+            pages={pages}
+            currentPageIndex={currentPageIndex}
+            selectedElement={selectedElement}
+            onSelectElement={setSelectedElement}
+            onUpdateElement={updateElement}
+            onSetCurrentPage={setCurrentPageIndex}
+            isEditMode={true}
+            showAllPages={true}
+          />
 
-        {/* Page Navigation */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <div className="flex items-center justify-between">
+          {/* Add New Page Button */}
+          {pages.length < 100 && (
             <button
-              onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
-              disabled={currentPageIndex === 0}
-              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+              onClick={addNewPage}
+              className="w-full mt-8 py-8 border-4 border-dashed border-purple-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all"
             >
-              ← Previous
+              <span className="text-2xl">➕ Add New Page</span>
             </button>
-
-            <div className="flex gap-2 overflow-x-auto">
-              {pages.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentPageIndex(index)}
-                  className={`w-10 h-10 rounded-lg flex-shrink-0 ${
-                    index === currentPageIndex 
-                      ? 'bg-purple-500 text-white' 
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                >
-                  {index + 1}
-                </button>
-              ))}
-              
-              {pages.length < 100 && (
-                <button
-                  onClick={addNewPage}
-                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 flex-shrink-0"
-                >
-                  + Add Page
-                </button>
-              )}
-            </div>
-
-            <button
-              onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
-              disabled={currentPageIndex === pages.length - 1}
-              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
-            >
-              Next →
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Actions */}
         <div className="flex justify-between">
           <button
             onClick={() => router.push('/profile')}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
           >
             Cancel
           </button>
@@ -714,151 +520,51 @@ export default function CreateAlbumPage() {
           <button
             onClick={saveAlbum}
             disabled={saving || !title.trim() || pages[0].elements.length === 0}
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
           >
-            {saving ? 'Creating...' : 'Create Album'}
+            {saving ? '⏳ Creating...' : '✨ Create Scrapbook Album'}
           </button>
         </div>
       </div>
 
-      {/* Sticker Picker Modal */}
-      {showStickerPicker && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6">
-            <h3 className="text-xl font-bold mb-4">Choose a Sticker</h3>
-            
-            {Object.entries(STICKER_LIBRARY).map(([category, stickers]) => (
-              <div key={category} className="mb-6">
-                <h4 className="text-lg font-semibold mb-2 capitalize">{category}</h4>
-                <div className="grid grid-cols-8 md:grid-cols-12 gap-2">
-                  {stickers.map((sticker, i) => (
-                    <button
-                      key={`${category}-${i}`}
-                      onClick={() => addSticker(sticker)}
-                      className="text-2xl hover:scale-125 transition-transform p-2"
-                    >
-                      {sticker}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            
-            <button
-              onClick={() => setShowStickerPicker(false)}
-              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg w-full md:w-auto"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Modals */}
+      <FramePicker
+        isOpen={showFramePicker}
+        selectedElementId={selectedElement}
+        onClose={() => setShowFramePicker(false)}
+        onApply={addFrame}
+      />
 
-      {/* Text Editor Modal */}
-      {showTextEditor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Add Text</h3>
-            
-            <textarea
-              value={editingText}
-              onChange={(e) => setEditingText(e.target.value)}
-              placeholder="Enter your text..."
-              className="w-full p-3 border border-gray-300 rounded-lg mb-4"
-              rows={3}
-            />
-            
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div>
-                <label className="block text-sm mb-1">Size</label>
-                <input
-                  type="number"
-                  value={textStyle.fontSize}
-                  onChange={(e) => setTextStyle({...textStyle, fontSize: parseInt(e.target.value)})}
-                  min="12"
-                  max="96"
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm mb-1">Color</label>
-                <input
-                  type="color"
-                  value={textStyle.fontColor}
-                  onChange={(e) => setTextStyle({...textStyle, fontColor: e.target.value})}
-                  className="w-full h-10"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm mb-1">Font</label>
-                <select
-                  value={textStyle.fontFamily}
-                  onChange={(e) => setTextStyle({...textStyle, fontFamily: e.target.value})}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="Arial">Arial</option>
-                  <option value="Georgia">Georgia</option>
-                  <option value="Times New Roman">Times</option>
-                  <option value="Comic Sans MS">Comic Sans</option>
-                  <option value="Courier New">Courier</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowTextEditor(false)}
-                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={addTextElement}
-                disabled={!editingText.trim()}
-                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50"
-              >
-                Add Text
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LabelEditor
+        isOpen={showLabelEditor}
+        onClose={() => setShowLabelEditor(false)}
+        onAdd={addLabel}
+      />
 
-      {/* Background Picker Modal */}
-      {showBackgroundPicker && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Choose Background</h3>
-            
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              {['#ffffff', '#f3f4f6', '#fef3c7', '#dbeafe', '#fce7f3', '#d1fae5', '#fee2e2', '#e0e7ff'].map(color => (
-                <button
-                  key={color}
-                  onClick={() => changeBackground(color)}
-                  className="h-16 rounded-lg border-2 border-gray-300 hover:scale-105 transition-transform"
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-            
-            <input
-              type="color"
-              value={currentPage.backgroundColor}
-              onChange={(e) => changeBackground(e.target.value)}
-              className="w-full h-10 mb-4"
-            />
-            
-            <button
-              onClick={() => setShowBackgroundPicker(false)}
-              className="w-full px-4 py-2 bg-gray-200 rounded-lg"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      <DecorationPicker
+        isOpen={showDecorationPicker}
+        onClose={() => setShowDecorationPicker(false)}
+        onAdd={addDecoration}
+      />
+
+      <StickerPicker
+        isOpen={showStickerPicker}
+        onClose={() => setShowStickerPicker(false)}
+        onAdd={addSticker}
+      />
+
+      <TextEditor
+        isOpen={showTextEditor}
+        onClose={() => setShowTextEditor(false)}
+        onAdd={addText}
+      />
+
+      <BackgroundPicker
+        isOpen={showBackgroundPicker}
+        currentColor={pages[currentPageIndex]?.backgroundColor || '#ffffff'}
+        onClose={() => setShowBackgroundPicker(false)}
+        onChange={changeBackground}
+      />
     </div>
   );
 }
