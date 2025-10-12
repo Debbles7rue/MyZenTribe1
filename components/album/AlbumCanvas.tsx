@@ -39,6 +39,7 @@ export default function AlbumCanvas({
     initialWidth: number;
     initialHeight: number;
     pageIndex: number;
+    element: any | null;
   }>({
     isDragging: false,
     isResizing: false,
@@ -50,7 +51,8 @@ export default function AlbumCanvas({
     initialY: 0,
     initialWidth: 0,
     initialHeight: 0,
-    pageIndex: 0
+    pageIndex: 0,
+    element: null
   });
 
   // Handle element drag start
