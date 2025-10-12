@@ -194,6 +194,9 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
     if (!commentText.trim() || isCommenting || !currentUserId) return;
     setIsCommenting(true);
     
+    console.log('🔔 Comment being added by:', currentUserId);
+    console.log('🔔 Post owner is:', post.user_id);
+    
     try {
       const result = await addComment(post.id, commentText.trim());
       if (result.ok) {
@@ -202,6 +205,7 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
         
         // Send notification to post owner (if not commenting on own post)
         if (post.user_id && post.user_id !== currentUserId) {
+          console.log('🔔 Should send notification! Post owner is different from commenter');
           try {
             // Get commenter's name
             const { data: commenterProfile } = await supabase
@@ -211,8 +215,10 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               .single();
 
             const commenterName = commenterProfile?.full_name || 'Someone';
+            console.log('🔔 Commenter name:', commenterName);
 
-            await createNotification({
+            console.log('🔔 Calling createNotification...');
+            const notifResult = await createNotification({
               recipient_id: post.user_id,
               type: 'post.comment',
               title: 'New Comment',
@@ -222,10 +228,13 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
               entity_id: post.id,
               actor_id: currentUserId
             });
+            console.log('🔔 Notification result:', notifResult);
           } catch (notifError) {
-            console.error('Error sending comment notification:', notifError);
+            console.error('❌ Error sending comment notification:', notifError);
             // Don't fail the comment if notification fails
           }
+        } else {
+          console.log('🔔 NOT sending notification - same user or no post owner');
         }
 
         // Send notifications to co-creators (if they exist and aren't the commenter)
