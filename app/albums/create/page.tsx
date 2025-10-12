@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import FriendSelector from '@/components/FriendSelector';
 
-// Import our new components
+// Import components
 import { AlbumPage, AlbumElement } from '@/components/album/constants/scrapbookAssets';
 import AlbumCanvas from '@/components/album/AlbumCanvas';
-import AlbumToolbar from '@/components/album/AlbumToolbar';
+import StickySidebarToolbar from '@/components/album/StickySidebarToolbar';
 import FramePicker from '@/components/album/modals/FramePicker';
 import LabelEditor from '@/components/album/modals/LabelEditor';
 import DecorationPicker from '@/components/album/modals/DecorationPicker';
@@ -223,6 +223,29 @@ export default function CreateAlbumPage() {
     setSelectedElement(null);
   }
 
+  // Move element to another page
+  function moveElementToPage(targetPageIndex: number) {
+    if (!selectedElement || targetPageIndex === currentPageIndex) return;
+    
+    // Find and remove element from current page
+    const element = pages[currentPageIndex].elements.find(el => el.id === selectedElement);
+    if (!element) return;
+
+    const updatedPages = [...pages];
+    updatedPages[currentPageIndex].elements = updatedPages[currentPageIndex].elements.filter(
+      el => el.id !== selectedElement
+    );
+
+    // Add to target page with adjusted zIndex
+    updatedPages[targetPageIndex].elements.push({
+      ...element,
+      zIndex: updatedPages[targetPageIndex].elements.length
+    });
+
+    setPages(updatedPages);
+    setCurrentPageIndex(targetPageIndex);
+  }
+
   // Apply template
   function applyTemplate(template: string) {
     const updatedPages = [...pages];
@@ -396,68 +419,9 @@ export default function CreateAlbumPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
-            ✨ Create Scrapbook Album
-          </h1>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Album Title *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                placeholder="Summer Memories 2024"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Privacy
-              </label>
-              <select
-                value={privacy}
-                onChange={(e) => setPrivacy(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="private">Private (Only me & collaborators)</option>
-                <option value="public">Public (Friends can see)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-              rows={2}
-              placeholder="Our amazing trip to the mountains..."
-            />
-          </div>
-
-          <div className="mt-4">
-            <FriendSelector
-              value={collaborators}
-              onChange={setCollaborators}
-              multiple={true}
-              label="Invite Friends to Collaborate"
-              placeholder="Search friends to add as co-creators..."
-            />
-          </div>
-        </div>
-
-        {/* Toolbar */}
-        <AlbumToolbar
+      <div className="flex">
+        {/* Sticky Sidebar Toolbar */}
+        <StickySidebarToolbar
           currentTemplate={pages[currentPageIndex]?.template || 'freeform'}
           uploading={uploading}
           canDeletePage={pages.length > 1}
@@ -472,58 +436,140 @@ export default function CreateAlbumPage() {
           showDeletePage={false}
         />
 
-        {/* Canvas */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">📖 All Pages (Editing View)</h2>
-            {selectedElement && (
+        {/* Main Content */}
+        <div className="flex-1 max-w-5xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+              ✨ Create Scrapbook Album
+            </h1>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Album Title *
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  placeholder="Summer Memories 2024"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Privacy
+                </label>
+                <select
+                  value={privacy}
+                  onChange={(e) => setPrivacy(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="private">Private (Only me & collaborators)</option>
+                  <option value="public">Public (Friends can see)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                rows={2}
+                placeholder="Our amazing trip to the mountains..."
+              />
+            </div>
+
+            <div className="mt-4">
+              <FriendSelector
+                value={collaborators}
+                onChange={setCollaborators}
+                multiple={true}
+                label="Invite Friends to Collaborate"
+                placeholder="Search friends to add as co-creators..."
+              />
+            </div>
+          </div>
+
+          {/* Canvas */}
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">📖 All Pages (Editing View)</h2>
+              <div className="flex items-center gap-2">
+                {selectedElement && (
+                  <>
+                    <button
+                      onClick={deleteElement}
+                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      🗑️ Delete
+                    </button>
+                    {pages.length > 1 && (
+                      <select
+                        onChange={(e) => moveElementToPage(parseInt(e.target.value))}
+                        value={currentPageIndex}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      >
+                        <option value={currentPageIndex}>Move to page...</option>
+                        {pages.map((_, index) => (
+                          index !== currentPageIndex && (
+                            <option key={index} value={index}>
+                              Move to Page {index + 1}
+                            </option>
+                          )
+                        ))}
+                      </select>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <AlbumCanvas
+              pages={pages}
+              currentPageIndex={currentPageIndex}
+              selectedElement={selectedElement}
+              onSelectElement={setSelectedElement}
+              onUpdateElement={updateElement}
+              onSetCurrentPage={setCurrentPageIndex}
+              isEditMode={true}
+              showAllPages={true}
+            />
+
+            {/* Add New Page Button */}
+            {pages.length < 100 && (
               <button
-                onClick={deleteElement}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                onClick={addNewPage}
+                className="w-full mt-8 py-8 border-4 border-dashed border-purple-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all"
               >
-                🗑️ Delete Selected
+                <span className="text-2xl">➕ Add New Page</span>
               </button>
             )}
           </div>
 
-          <AlbumCanvas
-            pages={pages}
-            currentPageIndex={currentPageIndex}
-            selectedElement={selectedElement}
-            onSelectElement={setSelectedElement}
-            onUpdateElement={updateElement}
-            onSetCurrentPage={setCurrentPageIndex}
-            isEditMode={true}
-            showAllPages={true}
-          />
-
-          {/* Add New Page Button */}
-          {pages.length < 100 && (
+          {/* Actions */}
+          <div className="flex justify-between mb-8">
             <button
-              onClick={addNewPage}
-              className="w-full mt-8 py-8 border-4 border-dashed border-purple-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all"
+              onClick={() => router.push('/profile')}
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
-              <span className="text-2xl">➕ Add New Page</span>
+              Cancel
             </button>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-between">
-          <button
-            onClick={() => router.push('/profile')}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Cancel
-          </button>
-          
-          <button
-            onClick={saveAlbum}
-            disabled={saving || !title.trim() || pages[0].elements.length === 0}
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
-          >
-            {saving ? '⏳ Creating...' : '✨ Create Scrapbook Album'}
-          </button>
+            
+            <button
+              onClick={saveAlbum}
+              disabled={saving || !title.trim() || pages[0].elements.length === 0}
+              className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
+            >
+              {saving ? '⏳ Creating...' : '✨ Create Scrapbook Album'}
+            </button>
+          </div>
         </div>
       </div>
 
