@@ -52,31 +52,50 @@ export default function AlbumElement({
 
       {/* Frame with Photo */}
       {element.type === 'frame' && element.frameStyle && (
-        <div 
-          className="w-full h-full flex items-center justify-center overflow-hidden"
-          style={{
-            padding: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].padding,
-            background: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].background,
-            border: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].border,
-            borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius,
-            boxShadow: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].shadow
-          }}
-        >
-          <div 
-            className="w-full h-full overflow-hidden" 
-            style={{
-              borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius,
-              clipPath: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].clipPath
-            }}
-          >
-            <img 
-              src={element.content} 
-              alt="" 
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          </div>
-        </div>
+        <>
+          {FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].isPureShape ? (
+            // Pure shape crop - no container, just clipped image
+            <div className="w-full h-full">
+              <img 
+                src={element.content} 
+                alt="" 
+                className="w-full h-full object-cover"
+                draggable={false}
+                style={{
+                  clipPath: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].clipPath,
+                  boxShadow: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].shadow
+                }}
+              />
+            </div>
+          ) : (
+            // Decorative frame with border/background
+            <div 
+              className="w-full h-full flex items-center justify-center overflow-hidden"
+              style={{
+                padding: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].padding,
+                background: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].background,
+                border: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].border,
+                borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius,
+                boxShadow: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].shadow
+              }}
+            >
+              <div 
+                className="w-full h-full overflow-hidden" 
+                style={{
+                  borderRadius: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].borderRadius,
+                  clipPath: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].clipPath
+                }}
+              >
+                <img 
+                  src={element.content} 
+                  alt="" 
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Video */}
