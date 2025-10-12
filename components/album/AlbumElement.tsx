@@ -24,7 +24,7 @@ export default function AlbumElement({
   
   return (
     <div
-      className={`absolute transition-all ${
+      className={`absolute transition-all album-element ${
         isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : ''
       }`}
       style={{
@@ -45,7 +45,7 @@ export default function AlbumElement({
         <img 
           src={element.content} 
           alt="" 
-          className="w-full h-full object-cover rounded-lg shadow-lg"
+          className="w-full h-full object-cover rounded-lg shadow-lg element-photo"
           draggable={false}
         />
       )}
@@ -55,7 +55,7 @@ export default function AlbumElement({
         <>
           {FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].isPureShape ? (
             // Pure shape crop - no container, just clipped image
-            <div className="w-full h-full">
+            <div className="w-full h-full element-frame-shape">
               <img 
                 src={element.content} 
                 alt="" 
@@ -70,7 +70,7 @@ export default function AlbumElement({
           ) : (
             // Decorative frame with border/background
             <div 
-              className="w-full h-full flex items-center justify-center overflow-hidden"
+              className="w-full h-full flex items-center justify-center overflow-hidden element-frame-decorative"
               style={{
                 padding: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].padding,
                 background: FRAME_STYLES[element.frameStyle as keyof typeof FRAME_STYLES].background,
@@ -103,14 +103,14 @@ export default function AlbumElement({
         <video 
           src={element.content}
           controls
-          className="w-full h-full object-cover rounded-lg shadow-lg"
+          className="w-full h-full object-cover rounded-lg shadow-lg element-video"
         />
       )}
 
       {/* Text */}
       {element.type === 'text' && (
         <div 
-          className="p-2 flex items-center justify-center h-full"
+          className="p-2 flex items-center justify-center h-full element-text"
           style={{
             fontSize: `${element.fontSize}px`,
             color: element.fontColor,
@@ -127,7 +127,7 @@ export default function AlbumElement({
       {/* Label */}
       {element.type === 'label' && element.labelStyle && (
         <div 
-          className="w-full h-full flex items-center justify-center p-2 rounded-lg shadow-md"
+          className="w-full h-full flex items-center justify-center p-2 rounded-lg shadow-md element-label"
           style={{
             backgroundColor: LABEL_STYLES[element.labelStyle as keyof typeof LABEL_STYLES].bg,
             border: LABEL_STYLES[element.labelStyle as keyof typeof LABEL_STYLES].border,
@@ -144,7 +144,7 @@ export default function AlbumElement({
       {/* Sticker */}
       {element.type === 'sticker' && (
         <div 
-          className="flex items-center justify-center w-full h-full"
+          className="flex items-center justify-center w-full h-full element-sticker"
           style={{ 
             fontSize: `${Math.min(element.width, element.height) * 0.8}px`,
             lineHeight: 1
@@ -157,7 +157,7 @@ export default function AlbumElement({
       {/* Decoration */}
       {element.type === 'decoration' && (
         <div 
-          className="flex items-center justify-center w-full h-full"
+          className="flex items-center justify-center w-full h-full element-decoration"
           style={{ fontSize: `${element.fontSize}px` }}
         >
           {element.content.includes('Washi Tape') ? (
@@ -181,28 +181,28 @@ export default function AlbumElement({
       {isSelected && isEditable && (
         <>
           <div
-            className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 rounded-full cursor-nw-resize z-10"
+            className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 rounded-full cursor-nw-resize z-10 resize-handle resize-nw"
             onMouseDown={(e) => {
               e.stopPropagation();
               onResizeStart('nw', e);
             }}
           />
           <div
-            className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-ne-resize z-10"
+            className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-ne-resize z-10 resize-handle resize-ne"
             onMouseDown={(e) => {
               e.stopPropagation();
               onResizeStart('ne', e);
             }}
           />
           <div
-            className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 rounded-full cursor-sw-resize z-10"
+            className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 rounded-full cursor-sw-resize z-10 resize-handle resize-sw"
             onMouseDown={(e) => {
               e.stopPropagation();
               onResizeStart('sw', e);
             }}
           />
           <div
-            className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-se-resize z-10"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-se-resize z-10 resize-handle resize-se"
             onMouseDown={(e) => {
               e.stopPropagation();
               onResizeStart('se', e);
@@ -210,6 +210,120 @@ export default function AlbumElement({
           />
         </>
       )}
+
+      <style jsx>{`
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .album-element {
+            touch-action: none;
+          }
+
+          /* Make resize handles larger for touch */
+          .resize-handle {
+            width: 1rem !important;
+            height: 1rem !important;
+          }
+
+          .resize-nw {
+            top: -0.5rem !important;
+            left: -0.5rem !important;
+          }
+
+          .resize-ne {
+            top: -0.5rem !important;
+            right: -0.5rem !important;
+          }
+
+          .resize-sw {
+            bottom: -0.5rem !important;
+            left: -0.5rem !important;
+          }
+
+          .resize-se {
+            bottom: -0.5rem !important;
+            right: -0.5rem !important;
+          }
+
+          /* Ensure images and videos are touch-friendly */
+          .element-photo,
+          .element-video {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+          }
+
+          /* Text should scale better on mobile */
+          .element-text {
+            padding: 0.5rem;
+          }
+
+          /* Labels should be readable on mobile */
+          .element-label {
+            padding: 0.375rem;
+          }
+
+          /* Stickers and decorations should be touch-friendly */
+          .element-sticker,
+          .element-decoration {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+          }
+        }
+
+        /* Small mobile screens */
+        @media (max-width: 480px) {
+          .resize-handle {
+            width: 1.25rem !important;
+            height: 1.25rem !important;
+          }
+
+          .resize-nw {
+            top: -0.625rem !important;
+            left: -0.625rem !important;
+          }
+
+          .resize-ne {
+            top: -0.625rem !important;
+            right: -0.625rem !important;
+          }
+
+          .resize-sw {
+            bottom: -0.625rem !important;
+            left: -0.625rem !important;
+          }
+
+          .resize-se {
+            bottom: -0.625rem !important;
+            right: -0.625rem !important;
+          }
+
+          .element-text {
+            padding: 0.375rem;
+          }
+
+          .element-label {
+            padding: 0.25rem;
+          }
+        }
+
+        /* Better touch support for all devices */
+        @media (hover: none) and (pointer: coarse) {
+          .album-element {
+            cursor: grab !important;
+          }
+
+          .album-element:active {
+            cursor: grabbing !important;
+          }
+
+          .resize-handle {
+            width: 1.25rem !important;
+            height: 1.25rem !important;
+            touch-action: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
