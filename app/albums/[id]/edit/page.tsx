@@ -727,11 +727,11 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
   const currentPage = pages[currentPageIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4 edit-album-page">
+      <div className="max-w-6xl mx-auto edit-container">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-4 edit-header">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 page-title">
             Edit Album
           </h1>
           
@@ -744,7 +744,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 title-input"
                 placeholder="Summer Memories 2024"
               />
             </div>
@@ -756,7 +756,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
               <select
                 value={privacy}
                 onChange={(e) => setPrivacy(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 privacy-select"
                 disabled={!isCreator}
               >
                 <option value="private">Private (Only me & collaborators)</option>
@@ -775,7 +775,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 description-textarea"
               rows={2}
               placeholder="Our amazing trip to the mountains..."
             />
@@ -808,9 +808,9 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Toolbar */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <div className="flex flex-wrap gap-2">
-            <label className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg cursor-pointer hover:opacity-90">
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-4 toolbar">
+          <div className="flex flex-wrap gap-2 toolbar-buttons">
+            <label className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg cursor-pointer hover:opacity-90 tool-button upload-button">
               {uploading ? 'Uploading...' : '📷 Add Photos/Videos'}
               <input
                 type="file"
@@ -824,21 +824,21 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
             
             <button
               onClick={() => setShowTextEditor(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 tool-button"
             >
               📝 Add Text
             </button>
             
             <button
               onClick={() => setShowStickerPicker(true)}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 tool-button"
             >
               ✨ Stickers
             </button>
             
             <button
               onClick={() => setShowBackgroundPicker(true)}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 tool-button"
             >
               🎨 Background
             </button>
@@ -846,7 +846,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
             <select
               value={currentPage?.template || 'freeform'}
               onChange={(e) => applyTemplate(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg"
+              className="px-4 py-2 border border-gray-300 rounded-lg template-select"
             >
               <option value="freeform">🎨 Freeform</option>
               <option value="grid">⊞ Grid (2x2)</option>
@@ -857,7 +857,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
             {pages.length > 1 && (
               <button
                 onClick={() => deletePage(currentPageIndex)}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 ml-auto"
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 ml-auto delete-page-button"
               >
                 🗑️ Delete Page
               </button>
@@ -867,13 +867,13 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
         {/* Canvas */}
         {currentPage && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Page {currentPageIndex + 1} of {pages.length}</h2>
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-4 canvas-container">
+            <div className="flex items-center justify-between mb-4 canvas-header">
+              <h2 className="text-xl font-semibold canvas-title">Page {currentPageIndex + 1} of {pages.length}</h2>
               {selectedElement && (
                 <button
                   onClick={() => deleteElement(selectedElement)}
-                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 delete-element-button"
                 >
                   🗑️ Delete Selected
                 </button>
@@ -882,7 +882,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
             <div
               ref={canvasRef}
-              className="relative border-2 border-dashed border-gray-300 rounded-lg"
+              className="relative border-2 border-dashed border-gray-300 rounded-lg canvas"
               style={{
                 minHeight: '500px',
                 backgroundColor: currentPage.backgroundColor,
@@ -895,7 +895,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
               }}
             >
               {currentPage.elements.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                <div className="absolute inset-0 flex items-center justify-center text-gray-400 empty-canvas">
                   <div className="text-center">
                     <p className="text-3xl mb-2">📸</p>
                     <p className="text-lg">Add photos or videos to this page</p>
@@ -906,7 +906,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
                 currentPage.elements.map((element) => (
                   <div
                     key={element.id}
-                    className={`absolute transition-all ${
+                    className={`absolute transition-all canvas-element ${
                       selectedElement === element.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
                     }`}
                     style={{
@@ -968,22 +968,22 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
         )}
 
         {/* Page Navigation */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-4 page-nav">
+          <div className="flex items-center justify-between nav-controls">
             <button
               onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
               disabled={currentPageIndex === 0}
-              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50 nav-button"
             >
               ← Previous
             </button>
 
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto page-numbers">
               {pages.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentPageIndex(index)}
-                  className={`w-10 h-10 rounded-lg flex-shrink-0 ${
+                  className={`w-10 h-10 rounded-lg flex-shrink-0 page-number ${
                     index === currentPageIndex 
                       ? 'bg-purple-500 text-white' 
                       : 'bg-gray-200 hover:bg-gray-300'
@@ -996,7 +996,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
               {pages.length < 100 && (
                 <button
                   onClick={addNewPage}
-                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 flex-shrink-0"
+                  className="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 flex-shrink-0 add-page-button"
                 >
                   + Add Page
                 </button>
@@ -1006,7 +1006,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
             <button
               onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
               disabled={currentPageIndex === pages.length - 1}
-              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+              className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50 nav-button"
             >
               Next →
             </button>
@@ -1014,10 +1014,10 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-between">
+        <div className="flex justify-between action-buttons">
           <button
             onClick={() => router.push(`/albums/${albumId}`)}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 cancel-button"
           >
             Cancel
           </button>
@@ -1025,7 +1025,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
           <button
             onClick={updateAlbum}
             disabled={saving || !title.trim()}
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 save-button"
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
@@ -1034,19 +1034,19 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
       {/* Sticker Picker Modal */}
       {showStickerPicker && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6">
-            <h3 className="text-xl font-bold mb-4">Choose a Sticker</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal-overlay">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6 modal-content sticker-modal">
+            <h3 className="text-xl font-bold mb-4 modal-title">Choose a Sticker</h3>
             
             {Object.entries(STICKER_LIBRARY).map(([category, stickers]) => (
-              <div key={category} className="mb-6">
-                <h4 className="text-lg font-semibold mb-2 capitalize">{category}</h4>
-                <div className="grid grid-cols-8 md:grid-cols-12 gap-2">
+              <div key={category} className="mb-6 sticker-category">
+                <h4 className="text-lg font-semibold mb-2 capitalize category-title">{category}</h4>
+                <div className="grid grid-cols-8 md:grid-cols-12 gap-2 sticker-grid">
                   {stickers.map((sticker, i) => (
                     <button
                       key={`${category}-${i}`}
                       onClick={() => addSticker(sticker)}
-                      className="text-2xl hover:scale-125 transition-transform p-2"
+                      className="text-2xl hover:scale-125 transition-transform p-2 sticker-button"
                     >
                       {sticker}
                     </button>
@@ -1057,7 +1057,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
             
             <button
               onClick={() => setShowStickerPicker(false)}
-              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg w-full md:w-auto"
+              className="mt-4 px-4 py-2 bg-gray-200 rounded-lg w-full md:w-auto modal-close"
             >
               Close
             </button>
@@ -1067,19 +1067,19 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
       {/* Text Editor Modal */}
       {showTextEditor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Add Text</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal-overlay">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 modal-content text-modal">
+            <h3 className="text-xl font-bold mb-4 modal-title">Add Text</h3>
             
             <textarea
               value={editingText}
               onChange={(e) => setEditingText(e.target.value)}
               placeholder="Enter your text..."
-              className="w-full p-3 border border-gray-300 rounded-lg mb-4"
+              className="w-full p-3 border border-gray-300 rounded-lg mb-4 text-textarea"
               rows={3}
             />
             
-            <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="grid grid-cols-3 gap-2 mb-4 text-controls">
               <div>
                 <label className="block text-sm mb-1">Size</label>
                 <input
@@ -1088,7 +1088,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
                   onChange={(e) => setTextStyle({...textStyle, fontSize: parseInt(e.target.value)})}
                   min="12"
                   max="96"
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded font-size-input"
                 />
               </div>
               
@@ -1098,7 +1098,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
                   type="color"
                   value={textStyle.fontColor}
                   onChange={(e) => setTextStyle({...textStyle, fontColor: e.target.value})}
-                  className="w-full h-10"
+                  className="w-full h-10 color-input"
                 />
               </div>
               
@@ -1107,7 +1107,7 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
                 <select
                   value={textStyle.fontFamily}
                   onChange={(e) => setTextStyle({...textStyle, fontFamily: e.target.value})}
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded font-select"
                 >
                   <option value="Arial">Arial</option>
                   <option value="Georgia">Georgia</option>
@@ -1118,17 +1118,17 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
               </div>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 modal-actions">
               <button
                 onClick={() => setShowTextEditor(false)}
-                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg"
+                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg text-cancel-button"
               >
                 Cancel
               </button>
               <button
                 onClick={addTextElement}
                 disabled={!editingText.trim()}
-                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg disabled:opacity-50 text-add-button"
               >
                 Add Text
               </button>
@@ -1139,16 +1139,16 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
       {/* Background Picker Modal */}
       {showBackgroundPicker && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Choose Background</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal-overlay">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 modal-content bg-modal">
+            <h3 className="text-xl font-bold mb-4 modal-title">Choose Background</h3>
             
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-4 gap-2 mb-4 bg-colors">
               {['#ffffff', '#f3f4f6', '#fef3c7', '#dbeafe', '#fce7f3', '#d1fae5', '#fee2e2', '#e0e7ff'].map(color => (
                 <button
                   key={color}
                   onClick={() => changeBackground(color)}
-                  className="h-16 rounded-lg border-2 border-gray-300 hover:scale-105 transition-transform"
+                  className="h-16 rounded-lg border-2 border-gray-300 hover:scale-105 transition-transform bg-color-button"
                   style={{ backgroundColor: color }}
                 />
               ))}
@@ -1158,12 +1158,12 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
               type="color"
               value={currentPage?.backgroundColor || '#ffffff'}
               onChange={(e) => changeBackground(e.target.value)}
-              className="w-full h-10 mb-4"
+              className="w-full h-10 mb-4 bg-color-picker"
             />
             
             <button
               onClick={() => setShowBackgroundPicker(false)}
-              className="w-full px-4 py-2 bg-gray-200 rounded-lg"
+              className="w-full px-4 py-2 bg-gray-200 rounded-lg modal-close"
             >
               Close
             </button>
@@ -1184,6 +1184,263 @@ export default function EditAlbumPage({ params }: { params: { id: string } }) {
 
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .edit-album-page {
+            padding: 0.5rem;
+          }
+
+          .edit-container {
+            padding: 0;
+          }
+
+          .edit-header {
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .page-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+          }
+
+          .title-input,
+          .privacy-select,
+          .description-textarea {
+            font-size: 16px; /* Prevents iOS zoom */
+            padding: 0.75rem;
+          }
+
+          .toolbar {
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .toolbar-buttons {
+            gap: 0.5rem;
+          }
+
+          .tool-button {
+            flex: 1;
+            min-width: calc(50% - 0.25rem);
+            padding: 0.875rem 0.5rem;
+            font-size: 13px;
+            touch-action: manipulation;
+            white-space: nowrap;
+          }
+
+          .template-select {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 16px;
+            touch-action: manipulation;
+          }
+
+          .delete-page-button {
+            width: 100%;
+            margin-left: 0;
+            margin-top: 0.5rem;
+            padding: 0.875rem;
+            touch-action: manipulation;
+          }
+
+          .canvas-container {
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .canvas-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+          }
+
+          .canvas-title {
+            font-size: 1rem;
+          }
+
+          .delete-element-button {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .canvas {
+            min-height: 350px !important;
+            touch-action: none;
+          }
+
+          .empty-canvas p {
+            font-size: 14px;
+          }
+
+          .empty-canvas p:first-child {
+            font-size: 2rem;
+          }
+
+          .canvas-element {
+            touch-action: none;
+          }
+
+          .page-nav {
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .nav-controls {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .nav-button {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .page-numbers {
+            width: 100%;
+            justify-content: flex-start;
+            padding: 0.5rem 0;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .page-numbers::-webkit-scrollbar {
+            height: 4px;
+          }
+
+          .page-number,
+          .add-page-button {
+            min-width: 40px;
+            height: 40px;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .action-buttons {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .cancel-button,
+          .save-button {
+            width: 100%;
+            padding: 1rem;
+            font-size: 16px;
+            touch-action: manipulation;
+          }
+
+          /* Modal styles */
+          .modal-overlay {
+            padding: 1rem;
+          }
+
+          .modal-content {
+            max-height: 85vh;
+            padding: 1rem;
+          }
+
+          .modal-title {
+            font-size: 1.25rem;
+          }
+
+          .sticker-modal {
+            padding: 1.5rem 1rem;
+          }
+
+          .sticker-grid {
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.5rem;
+          }
+
+          .sticker-button {
+            font-size: 1.75rem;
+            padding: 0.5rem;
+            touch-action: manipulation;
+          }
+
+          .text-textarea {
+            font-size: 16px;
+            padding: 0.75rem;
+          }
+
+          .text-controls {
+            gap: 0.5rem;
+          }
+
+          .text-controls input,
+          .text-controls select {
+            font-size: 14px;
+            padding: 0.625rem;
+          }
+
+          .font-size-input {
+            font-size: 16px !important;
+          }
+
+          .modal-actions button {
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          .bg-colors {
+            grid-template-columns: repeat(4, 1fr);
+          }
+
+          .bg-color-button {
+            height: 3.5rem;
+            touch-action: manipulation;
+          }
+
+          .modal-close {
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+        }
+
+        /* Small mobile screens */
+        @media (max-width: 480px) {
+          .page-title {
+            font-size: 1.25rem;
+          }
+
+          .tool-button {
+            font-size: 12px;
+            padding: 0.75rem 0.375rem;
+          }
+
+          .canvas {
+            min-height: 300px !important;
+          }
+
+          .sticker-grid {
+            grid-template-columns: repeat(5, 1fr);
+          }
+
+          .sticker-button {
+            font-size: 1.5rem;
+          }
+
+          .bg-colors {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        /* Landscape mobile orientation */
+        @media (max-width: 768px) and (orientation: landscape) {
+          .canvas {
+            min-height: 250px !important;
+          }
+
+          .modal-content {
+            max-height: 90vh;
+          }
         }
       `}</style>
     </div>
