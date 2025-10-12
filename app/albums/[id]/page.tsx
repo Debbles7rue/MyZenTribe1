@@ -4,7 +4,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import CommentSection from '@/components/CommentSection'; // ← ADD THIS LINE
+import AlbumElement from '@/components/album/AlbumElement';
+import AlbumPageComments from '@/components/album/AlbumPageComments';
+import { AlbumElement as ElementType } from '@/components/album/constants/scrapbookAssets';
 
 type AlbumData = {
   id: string;
@@ -36,22 +38,7 @@ type AlbumPage = {
   page_number: number;
   background_color: string;
   template: string;
-  elements: AlbumElement[];
-};
-
-type AlbumElement = {
-  id: string;
-  type: string;
-  content: string;
-  position_x: number;
-  position_y: number;
-  width: number;
-  height: number;
-  rotation: number;
-  z_index: number;
-  font_size?: number;
-  font_color?: string;
-  font_family?: string;
+  elements: ElementType[];
 };
 
 export default function AlbumViewerPage({ params }: { params: { id: string } }) {
@@ -62,7 +49,6 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [editMode, setEditMode] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<'pending' | 'accepted' | null>(null);
 
@@ -78,6 +64,20 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
     if (!userId) return;
     loadAlbum();
   }, [userId, params.id]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    function handleKeyPress(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft') {
+        setCurrentPageIndex(prev => Math.max(0, prev - 1));
+      } else if (e.key === 'ArrowRight') {
+        setCurrentPageIndex(prev => Math.min(pages.length - 1, prev + 1));
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [pages.length]);
 
   async function loadAlbum() {
     try {
@@ -135,7 +135,30 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
         .order('page_number');
 
       if (pagesData) {
-        setPages(pagesData);
+        const loadedPages: AlbumPage[] = pagesData.map(page => ({
+          id: page.id,
+          page_number: page.page_number,
+          background_color: page.background_color || '#ffffff',
+          template: page.template || 'freeform',
+          elements: page.elements.map((el: any) => ({
+            id: el.id,
+            type: el.type,
+            content: el.content,
+            x: el.position_x,
+            y: el.position_y,
+            width: el.width,
+            height: el.height,
+            rotation: el.rotation || 0,
+            zIndex: el.z_index,
+            fontSize: el.font_size,
+            fontColor: el.font_color,
+            fontFamily: el.font_family,
+            frameStyle: el.frame_style,
+            labelStyle: el.label_style,
+            decorationType: el.decoration_type
+          }))
+        }));
+        setPages(loadedPages);
       }
     } catch (error) {
       console.error('Error loading album:', error);
@@ -185,7 +208,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
     }
   }
 
-  // Navigate to edit mode (full editor)
+  // Navigate to edit mode
   function openEditor() {
     router.push(`/albums/${params.id}/edit`);
   }
@@ -256,7 +279,7 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
                 </button>
               )}
               <button
-                onClick={() => router.push('/profile')}
+                onClick={() => router.push('/albums')}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
                 Back
@@ -319,77 +342,59 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
           )}
         </div>
 
-        {/* Album Viewer */}
+        {/* Album Page Viewer - BOOK FLIP STYLE */}
         {currentPage ? (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
-                Page {currentPageIndex + 1} of {pages.length}
+                📖 Page {currentPageIndex + 1} of {pages.length}
               </h2>
+              <div className="text-sm text-gray-500">
+                {currentPage.template !== 'freeform' && (
+                  <span className="px-2 py-1 bg-purple-100 text-purple-600 rounded">
+                    {currentPage.template} layout
+                  </span>
+                )}
+              </div>
             </div>
 
+            {/* Page Canvas */}
             <div 
-              className="relative border-2 border-gray-200 rounded-lg overflow-hidden"
+              className="relative border-2 border-gray-200 rounded-lg overflow-hidden shadow-inner"
               style={{
-                minHeight: '500px',
+                minHeight: '600px',
                 backgroundColor: currentPage.background_color || '#ffffff'
               }}
             >
               {currentPage.elements && currentPage.elements.length > 0 ? (
                 currentPage.elements.map((element) => (
-                  <div
+                  <AlbumElement
                     key={element.id}
-                    className="absolute"
-                    style={{
-                      left: `${element.position_x}%`,
-                      top: `${element.position_y}%`,
-                      width: `${element.width}%`,
-                      height: `${element.height}%`,
-                      transform: `rotate(${element.rotation || 0}deg)`,
-                      zIndex: element.z_index
-                    }}
-                  >
-                    {element.type === 'photo' && (
-                      <img 
-                        src={element.content} 
-                        alt="" 
-                        className="w-full h-full object-cover rounded-lg shadow-lg"
-                      />
-                    )}
-                    {element.type === 'video' && (
-                      <video 
-                        src={element.content}
-                        controls
-                        className="w-full h-full object-cover rounded-lg shadow-lg"
-                      />
-                    )}
-                    {element.type === 'text' && (
-                      <div 
-                        style={{
-                          fontSize: `${element.font_size}px`,
-                          color: element.font_color,
-                          fontFamily: element.font_family,
-                          padding: '8px'
-                        }}
-                      >
-                        {element.content}
-                      </div>
-                    )}
-                    {element.type === 'sticker' && (
-                      <div 
-                        className="flex items-center justify-center w-full h-full"
-                        style={{ fontSize: `${element.font_size || 48}px` }}
-                      >
-                        {element.content}
-                      </div>
-                    )}
-                  </div>
+                    element={element}
+                    isSelected={false}
+                    isEditable={false}
+                    onMouseDown={() => {}}
+                    onClick={() => {}}
+                    onResizeStart={() => {}}
+                  />
                 ))
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-400">
-                  <p>No content on this page</p>
+                  <div className="text-center">
+                    <p className="text-3xl mb-2">📄</p>
+                    <p>This page is empty</p>
+                  </div>
                 </div>
               )}
+            </div>
+
+            {/* Comments Section */}
+            <div className="mt-6">
+              <AlbumPageComments
+                pageId={currentPage.id}
+                albumId={params.id}
+                currentUserId={userId}
+              />
             </div>
           </div>
         ) : (
@@ -398,27 +403,29 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
           </div>
         )}
 
-        {/* Page Navigation */}
+        {/* Page Navigation - BOOK FLIP STYLE */}
         {pages.length > 1 && (
           <div className="bg-white rounded-xl shadow-lg p-4">
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
                 disabled={currentPageIndex === 0}
-                className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2"
               >
-                ← Previous
+                <span className="text-xl">←</span>
+                <span>Previous</span>
               </button>
 
-              <div className="flex gap-2">
+              {/* Page Numbers */}
+              <div className="flex gap-2 overflow-x-auto max-w-md">
                 {pages.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentPageIndex(index)}
-                    className={`w-10 h-10 rounded-lg ${
+                    className={`min-w-[40px] h-10 rounded-lg font-semibold transition-all ${
                       index === currentPageIndex 
-                        ? 'bg-purple-500 text-white' 
-                        : 'bg-gray-200 hover:bg-gray-300'
+                        ? 'bg-purple-500 text-white shadow-lg scale-110' 
+                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                     }`}
                   >
                     {index + 1}
@@ -429,11 +436,29 @@ export default function AlbumViewerPage({ params }: { params: { id: string } }) 
               <button
                 onClick={() => setCurrentPageIndex(Math.min(pages.length - 1, currentPageIndex + 1))}
                 disabled={currentPageIndex === pages.length - 1}
-                className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-all flex items-center gap-2"
               >
-                Next →
+                <span>Next</span>
+                <span className="text-xl">→</span>
               </button>
             </div>
+
+            {/* Page Counter */}
+            <div className="text-center mt-3 text-sm text-gray-500">
+              Page {currentPageIndex + 1} of {pages.length}
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        {pages.length > 0 && (
+          <div className="mt-4 text-center space-y-2">
+            <p className="text-sm text-gray-600">
+              💡 Tip: Use arrow keys to navigate between pages
+            </p>
+            <p className="text-sm text-gray-600">
+              💬 Leave comments on each page to share memories!
+            </p>
           </div>
         )}
       </div>
