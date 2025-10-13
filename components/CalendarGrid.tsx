@@ -553,19 +553,20 @@ export default function CalendarGrid({
     const handleCellClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       
-      // Don't intercept clicks on events, date number link, or holiday banners
+      // Don't intercept clicks on events or holiday banners
       if (
         target.closest('.rbc-event') || 
         target.closest('.rbc-event-content') ||
-        target.classList.contains('rbc-button-link') ||
         target.closest('.holiday-banner-link') ||
         target.closest('.holiday-banners')
       ) {
         return;
       }
       
-      // If clicking on the cell background, open day view for this date
+      // If clicking on cell background OR date number, open day view for this date
       if (value && view === 'month') {
+        e.preventDefault();
+        e.stopPropagation();
         console.log('📅 Cell clicked, opening day view for:', value);
         setDate(value);
         setView('day');
