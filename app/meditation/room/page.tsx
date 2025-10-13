@@ -45,18 +45,18 @@ const MEDITATION_BACKGROUNDS = [
   },
 ];
 
-// Ambient sounds with working CDN links
+// Web Audio API ambient sounds - Beautiful atmospheric soundscapes
 const AMBIENT_SOUNDS = [
-  { name: 'Silent', file: '', description: 'Pure silence' },
-  { name: 'Ocean Waves', file: 'https://cdn.pixabay.com/audio/2022/03/10/audio_4e3f1d21e2.mp3', description: 'Calming ocean sounds' },
-  { name: 'Forest Creek', file: 'https://cdn.pixabay.com/audio/2022/03/10/audio_0ac3188dca.mp3', description: 'Peaceful water flow' },
-  { name: 'Forest Birds', file: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3', description: 'Nature sounds' },
-  { name: 'Rain & Thunder', file: 'https://cdn.pixabay.com/audio/2022/03/12/audio_b8c0975d41.mp3', description: 'Gentle rain sounds' },
-  { name: 'Tibetan Bowls', file: 'https://cdn.pixabay.com/audio/2023/10/03/audio_13a8566aa5.mp3', description: 'Singing bowl meditation' },
-  { name: '432 Hz Healing', file: 'https://cdn.pixabay.com/audio/2023/02/28/audio_229530e679.mp3', description: 'Healing frequency' },
-  { name: '528 Hz Love', file: 'https://cdn.pixabay.com/audio/2022/11/09/audio_d0c0dc1e7e.mp3', description: 'Love frequency' },
-  { name: 'Deep Meditation', file: 'https://cdn.pixabay.com/audio/2022/03/15/audio_4dfb87b5f3.mp3', description: 'Ambient meditation' },
-  { name: 'Zen Garden', file: 'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe5c49c.mp3', description: 'Peaceful ambient' },
+  { name: 'Silent', file: 'silent', description: 'Pure silence' },
+  { name: 'Ocean Waves', file: 'ocean', description: 'Calming wave sounds' },
+  { name: 'Forest Dream', file: 'forest', description: 'Peaceful nature ambience' },
+  { name: 'Sacred Space', file: 'sacred', description: 'Ethereal meditation' },
+  { name: 'Deep Peace', file: 'deeppeace', description: 'Profound calm' },
+  { name: '432 Hz Healing', file: '432hz', description: 'Healing frequency pad' },
+  { name: '528 Hz Love', file: '528hz', description: 'Love frequency pad' },
+  { name: 'Celestial', file: 'celestial', description: 'Heavenly atmosphere' },
+  { name: 'Earth Hum', file: 'earthhum', description: 'Grounding resonance' },
+  { name: 'Starlight', file: 'starlight', description: 'Cosmic meditation' },
 ];
 
 function MeditationRoomContent() {
@@ -67,25 +67,28 @@ function MeditationRoomContent() {
   const [sessionDuration, setSessionDuration] = useState(0);
   const [sessionStart, setSessionStart] = useState<Date | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [selectedSound, setSelectedSound] = useState('');
+  const [selectedSound, setSelectedSound] = useState('ocean');
   const [volume, setVolume] = useState(0.3);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioError, setAudioError] = useState('');
   
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorsRef = useRef<OscillatorNode[]>([]);
+  const gainNodesRef = useRef<GainNode[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentBg = MEDITATION_BACKGROUNDS.find(bg => bg.id === selectedBg) || MEDITATION_BACKGROUNDS[0];
 
   useEffect(() => {
     checkUser();
-    // Initialize audio element
-    audioRef.current = new Audio();
-    audioRef.current.loop = true;
-    audioRef.current.volume = volume;
     
     return () => {
       stopSound();
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, []);
 
@@ -106,52 +109,209 @@ function MeditationRoomContent() {
     setCurrentUser(user);
   };
 
+  const createSoundscape = (type: string, context: AudioContext, masterGain: GainNode) => {
+    const oscillators: OscillatorNode[] = [];
+    const gains: GainNode[] = [];
+
+    const createOsc = (freq: number, type: OscillatorType = 'sine', vol: number = 0.1) => {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      osc.connect(gain);
+      gain.connect(masterGain);
+      oscillators.push(osc);
+      gains.push(gain);
+      return { osc, gain };
+    };
+
+    switch (type) {
+      case 'ocean':
+        // Layered sine waves with slow modulation for ocean-like sound
+        createOsc(80, 'sine', 0.05);
+        createOsc(120, 'sine', 0.04);
+        createOsc(160, 'sine', 0.03);
+        // Add subtle noise-like quality
+        const oceanLFO = context.createOscillator();
+        oceanLFO.frequency.value = 0.2;
+        const oceanLFOGain = context.createGain();
+        oceanLFOGain.gain.value = 20;
+        oceanLFO.connect(oceanLFOGain);
+        oceanLFOGain.connect(oscillators[0].frequency);
+        oscillators.push(oceanLFO);
+        break;
+
+      case 'forest':
+        // Gentle harmonics with nature-like modulation
+        createOsc(220, 'sine', 0.04);
+        createOsc(330, 'sine', 0.03);
+        createOsc(440, 'triangle', 0.02);
+        createOsc(660, 'sine', 0.02);
+        break;
+
+      case 'sacred':
+        // Om-like resonance with harmonics
+        createOsc(136.1, 'sine', 0.06); // Om frequency
+        createOsc(272.2, 'sine', 0.04);
+        createOsc(408.3, 'sine', 0.02);
+        break;
+
+      case 'deeppeace':
+        // Very low, grounding frequencies
+        createOsc(60, 'sine', 0.06);
+        createOsc(90, 'sine', 0.05);
+        createOsc(120, 'triangle', 0.03);
+        break;
+
+      case '432hz':
+        // 432 Hz healing frequency with harmonics
+        createOsc(432, 'sine', 0.05);
+        createOsc(216, 'sine', 0.04);
+        createOsc(864, 'sine', 0.02);
+        createOsc(108, 'sine', 0.03);
+        break;
+
+      case '528hz':
+        // 528 Hz love frequency with harmonics
+        createOsc(528, 'sine', 0.05);
+        createOsc(264, 'sine', 0.04);
+        createOsc(1056, 'sine', 0.02);
+        createOsc(132, 'sine', 0.03);
+        break;
+
+      case 'celestial':
+        // High, ethereal frequencies
+        createOsc(528, 'sine', 0.03);
+        createOsc(639, 'sine', 0.03);
+        createOsc(741, 'sine', 0.02);
+        createOsc(852, 'sine', 0.02);
+        break;
+
+      case 'earthhum':
+        // Very low earth resonance
+        createOsc(7.83, 'sine', 0.08); // Schumann resonance
+        createOsc(40, 'sine', 0.06);
+        createOsc(80, 'sine', 0.04);
+        break;
+
+      case 'starlight':
+        // Shimmering high frequencies
+        createOsc(963, 'sine', 0.03);
+        createOsc(1111, 'sine', 0.02);
+        createOsc(888, 'triangle', 0.02);
+        createOsc(777, 'sine', 0.02);
+        break;
+
+      default:
+        // Silent or unknown
+        break;
+    }
+
+    return { oscillators, gains };
+  };
+
   const startSound = async () => {
-    if (!audioRef.current || !selectedSound) return;
+    if (!selectedSound || selectedSound === 'silent') return;
     
     try {
       setIsLoading(true);
-      audioRef.current.src = selectedSound;
-      await audioRef.current.play();
+      setAudioError('');
+      
+      // Stop any existing sound
+      stopSound();
+      
+      // Create audio context
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContext();
+      
+      // Create master gain for volume control
+      const masterGain = audioContextRef.current.createGain();
+      masterGain.gain.value = volume;
+      masterGain.connect(audioContextRef.current.destination);
+      
+      // Create the soundscape
+      const { oscillators, gains } = createSoundscape(
+        selectedSound, 
+        audioContextRef.current, 
+        masterGain
+      );
+      
+      // Store references
+      oscillatorsRef.current = oscillators;
+      gainNodesRef.current = gains;
+      gainNodesRef.current.push(masterGain);
+      
+      // Start all oscillators
+      const now = audioContextRef.current.currentTime;
+      oscillators.forEach(osc => osc.start(now));
+      
+      setIsPlaying(true);
       setIsLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error playing audio:', error);
+      setAudioError(`Audio failed: ${error.message || 'Unknown error'}`);
+      setIsPlaying(false);
       setIsLoading(false);
     }
   };
 
   const stopSound = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+    try {
+      // Stop all oscillators
+      oscillatorsRef.current.forEach(osc => {
+        try {
+          osc.stop();
+        } catch (e) {
+          // Already stopped
+        }
+      });
+      
+      // Clear references
+      oscillatorsRef.current = [];
+      gainNodesRef.current = [];
+      
+      // Close audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      setIsPlaying(false);
+    } catch (error) {
+      console.error('Error stopping audio:', error);
     }
+  };
+
+  const testSound = async () => {
+    if (!selectedSound) {
+      setAudioError('Please select a sound first');
+      return;
+    }
+    await startSound();
   };
 
   const toggleSound = () => {
     const newEnabled = !soundEnabled;
     setSoundEnabled(newEnabled);
     
-    if (newEnabled && selectedSound) {
-      startSound();
-    } else {
+    if (!newEnabled) {
       stopSound();
     }
   };
 
   const changeSound = (file: string) => {
+    stopSound();
     setSelectedSound(file);
-    if (soundEnabled && file) {
-      stopSound();
-      startSound();
-    } else if (!file) {
-      stopSound();
-    }
+    setAudioError('');
   };
 
   const changeVolume = (newVolume: number) => {
     setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
+    // Update master gain if audio is playing
+    if (gainNodesRef.current.length > 0) {
+      const masterGain = gainNodesRef.current[gainNodesRef.current.length - 1];
+      masterGain.gain.value = newVolume;
     }
   };
 
@@ -320,8 +480,29 @@ function MeditationRoomContent() {
                         />
                       </div>
                       
+                      {selectedSound && (
+                        <button
+                          onClick={testSound}
+                          className="w-full py-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors text-sm"
+                        >
+                          {isPlaying ? '🔊 Sound Playing' : '🔇 Test Sound'}
+                        </button>
+                      )}
+                      
                       {isLoading && (
                         <div className="text-sm opacity-75">Loading audio...</div>
+                      )}
+                      
+                      {isPlaying && (
+                        <div className="text-sm text-green-300 flex items-center gap-2">
+                          <span className="animate-pulse">●</span> Audio is playing
+                        </div>
+                      )}
+                      
+                      {audioError && (
+                        <div className="text-sm text-red-300 bg-red-900/20 p-2 rounded">
+                          {audioError}
+                        </div>
                       )}
                     </div>
                   )}
