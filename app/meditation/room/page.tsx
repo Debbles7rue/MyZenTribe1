@@ -49,14 +49,14 @@ const MEDITATION_BACKGROUNDS = [
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: 'silent', description: 'Pure silence' },
   { name: 'Ocean Waves', file: 'ocean', description: 'Realistic wave sounds' },
-  { name: 'Forest Ambience', file: 'forest', description: 'Wind and nature' },
+  { name: 'Rain & Thunder', file: 'rain', description: 'Gentle rain and distant thunder' },
   { name: 'Sacred Om', file: 'sacred', description: 'Om resonance 136Hz' },
-  { name: 'Deep Peace', file: 'deeppeace', description: 'Grounding meditation' },
-  { name: '432 Hz Healing', file: '432hz', description: 'Healing frequency' },
-  { name: '528 Hz Love', file: '528hz', description: 'Love frequency' },
-  { name: 'Celestial Realm', file: 'celestial', description: 'Gentle heavenly tones' },
+  { name: 'Deep Peace', file: 'deeppeace', description: 'Evolving grounding tones' },
+  { name: '432 Hz Healing', file: '432hz', description: 'Breathing healing frequency' },
+  { name: '528 Hz Love', file: '528hz', description: 'Pulsing love frequency' },
+  { name: 'Celestial Realm', file: 'celestial', description: 'Flowing heavenly atmosphere' },
   { name: 'Earth Resonance', file: 'earthhum', description: 'Deep grounding rumble' },
-  { name: 'Cosmic Starlight', file: 'starlight', description: 'Soft twinkling' },
+  { name: 'Cosmic Starlight', file: 'starlight', description: 'Evolving cosmic tones' },
 ];
 
 function MeditationRoomContent() {
