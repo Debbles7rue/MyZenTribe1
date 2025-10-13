@@ -1,4 +1,4 @@
-// components/EventDetails.tsx
+// File: components/EventDetails.tsx
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -22,7 +22,7 @@ interface EventDetailsProps {
 interface RSVPData {
   going: number;
   interested: number;
-  userStatus: 'going' | 'interested' | null;
+  userStatus: 'yes' | 'interested' | null;
 }
 
 interface Comment {
@@ -256,14 +256,14 @@ export default function EventDetails({
       }
 
       if (rsvps) {
-        const going = rsvps.filter(r => r.status === 'going').length;
+        const going = rsvps.filter(r => r.status === 'yes').length;
         const interested = rsvps.filter(r => r.status === 'interested').length;
         const userRsvp = currentUserId ? rsvps.find(r => r.user_id === currentUserId) : null;
 
         setRsvpData({
           going,
           interested,
-          userStatus: userRsvp?.status as 'going' | 'interested' | null
+          userStatus: userRsvp?.status as 'yes' | 'interested' | null
         });
       }
     } catch (error) {
@@ -290,7 +290,7 @@ export default function EventDetails({
 
       if (data) {
         setAttendees({
-          going: data.filter(r => r.status === 'going').map(r => r.user).filter(Boolean) as Attendee[],
+          going: data.filter(r => r.status === 'yes').map(r => r.user).filter(Boolean) as Attendee[],
           interested: data.filter(r => r.status === 'interested').map(r => r.user).filter(Boolean) as Attendee[]
         });
       }
@@ -458,7 +458,7 @@ export default function EventDetails({
     }
   };
 
-  const handleRSVP = async (status: 'going' | 'interested') => {
+  const handleRSVP = async (status: 'yes' | 'interested') => {
     if (!event || !currentUserId) {
       showToast({ type: 'warning', message: 'Please sign in to RSVP' });
       return;
@@ -493,7 +493,7 @@ export default function EventDetails({
         if (error) throw error;
         showToast({ 
           type: 'success', 
-          message: status === 'going' ? "✅ You're going!" : "⭐ Marked as interested" 
+          message: status === 'yes' ? "✅ You're going!" : "⭐ Marked as interested" 
         });
 
         // Send notification to event creator (if not RSVPing to own event)
@@ -507,7 +507,7 @@ export default function EventDetails({
               .single();
 
             const rsvpUserName = rsvpUserProfile?.full_name || 'Someone';
-            const statusText = status === 'going' ? 'is going to' : 'is interested in';
+            const statusText = status === 'yes' ? 'is going to' : 'is interested in';
 
             await createNotification({
               recipient_id: event.created_by,
@@ -1238,7 +1238,7 @@ export default function EventDetails({
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg flex items-center gap-2">
                       🎯 Pre/Post Activities
                     </h3>
-                    {!isCreator && event.allows_rsvp && rsvpData.userStatus === 'going' && (
+                    {!isCreator && event.allows_rsvp && rsvpData.userStatus === 'yes' && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => setShowProposalForm('pre_event')}
@@ -1327,7 +1327,7 @@ export default function EventDetails({
                   ) : (
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-6 text-center border border-gray-200 dark:border-gray-600">
                       <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        {!isCreator && event.allows_rsvp && rsvpData.userStatus === 'going' ? (
+                        {!isCreator && event.allows_rsvp && rsvpData.userStatus === 'yes' ? (
                           <>No pre/post activities yet. Want to grab dinner before or drinks after? Click + to propose one!</>
                         ) : (
                           <>No pre/post activities proposed yet</>
@@ -1436,15 +1436,15 @@ export default function EventDetails({
                 {event.allows_rsvp && !isCreator && (
                   <>
                     <button
-                      onClick={() => handleRSVP('going')}
+                      onClick={() => handleRSVP('yes')}
                       disabled={loading}
                       className={`px-5 py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md ${
-                        rsvpData.userStatus === 'going' 
+                        rsvpData.userStatus === 'yes' 
                           ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300' 
                           : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      {rsvpData.userStatus === 'going' ? '✓ Going' : 'Going'}
+                      {rsvpData.userStatus === 'yes' ? '✓ Going' : 'Going'}
                     </button>
                     <button
                       onClick={() => handleRSVP('interested')}
