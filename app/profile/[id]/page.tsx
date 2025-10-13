@@ -1,4 +1,4 @@
-// app/profile/[id]/page.tsx - UNIFIED FEED VERSION (NO TABS)
+// app/profile/[id]/page.tsx - UNIFIED FEED VERSION (NO TABS) + WALL POSTS
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import ProfileViewer from "../components/ProfileViewer";
 import PostsFeed from "@/components/PostsFeed";
 import PhotoMemories from "../../(protected)/calendar/components/PhotoMemories";
+import ProfilePostComposer from "@/components/ProfilePostComposer";
 
 type PublicProfile = {
   id: string;
@@ -92,6 +93,7 @@ export default function PublicProfilePage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [feedKey, setFeedKey] = useState(0); // For refreshing feed after wall post
 
   // Mobile detection
   useEffect(() => {
@@ -426,6 +428,11 @@ export default function PublicProfilePage() {
     }
   }
 
+  function handlePostCreated() {
+    // Refresh the feed by incrementing the key
+    setFeedKey(prev => prev + 1);
+  }
+
   // Loading state
   if (loading) {
     return (
@@ -563,12 +570,25 @@ export default function PublicProfilePage() {
         </div>
       )}
 
+      {/* Wall Post Composer - Only show to friends */}
+      {relationshipType === 'friend' && currentUserId && (
+        <div className="wall-post-section">
+          <ProfilePostComposer
+            profileUserId={profileId}
+            currentUserId={currentUserId}
+            profileUserName={profile.full_name || 'this user'}
+            onPostCreated={handlePostCreated}
+          />
+        </div>
+      )}
+
       {/* Unified Posts and Events Feed */}
       {(canViewFriendContent || profile.visibility === 'public') && (
         <div className="unified-feed">
           {/* Posts Feed - Displayed as continuous feed */}
           <div className="posts-feed-section">
             <PostsFeed 
+              key={feedKey}
               userId={profileId}
               viewerUserId={currentUserId}
               maxPosts={20}
@@ -701,6 +721,12 @@ export default function PublicProfilePage() {
           font-size: 1.25rem;
         }
 
+        /* Wall Post Section */
+        .wall-post-section {
+          max-width: 800px;
+          margin: 2rem auto 0;
+        }
+
         @media (max-width: 640px) {
           .profile-page {
             padding: 1rem 0.5rem;
@@ -718,6 +744,10 @@ export default function PublicProfilePage() {
 
           .business-icon {
             font-size: 1.1rem;
+          }
+
+          .wall-post-section {
+            margin: 1.5rem auto 0;
           }
         }
 
