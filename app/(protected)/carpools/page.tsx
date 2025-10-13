@@ -7,7 +7,7 @@ import {
   Car, Users, MapPin, Clock, DollarSign, Calendar, Search, Filter,
   Plus, MoreVertical, MessageCircle, Star, TrendingUp, Leaf,
   ArrowRight, ChevronDown, Eye, Edit, Trash2, Share2,
-  CheckCircle, XCircle, AlertCircle, RefreshCw
+  CheckCircle, XCircle, AlertCircle, RefreshCw, X
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { DBEvent } from '@/lib/types';
@@ -119,7 +119,7 @@ const CarpoolManagement = () => {
         let status: CarpoolGroup['status'] = 'upcoming';
         if (eventDate < now) {
           status = 'completed';
-        } else if (eventDate.getTime() - now.getTime() < 86400000) { // Within 24 hours
+        } else if (eventDate.getTime() - now.getTime() < 86400000) {
           status = 'active';
         }
 
@@ -129,7 +129,7 @@ const CarpoolManagement = () => {
           participants = JSON.parse(group.selected_friends || '[]').map((friendId: string, index: number) => ({
             id: `participant-${index}`,
             user_id: friendId,
-            name: `Friend ${index + 1}`, // In real app, would fetch from friends table
+            name: `Friend ${index + 1}`,
             role: friendId === group.driver_id ? 'driver' : 'passenger',
             status: 'confirmed',
             joined_at: group.created_at
@@ -138,9 +138,9 @@ const CarpoolManagement = () => {
           console.warn('Failed to parse participants:', e);
         }
 
-        // Calculate savings (mock calculation)
-        const participantCount = participants.length + 1; // Include driver
-        const estimatedDistance = 20; // miles
+        // Calculate savings
+        const participantCount = participants.length + 1;
+        const estimatedDistance = 20;
         const gasPrice = 3.50;
         const mpg = 25;
         const totalCost = (estimatedDistance / mpg) * gasPrice;
@@ -199,12 +199,10 @@ const CarpoolManagement = () => {
   useEffect(() => {
     let filtered = carpoolGroups;
 
-    // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(group => group.status === statusFilter);
     }
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(group =>
         group.event_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -212,7 +210,6 @@ const CarpoolManagement = () => {
       );
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'date':
@@ -404,7 +401,7 @@ const CarpoolManagement = () => {
                 <div className="p-6">
                   <div className={`${isMobile ? 'space-y-4' : 'flex items-center justify-between'}`}>
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                           {group.event_title}
                         </h3>
@@ -414,7 +411,7 @@ const CarpoolManagement = () => {
                         </span>
                       </div>
                       
-                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-3 flex-wrap">
                         <div className="flex items-center gap-1">
                           <Calendar size={14} />
                           {formatDate(group.event_date)}
@@ -492,7 +489,8 @@ const CarpoolManagement = () => {
                 </h2>
                 <button
                   onClick={() => setShowGroupDetails(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  aria-label="Close"
                 >
                   <X size={24} />
                 </button>
@@ -528,13 +526,13 @@ const CarpoolManagement = () => {
                   <div className="space-y-2">
                     {/* Driver */}
                     <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <Car size={16} className="text-white" />
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="font-medium text-gray-900 dark:text-white">You (Driver)</p>
                         {selectedGroup.car_details && (
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
                             {selectedGroup.car_details.make} {selectedGroup.car_details.color} • {selectedGroup.car_details.seats} seats
                           </p>
                         )}
@@ -544,13 +542,13 @@ const CarpoolManagement = () => {
                     {/* Passengers */}
                     {selectedGroup.participants.map((participant, index) => (
                       <div key={participant.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-white text-sm font-medium">
                             {participant.name.charAt(0)}
                           </span>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">{participant.name}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">{participant.name}</p>
                           <p className="text-xs text-gray-600 dark:text-gray-400">Passenger</p>
                         </div>
                       </div>
