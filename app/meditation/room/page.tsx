@@ -112,6 +112,7 @@ function MeditationRoomContent() {
   const createSoundscape = (type: string, context: AudioContext, masterGain: GainNode) => {
     const oscillators: OscillatorNode[] = [];
     const gains: GainNode[] = [];
+    const nodes: AudioNode[] = [];
 
     const createOsc = (freq: number, type: OscillatorType = 'sine', vol: number = 0.1) => {
       const osc = context.createOscillator();
@@ -126,42 +127,86 @@ function MeditationRoomContent() {
       return { osc, gain };
     };
 
+    // Create noise buffer for nature sounds
+    const createNoise = (filterFreq: number, vol: number = 0.3) => {
+      const bufferSize = context.sampleRate * 2;
+      const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+      const data = buffer.getChannelData(0);
+      
+      // Generate white noise
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      
+      const noise = context.createBufferSource();
+      noise.buffer = buffer;
+      noise.loop = true;
+      
+      const filter = context.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = filterFreq;
+      filter.Q.value = 1;
+      
+      const gain = context.createGain();
+      gain.gain.value = vol;
+      
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(masterGain);
+      
+      nodes.push(noise);
+      nodes.push(filter);
+      gains.push(gain);
+      
+      return { noise, filter, gain };
+    };
+
     switch (type) {
       case 'ocean':
-        // Layered sine waves with slow modulation for ocean-like sound
-        createOsc(80, 'sine', 0.05);
-        createOsc(120, 'sine', 0.04);
-        createOsc(160, 'sine', 0.03);
-        // Add subtle noise-like quality
-        const oceanLFO = context.createOscillator();
-        oceanLFO.frequency.value = 0.2;
-        const oceanLFOGain = context.createGain();
-        oceanLFOGain.gain.value = 20;
-        oceanLFO.connect(oceanLFOGain);
-        oceanLFOGain.connect(oscillators[0].frequency);
-        oscillators.push(oceanLFO);
+        // Ocean waves using filtered noise with slow modulation
+        const ocean1 = createNoise(200, 0.15);
+        const ocean2 = createNoise(400, 0.1);
+        
+        // Add wave-like modulation
+        const waveLFO = context.createOscillator();
+        waveLFO.frequency.value = 0.3;
+        const waveLFOGain = context.createGain();
+        waveLFOGain.gain.value = 100;
+        waveLFO.connect(waveLFOGain);
+        waveLFOGain.connect(ocean1.filter.frequency);
+        oscillators.push(waveLFO);
+        
+        // Deep ocean rumble
+        createOsc(55, 'sine', 0.03);
         break;
 
       case 'forest':
-        // Gentle harmonics with nature-like modulation
-        createOsc(220, 'sine', 0.04);
-        createOsc(330, 'sine', 0.03);
-        createOsc(440, 'triangle', 0.02);
-        createOsc(660, 'sine', 0.02);
+        // Forest ambience with filtered noise for wind/rustling
+        createNoise(1000, 0.08); // Wind through trees
+        createNoise(3000, 0.05); // Rustling leaves
+        
+        // Bird-like chirps with modulated high frequencies
+        const bird1 = createOsc(2000, 'sine', 0.02);
+        const bird2 = createOsc(2400, 'sine', 0.015);
+        
+        // Gentle forest hum
+        createOsc(150, 'sine', 0.02);
         break;
 
       case 'sacred':
-        // Om-like resonance with harmonics
-        createOsc(136.1, 'sine', 0.06); // Om frequency
+        // Om-like resonance with harmonics (no noise)
+        createOsc(136.1, 'sine', 0.06);
         createOsc(272.2, 'sine', 0.04);
         createOsc(408.3, 'sine', 0.02);
+        createOsc(68, 'sine', 0.03);
         break;
 
       case 'deeppeace':
-        // Very low, grounding frequencies
+        // Very low, grounding frequencies with subtle noise
         createOsc(60, 'sine', 0.06);
         createOsc(90, 'sine', 0.05);
         createOsc(120, 'triangle', 0.03);
+        createNoise(100, 0.02); // Very low rumble
         break;
 
       case '432hz':
@@ -170,6 +215,7 @@ function MeditationRoomContent() {
         createOsc(216, 'sine', 0.04);
         createOsc(864, 'sine', 0.02);
         createOsc(108, 'sine', 0.03);
+        createNoise(800, 0.01); // Subtle texture
         break;
 
       case '528hz':
@@ -178,21 +224,24 @@ function MeditationRoomContent() {
         createOsc(264, 'sine', 0.04);
         createOsc(1056, 'sine', 0.02);
         createOsc(132, 'sine', 0.03);
+        createNoise(1000, 0.01); // Subtle texture
         break;
 
       case 'celestial':
-        // High, ethereal frequencies
+        // High, ethereal frequencies with shimmer
         createOsc(528, 'sine', 0.03);
         createOsc(639, 'sine', 0.03);
         createOsc(741, 'sine', 0.02);
         createOsc(852, 'sine', 0.02);
+        createNoise(5000, 0.02); // High shimmer
         break;
 
       case 'earthhum':
-        // Very low earth resonance
-        createOsc(7.83, 'sine', 0.08); // Schumann resonance
+        // Very low earth resonance with rumble
+        createOsc(7.83, 'sine', 0.08);
         createOsc(40, 'sine', 0.06);
         createOsc(80, 'sine', 0.04);
+        createNoise(60, 0.03); // Deep rumble
         break;
 
       case 'starlight':
@@ -201,14 +250,14 @@ function MeditationRoomContent() {
         createOsc(1111, 'sine', 0.02);
         createOsc(888, 'triangle', 0.02);
         createOsc(777, 'sine', 0.02);
+        createNoise(8000, 0.03); // Sparkle
         break;
 
       default:
-        // Silent or unknown
         break;
     }
 
-    return { oscillators, gains };
+    return { oscillators, gains, nodes };
   };
 
   const startSound = async () => {
