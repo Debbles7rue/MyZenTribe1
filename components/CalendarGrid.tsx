@@ -168,7 +168,7 @@ export default function CalendarGrid({
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [showLegend, setShowLegend] = useState(true); // NEW: State to control legend visibility
+  const [showLegend, setShowLegend] = useState(true);
   const themeStyles = getThemeStyles(theme);
 
   // Detect mobile device
@@ -221,14 +221,30 @@ export default function CalendarGrid({
     [filteredDbEvents]
   );
 
-  // Merge regular events with moon events
+  // NEW: Separate holidays from regular events
+  const { holidayEvents, nonHolidayEvents } = useMemo(() => {
+    const holidays: UiEvent[] = [];
+    const nonHolidays: UiEvent[] = [];
+    
+    dbUiEvents.forEach(event => {
+      if (event.resource?.event_type === "holiday") {
+        holidays.push(event);
+      } else {
+        nonHolidays.push(event);
+      }
+    });
+    
+    return { holidayEvents: holidays, nonHolidayEvents: nonHolidays };
+  }, [dbUiEvents]);
+
+  // Merge non-holiday events with moon events (holidays handled separately in date header)
   const allEvents = useMemo(() => {
-    const events = [...dbUiEvents];
+    const events = [...nonHolidayEvents];
     if (showMoon) {
       events.push(...moonEvents);
     }
     return events;
-  }, [dbUiEvents, moonEvents, showMoon]);
+  }, [nonHolidayEvents, moonEvents, showMoon]);
 
   // Event styling based on type with pre/post event indicators
   const eventStyleGetter = (event: UiEvent): any => {
@@ -270,20 +286,6 @@ export default function CalendarGrid({
     // Add thicker border for events with pre/post gatherings
     const borderWidth = (resource?.hasPreEvent || resource?.hasPostEvent) ? "2px" : "1px";
     const borderStyle = (resource?.hasPreEvent || resource?.hasPostEvent) ? "solid" : "solid";
-
-    // Holiday events
-    if (resource?.event_type === "holiday") {
-      return {
-        style: {
-          ...baseStyle,
-          backgroundColor: isSelected ? "#c084fc" : "#e9d5ff",
-          border: `${borderWidth} ${borderStyle} ${isSelected ? "#9333ea" : "#c084fc"}`,
-          color: "#581c87",
-          boxShadow: isSelected ? "0 0 0 2px rgba(147, 51, 234, 0.3)" : 
-                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #c084fc" : "none",
-        },
-      };
-    }
 
     // Reminder events
     if (resource?.event_type === "reminder") {
@@ -399,19 +401,6 @@ export default function CalendarGrid({
     const hasPreEvent = resource?.hasPreEvent;
     const hasPostEvent = resource?.hasPostEvent;
 
-    // Holiday events with emoji preserved
-    if (resource?.event_type === "holiday") {
-      return (
-        <div className="flex items-center gap-1 px-1 w-full">
-          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
-          <span className="truncate flex-1 text-[10px] md:text-xs">
-            {event.title}
-          </span>
-          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
-        </div>
-      );
-    }
-
     // Render todo with checkbox
     if (resource?.event_type === "todo") {
       return (
@@ -470,30 +459,116 @@ export default function CalendarGrid({
     );
   };
 
-  // NEW: Custom date cell wrapper to make entire cell clickable
+  // NEW: Custom Month Date Header component with clickable holiday banners
+  const MonthDateHeader = useCallback(({ date: cellDate, label }: any) => {
+    // Find holidays for this date
+    const cellDateStr = moment(cellDate).format('YYYY-MM-DD');
+    const holidaysForDate = holidayEvents.filter(holiday => {
+      const holidayDateStr = moment(holiday.start).format('YYYY-MM-DD');
+      return holidayDateStr === cellDateStr;
+    });
+
+    return (
+      <div className="rbc-date-cell">
+        {/* Holiday Banners - at top */}
+        {holidaysForDate.length > 0 && (
+          <div 
+            className="holiday-banners"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1px',
+              padding: '2px',
+            }}
+          >
+            {holidaysForDate.map((holiday, idx) => (
+              <button
+                key={`${holiday.id}-${idx}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectEvent(holiday);
+                }}
+                className="holiday-banner-link"
+                title="Click to view details"
+                style={{
+                  background: 'linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 100%)',
+                  border: '1px solid #c084fc',
+                  borderRadius: '4px',
+                  padding: isMobile ? '2px 4px' : '3px 6px',
+                  fontSize: isMobile ? '9px' : '10px',
+                  fontWeight: 600,
+                  color: '#581c87',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  textDecoration: 'none',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ fontSize: isMobile ? '10px' : '12px', flexShrink: 0 }}>
+                  {holiday.title.match(/^[\p{Emoji}]/u)?.[0] || '🎉'}
+                </span>
+                <span style={{ 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                }}>
+                  {holiday.title.replace(/^[\p{Emoji}\s]+/u, '')}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        
+        {/* Date number - below holidays */}
+        <div 
+          style={{ 
+            position: 'relative',
+            zIndex: 2,
+            marginTop: holidaysForDate.length > 0 ? `${holidaysForDate.length * (isMobile ? 16 : 20)}px` : '0',
+          }}
+        >
+          <a className="rbc-button-link" role="cell">
+            {label}
+          </a>
+        </div>
+      </div>
+    );
+  }, [holidayEvents, onSelectEvent, isMobile]);
+
+  // NEW: Custom date cell wrapper to make entire cell clickable - opens day view
   const DateCellWrapper = useCallback(({ children, value }: any) => {
     const handleCellClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       
-      // Don't intercept clicks on events or the date number link
+      // Don't intercept clicks on events, date number link, or holiday banners
       if (
         target.closest('.rbc-event') || 
         target.closest('.rbc-event-content') ||
-        target.classList.contains('rbc-button-link')
+        target.classList.contains('rbc-button-link') ||
+        target.closest('.holiday-banner-link') ||
+        target.closest('.holiday-banners')
       ) {
         return;
       }
       
-      // If clicking on the cell background, trigger slot selection
-      if (onSelectSlot && value) {
-        console.log('📅 Cell background clicked, triggering onSelectSlot for:', value);
-        onSelectSlot({
-          start: value,
-          end: value,
-          action: 'click',
-          slots: [value],
-          box: undefined
-        });
+      // If clicking on the cell background, open day view for this date
+      if (value && view === 'month') {
+        console.log('📅 Cell clicked, opening day view for:', value);
+        setDate(value);
+        setView('day');
       }
     };
 
@@ -511,7 +586,7 @@ export default function CalendarGrid({
         {children}
       </div>
     );
-  }, [onSelectSlot]);
+  }, [view, setDate, setView]);
 
   // Handle external drop (from sidebar)
   const handleDropFromOutside = ({ start, end, allDay }: any) => {
@@ -558,7 +633,7 @@ export default function CalendarGrid({
         padding: isMobile ? '0.5rem' : '1rem',
       }}
     >
-      {/* FIXED: Legend for pre/post event indicators - NOW MINIMIZABLE */}
+      {/* Legend for pre/post event indicators - MINIMIZABLE */}
       {shouldShowLegend && (
         <div
           style={{
@@ -659,6 +734,9 @@ export default function CalendarGrid({
           eventPropGetter={eventStyleGetter}
           components={{
             event: EventComponent,
+            month: {
+              dateHeader: MonthDateHeader,
+            },
             dateCellWrapper: DateCellWrapper,
           }}
           resizable={!isMobile}
@@ -688,7 +766,7 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* FIXED STYLES - Calendar cells always white, text always dark + FULL CELL CLICKABLE + TIME LABELS */}
+      {/* STYLES - Calendar cells + Holiday Banners */}
       <style jsx global>{`
         /* Base calendar container */
         .calendar-wrapper {
@@ -719,9 +797,56 @@ export default function CalendarGrid({
           z-index: 2;
           color: #374151;
           pointer-events: auto;
+          padding-top: 2px;
         }
         
-        /* Ensure events are above clickable layer */
+        /* NEW: Holiday banner link styles with hover */
+        .holiday-banner-link {
+          position: relative;
+        }
+        
+        .holiday-banner-link::after {
+          content: 'Click to view';
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%) translateY(-4px);
+          background: rgba(88, 28, 135, 0.95);
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 10px;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+          z-index: 100;
+        }
+        
+        .holiday-banner-link:hover::after {
+          opacity: 1;
+        }
+        
+        .holiday-banner-link:hover {
+          background: linear-gradient(135deg, #ddd6fe 0%, #e9d5ff 100%) !important;
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3) !important;
+        }
+        
+        .holiday-banner-link:active {
+          transform: translateY(0);
+        }
+        
+        /* Mobile: simpler tooltip */
+        @media (max-width: 768px) {
+          .holiday-banner-link::after {
+            content: 'Tap';
+            font-size: 8px;
+            padding: 2px 4px;
+          }
+        }
+        
+        /* Ensure events are above clickable layer but below holiday banners */
         .custom-calendar .rbc-event,
         .custom-calendar .rbc-event-content {
           position: relative;
@@ -734,7 +859,7 @@ export default function CalendarGrid({
           position: relative !important;
         }
         
-        /* FIXED: Header always light with dark text */
+        /* Header always light with dark text */
         .custom-calendar .rbc-header {
           background: #f8fafc;
           border-bottom: 1px solid rgba(0,0,0,0.1);
@@ -789,14 +914,14 @@ export default function CalendarGrid({
           cursor: not-allowed;
         }
         
-        /* FIXED: Month view cells always white */
+        /* Month view cells always white */
         .custom-calendar .rbc-month-view {
           background: white;
           border-radius: 8px;
           overflow: hidden;
         }
         
-        /* FIXED: Day cells always white */
+        /* Day cells always white */
         .custom-calendar .rbc-day-bg {
           background: white;
         }
@@ -960,7 +1085,7 @@ export default function CalendarGrid({
           text-decoration: underline;
         }
         
-        /* FIXED: Week and Day view always white with dark text */
+        /* Week and Day view always white with dark text */
         .custom-calendar .rbc-time-view {
           border: 1px solid #e5e7eb;
           border-radius: 8px;
@@ -984,7 +1109,7 @@ export default function CalendarGrid({
           height: 2px;
         }
         
-        /* NEW FIX: Time labels in Day/Week view - ENSURE THEY SHOW */
+        /* Time labels in Day/Week view */
         .custom-calendar .rbc-time-header-gutter {
           background: #f9fafb;
           border-right: 1px solid #e5e7eb;
@@ -1010,7 +1135,7 @@ export default function CalendarGrid({
           border-left: 1px solid #e5e7eb;
         }
         
-        /* FIXED: Agenda view always dark text */
+        /* Agenda view always dark text */
         .custom-calendar .rbc-agenda-view {
           color: #111827;
         }
