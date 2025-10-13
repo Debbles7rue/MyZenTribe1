@@ -48,15 +48,15 @@ const MEDITATION_BACKGROUNDS = [
 // Web Audio API ambient sounds - Beautiful atmospheric soundscapes
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: 'silent', description: 'Pure silence' },
-  { name: 'Ocean Waves', file: 'ocean', description: 'Calming wave sounds' },
-  { name: 'Forest Dream', file: 'forest', description: 'Peaceful nature ambience' },
-  { name: 'Sacred Space', file: 'sacred', description: 'Ethereal meditation' },
-  { name: 'Deep Peace', file: 'deeppeace', description: 'Profound calm' },
-  { name: '432 Hz Healing', file: '432hz', description: 'Healing frequency pad' },
-  { name: '528 Hz Love', file: '528hz', description: 'Love frequency pad' },
-  { name: 'Celestial', file: 'celestial', description: 'Heavenly atmosphere' },
-  { name: 'Earth Hum', file: 'earthhum', description: 'Grounding resonance' },
-  { name: 'Starlight', file: 'starlight', description: 'Cosmic meditation' },
+  { name: 'Ocean Waves', file: 'ocean', description: 'Realistic wave sounds' },
+  { name: 'Forest Ambience', file: 'forest', description: 'Wind and nature' },
+  { name: 'Sacred Om', file: 'sacred', description: 'Om resonance 136Hz' },
+  { name: 'Deep Peace', file: 'deeppeace', description: 'Grounding meditation' },
+  { name: '432 Hz Healing', file: '432hz', description: 'Healing frequency' },
+  { name: '528 Hz Love', file: '528hz', description: 'Love frequency' },
+  { name: 'Celestial Realm', file: 'celestial', description: 'Gentle heavenly tones' },
+  { name: 'Earth Resonance', file: 'earthhum', description: 'Deep grounding rumble' },
+  { name: 'Cosmic Starlight', file: 'starlight', description: 'Soft twinkling' },
 ];
 
 function MeditationRoomContent() {
@@ -76,6 +76,7 @@ function MeditationRoomContent() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const gainNodesRef = useRef<GainNode[]>([]);
+  const audioNodesRef = useRef<AudioNode[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentBg = MEDITATION_BACKGROUNDS.find(bg => bg.id === selectedBg) || MEDITATION_BACKGROUNDS[0];
@@ -164,8 +165,8 @@ function MeditationRoomContent() {
     switch (type) {
       case 'ocean':
         // Ocean waves using filtered noise with slow modulation
-        const ocean1 = createNoise(200, 0.15);
-        const ocean2 = createNoise(400, 0.1);
+        const ocean1 = createNoise(200, 0.35);
+        const ocean2 = createNoise(400, 0.25);
         
         // Add wave-like modulation
         const waveLFO = context.createOscillator();
@@ -177,20 +178,20 @@ function MeditationRoomContent() {
         oscillators.push(waveLFO);
         
         // Deep ocean rumble
-        createOsc(55, 'sine', 0.03);
+        createOsc(55, 'sine', 0.06);
         break;
 
       case 'forest':
         // Forest ambience with filtered noise for wind/rustling
-        createNoise(1000, 0.08); // Wind through trees
-        createNoise(3000, 0.05); // Rustling leaves
+        createNoise(1000, 0.20); // Wind through trees
+        createNoise(3000, 0.15); // Rustling leaves
         
         // Bird-like chirps with modulated high frequencies
-        const bird1 = createOsc(2000, 'sine', 0.02);
-        const bird2 = createOsc(2400, 'sine', 0.015);
+        const bird1 = createOsc(2000, 'sine', 0.04);
+        const bird2 = createOsc(2400, 'sine', 0.03);
         
         // Gentle forest hum
-        createOsc(150, 'sine', 0.02);
+        createOsc(150, 'sine', 0.04);
         break;
 
       case 'sacred':
@@ -245,12 +246,21 @@ function MeditationRoomContent() {
         break;
 
       case 'starlight':
-        // Shimmering high frequencies
-        createOsc(963, 'sine', 0.03);
-        createOsc(1111, 'sine', 0.02);
-        createOsc(888, 'triangle', 0.02);
-        createOsc(777, 'sine', 0.02);
-        createNoise(8000, 0.03); // Sparkle
+        // Gentle, shimmering ambient (NOT emergency alert!)
+        createOsc(432, 'sine', 0.02); // Base healing freq
+        createOsc(528, 'sine', 0.015); // Love freq
+        createOsc(639, 'sine', 0.01); // Connection
+        createNoise(6000, 0.03); // Soft high shimmer
+        
+        // Very gentle high sparkle
+        const sparkle = createOsc(1200, 'sine', 0.008);
+        const sparkleLFO = context.createOscillator();
+        sparkleLFO.frequency.value = 0.5;
+        const sparkleLFOGain = context.createGain();
+        sparkleLFOGain.gain.value = 0.005;
+        sparkleLFO.connect(sparkleLFOGain);
+        sparkleLFOGain.connect(sparkle.gain.gain);
+        oscillators.push(sparkleLFO);
         break;
 
       default:
@@ -280,7 +290,7 @@ function MeditationRoomContent() {
       masterGain.connect(audioContextRef.current.destination);
       
       // Create the soundscape
-      const { oscillators, gains } = createSoundscape(
+      const { oscillators, gains, nodes } = createSoundscape(
         selectedSound, 
         audioContextRef.current, 
         masterGain
@@ -290,10 +300,16 @@ function MeditationRoomContent() {
       oscillatorsRef.current = oscillators;
       gainNodesRef.current = gains;
       gainNodesRef.current.push(masterGain);
+      audioNodesRef.current = nodes;
       
-      // Start all oscillators
+      // Start all oscillators and buffer sources
       const now = audioContextRef.current.currentTime;
       oscillators.forEach(osc => osc.start(now));
+      nodes.forEach(node => {
+        if (node instanceof AudioBufferSourceNode) {
+          node.start(now);
+        }
+      });
       
       setIsPlaying(true);
       setIsLoading(false);
@@ -316,9 +332,21 @@ function MeditationRoomContent() {
         }
       });
       
+      // Stop all buffer sources (noise generators)
+      audioNodesRef.current.forEach(node => {
+        if (node instanceof AudioBufferSourceNode) {
+          try {
+            node.stop();
+          } catch (e) {
+            // Already stopped
+          }
+        }
+      });
+      
       // Clear references
       oscillatorsRef.current = [];
       gainNodesRef.current = [];
+      audioNodesRef.current = [];
       
       // Close audio context
       if (audioContextRef.current) {
