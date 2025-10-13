@@ -13,14 +13,6 @@ interface Community {
   created_by: string;
 }
 
-interface Settings {
-  members_can_post: boolean;
-  members_can_invite: boolean;
-  require_post_approval: boolean;
-  allow_events: boolean;
-  members_can_create_events: boolean;
-}
-
 export default function CommunitySettingsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -39,13 +31,15 @@ export default function CommunitySettingsPage() {
   const [allowEvents, setAllowEvents] = useState(true);
   const [membersCanCreateEvents, setMembersCanCreateEvents] = useState(false);
 
+  // UI state
+  const [showTransferSection, setShowTransferSection] = useState(false);
+  const [showDeleteSection, setShowDeleteSection] = useState(false);
+
   // Danger zone
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
 
   // Transfer ownership
-  const [showTransferOwnership, setShowTransferOwnership] = useState(false);
   const [transferToUserId, setTransferToUserId] = useState("");
   const [transferring, setTransferring] = useState(false);
 
@@ -90,9 +84,6 @@ export default function CommunitySettingsPage() {
         router.push(`/communities/${communityId}`);
         return;
       }
-
-      // Load settings (if you have a settings table)
-      // For now, we'll use default values or add these columns to communities table later
       
     } catch (error: any) {
       console.error("Error loading:", error);
@@ -217,126 +208,131 @@ export default function CommunitySettingsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen p-6" style={{ background: "#F4ECFF" }}>
-        <div className="mx-auto max-w-4xl">
+      <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5] pb-20">
+        <div className="container mx-auto px-4 py-4 max-w-3xl">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
-            <div className="bg-white rounded-2xl p-6">
-              <div className="space-y-4">
-                <div className="h-10 bg-gray-200 rounded"></div>
-                <div className="h-10 bg-gray-200 rounded"></div>
-                <div className="h-10 bg-gray-200 rounded"></div>
-              </div>
+            <div className="h-10 bg-gray-200 rounded w-2/3 mb-6"></div>
+            <div className="space-y-4">
+              <div className="h-32 bg-gray-200 rounded-2xl"></div>
+              <div className="h-32 bg-gray-200 rounded-2xl"></div>
             </div>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   const isOwner = userRole === "owner";
 
   return (
-    <main className="min-h-screen p-6" style={{ background: "#F4ECFF" }}>
-      <div className="mx-auto max-w-4xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
+    <div className="min-h-screen bg-gradient-to-b from-[#EDE7F6] to-[#F6EFE5] pb-24">
+      {/* Mobile-Optimized Sticky Header */}
+      <div className="sticky top-0 z-40 bg-gradient-to-b from-[#EDE7F6] to-[#EDE7F6]/95 backdrop-blur-sm border-b border-purple-100">
+        <div className="container mx-auto px-4 py-3 max-w-3xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/communities/${communityId}`}
+                className="p-2 -ml-2 hover:bg-purple-100 rounded-full transition"
+              >
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </Link>
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">Settings</h1>
+                <p className="text-xs text-gray-600">{community?.title}</p>
+              </div>
+            </div>
             <Link
-              href={`/communities/${communityId}`}
-              className="text-purple-600 hover:text-purple-700 mb-2 inline-block"
+              href={`/communities/${communityId}/edit`}
+              className="px-4 py-2 bg-white text-gray-700 rounded-full text-sm font-medium shadow-sm hover:bg-gray-50 transition"
             >
-              ← Back to Community
+              Edit
             </Link>
-            <h1 className="text-2xl font-semibold">Community Settings</h1>
-            <p className="text-gray-600 text-sm">{community?.title}</p>
           </div>
-          <Link
-            href={`/communities/${communityId}/edit`}
-            className="btn"
-          >
-            Edit Details
-          </Link>
         </div>
+      </div>
 
+      <div className="container mx-auto px-4 py-4 max-w-3xl space-y-4">
         {/* Member Permissions */}
-        <div className="bg-white rounded-2xl border border-purple-100 shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Member Permissions</h2>
+        <div className="bg-white rounded-2xl shadow-sm p-4">
+          <h2 className="text-lg font-semibold mb-3 text-gray-800">Member Permissions</h2>
           <p className="text-sm text-gray-600 mb-4">
             Control what members can do in this community
           </p>
 
           <div className="space-y-3">
-            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-              <div>
-                <div className="font-medium">Members can create posts</div>
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer active:bg-gray-100 transition">
+              <div className="flex-1 pr-3">
+                <div className="font-medium text-gray-900">Members can create posts</div>
                 <div className="text-sm text-gray-600">Allow all members to create discussions</div>
               </div>
               <input
                 type="checkbox"
                 checked={membersCanPost}
                 onChange={(e) => setMembersCanPost(e.target.checked)}
-                className="w-5 h-5 text-purple-600 rounded"
+                className="w-6 h-6 text-purple-600 rounded"
               />
             </label>
 
-            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-              <div>
-                <div className="font-medium">Members can invite others</div>
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer active:bg-gray-100 transition">
+              <div className="flex-1 pr-3">
+                <div className="font-medium text-gray-900">Members can invite others</div>
                 <div className="text-sm text-gray-600">Let members send invite links</div>
               </div>
               <input
                 type="checkbox"
                 checked={membersCanInvite}
                 onChange={(e) => setMembersCanInvite(e.target.checked)}
-                className="w-5 h-5 text-purple-600 rounded"
+                className="w-6 h-6 text-purple-600 rounded"
               />
             </label>
 
-            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-              <div>
-                <div className="font-medium">Require post approval</div>
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer active:bg-gray-100 transition">
+              <div className="flex-1 pr-3">
+                <div className="font-medium text-gray-900">Require post approval</div>
                 <div className="text-sm text-gray-600">All posts must be approved by admins</div>
               </div>
               <input
                 type="checkbox"
                 checked={requirePostApproval}
                 onChange={(e) => setRequirePostApproval(e.target.checked)}
-                className="w-5 h-5 text-purple-600 rounded"
+                className="w-6 h-6 text-purple-600 rounded"
               />
             </label>
           </div>
         </div>
 
         {/* Event Settings */}
-        <div className="bg-white rounded-2xl border border-purple-100 shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Event Settings</h2>
+        <div className="bg-white rounded-2xl shadow-sm p-4">
+          <h2 className="text-lg font-semibold mb-3 text-gray-800">Event Settings</h2>
           
           <div className="space-y-3">
-            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-              <div>
-                <div className="font-medium">Enable events</div>
+            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer active:bg-gray-100 transition">
+              <div className="flex-1 pr-3">
+                <div className="font-medium text-gray-900">Enable events</div>
                 <div className="text-sm text-gray-600">Allow events to be created in this community</div>
               </div>
               <input
                 type="checkbox"
                 checked={allowEvents}
                 onChange={(e) => setAllowEvents(e.target.checked)}
-                className="w-5 h-5 text-purple-600 rounded"
+                className="w-6 h-6 text-purple-600 rounded"
               />
             </label>
 
             {allowEvents && (
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-                <div>
-                  <div className="font-medium">Members can create events</div>
+              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer active:bg-gray-100 transition">
+                <div className="flex-1 pr-3">
+                  <div className="font-medium text-gray-900">Members can create events</div>
                   <div className="text-sm text-gray-600">Let members create and manage events</div>
                 </div>
                 <input
                   type="checkbox"
                   checked={membersCanCreateEvents}
                   onChange={(e) => setMembersCanCreateEvents(e.target.checked)}
-                  className="w-5 h-5 text-purple-600 rounded"
+                  className="w-6 h-6 text-purple-600 rounded"
                 />
               </label>
             )}
@@ -344,38 +340,46 @@ export default function CommunitySettingsPage() {
         </div>
 
         {/* Save Settings Button */}
-        <div className="mb-6">
-          <button
-            onClick={handleSaveSettings}
-            disabled={saving}
-            className="btn btn-brand w-full"
-          >
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            Note: Add settings columns to your database to persist these changes
-          </p>
-        </div>
+        <button
+          onClick={handleSaveSettings}
+          disabled={saving}
+          className="w-full px-6 py-4 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition disabled:opacity-50 shadow-md"
+        >
+          {saving ? "Saving..." : "Save Settings"}
+        </button>
+        <p className="text-xs text-gray-500 text-center -mt-2">
+          Note: Add settings columns to your database to persist these changes
+        </p>
 
         {/* Transfer Ownership (Owner only) */}
         {isOwner && (
-          <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 mb-6">
-            <h2 className="text-lg font-semibold text-amber-900 mb-2">Transfer Ownership</h2>
-            <p className="text-sm text-amber-800 mb-4">
-              Transfer community ownership to another member. You will become an admin.
-            </p>
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setShowTransferSection(!showTransferSection)}
+              className="w-full p-4 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">👑</span>
+                <div className="text-left">
+                  <h2 className="text-lg font-semibold text-amber-900">Transfer Ownership</h2>
+                  <p className="text-sm text-amber-800">Give community ownership to another member</p>
+                </div>
+              </div>
+              <svg className={`w-5 h-5 text-amber-900 transition-transform ${showTransferSection ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
 
-            {!showTransferOwnership ? (
-              <button
-                onClick={() => setShowTransferOwnership(true)}
-                className="btn bg-amber-600 text-white hover:bg-amber-700"
-              >
-                Transfer Ownership
-              </button>
-            ) : (
-              <div className="space-y-3">
+            {showTransferSection && (
+              <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top">
+                <div className="p-3 bg-amber-100 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    ⚠️ You will become an admin after transfer. This cannot be undone.
+                  </p>
+                </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-amber-900 mb-1">
+                  <label className="block text-sm font-medium text-amber-900 mb-2">
                     New Owner User ID
                   </label>
                   <input
@@ -383,7 +387,7 @@ export default function CommunitySettingsPage() {
                     value={transferToUserId}
                     onChange={(e) => setTransferToUserId(e.target.value)}
                     placeholder="Paste user ID here..."
-                    className="input w-full"
+                    className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                   <p className="text-xs text-amber-700 mt-1">
                     The user must be a member of this community
@@ -393,10 +397,10 @@ export default function CommunitySettingsPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      setShowTransferOwnership(false);
+                      setShowTransferSection(false);
                       setTransferToUserId("");
                     }}
-                    className="btn flex-1"
+                    className="flex-1 px-6 py-3 bg-white border-2 border-amber-300 text-amber-900 rounded-xl font-medium hover:bg-amber-50 transition"
                     disabled={transferring}
                   >
                     Cancel
@@ -404,9 +408,9 @@ export default function CommunitySettingsPage() {
                   <button
                     onClick={handleTransferOwnership}
                     disabled={transferring || !transferToUserId.trim()}
-                    className="btn bg-amber-600 text-white hover:bg-amber-700 flex-1"
+                    className="flex-1 px-6 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition disabled:opacity-50"
                   >
-                    {transferring ? "Transferring..." : "Confirm Transfer"}
+                    {transferring ? "Transferring..." : "Transfer"}
                   </button>
                 </div>
               </div>
@@ -416,41 +420,51 @@ export default function CommunitySettingsPage() {
 
         {/* Danger Zone (Owner only) */}
         {isOwner && (
-          <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-6">
-            <h2 className="text-lg font-semibold text-rose-900 mb-2">Danger Zone</h2>
-            <p className="text-sm text-rose-800 mb-4">
-              Deleting a community is permanent and cannot be undone. All posts, members, and data will be lost.
-            </p>
+          <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setShowDeleteSection(!showDeleteSection)}
+              className="w-full p-4 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div className="text-left">
+                  <h2 className="text-lg font-semibold text-rose-900">Danger Zone</h2>
+                  <p className="text-sm text-rose-800">Delete this community permanently</p>
+                </div>
+              </div>
+              <svg className={`w-5 h-5 text-rose-900 transition-transform ${showDeleteSection ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
 
-            {!showDeleteConfirm ? (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="btn bg-rose-600 text-white hover:bg-rose-700"
-              >
-                Delete Community
-              </button>
-            ) : (
-              <div className="space-y-3">
+            {showDeleteSection && (
+              <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top">
+                <div className="p-3 bg-rose-100 rounded-lg">
+                  <p className="text-sm text-rose-800">
+                    🚨 This will permanently delete the community, all posts, members, and data. This cannot be undone.
+                  </p>
+                </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-rose-900 mb-1">
-                    Type the community name to confirm: <strong>{community?.title}</strong>
+                  <label className="block text-sm font-medium text-rose-900 mb-2">
+                    Type <strong>{community?.title}</strong> to confirm
                   </label>
                   <input
                     type="text"
                     value={deleteConfirmText}
                     onChange={(e) => setDeleteConfirmText(e.target.value)}
                     placeholder="Type community name exactly..."
-                    className="input w-full"
+                    className="w-full px-4 py-3 border-2 border-rose-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      setShowDeleteConfirm(false);
+                      setShowDeleteSection(false);
                       setDeleteConfirmText("");
                     }}
-                    className="btn flex-1"
+                    className="flex-1 px-6 py-3 bg-white border-2 border-rose-300 text-rose-900 rounded-xl font-medium hover:bg-rose-50 transition"
                     disabled={deleting}
                   >
                     Cancel
@@ -458,7 +472,7 @@ export default function CommunitySettingsPage() {
                   <button
                     onClick={handleDeleteCommunity}
                     disabled={deleting || deleteConfirmText !== community?.title}
-                    className="btn bg-rose-600 text-white hover:bg-rose-700 flex-1 disabled:opacity-50"
+                    className="flex-1 px-6 py-3 bg-rose-600 text-white rounded-xl font-semibold hover:bg-rose-700 transition disabled:opacity-50"
                   >
                     {deleting ? "Deleting..." : "Delete Forever"}
                   </button>
@@ -470,13 +484,14 @@ export default function CommunitySettingsPage() {
 
         {/* Admin view (not owner) */}
         {!isOwner && (
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-            <p className="text-gray-600 text-center">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center">
+            <div className="text-3xl mb-2">👤</div>
+            <p className="text-gray-600 font-medium">
               You are an admin. Only the owner can transfer ownership or delete this community.
             </p>
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
