@@ -284,6 +284,74 @@
 }
 
 /* ======================
+   WALL POST STYLES
+   ====================== */
+
+.wallPost {
+  border-left: 4px solid #8b5cf6;
+  background: linear-gradient(to right, rgba(139, 92, 246, 0.03), transparent);
+}
+
+.wallPostBanner {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.75rem 0.75rem 0 0;
+  margin: -1.5rem -1.5rem 1rem -1.5rem;
+}
+
+.wallPostIcon {
+  font-size: 1.125rem;
+}
+
+.wallPostText {
+  font-size: 0.875rem;
+}
+
+.wallPostAuthor {
+  font-weight: 600;
+  color: inherit;
+}
+
+.wallPostArrow {
+  margin: 0 0.25rem;
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+.wallPostTarget {
+  color: #8b5cf6;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.wallPostTarget:hover {
+  color: #7c3aed;
+  text-decoration: underline;
+}
+
+/* Wall post styling in compact mode */
+.postCardCompact.wallPost {
+  border-left: 3px solid #8b5cf6;
+}
+
+.postCardCompact.wallPost .compactName .wallPostTarget {
+  color: #8b5cf6;
+}
+
+.postCardCompact.wallPost .compactName .wallPostArrow {
+  margin: 0 0.25rem;
+  color: #9ca3af;
+}
+
+/* ======================
    PHOTO GRID STYLES
    ====================== */
 
@@ -1108,6 +1176,17 @@
   
   .mobileHints {
     display: block;
+  }
+  
+  /* Wall post mobile adjustments */
+  .wallPostBanner {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8125rem;
+    margin: -1rem -1rem 0.75rem -1rem;
+  }
+  
+  .wallPostIcon {
+    font-size: 1rem;
   }
 }
 
