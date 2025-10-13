@@ -5,58 +5,58 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-// Simple color backgrounds
+// Updated vibrant color backgrounds
 const MEDITATION_BACKGROUNDS = [
   { 
     id: 'sunset', 
     name: 'Golden Sunset', 
-    gradient: 'from-orange-400 via-pink-400 to-purple-500',
+    gradient: 'from-orange-500 via-rose-500 to-pink-600',
     description: 'Warm and peaceful'
   },
   { 
     id: 'ocean', 
     name: 'Ocean Waves', 
-    gradient: 'from-cyan-400 via-blue-500 to-indigo-600',
+    gradient: 'from-cyan-500 via-blue-600 to-indigo-700',
     description: 'Deep and calming'
   },
   { 
     id: 'forest', 
     name: 'Forest', 
-    gradient: 'from-green-400 via-emerald-500 to-teal-600',
+    gradient: 'from-green-500 via-emerald-600 to-teal-700',
     description: 'Natural tranquility'
   },
   { 
     id: 'lavender', 
     name: 'Lavender Dreams', 
-    gradient: 'from-purple-400 via-violet-500 to-indigo-600',
+    gradient: 'from-purple-500 via-violet-600 to-fuchsia-700',
     description: 'Peaceful dreams'
   },
   { 
     id: 'sunrise', 
     name: 'Morning Light', 
-    gradient: 'from-yellow-300 via-orange-400 to-red-500',
+    gradient: 'from-amber-400 via-orange-500 to-rose-600',
     description: 'New beginnings'
   },
   { 
     id: 'night', 
     name: 'Night Sky', 
-    gradient: 'from-gray-900 via-purple-900 to-violet-900',
+    gradient: 'from-indigo-900 via-purple-900 to-violet-950',
     description: 'Deep meditation'
   },
 ];
 
-// Ambient sounds using actual audio files
+// Ambient sounds with working CDN links
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: '', description: 'Pure silence' },
-  { name: 'Ocean Waves', file: '/audio/beach_waves.mp3', description: 'Calming ocean sounds' },
-  { name: 'Forest Creek', file: '/audio/forest_creek.mp3', description: 'Peaceful water flow' },
-  { name: 'Forest Birds', file: '/audio/forest_birds.mp3', description: 'Nature sounds' },
-  { name: 'Lake Waters', file: '/audio/lake_softwater.mp3', description: 'Gentle lake sounds' },
-  { name: 'Sacred Chant', file: '/audio/candle_room_chant.mp3', description: 'Spiritual chanting' },
-  { name: '432 Hz Tone', file: '/audio/tone_432.mp3', description: 'Healing frequency' },
-  { name: '528 Hz Love', file: '/audio/tone_528.mp3', description: 'Love frequency' },
-  { name: '639 Hz Heart', file: '/audio/tone_639.mp3', description: 'Connection frequency' },
-  { name: '963 Hz Crown', file: '/audio/tone_963.mp3', description: 'Divine frequency' },
+  { name: 'Ocean Waves', file: 'https://cdn.pixabay.com/audio/2022/03/10/audio_4e3f1d21e2.mp3', description: 'Calming ocean sounds' },
+  { name: 'Forest Creek', file: 'https://cdn.pixabay.com/audio/2022/03/10/audio_0ac3188dca.mp3', description: 'Peaceful water flow' },
+  { name: 'Forest Birds', file: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3', description: 'Nature sounds' },
+  { name: 'Rain & Thunder', file: 'https://cdn.pixabay.com/audio/2022/03/12/audio_b8c0975d41.mp3', description: 'Gentle rain sounds' },
+  { name: 'Tibetan Bowls', file: 'https://cdn.pixabay.com/audio/2023/10/03/audio_13a8566aa5.mp3', description: 'Singing bowl meditation' },
+  { name: '432 Hz Healing', file: 'https://cdn.pixabay.com/audio/2023/02/28/audio_229530e679.mp3', description: 'Healing frequency' },
+  { name: '528 Hz Love', file: 'https://cdn.pixabay.com/audio/2022/11/09/audio_d0c0dc1e7e.mp3', description: 'Love frequency' },
+  { name: 'Deep Meditation', file: 'https://cdn.pixabay.com/audio/2022/03/15/audio_4dfb87b5f3.mp3', description: 'Ambient meditation' },
+  { name: 'Zen Garden', file: 'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe5c49c.mp3', description: 'Peaceful ambient' },
 ];
 
 function MeditationRoomContent() {
