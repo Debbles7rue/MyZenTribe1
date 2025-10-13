@@ -5,14 +5,8 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-// Updated vibrant color backgrounds
+// Updated vibrant color backgrounds (removed sunset)
 const MEDITATION_BACKGROUNDS = [
-  { 
-    id: 'sunset', 
-    name: 'Golden Sunset', 
-    gradient: 'from-orange-500 via-rose-500 to-pink-600',
-    description: 'Warm and peaceful'
-  },
   { 
     id: 'ocean', 
     name: 'Ocean Waves', 
@@ -45,24 +39,24 @@ const MEDITATION_BACKGROUNDS = [
   },
 ];
 
-// Web Audio API ambient sounds - Beautiful atmospheric soundscapes
+// Web Audio API ambient sounds - Beautiful soundscapes and melodic music
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: 'silent', description: 'Pure silence' },
   { name: 'Ocean Waves', file: 'ocean', description: 'Realistic wave sounds' },
-  { name: 'Rain & Thunder', file: 'rain', description: 'Gentle rain and distant thunder' },
   { name: 'Sacred Om', file: 'sacred', description: 'Om resonance 136Hz' },
-  { name: 'Deep Peace', file: 'deeppeace', description: 'Evolving grounding tones' },
-  { name: '432 Hz Healing', file: '432hz', description: 'Breathing healing frequency' },
-  { name: '528 Hz Love', file: '528hz', description: 'Pulsing love frequency' },
-  { name: 'Celestial Realm', file: 'celestial', description: 'Flowing heavenly atmosphere' },
   { name: 'Earth Resonance', file: 'earthhum', description: 'Deep grounding rumble' },
-  { name: 'Cosmic Starlight', file: 'starlight', description: 'Evolving cosmic tones' },
+  { name: 'Peaceful Ambience', file: 'peaceful', description: 'Flowing gentle melody' },
+  { name: 'Healing Harmony', file: 'healing', description: 'Beautiful healing music' },
+  { name: 'Love Frequencies', file: 'love', description: 'Warm melodic embrace' },
+  { name: 'Celestial Music', file: 'celestial', description: 'Heavenly chord progressions' },
+  { name: 'Cosmic Journey', file: 'cosmic', description: 'Ethereal soundscape' },
+  { name: 'Deep Meditation', file: 'deepmed', description: 'Profound peaceful music' },
 ];
 
 function MeditationRoomContent() {
   const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedBg, setSelectedBg] = useState('sunset');
+  const [selectedBg, setSelectedBg] = useState('ocean');
   const [isActive, setIsActive] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [sessionStart, setSessionStart] = useState<Date | null>(null);
