@@ -157,17 +157,103 @@ function MeditationRoomContent() {
     console.log('🔍 BEFORE SWITCH STATEMENT, type is:', type, 'typeof:', typeof type);
     
     if (type === 'drumflute') {
-      console.log('✅ DIRECT IF CHECK: drumflute matched!');
-      const testDrum = context.createOscillator();
-      const testGain = context.createGain();
-      testDrum.frequency.value = 80;
-      testDrum.type = 'sine';
-      testGain.gain.value = 0.8; // MUCH LOUDER!
-      testDrum.connect(testGain);
-      testGain.connect(masterGain);
-      oscillators.push(testDrum);
-      gains.push(testGain);
-      console.log('✅ DRUMFLUTE oscillator created via IF!');
+      console.log('🥁 Creating Spirit Drum Journey with rhythm and flute...');
+      
+      // DEEP BASS DRUM - Slow heartbeat rhythm
+      const drumPattern = [0, 2, 4, 6, 8, 10, 12, 14]; // Every 2 seconds
+      drumPattern.forEach(time => {
+        const drumOsc = context.createOscillator();
+        const drumGain = context.createGain();
+        
+        drumOsc.frequency.value = 60; // Deep bass
+        drumOsc.type = 'sine';
+        
+        const startTime = context.currentTime + time;
+        
+        // Drum hit envelope (quick attack, decay)
+        drumGain.gain.setValueAtTime(0, startTime);
+        drumGain.gain.linearRampToValueAtTime(0.6, startTime + 0.05);
+        drumGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
+        
+        drumOsc.connect(drumGain);
+        drumGain.connect(masterGain);
+        
+        drumOsc.start(startTime);
+        drumOsc.stop(startTime + 0.8);
+        
+        oscillators.push(drumOsc);
+        gains.push(drumGain);
+      });
+      
+      // HAND DRUM ACCENTS - Between bass hits
+      const accentPattern = [1, 3, 5, 7, 9, 11, 13];
+      accentPattern.forEach(time => {
+        const accentOsc = context.createOscillator();
+        const accentGain = context.createGain();
+        
+        accentOsc.frequency.value = 180;
+        accentOsc.type = 'sine';
+        
+        const startTime = context.currentTime + time;
+        
+        accentGain.gain.setValueAtTime(0, startTime);
+        accentGain.gain.linearRampToValueAtTime(0.25, startTime + 0.03);
+        accentGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.4);
+        
+        accentOsc.connect(accentGain);
+        accentGain.connect(masterGain);
+        
+        accentOsc.start(startTime);
+        accentOsc.stop(startTime + 0.4);
+        
+        oscillators.push(accentOsc);
+        gains.push(accentGain);
+      });
+      
+      // ETHEREAL FLUTE MELODY - Pentatonic scale floating over drums
+      // Notes: D, E, G, A, C (Native American inspired)
+      const fluteNotes = [293.66, 329.63, 392.00, 440.00, 523.25];
+      const melody = [0, 2, 1, 3, 2, 4, 3, 1, 0]; // Pattern indices
+      const noteDuration = 1.8;
+      
+      melody.forEach((noteIndex, i) => {
+        const fluteOsc = context.createOscillator();
+        const fluteGain = context.createGain();
+        
+        fluteOsc.frequency.value = fluteNotes[noteIndex];
+        fluteOsc.type = 'triangle'; // Breathy flute sound
+        
+        const startTime = context.currentTime + (i * noteDuration) + 0.5; // Offset from drums
+        
+        // Gentle breath-like attack and release
+        fluteGain.gain.setValueAtTime(0, startTime);
+        fluteGain.gain.linearRampToValueAtTime(0.15, startTime + 0.3);
+        fluteGain.gain.setValueAtTime(0.15, startTime + noteDuration - 0.4);
+        fluteGain.gain.linearRampToValueAtTime(0, startTime + noteDuration);
+        
+        // Add vibrato for organic feel
+        const vibrato = context.createOscillator();
+        const vibratoGain = context.createGain();
+        vibrato.frequency.value = 4.5; // Gentle vibrato
+        vibratoGain.gain.value = 4; // Subtle pitch variation
+        
+        vibrato.connect(vibratoGain);
+        vibratoGain.connect(fluteOsc.frequency);
+        
+        fluteOsc.connect(fluteGain);
+        fluteGain.connect(masterGain);
+        
+        vibrato.start(startTime);
+        vibrato.stop(startTime + noteDuration);
+        fluteOsc.start(startTime);
+        fluteOsc.stop(startTime + noteDuration);
+        
+        oscillators.push(fluteOsc);
+        oscillators.push(vibrato);
+        gains.push(fluteGain);
+      });
+      
+      console.log('🥁 Spirit Drum Journey created with', oscillators.length, 'sound elements');
     }
 
     switch (type) {
