@@ -518,7 +518,7 @@ export default function CalendarGrid({
                   whiteSpace: 'nowrap',
                 }}
               >
-                <span style={{ fontSize: isMobile ? '12px' : '12px', flexShrink: 0 }}>
+                style={{ fontSize: isMobile ? '12px' : '12px', flexShrink: 0 }}>
                   {holiday.title.match(/^[\p{Emoji}]/u)?.[0] || '🎉'}
                 </span>
                 <span style={{ 
@@ -526,6 +526,7 @@ export default function CalendarGrid({
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   flex: 1,
+                  minWidth: 0,
                 }}>
                   {holiday.title.replace(/^[\p{Emoji}\s]+/u, '')}
                 </span>
@@ -807,6 +808,7 @@ export default function CalendarGrid({
           color: #374151;
           pointer-events: auto;
           padding-top: 2px;
+          min-height: 24px;
         }
         
         /* NEW: Holiday banner link styles with hover */
@@ -843,6 +845,16 @@ export default function CalendarGrid({
         }
         
         .holiday-banner-link:active {
+          transform: translateY(0);
+        }
+        
+        /* "+X more" link styles */
+        .holiday-more-link:hover {
+          background: rgba(221, 214, 254, 0.8) !important;
+          transform: translateY(-1px);
+        }
+        
+        .holiday-more-link:active {
           transform: translateY(0);
         }
         
@@ -938,9 +950,15 @@ export default function CalendarGrid({
           overflow: hidden;
         }
         
+        /* Month rows need more height for holiday banners */
+        .custom-calendar .rbc-month-row {
+          min-height: 110px;
+        }
+        
         /* Day cells always white */
         .custom-calendar .rbc-day-bg {
           background: white;
+          min-height: 100px;
         }
         
         /* Day cell hover effect */
@@ -1024,7 +1042,7 @@ export default function CalendarGrid({
           }
           
           .custom-calendar .rbc-month-row {
-            min-height: 70px;
+            min-height: 100px;
           }
           
           .custom-calendar .rbc-date-cell {
@@ -1034,22 +1052,25 @@ export default function CalendarGrid({
           }
           
           .custom-calendar .rbc-day-bg {
-            min-height: 60px;
+            min-height: 90px;
           }
           
           /* Mobile events - larger touch targets */
           .custom-calendar .rbc-event {
             padding: 4px 6px !important;
-            font-size: 10px !important;
+            font-size: 11px !important;
             min-height: 28px !important;
             line-height: 1.3;
+            white-space: normal !important;
+            word-wrap: break-word !important;
           }
           
           .custom-calendar .rbc-event-content {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 10px;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+            font-size: 11px;
+            word-wrap: break-word !important;
           }
           
           /* Mobile header */
