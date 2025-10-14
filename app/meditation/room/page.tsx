@@ -39,13 +39,13 @@ const MEDITATION_BACKGROUNDS = [
   },
 ];
 
-// Web Audio API ambient sounds - Working sounds + one melodic option
+// Web Audio API ambient sounds - Working sounds + drumming/flute
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: 'silent', description: 'Pure silence' },
   { name: 'Ocean Waves', file: 'ocean', description: 'Realistic wave sounds' },
   { name: 'Sacred Om', file: 'sacred', description: 'Om resonance 136Hz' },
   { name: 'Earth Resonance', file: 'earthhum', description: 'Deep grounding rumble' },
-  { name: 'Peaceful Harmony', file: 'harmony', description: 'Gentle melodic music' },
+  { name: 'Spirit Drum Journey', file: 'drumflute', description: 'Hypnotic drums & flute' },
 ];
 
 function MeditationRoomContent() {
