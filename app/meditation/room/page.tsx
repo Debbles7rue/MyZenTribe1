@@ -100,11 +100,13 @@ function MeditationRoomContent() {
   };
 
   const createSoundscape = (type: string, context: AudioContext, masterGain: GainNode) => {
+    console.log('🎨 createSoundscape called with type:', type);
     const oscillators: OscillatorNode[] = [];
     const gains: GainNode[] = [];
     const nodes: AudioNode[] = [];
 
     const createOsc = (freq: number, type: OscillatorType = 'sine', vol: number = 0.1) => {
+      console.log('  📢 Creating oscillator:', freq, 'Hz, volume:', vol);
       const osc = context.createOscillator();
       const gain = context.createGain();
       osc.type = type;
@@ -114,6 +116,7 @@ function MeditationRoomContent() {
       gain.connect(masterGain);
       oscillators.push(osc);
       gains.push(gain);
+      console.log('  ✅ Oscillator created, total oscillators now:', oscillators.length);
       return { osc, gain };
     };
 
