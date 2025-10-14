@@ -105,6 +105,7 @@ const getCurrentYearHolidays = (year: number) => {
   const internationalHolidays: Holiday[] = [
     { name: "Chinese New Year", date: `${year}-02-10`, emoji: "🐉", description: "Year of the Dragon", category: 'international', color: '#DC2626' },
     { name: "Mardi Gras", date: `${year}-02-13`, emoji: "🎭", description: "Let the good times roll", category: 'international', color: '#7C3AED' },
+    { name: "World Sound Healing Day", date: `${year}-02-14`, emoji: "🕉️", description: "Say Om at noon worldwide - Sound healing celebration", category: 'international', recurring: true, color: '#7C3AED' },
     { name: "Ramadan Begins", date: `${year}-03-01`, emoji: "🌙", description: "Islamic holy month", category: 'international', color: '#059669' },
     { name: "Purim", date: `${year}-03-24`, emoji: "👑", description: "Festival of lots", category: 'international', color: '#EC4899' },
     { name: "Eid al-Fitr", date: `${year}-04-10`, emoji: "🌟", description: "Breaking of the fast", category: 'international', color: '#F59E0B' },
@@ -123,6 +124,7 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Diwali", date: `${year}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
     { name: "Day of the Dead", date: `${year}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
     { name: "Guy Fawkes Day", date: `${year}-11-05`, emoji: "🎆", description: "Bonfire Night (UK)", category: 'international', color: '#DC2626' },
+    { name: "Remember Remember the 5th of November", date: `${year}-11-05`, emoji: "🔥", description: "Gunpowder Plot anniversary", category: 'international', color: '#EF4444' },
     { name: "Remembrance Day (Canada)", date: `${year}-11-11`, emoji: "🌺", description: "Honor veterans", category: 'international', color: '#DC2626' },
     { name: "St. Lucia Day", date: `${year}-12-13`, emoji: "🕯️", description: "Festival of Light (Sweden)", category: 'international', color: '#FCD34D' },
     { name: "Hanukkah (First Night)", date: `${year}-12-25`, emoji: "🕎", description: "Festival of dedication", category: 'international', color: '#3B82F6' },
@@ -454,17 +456,18 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
       />
       
       <div 
-        className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] my-auto overflow-hidden"
+        className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-h-[90vh] sm:max-h-[85vh] my-auto overflow-hidden flex flex-col"
+        style={{ maxWidth: '1024px' }}
         onClick={(e) => e.stopPropagation()} // FIXED: Prevent clicks inside modal from bubbling to backdrop
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-6">
+        <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-3xl font-bold flex items-center gap-2">
+              <h2 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
                 🎊 Holiday & Celebration Manager
               </h2>
-              <p className="text-sm mt-1 text-white/90">
+              <p className="text-xs sm:text-sm mt-1 text-white/90">
                 Add holidays, birthdays, and fun celebrations to your calendar
               </p>
             </div>
@@ -525,7 +528,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
         </div>
 
         {/* Category Tabs */}
-        <div className="bg-gray-50 dark:bg-gray-900 p-4 border-b dark:border-gray-700">
+        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 border-b dark:border-gray-700">
           <div className="flex flex-wrap gap-2">
             {categories.map(cat => (
               <div key={cat.id} className="flex items-center gap-2">
@@ -575,7 +578,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
 
         {/* Add Personal Event Button */}
         {activeCategory === 'personal' && (
-          <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border-b dark:border-gray-700">
+          <div className="flex-shrink-0 p-3 sm:p-4 bg-purple-50 dark:bg-purple-900/20 border-b dark:border-gray-700">
             {!showAddPersonal ? (
               <button
                 onClick={(e) => {
@@ -666,7 +669,7 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
         )}
 
         {/* Holiday Grid */}
-        <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 280px)' }}>
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
           <div className="grid gap-2">
             {filteredHolidays.map(holiday => {
               const date = new Date(holiday.date);
@@ -790,9 +793,9 @@ export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFro
           )}
         </div>
 
-        {/* Footer - FIXED: Mobile responsive layout */}
-        <div className="p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        {/* Footer - FIXED: Mobile responsive layout + Always visible */}
+        <div className="flex-shrink-0 p-4 sm:p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 dark:text-gray-400">
               <span className="font-medium">{filteredHolidays.length} holidays</span>
               <span className="text-xs">
