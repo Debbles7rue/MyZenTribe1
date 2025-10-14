@@ -214,7 +214,7 @@ function MeditationRoomContent() {
       // Notes: D, E, G, A, C (Native American inspired)
       const fluteNotes = [293.66, 329.63, 392.00, 440.00, 523.25];
       const melody = [0, 2, 1, 3, 2, 4, 3, 1, 0]; // Pattern indices
-      const noteDuration = 1.8;
+      const noteDuration = 2.2; // Longer notes for more overlap
       
       melody.forEach((noteIndex, i) => {
         const fluteOsc = context.createOscillator();
@@ -223,13 +223,13 @@ function MeditationRoomContent() {
         fluteOsc.frequency.value = fluteNotes[noteIndex];
         fluteOsc.type = 'triangle'; // Breathy flute sound
         
-        const startTime = context.currentTime + (i * noteDuration) + 0.5; // Offset from drums
+        const startTime = context.currentTime + (i * 1.6) + 0.5; // Notes overlap now!
         
-        // Gentle breath-like attack and release
+        // Smooth blending - quick attack, long sustain, gentle release
         fluteGain.gain.setValueAtTime(0, startTime);
-        fluteGain.gain.linearRampToValueAtTime(0.15, startTime + 0.3);
-        fluteGain.gain.setValueAtTime(0.15, startTime + noteDuration - 0.4);
-        fluteGain.gain.linearRampToValueAtTime(0, startTime + noteDuration);
+        fluteGain.gain.linearRampToValueAtTime(0.15, startTime + 0.2); // Quick attack
+        fluteGain.gain.setValueAtTime(0.15, startTime + 1.4); // Hold the note
+        fluteGain.gain.linearRampToValueAtTime(0, startTime + noteDuration); // Gentle fade while next note starts
         
         // Add vibrato for organic feel
         const vibrato = context.createOscillator();
