@@ -154,6 +154,22 @@ function MeditationRoomContent() {
       return { noise, filter, gain };
     };
 
+    console.log('🔍 BEFORE SWITCH STATEMENT, type is:', type, 'typeof:', typeof type);
+    
+    if (type === 'drumflute') {
+      console.log('✅ DIRECT IF CHECK: drumflute matched!');
+      const testDrum = context.createOscillator();
+      const testGain = context.createGain();
+      testDrum.frequency.value = 80;
+      testDrum.type = 'sine';
+      testGain.gain.value = 0.3;
+      testDrum.connect(testGain);
+      testGain.connect(masterGain);
+      oscillators.push(testDrum);
+      gains.push(testGain);
+      console.log('✅ DRUMFLUTE oscillator created via IF!');
+    }
+
     switch (type) {
       case 'ocean':
         // Ocean waves using filtered noise with slow modulation
