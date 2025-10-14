@@ -1,1210 +1,833 @@
-// components/CalendarGrid.tsx
-"use client";
+// app/(protected)/calendar/components/HolidayReminders.tsx
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  Calendar as BigCalendar,
-  View,
-  momentLocalizer,
-  Event,
-  SlotInfo,
-  EventProps,
-} from "react-big-calendar";
-import moment from "moment";
-import withDragAndDrop, {
-  EventInteractionArgs,
-} from "react-big-calendar/lib/addons/dragAndDrop";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import { TouchBackend } from "react-dnd-touch-backend";
-import "react-big-calendar/lib/css/react-big-calendar.css";
-import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
-import type { DBEvent } from "@/lib/types";
+interface Holiday {
+  name: string;
+  date: string;
+  emoji: string;
+  description: string;
+  category: 'traditional' | 'fun' | 'personal' | 'special' | 'international';
+  recurring?: boolean;
+  color?: string;
+}
 
-// Import MoonPhaseDisplay components
-import { 
-  MoonPhaseIcon, 
-  getMoonPhaseFromResource 
-} from "@/components/MoonPhaseDisplay";
+interface HolidayRemindersProps {
+  onClose: () => void;
+  onAddToCalendar: (holiday: Holiday) => Promise<boolean> | void;
+  onRemoveFromCalendar?: (eventId: string) => Promise<void>;
+  existingEvents?: any[];
+  showToast?: (toast: { type: string; message: string }) => void;
+}
 
-// Initialize localizer
-const localizer = momentLocalizer(moment);
+// Move holiday data outside component to avoid initialization issues
+const getCurrentYearHolidays = (year: number) => {
+  const traditionalHolidays: Holiday[] = [
+    { name: "New Year's Day", date: `${year}-01-01`, emoji: "🎊", description: "Fresh starts and resolutions", category: 'traditional', color: '#FFD700' },
+    { name: "Martin Luther King Jr. Day", date: `${year}-01-20`, emoji: "✊", description: "Day of service", category: 'traditional', color: '#4B5563' },
+    { name: "Valentine's Day", date: `${year}-02-14`, emoji: "💝", description: "Love is in the air", category: 'traditional', color: '#EC4899' },
+    { name: "Presidents' Day", date: `${year}-02-17`, emoji: "🎩", description: "Honoring leadership", category: 'traditional', color: '#3B82F6' },
+    { name: "Easter", date: `${year}-04-20`, emoji: "🐰", description: "Spring celebration", category: 'traditional', color: '#FCD34D' },
+    { name: "Memorial Day", date: `${year}-05-26`, emoji: "🇺🇸", description: "Remember and honor", category: 'traditional', color: '#EF4444' },
+    { name: "Independence Day", date: `${year}-07-04`, emoji: "🎆", description: "Fireworks and freedom", category: 'traditional', color: '#3B82F6' },
+    { name: "Labor Day", date: `${year}-09-01`, emoji: "⚒️", description: "Celebrating workers", category: 'traditional', color: '#6B7280' },
+    { name: "Halloween", date: `${year}-10-31`, emoji: "🎃", description: "Tricks and treats", category: 'traditional', color: '#F97316' },
+    { name: "Thanksgiving", date: `${year}-11-27`, emoji: "🦃", description: "Gratitude and pie", category: 'traditional', color: '#92400E' },
+    { name: "Christmas", date: `${year}-12-25`, emoji: "🎄", description: "Joy to the world", category: 'traditional', color: '#059669' },
+    { name: "New Year's Eve", date: `${year}-12-31`, emoji: "🎉", description: "Out with the old, in with the new", category: 'traditional', color: '#FFD700' },
+  ];
 
-// Create DnD calendar
-const DnDCalendar = withDragAndDrop(BigCalendar);
+  const funHolidays: Holiday[] = [
+    { name: "National Spaghetti Day", date: `${year}-01-04`, emoji: "🍝", description: "Pasta la vista!", category: 'fun', color: '#DC2626' },
+    { name: "National Bubble Wrap Day", date: `${year}-01-31`, emoji: "🫧", description: "Pop pop pop!", category: 'fun', color: '#06B6D4' },
+    { name: "National Compliment Day", date: `${year}-01-24`, emoji: "💖", description: "Spread the positivity", category: 'fun', color: '#EC4899' },
+    { name: "National Pizza Day", date: `${year}-02-09`, emoji: "🍕", description: "Pizza party time!", category: 'fun', color: '#EF4444' },
+    { name: "Random Acts of Kindness Day", date: `${year}-02-17`, emoji: "🤗", description: "Do something nice", category: 'fun', color: '#10B981' },
+    { name: "National Margarita Day", date: `${year}-02-22`, emoji: "🍹", description: "Salt or no salt?", category: 'fun', color: '#10B981' },
+    { name: "Palindrome Day", date: `${year}-02-22`, emoji: "🔄", description: "2/22!", category: 'fun', color: '#3B82F6' },
+    { name: "National Pancake Day", date: `${year}-02-28`, emoji: "🥞", description: "Stack 'em high", category: 'fun', color: '#FCD34D' },
+    { name: "National Napping Day", date: `${year}-03-10`, emoji: "😴", description: "Catch up on sleep", category: 'fun', color: '#8B5CF6' },
+    { name: "Pi Day", date: `${year}-03-14`, emoji: "🥧", description: "3.14159...", category: 'fun', color: '#8B5CF6' },
+    { name: "National Awkward Moments Day", date: `${year}-03-18`, emoji: "😬", description: "Embrace the cringe", category: 'fun', color: '#F59E0B' },
+    { name: "National Puppy Day", date: `${year}-03-23`, emoji: "🐶", description: "Celebrate puppies!", category: 'fun', color: '#92400E' },
+    { name: "National Grilled Cheese Day", date: `${year}-04-12`, emoji: "🧀", description: "Melty goodness", category: 'fun', color: '#FCD34D' },
+    { name: "National High Five Day", date: `${year}-04-18`, emoji: "🙏", description: "Up high!", category: 'fun', color: '#3B82F6' },
+    { name: "Star Wars Day", date: `${year}-05-04`, emoji: "⚔️", description: "May the 4th be with you", category: 'fun', color: '#1E40AF' },
+    { name: "National Dance Like a Chicken Day", date: `${year}-05-14`, emoji: "🐔", description: "Get funky", category: 'fun', color: '#F59E0B' },
+    { name: "Towel Day", date: `${year}-05-25`, emoji: "🏖️", description: "Don't panic - Douglas Adams tribute", category: 'fun', color: '#06B6D4' },
+    { name: "National Cheese Day", date: `${year}-06-04`, emoji: "🧀", description: "Say cheese!", category: 'fun', color: '#FCD34D' },
+    { name: "National Donut Day", date: `${year}-06-07`, emoji: "🍩", description: "Sweet treats allowed", category: 'fun', color: '#EC4899' },
+    { name: "National Best Friends Day", date: `${year}-06-08`, emoji: "👯", description: "Celebrate your squad", category: 'fun', color: '#EC4899' },
+    { name: "National Flip Flop Day", date: `${year}-06-21`, emoji: "🩴", description: "Summer vibes", category: 'fun', color: '#06B6D4' },
+    { name: "World UFO Day", date: `${year}-07-02`, emoji: "🛸", description: "The truth is out there", category: 'fun', color: '#10B981' },
+    { name: "World Chocolate Day", date: `${year}-07-07`, emoji: "🍫", description: "Sweet indulgence", category: 'fun', color: '#7C2D12' },
+    { name: "World Emoji Day", date: `${year}-07-17`, emoji: "😀", description: "Express yourself!", category: 'fun', color: '#FCD34D' },
+    { name: "National Ice Cream Day", date: `${year}-07-21`, emoji: "🍦", description: "Cool treats", category: 'fun', color: '#06B6D4' },
+    { name: "National Hammock Day", date: `${year}-07-22`, emoji: "🏝️", description: "Ultimate relaxation", category: 'fun', color: '#10B981' },
+    { name: "National Avocado Day", date: `${year}-07-31`, emoji: "🥑", description: "Guac time!", category: 'fun', color: '#10B981' },
+    { name: "National Lazy Day", date: `${year}-08-10`, emoji: "🦥", description: "Permission to do nothing", category: 'fun', color: '#8B5CF6' },
+    { name: "National Tell a Joke Day", date: `${year}-08-16`, emoji: "😂", description: "Knock knock...", category: 'fun', color: '#F59E0B' },
+    { name: "National Dog Day", date: `${year}-08-26`, emoji: "🐕", description: "Celebrate all dogs", category: 'fun', color: '#92400E' },
+    { name: "International Bacon Day", date: `${year}-08-31`, emoji: "🥓", description: "Sizzle sizzle", category: 'fun', color: '#DC2626' },
+    { name: "National Read a Book Day", date: `${year}-09-06`, emoji: "📚", description: "Get cozy with a book", category: 'fun', color: '#8B5CF6' },
+    { name: "National Guacamole Day", date: `${year}-09-16`, emoji: "🥑", description: "Holy guacamole!", category: 'fun', color: '#10B981' },
+    { name: "Talk Like a Pirate Day", date: `${year}-09-19`, emoji: "🏴‍☠️", description: "Ahoy matey!", category: 'fun', color: '#991B1B' },
+    { name: "National Coffee Day", date: `${year}-09-29`, emoji: "☕", description: "Caffeine celebration", category: 'fun', color: '#92400E' },
+    { name: "National Taco Day", date: `${year}-10-04`, emoji: "🌮", description: "Taco Tuesday special!", category: 'fun', color: '#FCD34D' },
+    { name: "National Dessert Day", date: `${year}-10-14`, emoji: "🍰", description: "Sweet celebration!", category: 'fun', color: '#EC4899' },
+    { name: "National Pasta Day", date: `${year}-10-17`, emoji: "🍜", description: "Carb loading day!", category: 'fun', color: '#F59E0B' },
+    { name: "National Cat Day", date: `${year}-10-29`, emoji: "🐱", description: "Meow meow", category: 'fun', color: '#7C3AED' },
+    { name: "Frankenstein Friday", date: `${year}-10-31`, emoji: "🧟", description: "It's alive!", category: 'fun', color: '#10B981' },
+    { name: "National Sandwich Day", date: `${year}-11-03`, emoji: "🥪", description: "Build your dream sandwich", category: 'fun', color: '#F59E0B' },
+    { name: "Origami Day", date: `${year}-11-11`, emoji: "🗾", description: "The art of paper folding", category: 'fun', color: '#8B5CF6' },
+    { name: "World Kindness Day", date: `${year}-11-13`, emoji: "💝", description: "Be kind to everyone", category: 'fun', color: '#EC4899' },
+    { name: "National Cookie Day", date: `${year}-12-04`, emoji: "🍪", description: "Fresh from the oven", category: 'fun', color: '#92400E' },
+    { name: "Festivus", date: `${year}-12-23`, emoji: "🎄", description: "For the rest of us!", category: 'fun', color: '#DC2626' },
+    { name: "Card Playing Day", date: `${year}-12-28`, emoji: "🃏", description: "Game night!", category: 'fun', color: '#8B5CF6' },
+  ];
 
-type CalendarTheme = "default" | "spring" | "summer" | "autumn" | "winter" | "nature" | "ocean";
+  const specialDays: Holiday[] = [
+    { name: "Mother's Day", date: `${year}-05-11`, emoji: "💐", description: "Celebrate Mom", category: 'special', color: '#EC4899' },
+    { name: "Father's Day", date: `${year}-06-15`, emoji: "👔", description: "Dad's special day", category: 'special', color: '#3B82F6' },
+    { name: "Grandparents Day", date: `${year}-09-07`, emoji: "👴👵", description: "Honor grandparents", category: 'special', color: '#8B5CF6' },
+    { name: "National Daughters Day", date: `${year}-09-25`, emoji: "👧", description: "Celebrate daughters", category: 'special', color: '#EC4899' },
+    { name: "National Sons Day", date: `${year}-03-04`, emoji: "👦", description: "Celebrate sons", category: 'special', color: '#3B82F6' },
+    { name: "National Siblings Day", date: `${year}-04-10`, emoji: "👫", description: "Brother & sister love", category: 'special', color: '#8B5CF6' },
+    { name: "Earth Day", date: `${year}-04-22`, emoji: "🌍", description: "Planet awareness", category: 'special', color: '#10B981' },
+    { name: "April Fool's Day", date: `${year}-04-01`, emoji: "🃏", description: "Pranks allowed!", category: 'special', color: '#F59E0B' },
+    { name: "St. Patrick's Day", date: `${year}-03-17`, emoji: "☘️", description: "Luck of the Irish", category: 'special', color: '#10B981' },
+    { name: "Groundhog Day", date: `${year}-02-02`, emoji: "🦫", description: "6 more weeks?", category: 'special', color: '#92400E' },
+    { name: "Leap Day", date: `${year}-02-29`, emoji: "🐸", description: "Extra special (if leap year)", category: 'special', color: '#10B981' },
+    { name: "National Pet Day", date: `${year}-04-11`, emoji: "🐾", description: "All pets deserve love", category: 'special', color: '#F59E0B' },
+    { name: "National Bird Day", date: `${year}-01-05`, emoji: "🦜", description: "Tweet tweet!", category: 'special', color: '#06B6D4' },
+  ];
 
-export type UiEvent = Event & {
-  resource?: any;
-};
+  const internationalHolidays: Holiday[] = [
+    { name: "Chinese New Year", date: `${year}-02-10`, emoji: "🐉", description: "Year of the Dragon", category: 'international', color: '#DC2626' },
+    { name: "Mardi Gras", date: `${year}-02-13`, emoji: "🎭", description: "Let the good times roll", category: 'international', color: '#7C3AED' },
+    { name: "World Sound Healing Day", date: `${year}-02-14`, emoji: "🕉️", description: "Say Om at noon worldwide - Sound healing celebration", category: 'international', recurring: true, color: '#7C3AED' },
+    { name: "Ramadan Begins", date: `${year}-03-01`, emoji: "🌙", description: "Islamic holy month", category: 'international', color: '#059669' },
+    { name: "Purim", date: `${year}-03-24`, emoji: "👑", description: "Festival of lots", category: 'international', color: '#EC4899' },
+    { name: "Eid al-Fitr", date: `${year}-04-10`, emoji: "🌟", description: "Breaking of the fast", category: 'international', color: '#F59E0B' },
+    { name: "Passover (First Day)", date: `${year}-04-23`, emoji: "🍷", description: "Festival of freedom", category: 'international', color: '#3B82F6' },
+    { name: "Cinco de Mayo", date: `${year}-05-05`, emoji: "🇲🇽", description: "Mexican heritage", category: 'international', color: '#059669' },
+    { name: "Victoria Day (Canada)", date: `${year}-05-19`, emoji: "🇨🇦", description: "Queen Victoria's birthday", category: 'international', color: '#DC2626' },
+    { name: "Shavuot", date: `${year}-06-12`, emoji: "📜", description: "Feast of Weeks", category: 'international', color: '#10B981' },
+    { name: "Midsummer's Eve", date: `${year}-06-21`, emoji: "☀️", description: "Summer solstice celebration", category: 'international', color: '#F59E0B' },
+    { name: "Canada Day", date: `${year}-07-01`, emoji: "🍁", description: "Canadian Independence", category: 'international', color: '#DC2626' },
+    { name: "Bastille Day", date: `${year}-07-14`, emoji: "🇫🇷", description: "French National Day", category: 'international', color: '#3B82F6' },
+    { name: "Oktoberfest", date: `${year}-09-21`, emoji: "🍺", description: "German celebration", category: 'international', color: '#F59E0B' },
+    { name: "Canadian Thanksgiving", date: `${year}-10-13`, emoji: "🦃", description: "Harvest celebration", category: 'international', color: '#F97316' },
+    { name: "Rosh Hashanah", date: `${year}-10-03`, emoji: "🍎", description: "Jewish New Year", category: 'international', color: '#F59E0B' },
+    { name: "Yom Kippur", date: `${year}-10-12`, emoji: "📖", description: "Day of Atonement", category: 'international', color: '#8B5CF6' },
+    { name: "Sukkot", date: `${year}-10-17`, emoji: "🌿", description: "Feast of Tabernacles", category: 'international', color: '#10B981' },
+    { name: "Diwali", date: `${year}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
+    { name: "Day of the Dead", date: `${year}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
+    { name: "Guy Fawkes Day", date: `${year}-11-05`, emoji: "🎆", description: "Bonfire Night (UK)", category: 'international', color: '#DC2626' },
+    { name: "Remember Remember the 5th of November", date: `${year}-11-05`, emoji: "🔥", description: "Gunpowder Plot anniversary", category: 'international', color: '#EF4444' },
+    { name: "Remembrance Day (Canada)", date: `${year}-11-11`, emoji: "🌺", description: "Honor veterans", category: 'international', color: '#DC2626' },
+    { name: "St. Lucia Day", date: `${year}-12-13`, emoji: "🕯️", description: "Festival of Light (Sweden)", category: 'international', color: '#FCD34D' },
+    { name: "Hanukkah (First Night)", date: `${year}-12-25`, emoji: "🕎", description: "Festival of dedication", category: 'international', color: '#3B82F6' },
+    { name: "Kwanzaa", date: `${year}-12-26`, emoji: "🕯️", description: "African heritage", category: 'international', color: '#DC2626' },
+    { name: "Boxing Day", date: `${year}-12-26`, emoji: "🎁", description: "UK/Canada/Australia", category: 'international', color: '#10B981' },
+  ];
 
-interface MoonEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  allDay: boolean;
-  resource: {
-    moonPhase: 'moon-new' | 'moon-first' | 'moon-full' | 'moon-last';
+  return {
+    traditionalHolidays,
+    funHolidays,
+    specialDays,
+    internationalHolidays
   };
-}
-
-interface Props {
-  dbEvents: DBEvent[];
-  moonEvents: MoonEvent[];
-  showMoon: boolean;
-  showWeather?: boolean;
-  temperatureUnit?: "celsius" | "fahrenheit";
-  theme?: CalendarTheme;
-  date: Date;
-  setDate: (d: Date) => void;
-  view: View;
-  setView: (v: View) => void;
-  onSelectSlot: (slotInfo: SlotInfo) => void;
-  onSelectEvent: (event: UiEvent) => void;
-  onDrop?: (args: EventInteractionArgs<UiEvent>) => void;
-  onResize?: (args: EventInteractionArgs<UiEvent>) => void;
-  externalDragType?: 'none' | 'reminder' | 'todo';
-  externalDragTitle?: string;
-  onExternalDrop?: (
-    info: { start: Date; end: Date; allDay?: boolean },
-    type: 'reminder' | 'todo'
-  ) => void;
-  context?: 'calendar' | 'business' | 'community';
-  businessId?: string;
-  darkMode?: boolean;
-  selectedBatchEvents?: Set<string>;
-}
-
-// Check if device is touch-enabled
-function isTouchDevice() {
-  if (typeof window === "undefined") return false;
-  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
-}
-
-// Fallback moon phase emoji mapper
-const getMoonEmoji = (phase: string) => {
-  switch (phase) {
-    case 'moon-new': return '🌑';
-    case 'moon-first': return '🌓';
-    case 'moon-full': return '🌕';
-    case 'moon-last': return '🌗';
-    default: return '🌙';
-  }
 };
 
-// Theme configurations - only affects accents and highlights, not main background
-const getThemeStyles = (theme: CalendarTheme) => {
-  const themes = {
-    default: {
-      accent: "#8b5cf6", // Purple
-      todayBg: "rgba(139, 92, 246, 0.08)",
-      hover: "rgba(139, 92, 246, 0.03)",
-      selection: "rgba(139, 92, 246, 0.15)",
-    },
-    spring: {
-      accent: "#ec4899", // Pink
-      todayBg: "rgba(236, 72, 153, 0.08)",
-      hover: "rgba(236, 72, 153, 0.03)",
-      selection: "rgba(236, 72, 153, 0.15)",
-    },
-    summer: {
-      accent: "#f59e0b", // Amber
-      todayBg: "rgba(245, 158, 11, 0.08)",
-      hover: "rgba(245, 158, 11, 0.03)",
-      selection: "rgba(245, 158, 11, 0.15)",
-    },
-    autumn: {
-      accent: "#ea580c", // Orange
-      todayBg: "rgba(234, 88, 12, 0.08)",
-      hover: "rgba(234, 88, 12, 0.03)",
-      selection: "rgba(234, 88, 12, 0.15)",
-    },
-    winter: {
-      accent: "#3b82f6", // Blue
-      todayBg: "rgba(59, 130, 246, 0.08)",
-      hover: "rgba(59, 130, 246, 0.03)",
-      selection: "rgba(59, 130, 246, 0.15)",
-    },
-    nature: {
-      accent: "#22c55e", // Green
-      todayBg: "rgba(34, 197, 94, 0.08)",
-      hover: "rgba(34, 197, 94, 0.03)",
-      selection: "rgba(34, 197, 94, 0.15)",
-    },
-    ocean: {
-      accent: "#0ea5e9", // Sky blue
-      todayBg: "rgba(14, 165, 233, 0.08)",
-      hover: "rgba(14, 165, 233, 0.03)",
-      selection: "rgba(14, 165, 233, 0.15)",
-    },
-  };
-  return themes[theme];
-};
+export default function HolidayReminders({ onClose, onAddToCalendar, onRemoveFromCalendar, existingEvents = [], showToast }: HolidayRemindersProps) {
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [selectedHolidays, setSelectedHolidays] = useState<Set<string>>(new Set());
+  const [personalEvents, setPersonalEvents] = useState<Holiday[]>([]);
+  const [showAddPersonal, setShowAddPersonal] = useState(false);
+  const [newPersonalEvent, setNewPersonalEvent] = useState({
+    name: '',
+    date: '',
+    type: 'birthday' as 'birthday' | 'anniversary' | 'other',
+    description: ''
+  });
+  const [enabledCategories, setEnabledCategories] = useState<Set<string>>(
+    new Set(['traditional', 'special', 'fun', 'personal'])
+  );
+  const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set());
+  const [isAddingAll, setIsAddingAll] = useState(false);
+  const [addProgress, setAddProgress] = useState(0);
+  const [showRemoveMode, setShowRemoveMode] = useState(false);
 
-export default function CalendarGrid({
-  dbEvents,
-  moonEvents,
-  showMoon,
-  showWeather = false,
-  temperatureUnit = "celsius",
-  theme = "default",
-  date,
-  setDate,
-  view,
-  setView,
-  onSelectSlot,
-  onSelectEvent,
-  onDrop,
-  onResize,
-  externalDragType = 'none',
-  externalDragTitle,
-  onExternalDrop,
-  context = 'calendar',
-  businessId,
-  darkMode = false,
-  selectedBatchEvents,
-}: Props) {
-  const [mounted, setMounted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showLegend, setShowLegend] = useState(true);
-  const themeStyles = getThemeStyles(theme);
-
-  // Detect mobile device
-  useEffect(() => {
-    setMounted(true);
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || isTouchDevice());
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Filter events based on context for business calendar
-  const filteredDbEvents = useMemo(() => {
-    if (context === 'business' && businessId) {
-      // Show events created by this business OR with this business as source
-      return dbEvents.filter((event: DBEvent) => {
-        const e = event as any;
-        return (
-          e.created_by === businessId ||
-          e.business_id === businessId ||
-          e.host_business_id === businessId ||
-          (e.source === 'business' && e.business_creator_id === businessId)
-        );
-      });
-    }
-    return dbEvents;
-  }, [dbEvents, context, businessId]);
-
-  // Convert DB events to UI events with pre/post event indicators
-  const dbUiEvents = useMemo<UiEvent[]>(() => 
-    (filteredDbEvents || []).map((e: DBEvent) => {
-      const event = e as any;
-      return {
-        id: e.id,
-        title: e.title,
-        start: new Date(e.start_time),
-        end: new Date(e.end_time),
-        allDay: e.all_day || false,
-        resource: {
-          ...e,
-          hasPreEvent: !!(event.pre_event && event.pre_event.title),
-          hasPostEvent: !!(event.post_event && event.post_event.title),
-          preEvent: event.pre_event,
-          postEvent: event.post_event,
-        },
-      };
-    }),
-    [filteredDbEvents]
+  // Get holiday data
+  const { traditionalHolidays, funHolidays, specialDays, internationalHolidays } = useMemo(
+    () => getCurrentYearHolidays(currentYear),
+    [currentYear]
   );
 
-  // NEW: Separate holidays from regular events
-  const { holidayEvents, nonHolidayEvents } = useMemo(() => {
-    const holidays: UiEvent[] = [];
-    const nonHolidays: UiEvent[] = [];
-    
-    dbUiEvents.forEach(event => {
-      if (event.resource?.event_type === "holiday") {
-        holidays.push(event);
-      } else {
-        nonHolidays.push(event);
-      }
-    });
-    
-    return { holidayEvents: holidays, nonHolidayEvents: nonHolidays };
-  }, [dbUiEvents]);
+  // Load personal events from Supabase
+  useEffect(() => {
+    loadPersonalEvents();
+  }, [currentYear]);
 
-  // Merge non-holiday events with moon events (holidays handled separately in date header)
-  const allEvents = useMemo(() => {
-    const events = [...nonHolidayEvents];
-    if (showMoon) {
-      events.push(...moonEvents);
+  const loadPersonalEvents = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('personal_holidays')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (data && !error) {
+      const formattedEvents = data.map(event => ({
+        name: event.name,
+        date: `${currentYear}-${event.month.toString().padStart(2, '0')}-${event.day.toString().padStart(2, '0')}`,
+        emoji: event.emoji || (event.type === 'birthday' ? '🎂' : event.type === 'anniversary' ? '💑' : '⭐'),
+        description: event.description || '',
+        category: 'personal' as const,
+        recurring: true,
+        color: event.type === 'birthday' ? '#EC4899' : event.type === 'anniversary' ? '#8B5CF6' : '#3B82F6'
+      }));
+      setPersonalEvents(formattedEvents);
     }
-    return events;
-  }, [nonHolidayEvents, moonEvents, showMoon]);
-
-  // Event styling based on type with pre/post event indicators
-  const eventStyleGetter = (event: UiEvent): any => {
-    const resource = event.resource as any;
-    
-    // Check if this event is selected in batch mode
-    const isSelected = selectedBatchEvents?.has(resource?.id || event.id);
-
-    // Moon phase events
-    if (resource?.moonPhase) {
-      return {
-        style: {
-          backgroundColor: 'transparent',
-          border: 'none',
-          color: '#1f2937',
-          padding: '2px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          minHeight: '20px',
-          fontSize: '16px',
-        },
-      };
-    }
-
-    // Base styles for all events
-    let baseStyle = {
-      borderRadius: "6px",
-      cursor: "pointer",
-      fontWeight: 600,
-      fontSize: isMobile ? "10px" : "11px",
-      padding: isMobile ? "3px 5px" : "4px 6px",
-      minHeight: isMobile ? "22px" : "24px",
-      position: "relative" as const,
-      overflow: "visible" as const,
-    };
-
-    // Add thicker border for events with pre/post gatherings
-    const borderWidth = (resource?.hasPreEvent || resource?.hasPostEvent) ? "2px" : "1px";
-    const borderStyle = (resource?.hasPreEvent || resource?.hasPostEvent) ? "solid" : "solid";
-
-    // Reminder events
-    if (resource?.event_type === "reminder") {
-      return {
-        style: {
-          ...baseStyle,
-          backgroundColor: isSelected ? "#f59e0b" : "#fbbf24",
-          border: `${borderWidth} ${borderStyle} ${isSelected ? "#d97706" : "#f59e0b"}`,
-          color: "#92400e",
-          boxShadow: isSelected ? "0 0 0 2px rgba(245, 158, 11, 0.3)" :
-                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #f59e0b" : "none",
-        },
-      };
-    }
-
-    // Todo events
-    if (resource?.event_type === "todo") {
-      return {
-        style: {
-          ...baseStyle,
-          backgroundColor: resource?.completed ? "#86efac" : (isSelected ? "#10b981" : "#34d399"),
-          border: `${borderWidth} ${borderStyle} ${resource?.completed ? "#22c55e" : "#10b981"}`,
-          color: "#064e3b",
-          textDecoration: resource?.completed ? "line-through" : "none",
-          boxShadow: isSelected ? "0 0 0 2px rgba(16, 185, 129, 0.3)" :
-                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #10b981" : "none",
-        },
-      };
-    }
-
-    // Business events - special gradient styling
-    if (resource?.source === "business" || resource?.kind === "business") {
-      return {
-        style: {
-          ...baseStyle,
-          background: isSelected ? "linear-gradient(135deg, #6b21a8 0%, #7c3aed 100%)" : 
-                                   "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
-          border: `2px solid ${isSelected ? "#581c87" : "#6b21a8"}`,
-          color: "#ffffff",
-          fontWeight: 700,
-          boxShadow: isSelected ? "0 0 0 2px rgba(124, 58, 237, 0.3)" : "0 2px 4px rgba(124, 58, 237, 0.3)",
-        },
-      };
-    }
-
-    // Friend events
-    if (resource?.by_friend) {
-      return {
-        style: {
-          ...baseStyle,
-          backgroundColor: isSelected ? "#8b5cf6" : "#c7d2fe",
-          border: `${borderWidth} ${borderStyle} ${isSelected ? "#6b21a8" : "#8b5cf6"}`,
-          color: "#5b21b6",
-          fontWeight: resource?.rsvp_me ? 700 : 500,
-          boxShadow: isSelected ? "0 0 0 2px rgba(139, 92, 246, 0.3)" :
-                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #8b5cf6" : "none",
-        },
-      };
-    }
-
-    // Community events
-    if (resource?.kind === "community") {
-      return {
-        style: {
-          ...baseStyle,
-          backgroundColor: isSelected ? "#ec4899" : "#fce7f3",
-          border: `${borderWidth} ${borderStyle} ${isSelected ? "#be185d" : "#ec4899"}`,
-          color: "#be185d",
-          boxShadow: isSelected ? "0 0 0 2px rgba(236, 72, 153, 0.3)" :
-                     (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #ec4899" : "none",
-        },
-      };
-    }
-
-    // Default personal events
-    return {
-      style: {
-        ...baseStyle,
-        backgroundColor: isSelected ? "#3b82f6" : "#93c5fd",
-        border: `${borderWidth} ${borderStyle} ${isSelected ? "#1e40af" : "#3b82f6"}`,
-        color: "#1e40af",
-        fontWeight: resource?.rsvp_me ? 700 : 500,
-        boxShadow: isSelected ? "0 0 0 2px rgba(59, 130, 246, 0.3)" :
-                   (resource?.hasPreEvent || resource?.hasPostEvent) ? "0 0 0 1px #3b82f6" : "none",
-      },
-    };
   };
 
-  // Custom event component with pre/post indicators
-  const EventComponent = ({ event }: EventProps<UiEvent>) => {
-    const resource = event.resource as any;
+  // Combine all holidays
+  const allHolidays = useMemo(() => [
+    ...traditionalHolidays,
+    ...funHolidays,
+    ...specialDays,
+    ...internationalHolidays,
+    ...personalEvents
+  ], [traditionalHolidays, funHolidays, specialDays, internationalHolidays, personalEvents]);
+
+  // Get matching events for each holiday
+  const getMatchingEvents = useCallback((holiday: Holiday) => {
+    if (!existingEvents || existingEvents.length === 0) return [];
     
-    // Handle moon phases
-    if (resource?.moonPhase) {
-      if (MoonPhaseIcon && getMoonPhaseFromResource) {
-        const moonPhase = getMoonPhaseFromResource(resource);
-        if (moonPhase) {
-          return (
-            <div className="flex items-center justify-center w-full h-full p-0">
-              <MoonPhaseIcon phase={moonPhase} />
-            </div>
-          );
+    return existingEvents.filter(event => {
+      if (!event.title) return false;
+      
+      const eventTitle = event.title.toLowerCase();
+      const holidayName = holiday.name.toLowerCase();
+      const holidayEmoji = holiday.emoji;
+      
+      // Check if event title matches the holiday
+      if (eventTitle.includes(holidayName) || 
+          eventTitle === `${holidayEmoji} ${holidayName}` ||
+          eventTitle === holidayName) {
+        // Check if it's for current or next year
+        const eventDate = new Date(event.start_time || event.start);
+        const eventYear = eventDate.getFullYear();
+        
+        if (eventYear === currentYear || eventYear === nextYear) {
+          return true;
         }
       }
-      return (
-        <div className="flex items-center justify-center w-full h-full text-base">
-          {getMoonEmoji(resource.moonPhase)}
-        </div>
-      );
-    }
+      return false;
+    });
+  }, [existingEvents, currentYear, nextYear]);
 
-    // Build event display with indicators
-    const hasPreEvent = resource?.hasPreEvent;
-    const hasPostEvent = resource?.hasPostEvent;
+  // Check which holidays are already added
+  const addedHolidays = useMemo(() => {
+    const added = new Set<string>();
+    
+    allHolidays.forEach(holiday => {
+      const matchingEvents = getMatchingEvents(holiday);
+      matchingEvents.forEach(event => {
+        const eventDate = new Date(event.start_time || event.start);
+        const eventYear = eventDate.getFullYear();
+        added.add(`${holiday.name}-${eventYear}`);
+      });
+    });
+    
+    return added;
+  }, [allHolidays, getMatchingEvents]);
 
-    // Render todo with checkbox
-    if (resource?.event_type === "todo") {
-      return (
-        <div className="flex items-center gap-1 px-1 w-full">
-          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
-          <span className="text-[10px]">
-            {resource?.completed ? "✓" : "○"}
-          </span>
-          <span className="truncate flex-1 text-[10px] md:text-xs">
-            {event.title}
-          </span>
-          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
-        </div>
-      );
-    }
+  const filteredHolidays = useMemo(() => {
+    return activeCategory === 'all' 
+      ? allHolidays.filter(h => enabledCategories.has(h.category))
+      : allHolidays.filter(h => h.category === activeCategory && enabledCategories.has(h.category));
+  }, [activeCategory, allHolidays, enabledCategories]);
 
-    // Render reminder with icon
-    if (resource?.event_type === "reminder") {
-      return (
-        <div className="flex items-center gap-1 px-1 w-full">
-          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
-          <span className="text-[10px]">⏰</span>
-          <span className="truncate flex-1 text-[10px] md:text-xs">
-            {event.title}
-          </span>
-          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
-        </div>
-      );
-    }
+  const categories = [
+    { id: 'all', label: 'All', emoji: '✨', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
+    { id: 'traditional', label: 'Traditional', emoji: '🎊', color: 'bg-blue-500' },
+    { id: 'fun', label: 'Fun & Quirky', emoji: '🎉', color: 'bg-yellow-500' },
+    { id: 'special', label: 'Special Days', emoji: '💝', color: 'bg-pink-500' },
+    { id: 'international', label: 'International', emoji: '🌍', color: 'bg-green-500' },
+    { id: 'personal', label: 'Personal', emoji: '🎂', color: 'bg-purple-500' },
+  ];
 
-    // Business events with special badge
-    if (resource?.source === "business") {
-      return (
-        <div className="flex items-center gap-1 px-1 w-full">
-          {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
-          <span className="truncate flex-1 text-[10px] md:text-xs font-bold">
-            {event.title}
-          </span>
-          {context !== 'business' && (
-            <span className="text-[8px] bg-white/30 px-1 rounded">BIZ</span>
-          )}
-          {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
-        </div>
-      );
+  const toggleCategory = (categoryId: string) => {
+    if (categoryId === 'all') return;
+    setEnabledCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  // FIXED: Added stopPropagation to prevent event bubbling
+  const handleAddHoliday = async (holiday: Holiday, forNextYear: boolean = false, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation(); // FIXED: Stop propagation
     }
     
-    // Render normal event with pre/post indicators
-    return (
-      <div className="flex items-center gap-1 px-1 w-full">
-        {hasPreEvent && <span className="text-[8px]" title="Pre-event">🍽️</span>}
-        <span className="truncate flex-1 text-[10px] md:text-xs">
-          {event.title}
-        </span>
-        {hasPostEvent && <span className="text-[8px]" title="Post-event">☕</span>}
-      </div>
-    );
-  };
-
-  // NEW: Custom Month Date Header component with clickable holiday banners
-  const MonthDateHeader = useCallback(({ date: cellDate, label }: any) => {
-    // Find holidays for this date
-    const cellDateStr = moment(cellDate).format('YYYY-MM-DD');
-    const holidaysForDate = holidayEvents.filter(holiday => {
-      const holidayDateStr = moment(holiday.start).format('YYYY-MM-DD');
-      return holidayDateStr === cellDateStr;
-    });
-
-    return (
-      <div className="rbc-date-cell">
-        {/* Holiday Banners - at top */}
-        {holidaysForDate.length > 0 && (
-          <div 
-            className="holiday-banners"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: isMobile ? '2px' : '1px',
-              padding: isMobile ? '3px' : '2px',
-            }}
-          >
-            {holidaysForDate.map((holiday, idx) => (
-              <button
-                key={`${holiday.id}-${idx}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectEvent(holiday);
-                }}
-                className="holiday-banner-link"
-                title="Click to view details"
-                aria-label={`View ${holiday.title} details`}
-                style={{
-                  background: 'linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 100%)',
-                  border: '1px solid #c084fc',
-                  borderRadius: '4px',
-                  padding: isMobile ? '4px 6px' : '3px 6px',
-                  minHeight: isMobile ? '32px' : 'auto',
-                  fontSize: isMobile ? '10px' : '10px',
-                  fontWeight: 600,
-                  color: '#581c87',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  textDecoration: 'none',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                style={{ fontSize: isMobile ? '12px' : '12px', flexShrink: 0 }}>
-                  {holiday.title.match(/^[\p{Emoji}]/u)?.[0] || '🎉'}
-                </span>
-                <span style={{ 
-                  overflow: 'hidden', 
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  flex: 1,
-                  minWidth: 0,
-                }}>
-                  {holiday.title.replace(/^[\p{Emoji}\s]+/u, '')}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-        
-        {/* Date number - below holidays */}
-        <div 
-          style={{ 
-            position: 'relative',
-            zIndex: 2,
-            marginTop: holidaysForDate.length > 0 ? `${holidaysForDate.length * (isMobile ? 34 : 20)}px` : '0',
-          }}
-        >
-          <a className="rbc-button-link" role="cell">
-            {label}
-          </a>
-        </div>
-      </div>
-    );
-  }, [holidayEvents, onSelectEvent, isMobile]);
-
-  // NEW: Custom date cell wrapper to make entire cell clickable - opens day view
-  const DateCellWrapper = useCallback(({ children, value }: any) => {
-    const handleCellClick = (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      
-      // Don't intercept clicks on events or holiday banners
-      if (
-        target.closest('.rbc-event') || 
-        target.closest('.rbc-event-content') ||
-        target.closest('.holiday-banner-link') ||
-        target.closest('.holiday-banners')
-      ) {
-        return;
-      }
-      
-      // If clicking on cell background OR date number, open day view for this date
-      if (value && view === 'month') {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('📅 Cell clicked, opening day view for:', value);
-        setDate(value);
-        setView('day');
-      }
+    const date = new Date(holiday.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Determine the target year
+    const targetYear = forNextYear ? nextYear : 
+                       (date < today ? nextYear : currentYear);
+    
+    // Check if already added for this year
+    const alreadyAddedKey = `${holiday.name}-${targetYear}`;
+    if (addedHolidays.has(alreadyAddedKey) || recentlyAdded.has(alreadyAddedKey)) {
+      showToast?.({ 
+        type: 'info', 
+        message: `${holiday.name} is already on your calendar for ${targetYear}` 
+      });
+      return;
+    }
+    
+    // Create holiday with adjusted date
+    const adjustedHoliday = {
+      ...holiday,
+      date: holiday.date.replace(currentYear.toString(), targetYear.toString())
     };
-
-    return (
-      <div 
-        className="rbc-day-bg-clickable" 
-        onClick={handleCellClick}
-        style={{ 
-          position: 'absolute',
-          inset: 0,
-          cursor: 'pointer',
-          zIndex: 0
-        }}
-      >
-        {children}
-      </div>
-    );
-  }, [view, setDate, setView]);
-
-  // Handle external drop (from sidebar)
-  const handleDropFromOutside = ({ start, end, allDay }: any) => {
-    if (onExternalDrop && externalDragType !== 'none' && !isMobile) {
-      onExternalDrop(
-        { start, end, allDay },
-        externalDragType as 'reminder' | 'todo'
-      );
+    
+    // Add to recently added set for immediate UI feedback
+    setRecentlyAdded(prev => new Set(prev).add(alreadyAddedKey));
+    
+    // Call the parent's onAddToCalendar
+    await onAddToCalendar(adjustedHoliday);
+    
+    // Show success feedback with animation
+    const element = document.getElementById(`holiday-${holiday.name.replace(/[^a-zA-Z0-9]/g, '-')}`);
+    if (element) {
+      element.classList.add('animate-pulse', 'bg-green-100', 'dark:bg-green-900/30');
+      setTimeout(() => {
+        element.classList.remove('animate-pulse', 'bg-green-100', 'dark:bg-green-900/30');
+      }, 1000);
     }
   };
 
-  // Select appropriate DnD backend
-  const Backend = isMobile ? TouchBackend : HTML5Backend;
-  const backendOptions = isMobile ? {
-    enableMouseEvents: true,
-    enableTouchEvents: true,
-    enableKeyboardEvents: true,
-    delayTouchStart: 200,
-    touchSlop: 10,
-  } : {};
+  // FIXED: Added stopPropagation to prevent event bubbling
+  const handleRemoveHoliday = async (holiday: Holiday, event: any, clickEvent?: React.MouseEvent) => {
+    if (clickEvent) {
+      clickEvent.stopPropagation(); // FIXED: Stop propagation
+    }
+    
+    if (!onRemoveFromCalendar) {
+      showToast?.({ 
+        type: 'error', 
+        message: 'Remove functionality not available. Please delete from calendar view.' 
+      });
+      return;
+    }
 
-  // Check if we should show the legend
-  const shouldShowLegend = context === 'business' || dbUiEvents.some(e => e.resource?.hasPreEvent || e.resource?.hasPostEvent);
+    try {
+      await onRemoveFromCalendar(event.id);
+      
+      // Remove from recently added
+      const eventDate = new Date(event.start_time || event.start);
+      const eventYear = eventDate.getFullYear();
+      setRecentlyAdded(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(`${holiday.name}-${eventYear}`);
+        return newSet;
+      });
+      
+      showToast?.({ 
+        type: 'success', 
+        message: `Removed ${holiday.name} from ${eventYear}` 
+      });
+      
+      // Reload to refresh the UI
+      window.location.reload();
+    } catch (error) {
+      showToast?.({ 
+        type: 'error', 
+        message: 'Failed to remove holiday' 
+      });
+    }
+  };
 
-  if (!mounted) {
-    return (
-      <div className="flex items-center justify-center h-[650px]">
-        <div className="animate-pulse">
-          <div className="h-8 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
-          <div className="grid grid-cols-7 gap-2">
-            {[...Array(35)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-100 dark:bg-gray-800 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const addAllInCategory = async () => {
+    const toAdd = filteredHolidays.filter(h => {
+      const date = new Date(h.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const targetYear = date < today ? nextYear : currentYear;
+      const key = `${h.name}-${targetYear}`;
+      
+      return !addedHolidays.has(key) && !recentlyAdded.has(key);
+    });
+
+    if (toAdd.length === 0) {
+      showToast?.({ type: 'info', message: 'All holidays in this category are already added' });
+      return;
+    }
+
+    setIsAddingAll(true);
+    setAddProgress(0);
+
+    // Add holidays with progress animation
+    for (let i = 0; i < toAdd.length; i++) {
+      const holiday = toAdd[i];
+      const date = new Date(holiday.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const targetYear = date < today ? nextYear : currentYear;
+      const adjustedHoliday = {
+        ...holiday,
+        date: holiday.date.replace(currentYear.toString(), targetYear.toString())
+      };
+      
+      setRecentlyAdded(prev => new Set(prev).add(`${holiday.name}-${targetYear}`));
+      await onAddToCalendar(adjustedHoliday);
+      
+      setAddProgress(Math.round(((i + 1) / toAdd.length) * 100));
+      
+      // Small delay for visual effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    showToast?.({ type: 'success', message: `🎉 Added ${toAdd.length} holidays to your calendar!` });
+    
+    setTimeout(() => {
+      setIsAddingAll(false);
+      onClose();
+    }, 1500);
+  };
+
+  const savePersonalEvent = async () => {
+    if (!newPersonalEvent.name || !newPersonalEvent.date) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const dateObj = new Date(newPersonalEvent.date);
+    const emoji = newPersonalEvent.type === 'birthday' ? '🎂' : 
+                   newPersonalEvent.type === 'anniversary' ? '💑' : '⭐';
+
+    const { error } = await supabase
+      .from('personal_holidays')
+      .insert({
+        user_id: user.id,
+        name: newPersonalEvent.name,
+        type: newPersonalEvent.type,
+        month: dateObj.getMonth() + 1,
+        day: dateObj.getDate(),
+        emoji: emoji,
+        description: newPersonalEvent.description
+      });
+
+    if (!error) {
+      await loadPersonalEvents();
+      setShowAddPersonal(false);
+      setNewPersonalEvent({ name: '', date: '', type: 'birthday', description: '' });
+      showToast?.({ type: 'success', message: `Added ${newPersonalEvent.name} to your personal holidays!` });
+    }
+  };
 
   return (
     <div 
-      className="calendar-wrapper rounded-xl overflow-hidden shadow-lg bg-white relative"
-      style={{
-        padding: isMobile ? '0.5rem' : '1rem',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:p-8"
+      onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation at root
     >
-      {/* Legend for pre/post event indicators - MINIMIZABLE + MOBILE OPTIMIZED */}
-      {shouldShowLegend && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: isMobile ? "8px" : "10px",
-            right: isMobile ? "8px" : "10px",
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(8px)",
-            borderRadius: "8px",
-            padding: showLegend ? (isMobile ? "8px 10px" : "6px 10px") : (isMobile ? "8px" : "4px 8px"),
-            fontSize: isMobile ? "10px" : "11px",
-            border: "1px solid rgba(0,0,0,0.1)",
-            zIndex: 10,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            transition: "all 0.2s ease",
-            maxWidth: showLegend ? (isMobile ? "180px" : "200px") : (isMobile ? "44px" : "40px"),
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            {showLegend && (
-              <div style={{ fontWeight: 600, color: "#374151", marginRight: "8px" }}>
-                Event Indicators:
-              </div>
-            )}
-            <button
-              onClick={() => setShowLegend(!showLegend)}
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: isMobile ? "8px" : "2px",
-                fontSize: isMobile ? "16px" : "14px",
-                color: "#6b7280",
-                lineHeight: 1,
-                minWidth: isMobile ? "44px" : "auto",
-                minHeight: isMobile ? "44px" : "auto",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              title={showLegend ? "Minimize" : "Show legend"}
-              aria-label={showLegend ? "Minimize legend" : "Show legend"}
-            >
-              {showLegend ? "−" : "?"}
-            </button>
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300" 
+        onClick={(e) => {
+          e.stopPropagation(); // FIXED: Stop propagation
+          onClose();
+        }} 
+      />
+      
+      <div 
+        className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-h-[90vh] sm:max-h-[85vh] my-auto overflow-hidden flex flex-col"
+        style={{ maxWidth: '1024px' }}
+        onClick={(e) => e.stopPropagation()} // FIXED: Prevent clicks inside modal from bubbling to backdrop
+      >
+        {/* Header */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white p-4 sm:p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                🎊 Holiday & Celebration Manager
+              </h2>
+              <p className="text-xs sm:text-sm mt-1 text-white/90">
+                Add holidays, birthdays, and fun celebrations to your calendar
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  setShowRemoveMode(!showRemoveMode);
+                }}
+                className={`text-white/80 hover:text-white transition-colors p-2 rounded-lg ${
+                  showRemoveMode ? 'bg-red-500/30' : 'hover:bg-white/20'
+                }`}
+                title={showRemoveMode ? 'Exit remove mode' : 'Remove holidays'}
+              >
+                {showRemoveMode ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  onClose();
+                }}
+                className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/20 rounded-lg"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
-          {showLegend && (
-            <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "4px" : "2px", color: "#6b7280", marginTop: "4px" }}>
-              <div>🍽️ = Pre-event gathering</div>
-              <div>☕ = Post-event gathering</div>
-              {context === 'business' && <div>BIZ = Business event</div>}
+          
+          {/* Remove Mode Indicator */}
+          {showRemoveMode && (
+            <div className="mt-3 p-2 bg-red-500/30 rounded-lg text-sm">
+              🗑️ Remove mode active - Click on added holidays to remove them
+            </div>
+          )}
+          
+          {/* Progress bar when adding all */}
+          {isAddingAll && (
+            <div className="mt-4">
+              <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-white h-full transition-all duration-300 ease-out"
+                  style={{ width: `${addProgress}%` }}
+                />
+              </div>
+              <p className="text-xs mt-1 text-white/80">Adding holidays... {addProgress}%</p>
             </div>
           )}
         </div>
-      )}
 
-      {/* Optional weather overlay */}
-      {showWeather && view === "month" && !isMobile && (
-        <div
-          style={{
-            position: "absolute",
-            top: "24px",
-            right: "24px",
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(8px)",
-            borderRadius: "12px",
-            padding: "8px 12px",
-            fontSize: "12px",
-            fontWeight: 600,
-            color: "#374151",
-            border: "1px solid rgba(255,255,255,0.5)",
-            zIndex: 10,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          }}
-        >
-          ☀️ 22°{temperatureUnit === "celsius" ? "C" : "F"}
+        {/* Category Tabs */}
+        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 border-b dark:border-gray-700">
+          <div className="flex flex-wrap gap-2">
+            {categories.map(cat => (
+              <div key={cat.id} className="flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // FIXED: Stop propagation
+                    setActiveCategory(cat.id);
+                  }}
+                  className={`
+                    px-4 py-2 rounded-full font-medium transition-all transform hover:scale-105
+                    ${activeCategory === cat.id 
+                      ? `${cat.color} text-white shadow-lg` 
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                    }
+                  `}
+                >
+                  <span className="mr-2">{cat.emoji}</span>
+                  {cat.label}
+                </button>
+                {cat.id !== 'all' && (
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enabledCategories.has(cat.id)}
+                      onChange={(e) => {
+                        e.stopPropagation(); // FIXED: Stop propagation
+                        toggleCategory(cat.id);
+                      }}
+                      className="sr-only"
+                    />
+                    <div className={`
+                      w-10 h-6 rounded-full transition-colors duration-200
+                      ${enabledCategories.has(cat.id) ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}
+                    `}>
+                      <div className={`
+                        w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200
+                        ${enabledCategories.has(cat.id) ? 'translate-x-5' : 'translate-x-1'}
+                        mt-1
+                      `} />
+                    </div>
+                  </label>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      )}
 
-      <DndProvider backend={Backend as any} options={backendOptions}>
-        <DnDCalendar
-          localizer={localizer}
-          events={allEvents}
-          view={view}
-          date={date}
-          onView={setView}
-          onNavigate={setDate}
-          selectable={true}
-          onSelectSlot={(slotInfo: any) => {
-            console.log('CalendarGrid: Slot clicked!', slotInfo);
-            if (onSelectSlot) {
-              onSelectSlot(slotInfo);
-            }
-          }}
-          onSelectEvent={(event: any) => {
-            console.log('CalendarGrid: Event clicked!', event);
-            if (onSelectEvent) {
-              onSelectEvent(event);
-            }
-          }}
-          onEventDrop={isMobile ? undefined : onDrop}
-          onEventResize={isMobile ? undefined : onResize}
-          onDropFromOutside={isMobile ? undefined : handleDropFromOutside}
-          eventPropGetter={eventStyleGetter}
-          components={{
-            event: EventComponent,
-            month: {
-              dateHeader: MonthDateHeader,
-            },
-            dateCellWrapper: DateCellWrapper,
-          }}
-          resizable={!isMobile}
-          popup
-          step={30}
-          timeslots={2}
-          scrollToTime={new Date(1970, 1, 1, 8, 0, 0)}
-          longPressThreshold={isMobile ? 250 : 100}
-          dragFromOutsideItem={
-            !isMobile && externalDragType !== 'none'
-              ? () => ({
-                  title: externalDragTitle || 
-                    (externalDragType === 'reminder' ? 'New Reminder' : 'New Todo')
-                })
-              : undefined
-          }
-          onDragOver={(e: any) => {
-            if (!isMobile) e.preventDefault();
-          }}
-          style={{
-            minHeight: isMobile ? 500 : 650,
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            borderRadius: '8px',
-          }}
-          className="custom-calendar"
-        />
-      </DndProvider>
-      
-      {/* STYLES - Calendar cells + Holiday Banners */}
-      <style jsx global>{`
-        /* Base calendar container */
-        .calendar-wrapper {
-          background: white !important;
-        }
-        
-        .custom-calendar {
-          font-size: 14px;
-          background: rgba(255, 255, 255, 0.98) !important;
-        }
-        
-        /* CRITICAL FIX: Make entire cell clickable */
-        .custom-calendar .rbc-day-bg {
-          cursor: pointer !important;
-          position: relative !important;
-        }
-        
-        .custom-calendar .rbc-day-bg-clickable {
-          position: absolute;
-          inset: 0;
-          cursor: pointer;
-          z-index: 0;
-        }
-        
-        /* Ensure date number is above clickable layer */
-        .custom-calendar .rbc-date-cell {
-          position: relative;
-          z-index: 2;
-          color: #374151;
-          pointer-events: auto;
-          padding-top: 2px;
-          min-height: 24px;
-        }
-        
-        /* NEW: Holiday banner link styles with hover */
-        .holiday-banner-link {
-          position: relative;
-        }
-        
-        .holiday-banner-link::after {
-          content: 'Click to view';
-          position: absolute;
-          bottom: 100%;
-          left: 50%;
-          transform: translateX(-50%) translateY(-4px);
-          background: rgba(88, 28, 135, 0.95);
-          color: white;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 10px;
-          white-space: nowrap;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.2s ease;
-          z-index: 100;
-        }
-        
-        .holiday-banner-link:hover::after {
-          opacity: 1;
-        }
-        
-        .holiday-banner-link:hover {
-          background: linear-gradient(135deg, #ddd6fe 0%, #e9d5ff 100%) !important;
-          transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3) !important;
-        }
-        
-        .holiday-banner-link:active {
-          transform: translateY(0);
-        }
-        
-        /* Mobile: simpler tooltip */
-        @media (max-width: 768px) {
-          .holiday-banner-link::after {
-            content: 'Tap to view';
-            font-size: 9px;
-            padding: 3px 6px;
-            bottom: auto;
-            top: 100%;
-            transform: translateX(-50%) translateY(4px);
-          }
+        {/* Add Personal Event Button */}
+        {activeCategory === 'personal' && (
+          <div className="flex-shrink-0 p-3 sm:p-4 bg-purple-50 dark:bg-purple-900/20 border-b dark:border-gray-700">
+            {!showAddPersonal ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  setShowAddPersonal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-all transform hover:scale-105"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Birthday/Anniversary
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    placeholder="Name (e.g., Mom's Birthday)"
+                    value={newPersonalEvent.name}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, name: e.target.value });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
+                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
+                  />
+                  <input
+                    type="date"
+                    value={newPersonalEvent.date}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, date: e.target.value });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
+                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <select
+                    value={newPersonalEvent.type}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, type: e.target.value as any });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
+                    className="px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
+                  >
+                    <option value="birthday">🎂 Birthday</option>
+                    <option value="anniversary">💑 Anniversary</option>
+                    <option value="other">⭐ Other</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Description (optional)"
+                    value={newPersonalEvent.description}
+                    onChange={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setNewPersonalEvent({ ...newPersonalEvent, description: e.target.value });
+                    }}
+                    onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation
+                    className="flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 transition-all"
+                  />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      savePersonalEvent();
+                    }}
+                    disabled={!newPersonalEvent.name || !newPersonalEvent.date}
+                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // FIXED: Stop propagation
+                      setShowAddPersonal(false);
+                      setNewPersonalEvent({ name: '', date: '', type: 'birthday', description: '' });
+                    }}
+                    className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Holiday Grid */}
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
+          <div className="grid gap-2">
+            {filteredHolidays.map(holiday => {
+              const date = new Date(holiday.date);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const isPast = date < today;
+              
+              const matchingEvents = getMatchingEvents(holiday);
+              const hasCurrentYear = matchingEvents.some(e => new Date(e.start_time || e.start).getFullYear() === currentYear);
+              const hasNextYear = matchingEvents.some(e => new Date(e.start_time || e.start).getFullYear() === nextYear);
+              
+              // Check if added for current year or next year
+              const isAddedThisYear = hasCurrentYear || recentlyAdded.has(`${holiday.name}-${currentYear}`);
+              const isAddedNextYear = hasNextYear || recentlyAdded.has(`${holiday.name}-${nextYear}`);
+              
+              // Determine what year we'd add it for
+              const targetYear = isPast ? nextYear : currentYear;
+              const isAlreadyAdded = isPast ? isAddedNextYear : isAddedThisYear;
+              
+              return (
+                <div
+                  key={`${holiday.name}-${holiday.date}`}
+                  id={`holiday-${holiday.name.replace(/[^a-zA-Z0-9]/g, '-')}`}
+                  className={`
+                    relative group rounded-lg p-3 border transition-all duration-300
+                    ${isAlreadyAdded 
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-400' 
+                      : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
+                    }
+                    ${showRemoveMode && matchingEvents.length > 0 ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20' : ''}
+                  `}
+                  style={{
+                    borderLeftWidth: '4px',
+                    borderLeftColor: holiday.color || '#6B7280'
+                  }}
+                  onClick={(e) => e.stopPropagation()} // FIXED: Stop propagation on holiday card
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{holiday.emoji}</span>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        {holiday.name}
+                        {holiday.recurring && (
+                          <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded-full">
+                            Yearly
+                          </span>
+                        )}
+                        {isPast && !isAddedNextYear && (
+                          <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 px-2 py-0.5 rounded-full">
+                            Past - Add for {nextYear}
+                          </span>
+                        )}
+                        {matchingEvents.length > 1 && (
+                          <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300 px-2 py-0.5 rounded-full">
+                            {matchingEvents.length}x on calendar
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} 
+                        {holiday.description && ` • ${holiday.description}`}
+                      </div>
+                    </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2">
+                      {showRemoveMode && matchingEvents.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {matchingEvents.map((event, idx) => {
+                            const eventYear = new Date(event.start_time || event.start).getFullYear();
+                            return (
+                              <button
+                                key={event.id || idx}
+                                onClick={(e) => handleRemoveHoliday(holiday, event, e)}
+                                className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-all"
+                              >
+                                Remove {eventYear}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : isAlreadyAdded ? (
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
+                          </svg>
+                          <span className="text-sm font-medium">
+                            {isPast ? `Added for ${nextYear}` : 'Added'}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => handleAddHoliday(holiday, isPast, e)}
+                            className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-md"
+                          >
+                            Add {isPast && `for ${targetYear}`}
+                          </button>
+                          {!isPast && !isAddedNextYear && (
+                            <button
+                              onClick={(e) => handleAddHoliday(holiday, true, e)}
+                              className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-all transform hover:scale-105"
+                              title={`Also add for ${nextYear}`}
+                            >
+                              +{nextYear}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           
-          /* Prevent tooltip overflow on small screens */
-          .holiday-banner-link:hover::after {
-            max-width: 100px;
-          }
-        }
-        
-        /* Ensure events are above clickable layer but below holiday banners */
-        .custom-calendar .rbc-event,
-        .custom-calendar .rbc-event-content {
-          position: relative;
-          z-index: 3;
-          pointer-events: auto;
-        }
-        
-        .custom-calendar .rbc-time-slot {
-          cursor: pointer !important;
-          position: relative !important;
-        }
-        
-        /* Header always light with dark text */
-        .custom-calendar .rbc-header {
-          background: #f8fafc;
-          border-bottom: 1px solid rgba(0,0,0,0.1);
-          padding: 8px 4px;
-          font-weight: 600;
-          color: #374151;
-        }
-        
-        /* Today highlighting */
-        .custom-calendar .rbc-today {
-          background: ${themeStyles.todayBg};
-        }
-        
-        /* Toolbar styling */
-        .custom-calendar .rbc-toolbar {
-          margin-bottom: 12px;
-          padding: 0 8px;
-          background: transparent;
-        }
-        
-        .custom-calendar .rbc-toolbar-label {
-          color: #1f2937;
-          font-weight: 600;
-        }
-        
-        .custom-calendar .rbc-toolbar button {
-          border: 1px solid rgba(0,0,0,0.1);
-          background: rgba(255,255,255,0.9);
-          color: #374151;
-          border-radius: 6px;
-          padding: 6px 10px;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          margin: 0 2px;
-        }
-        
-        .custom-calendar .rbc-toolbar button:hover:not(:disabled) {
-          background: ${themeStyles.hover};
-          border-color: ${themeStyles.accent};
-          transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .custom-calendar .rbc-toolbar button.rbc-active {
-          background: ${themeStyles.accent};
-          color: white;
-          border-color: ${themeStyles.accent};
-        }
-        
-        .custom-calendar .rbc-toolbar button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        /* Month view cells always white */
-        .custom-calendar .rbc-month-view {
-          background: white;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        
-        /* Month rows need more height for holiday banners */
-        .custom-calendar .rbc-month-row {
-          min-height: 100px;
-        }
-        
-        /* Day cells always white */
-        .custom-calendar .rbc-day-bg {
-          background: white;
-          min-height: 90px;
-        }
-        
-        /* Day cell hover effect */
-        .custom-calendar .rbc-day-bg:hover {
-          background: ${themeStyles.hover} !important;
-          transition: background 0.2s ease;
-        }
-        
-        /* Selection styling */
-        .custom-calendar .rbc-slot-selection {
-          background: ${themeStyles.selection};
-          border: 2px dashed ${themeStyles.accent};
-          border-radius: 4px;
-        }
-        
-        /* Off-range days - slightly gray but still readable */
-        .custom-calendar .rbc-off-range-bg {
-          background: rgba(156, 163, 175, 0.05);
-        }
-        
-        /* Event hover effects (desktop only) */
-        @media (hover: hover) {
-          .custom-calendar .rbc-event:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-            transition: all 0.2s;
-            z-index: 4;
-          }
-          
-          /* Don't apply hover to moon phases */
-          .custom-calendar .rbc-event[title*="Moon"]:hover {
-            transform: none;
-            box-shadow: none;
-          }
-        }
-        
-        /* Mobile-specific styles */
-        @media (max-width: 768px) {
-          .custom-calendar {
-            font-size: 12px;
-          }
-          
-          /* Safe area for iOS notch/home indicator */
-          .calendar-wrapper {
-            padding-bottom: env(safe-area-inset-bottom, 0.5rem);
-          }
-          
-          /* Responsive toolbar */
-          .custom-calendar .rbc-toolbar {
-            flex-direction: column;
-            gap: 8px;
-            padding: 0 4px;
-          }
-          
-          .custom-calendar .rbc-toolbar-label {
-            font-size: 16px;
-            font-weight: 600;
-            margin: 0;
-          }
-          
-          .custom-calendar .rbc-btn-group {
-            display: flex;
-            justify-content: center;
-            gap: 4px;
-            flex-wrap: wrap;
-          }
-          
-          .custom-calendar .rbc-btn-group button {
-            padding: 10px 14px;
-            font-size: 13px;
-            min-width: 44px;
-            min-height: 44px;
-            flex: 1;
-            max-width: 100px;
-          }
-          
-          /* Mobile calendar view */
-          .custom-calendar .rbc-month-view {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
-          
-          .custom-calendar .rbc-month-row {
-            min-height: 90px;
-          }
-          
-          .custom-calendar .rbc-date-cell {
-            padding: 2px;
-            font-size: 12px;
-            font-weight: 500;
-          }
-          
-          .custom-calendar .rbc-day-bg {
-            min-height: 80px;
-          }
-          
-          /* Mobile events - larger touch targets */
-          .custom-calendar .rbc-event {
-            padding: 4px 6px !important;
-            font-size: 11px !important;
-            min-height: 28px !important;
-            line-height: 1.3;
-            white-space: normal !important;
-            word-wrap: break-word !important;
-          }
-          
-          .custom-calendar .rbc-event-content {
-            overflow: visible !important;
-            text-overflow: clip !important;
-            white-space: normal !important;
-            font-size: 11px;
-            word-wrap: break-word !important;
-          }
-          
-          /* Mobile header */
-          .custom-calendar .rbc-header {
-            padding: 8px 4px;
-            font-size: 12px;
-          }
-          
-          /* Show more link - larger touch target */
-          .custom-calendar .rbc-show-more {
-            font-size: 11px;
-            padding: 4px 6px;
-            background: rgba(255,255,255,0.9);
-            border-radius: 4px;
-            margin-top: 2px;
-            min-height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          
-          /* Holiday banner larger on mobile */
-          .holiday-banners {
-            gap: 2px !important;
-            padding: 3px !important;
-          }
-          
-          /* Disable text selection on mobile */
-          .custom-calendar {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-            -webkit-touch-callout: none;
-            -webkit-tap-highlight-color: transparent;
-          }
-          
-          /* Make touch targets larger */
-          .custom-calendar .rbc-event,
-          .custom-calendar .rbc-day-bg {
-            cursor: pointer;
-            -webkit-tap-highlight-color: ${themeStyles.selection};
-          }
-          
-          /* Time view improvements for mobile */
-          .custom-calendar .rbc-time-slot {
-            min-height: 48px;
-          }
-          
-          .custom-calendar .rbc-timeslot-group {
-            min-height: 48px;
-          }
-        }
-        
-        /* Moon phase specific styles */
-        .custom-calendar .rbc-event[title*="Moon"] {
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-          padding: 0 !important;
-        }
-        
-        /* Accessibility improvements */
-        .custom-calendar .rbc-event:focus {
-          outline: 2px solid ${themeStyles.accent};
-          outline-offset: 1px;
-        }
-        
-        .custom-calendar .rbc-show-more {
-          color: ${themeStyles.accent};
-          font-weight: 500;
-          cursor: pointer;
-        }
-        
-        .custom-calendar .rbc-show-more:hover {
-          text-decoration: underline;
-        }
-        
-        /* Week and Day view always white with dark text */
-        .custom-calendar .rbc-time-view {
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-        }
-        
-        .custom-calendar .rbc-time-header {
-          background: #f9fafb;
-        }
-        
-        .custom-calendar .rbc-time-content {
-          border-top: 1px solid #e5e7eb;
-          background: white;
-        }
-        
-        .custom-calendar .rbc-time-slot {
-          border-top: 1px solid #f3f4f6;
-        }
-        
-        .custom-calendar .rbc-current-time-indicator {
-          background-color: #ef4444;
-          height: 2px;
-        }
-        
-        /* Time labels in Day/Week view */
-        .custom-calendar .rbc-time-header-gutter {
-          background: #f9fafb;
-          border-right: 1px solid #e5e7eb;
-        }
-        
-        .custom-calendar .rbc-label {
-          padding: 4px 8px;
-          font-size: 11px;
-          font-weight: 500;
-          color: #6b7280 !important;
-          text-align: right;
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-        }
-        
-        .custom-calendar .rbc-time-gutter {
-          background: #f9fafb;
-        }
-        
-        .custom-calendar .rbc-timeslot-group {
-          min-height: 40px;
-          border-left: 1px solid #e5e7eb;
-        }
-        
-        /* Agenda view always dark text */
-        .custom-calendar .rbc-agenda-view {
-          color: #111827;
-        }
-        
-        .custom-calendar .rbc-agenda-date-cell,
-        .custom-calendar .rbc-agenda-time-cell {
-          padding: 8px;
-          white-space: nowrap;
-          color: #374151;
-        }
-        
-        .custom-calendar .rbc-agenda-event-cell {
-          padding: 8px;
-        }
-      `}</style>
+          {filteredHolidays.length === 0 && (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p>No holidays in this category</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer - FIXED: Mobile responsive layout + Always visible */}
+        <div className="flex-shrink-0 p-4 sm:p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span className="font-medium">{filteredHolidays.length} holidays</span>
+              <span className="text-xs">
+                {showRemoveMode ? '🗑️ Click holidays to remove' : 'Click to add instantly • Past holidays add for next year'}
+              </span>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // FIXED: Stop propagation
+                  onClose();
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all transform hover:scale-105"
+              >
+                Close
+              </button>
+              {!showRemoveMode && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // FIXED: Stop propagation
+                    addAllInCategory();
+                  }}
+                  disabled={isAddingAll}
+                  className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {isAddingAll ? 'Adding...' : `Add All ${activeCategory === 'all' ? 'Enabled' : categories.find(c => c.id === activeCategory)?.label} Holidays`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
