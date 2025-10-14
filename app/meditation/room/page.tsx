@@ -263,6 +263,7 @@ function MeditationRoomContent() {
     if (!selectedSound || selectedSound === 'silent') return;
     
     try {
+      console.log('🔊 Starting sound:', selectedSound);
       setIsLoading(true);
       setAudioError('');
       
@@ -272,11 +273,13 @@ function MeditationRoomContent() {
       // Create audio context
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       audioContextRef.current = new AudioContext();
+      console.log('🔊 Audio context created, state:', audioContextRef.current.state);
       
       // Create master gain for volume control
       const masterGain = audioContextRef.current.createGain();
       masterGain.gain.value = volume;
       masterGain.connect(audioContextRef.current.destination);
+      console.log('🔊 Master gain created, volume:', volume);
       
       // Create the soundscape
       const { oscillators, gains, nodes } = createSoundscape(
@@ -284,6 +287,8 @@ function MeditationRoomContent() {
         audioContextRef.current, 
         masterGain
       );
+      
+      console.log('🔊 Soundscape created. Oscillators:', oscillators.length, 'Nodes:', nodes.length);
       
       // Store references
       oscillatorsRef.current = oscillators;
@@ -293,17 +298,22 @@ function MeditationRoomContent() {
       
       // Start all oscillators and buffer sources
       const now = audioContextRef.current.currentTime;
-      oscillators.forEach(osc => osc.start(now));
+      console.log('🔊 Starting oscillators at time:', now);
+      oscillators.forEach((osc, i) => {
+        console.log(`🔊 Starting oscillator ${i}:`, osc.frequency.value, 'Hz');
+        osc.start(now);
+      });
       nodes.forEach(node => {
         if (node instanceof AudioBufferSourceNode) {
           node.start(now);
         }
       });
       
+      console.log('🔊 All oscillators started, audio should be playing!');
       setIsPlaying(true);
       setIsLoading(false);
     } catch (error: any) {
-      console.error('Error playing audio:', error);
+      console.error('❌ Error playing audio:', error);
       setAudioError(`Audio failed: ${error.message || 'Unknown error'}`);
       setIsPlaying(false);
       setIsLoading(false);
