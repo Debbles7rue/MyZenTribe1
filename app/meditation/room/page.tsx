@@ -162,7 +162,7 @@ function MeditationRoomContent() {
       const testGain = context.createGain();
       testDrum.frequency.value = 80;
       testDrum.type = 'sine';
-      testGain.gain.value = 0.3;
+      testGain.gain.value = 0.8; // MUCH LOUDER!
       testDrum.connect(testGain);
       testGain.connect(masterGain);
       oscillators.push(testDrum);
