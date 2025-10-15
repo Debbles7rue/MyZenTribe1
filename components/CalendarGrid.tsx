@@ -221,7 +221,7 @@ export default function CalendarGrid({
     [filteredDbEvents]
   );
 
-  // NEW: Separate holidays from regular events
+  // FIXED: Separate holidays ONLY for month view date headers
   const { holidayEvents, nonHolidayEvents } = useMemo(() => {
     const holidays: UiEvent[] = [];
     const nonHolidays: UiEvent[] = [];
@@ -237,14 +237,24 @@ export default function CalendarGrid({
     return { holidayEvents: holidays, nonHolidayEvents: nonHolidays };
   }, [dbUiEvents]);
 
-  // Merge non-holiday events with moon events (holidays handled separately in date header)
+  // FIXED: For month view, use non-holiday events + moon. For other views, use ALL events + moon
   const allEvents = useMemo(() => {
-    const events = [...nonHolidayEvents];
+    let events: UiEvent[];
+    
+    if (view === 'month') {
+      // Month view: holidays shown in header, not as events
+      events = [...nonHolidayEvents];
+    } else {
+      // Day/Week/Agenda view: show ALL events including holidays
+      events = [...dbUiEvents];
+    }
+    
     if (showMoon) {
       events.push(...moonEvents);
     }
+    
     return events;
-  }, [nonHolidayEvents, moonEvents, showMoon]);
+  }, [view, nonHolidayEvents, dbUiEvents, moonEvents, showMoon]);
 
   // Event styling based on type with pre/post event indicators
   const eventStyleGetter = (event: UiEvent): any => {
@@ -253,7 +263,7 @@ export default function CalendarGrid({
     // Check if this event is selected in batch mode
     const isSelected = selectedBatchEvents?.has(resource?.id || event.id);
 
-    // Moon phase events
+    // Moon phase events - FIXED: Better containment
     if (resource?.moonPhase) {
       return {
         style: {
@@ -266,7 +276,9 @@ export default function CalendarGrid({
           justifyContent: 'center',
           cursor: 'pointer',
           minHeight: '20px',
+          maxHeight: '24px',
           fontSize: '16px',
+          overflow: 'hidden',
         },
       };
     }
@@ -286,6 +298,20 @@ export default function CalendarGrid({
     // Add thicker border for events with pre/post gatherings
     const borderWidth = (resource?.hasPreEvent || resource?.hasPostEvent) ? "2px" : "1px";
     const borderStyle = (resource?.hasPreEvent || resource?.hasPostEvent) ? "solid" : "solid";
+
+    // Holiday events (for day/week/agenda views)
+    if (resource?.event_type === "holiday") {
+      return {
+        style: {
+          ...baseStyle,
+          backgroundColor: isSelected ? "#c084fc" : "#f3e8ff",
+          border: `${borderWidth} ${borderStyle} ${isSelected ? "#9333ea" : "#c084fc"}`,
+          color: "#581c87",
+          fontWeight: 700,
+          boxShadow: isSelected ? "0 0 0 2px rgba(192, 132, 252, 0.3)" : "0 1px 3px rgba(168, 85, 247, 0.2)",
+        },
+      };
+    }
 
     // Reminder events
     if (resource?.event_type === "reminder") {
@@ -378,20 +404,20 @@ export default function CalendarGrid({
   const EventComponent = ({ event }: EventProps<UiEvent>) => {
     const resource = event.resource as any;
     
-    // Handle moon phases
+    // Handle moon phases - FIXED: Better rendering
     if (resource?.moonPhase) {
       if (MoonPhaseIcon && getMoonPhaseFromResource) {
         const moonPhase = getMoonPhaseFromResource(resource);
         if (moonPhase) {
           return (
-            <div className="flex items-center justify-center w-full h-full p-0">
+            <div className="flex items-center justify-center w-full h-full p-0" style={{ overflow: 'hidden', maxHeight: '24px' }}>
               <MoonPhaseIcon phase={moonPhase} />
             </div>
           );
         }
       }
       return (
-        <div className="flex items-center justify-center w-full h-full text-base">
+        <div className="flex items-center justify-center w-full h-full text-base" style={{ maxHeight: '24px' }}>
           {getMoonEmoji(resource.moonPhase)}
         </div>
       );
@@ -431,6 +457,20 @@ export default function CalendarGrid({
       );
     }
 
+    // Render holiday with emoji (in day/week/agenda views)
+    if (resource?.event_type === "holiday") {
+      const emoji = event.title.match(/^[\p{Emoji}]/u)?.[0] || '🎉';
+      const titleWithoutEmoji = event.title.replace(/^[\p{Emoji}\s]+/u, '');
+      return (
+        <div className="flex items-center gap-1 px-1 w-full">
+          <span className="text-[12px]">{emoji}</span>
+          <span className="truncate flex-1 text-[10px] md:text-xs font-bold">
+            {titleWithoutEmoji}
+          </span>
+        </div>
+      );
+    }
+
     // Business events with special badge
     if (resource?.source === "business") {
       return (
@@ -459,7 +499,7 @@ export default function CalendarGrid({
     );
   };
 
-  // NEW: Custom Month Date Header component with clickable holiday banners
+// Custom Month Date Header component with clickable holiday banners (MONTH VIEW ONLY)
   const MonthDateHeader = useCallback(({ date: cellDate, label }: any) => {
     // Find holidays for this date
     const cellDateStr = moment(cellDate).format('YYYY-MM-DD');
@@ -470,7 +510,7 @@ export default function CalendarGrid({
 
     return (
       <div className="rbc-date-cell">
-        {/* Holiday Banners - at top */}
+        {/* Holiday Banners - at top (MONTH VIEW ONLY) */}
         {holidaysForDate.length > 0 && (
           <div 
             className="holiday-banners"
@@ -548,10 +588,16 @@ export default function CalendarGrid({
     );
   }, [holidayEvents, onSelectEvent, isMobile]);
 
-  // NEW: Custom date cell wrapper to make entire cell clickable - opens day view
+  // FIXED: Enhanced date cell wrapper with better click detection
   const DateCellWrapper = useCallback(({ children, value }: any) => {
     const handleCellClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
+      
+      console.log('🖱️ Cell click detected:', {
+        target: target.className,
+        view,
+        value
+      });
       
       // Don't intercept clicks on events or holiday banners
       if (
@@ -560,14 +606,15 @@ export default function CalendarGrid({
         target.closest('.holiday-banner-link') ||
         target.closest('.holiday-banners')
       ) {
+        console.log('❌ Click was on event/holiday - ignoring');
         return;
       }
       
-      // If clicking on cell background OR date number, open day view for this date
+      // FIXED: If clicking on month view cell, open day view for this date
       if (value && view === 'month') {
         e.preventDefault();
         e.stopPropagation();
-        console.log('📅 Cell clicked, opening day view for:', value);
+        console.log('✅ Opening day view for:', value);
         setDate(value);
         setView('day');
       }
@@ -580,7 +627,7 @@ export default function CalendarGrid({
         style={{ 
           position: 'absolute',
           inset: 0,
-          cursor: 'pointer',
+          cursor: view === 'month' ? 'pointer' : 'default',
           zIndex: 0
         }}
       >
@@ -718,13 +765,13 @@ export default function CalendarGrid({
           onNavigate={setDate}
           selectable={true}
           onSelectSlot={(slotInfo: any) => {
-            console.log('CalendarGrid: Slot clicked!', slotInfo);
+            console.log('📅 CalendarGrid: Slot selected!', { slotInfo, view });
             if (onSelectSlot) {
               onSelectSlot(slotInfo);
             }
           }}
           onSelectEvent={(event: any) => {
-            console.log('CalendarGrid: Event clicked!', event);
+            console.log('📅 CalendarGrid: Event selected!', event);
             if (onSelectEvent) {
               onSelectEvent(event);
             }
@@ -767,9 +814,8 @@ export default function CalendarGrid({
         />
       </DndProvider>
       
-      {/* STYLES - Calendar cells + Holiday Banners */}
+      {/* STYLES - Calendar cells + Holiday Banners + Moon containment */}
       <style jsx global>{`
-        /* Base calendar container */
         .calendar-wrapper {
           background: white !important;
         }
@@ -779,7 +825,6 @@ export default function CalendarGrid({
           background: rgba(255, 255, 255, 0.98) !important;
         }
         
-        /* CRITICAL FIX: Make entire cell clickable */
         .custom-calendar .rbc-day-bg {
           cursor: pointer !important;
           position: relative !important;
@@ -792,7 +837,6 @@ export default function CalendarGrid({
           z-index: 0;
         }
         
-        /* Ensure date number is above clickable layer */
         .custom-calendar .rbc-date-cell {
           position: relative;
           z-index: 2;
@@ -801,7 +845,6 @@ export default function CalendarGrid({
           padding-top: 2px;
         }
         
-        /* NEW: Holiday banner link styles with hover */
         .holiday-banner-link {
           position: relative;
         }
@@ -838,7 +881,6 @@ export default function CalendarGrid({
           transform: translateY(0);
         }
         
-        /* Mobile: simpler tooltip */
         @media (max-width: 768px) {
           .holiday-banner-link::after {
             content: 'Tap';
@@ -847,7 +889,6 @@ export default function CalendarGrid({
           }
         }
         
-        /* Ensure events are above clickable layer but below holiday banners */
         .custom-calendar .rbc-event,
         .custom-calendar .rbc-event-content {
           position: relative;
@@ -860,7 +901,6 @@ export default function CalendarGrid({
           position: relative !important;
         }
         
-        /* Header always light with dark text */
         .custom-calendar .rbc-header {
           background: #f8fafc;
           border-bottom: 1px solid rgba(0,0,0,0.1);
@@ -869,12 +909,10 @@ export default function CalendarGrid({
           color: #374151;
         }
         
-        /* Today highlighting */
         .custom-calendar .rbc-today {
           background: ${themeStyles.todayBg};
         }
         
-        /* Toolbar styling */
         .custom-calendar .rbc-toolbar {
           margin-bottom: 12px;
           padding: 0 8px;
@@ -915,37 +953,31 @@ export default function CalendarGrid({
           cursor: not-allowed;
         }
         
-        /* Month view cells always white */
         .custom-calendar .rbc-month-view {
           background: white;
           border-radius: 8px;
           overflow: hidden;
         }
         
-        /* Day cells always white */
         .custom-calendar .rbc-day-bg {
           background: white;
         }
         
-        /* Day cell hover effect */
         .custom-calendar .rbc-day-bg:hover {
           background: ${themeStyles.hover} !important;
           transition: background 0.2s ease;
         }
         
-        /* Selection styling */
         .custom-calendar .rbc-slot-selection {
           background: ${themeStyles.selection};
           border: 2px dashed ${themeStyles.accent};
           border-radius: 4px;
         }
         
-        /* Off-range days - slightly gray but still readable */
         .custom-calendar .rbc-off-range-bg {
           background: rgba(156, 163, 175, 0.05);
         }
         
-        /* Event hover effects (desktop only) */
         @media (hover: hover) {
           .custom-calendar .rbc-event:hover {
             transform: translateY(-1px);
@@ -954,20 +986,17 @@ export default function CalendarGrid({
             z-index: 4;
           }
           
-          /* Don't apply hover to moon phases */
           .custom-calendar .rbc-event[title*="Moon"]:hover {
             transform: none;
             box-shadow: none;
           }
         }
         
-        /* Mobile-specific styles */
         @media (max-width: 768px) {
           .custom-calendar {
             font-size: 12px;
           }
           
-          /* Responsive toolbar */
           .custom-calendar .rbc-toolbar {
             flex-direction: column;
             gap: 8px;
@@ -995,7 +1024,6 @@ export default function CalendarGrid({
             max-width: 80px;
           }
           
-          /* Mobile calendar view */
           .custom-calendar .rbc-month-view {
             overflow-x: auto;
           }
@@ -1014,7 +1042,6 @@ export default function CalendarGrid({
             min-height: 50px;
           }
           
-          /* Mobile events */
           .custom-calendar .rbc-event {
             padding: 1px 2px !important;
             font-size: 9px !important;
@@ -1029,13 +1056,11 @@ export default function CalendarGrid({
             font-size: 9px;
           }
           
-          /* Mobile header */
           .custom-calendar .rbc-header {
             padding: 6px 2px;
             font-size: 11px;
           }
           
-          /* Show more link */
           .custom-calendar .rbc-show-more {
             font-size: 10px;
             padding: 2px 4px;
@@ -1044,7 +1069,6 @@ export default function CalendarGrid({
             margin-top: 2px;
           }
           
-          /* Disable text selection on mobile */
           .custom-calendar {
             -webkit-user-select: none;
             -moz-user-select: none;
@@ -1054,7 +1078,6 @@ export default function CalendarGrid({
             -webkit-tap-highlight-color: transparent;
           }
           
-          /* Make touch targets larger */
           .custom-calendar .rbc-event,
           .custom-calendar .rbc-day-bg {
             cursor: pointer;
@@ -1062,7 +1085,6 @@ export default function CalendarGrid({
           }
         }
         
-        /* Moon phase specific styles */
         .custom-calendar .rbc-event[title*="Moon"] {
           background: transparent !important;
           border: none !important;
@@ -1070,7 +1092,6 @@ export default function CalendarGrid({
           padding: 0 !important;
         }
         
-        /* Accessibility improvements */
         .custom-calendar .rbc-event:focus {
           outline: 2px solid ${themeStyles.accent};
           outline-offset: 1px;
@@ -1086,7 +1107,6 @@ export default function CalendarGrid({
           text-decoration: underline;
         }
         
-        /* Week and Day view always white with dark text */
         .custom-calendar .rbc-time-view {
           border: 1px solid #e5e7eb;
           border-radius: 8px;
@@ -1110,7 +1130,6 @@ export default function CalendarGrid({
           height: 2px;
         }
         
-        /* Time labels in Day/Week view */
         .custom-calendar .rbc-time-header-gutter {
           background: #f9fafb;
           border-right: 1px solid #e5e7eb;
@@ -1136,7 +1155,6 @@ export default function CalendarGrid({
           border-left: 1px solid #e5e7eb;
         }
         
-        /* Agenda view always dark text */
         .custom-calendar .rbc-agenda-view {
           color: #111827;
         }
