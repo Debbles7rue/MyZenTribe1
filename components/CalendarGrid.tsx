@@ -237,24 +237,33 @@ export default function CalendarGrid({
     return { holidayEvents: holidays, nonHolidayEvents: nonHolidays };
   }, [dbUiEvents]);
 
-  // FIXED: For month view, use non-holiday events + moon. For other views, use ALL events + moon
-  const allEvents = useMemo(() => {
-    let events: UiEvent[];
-    
-    if (view === 'month') {
-      // Month view: holidays shown in header, not as events
-      events = [...nonHolidayEvents];
-    } else {
-      // Day/Week/Agenda view: show ALL events including holidays
-      events = [...dbUiEvents];
-    }
-    
-    if (showMoon) {
-      events.push(...moonEvents);
-    }
-    
-    return events;
-  }, [view, nonHolidayEvents, dbUiEvents, moonEvents, showMoon]);
+// FIXED: Show holidays ONLY in month view as banners. In day/week/agenda, exclude holidays entirely
+const allEvents = useMemo(() => {
+  let events: UiEvent[];
+  
+  if (view === 'month') {
+    // Month view: holidays shown in header, regular events shown normally
+    events = [...nonHolidayEvents];
+  } else {
+    // Day/Week/Agenda view: show ONLY non-holiday events (exclude holidays entirely)
+    events = [...nonHolidayEvents];
+  }
+  
+  if (showMoon) {
+    events.push(...moonEvents);
+  }
+  
+  console.log('📊 Calendar Events:', {
+    view,
+    totalEvents: events.length,
+    nonHolidayCount: nonHolidayEvents.length,
+    holidayCount: holidayEvents.length,
+    moonCount: showMoon ? moonEvents.length : 0,
+    eventsList: events.map(e => ({ title: e.title, start: e.start, type: e.resource?.event_type }))
+  });
+  
+  return events;
+}, [view, nonHolidayEvents, holidayEvents, moonEvents, showMoon]);
 
   // Event styling based on type with pre/post event indicators
   const eventStyleGetter = (event: UiEvent): any => {
