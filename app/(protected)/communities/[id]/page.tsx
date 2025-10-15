@@ -1,3 +1,6 @@
+// FILE NAME: page.tsx
+// LOCATION: /app/(protected)/communities/[id]/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -57,13 +60,31 @@ interface Post {
 
 interface Business {
   id: string;
-  business_name: string;
-  business_description: string | null;
-  business_logo: string | null;
-  business_category: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
+  display_name: string;
+  bio: string | null;
+  logo_url: string | null;
+  categories: string[] | null;
+  email: string | null;
+  phone: string | null;
   website_url: string | null;
+}
+
+interface CommunityEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  start_time: string;
+  end_time: string | null;
+  location: string | null;
+  image_path: string | null;
+  source: string;
+  created_by: string;
+  creator_name: string | null;
+  creator_avatar: string | null;
+  business_profile_id: string | null;
+  business_name: string | null;
+  rsvp_count?: number;
+  user_rsvp?: boolean;
 }
 
 export default function CommunityDetailPage({ params }: { params: { id: string } }) {
@@ -72,7 +93,9 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
   const [members, setMembers] = useState<Member[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isMember, setIsMember] = useState(false);
@@ -82,20 +105,28 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
   // Active tab
   const [activeTab, setActiveTab] = useState<"discussions" | "members" | "events" | "businesses" | "admin">("discussions");
   
+  // Event filters
+  const [eventFilter, setEventFilter] = useState<"all" | "upcoming" | "business" | "member">("upcoming");
+  
   // Modals
   const [showNewPost, setShowNewPost] = useState(false);
   const [showAnnouncement, setShowAnnouncement] = useState(false);
-  const [showComments, setShowComments] = useState<string | null>(null);
   const [postTitle, setPostTitle] = useState("");
   const [postContent, setPostContent] = useState("");
   const [postAnonymous, setPostAnonymous] = useState(false);
-  const [commentText, setCommentText] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementContent, setAnnouncementContent] = useState("");
 
   useEffect(() => {
     loadCommunityData();
   }, [params.id]);
+
+  // Load events when switching to events tab
+  useEffect(() => {
+    if (activeTab === "events") {
+      loadCommunityEvents();
+    }
+  }, [activeTab, params.id]);
 
   async function loadCommunityData() {
     setLoading(true);
@@ -159,7 +190,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, avatar_url")
-            .eq("user_id", member.user_id)
+            .eq("id", member.user_id)
             .single();
           
           return { ...member, profile: profile || null };
@@ -186,7 +217,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, avatar_url")
-            .eq("user_id", post.author_id)
+            .eq("id", post.author_id)
             .single();
           
           return { ...post, author: profile || null };
@@ -202,24 +233,184 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
         business_id,
         business_profiles!inner(
           id,
-          business_name,
-          business_description,
-          business_logo,
-          business_category,
-          contact_email,
-          contact_phone,
+          display_name,
+          bio,
+          logo_url,
+          categories,
+          email,
+          phone,
           website_url
         )
       `)
       .eq("community_id", params.id);
 
     if (businessData) {
-      const businessList = businessData.map(item => item.business_profiles).filter(Boolean);
-      setBusinesses(businessList as Business[]);
+      const businessList = businessData
+        .map(item => item.business_profiles)
+        .filter(Boolean) as Business[];
+      setBusinesses(businessList);
     }
 
     setLoading(false);
   }
+
+  async function loadCommunityEvents() {
+    setEventsLoading(true);
+    try {
+      // Get all events linked to this community via event_communities
+      const { data: eventLinks, error: linksError } = await supabase
+        .from("event_communities")
+        .select("event_id")
+        .eq("community_id", params.id);
+
+      if (linksError) throw linksError;
+
+      if (!eventLinks || eventLinks.length === 0) {
+        setEvents([]);
+        setEventsLoading(false);
+        return;
+      }
+
+      const eventIds = eventLinks.map(link => link.event_id);
+
+      // Get full event details
+      const { data: eventsData, error: eventsError } = await supabase
+        .from("events")
+        .select(`
+          id,
+          title,
+          description,
+          start_time,
+          end_time,
+          location,
+          image_path,
+          source,
+          created_by,
+          business_profile_id
+        `)
+        .in("id", eventIds)
+        .order("start_time", { ascending: true });
+
+      if (eventsError) throw eventsError;
+
+      // Enrich events with creator info
+      const enrichedEvents = await Promise.all(
+        (eventsData || []).map(async (event) => {
+          let creator_name = null;
+          let creator_avatar = null;
+          let business_name = null;
+
+          // Get creator profile
+          if (event.created_by) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("full_name, avatar_url")
+              .eq("id", event.created_by)
+              .single();
+            
+            if (profile) {
+              creator_name = profile.full_name;
+              creator_avatar = profile.avatar_url;
+            }
+          }
+
+          // Get business profile if applicable
+          if (event.business_profile_id) {
+            const { data: business } = await supabase
+              .from("business_profiles")
+              .select("display_name")
+              .eq("id", event.business_profile_id)
+              .single();
+            
+            if (business) {
+              business_name = business.display_name;
+            }
+          }
+
+          // Get RSVP count and user's RSVP status
+          const { count: rsvpCount } = await supabase
+            .from("event_rsvps")
+            .select("*", { count: "exact", head: true })
+            .eq("event_id", event.id)
+            .eq("status", "going");
+
+          let userRsvp = false;
+          if (userId) {
+            const { data: rsvp } = await supabase
+              .from("event_rsvps")
+              .select("status")
+              .eq("event_id", event.id)
+              .eq("user_id", userId)
+              .single();
+            
+            userRsvp = rsvp?.status === "going";
+          }
+
+          return {
+            ...event,
+            creator_name,
+            creator_avatar,
+            business_name,
+            rsvp_count: rsvpCount || 0,
+            user_rsvp: userRsvp
+          };
+        })
+      );
+
+      setEvents(enrichedEvents);
+    } catch (error) {
+      console.error("Error loading community events:", error);
+    } finally {
+      setEventsLoading(false);
+    }
+  }
+
+  async function handleRSVP(eventId: string, currentStatus: boolean) {
+    if (!userId) {
+      router.push("/login");
+      return;
+    }
+
+    try {
+      if (currentStatus) {
+        // Remove RSVP
+        await supabase
+          .from("event_rsvps")
+          .delete()
+          .eq("event_id", eventId)
+          .eq("user_id", userId);
+      } else {
+        // Add RSVP
+        await supabase
+          .from("event_rsvps")
+          .upsert({
+            event_id: eventId,
+            user_id: userId,
+            status: "going"
+          });
+      }
+
+      // Reload events
+      loadCommunityEvents();
+    } catch (error) {
+      console.error("Error updating RSVP:", error);
+    }
+  }
+
+  // Filter events
+  const filteredEvents = events.filter(event => {
+    const now = new Date();
+    const eventDate = new Date(event.start_time);
+
+    if (eventFilter === "upcoming") {
+      return eventDate >= now;
+    } else if (eventFilter === "business") {
+      return event.business_profile_id !== null;
+    } else if (eventFilter === "member") {
+      return event.business_profile_id === null;
+    }
+    return true; // "all"
+  });
 
   async function handleJoinCommunity() {
     if (!userId) {
@@ -436,7 +627,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
             </div>
           </div>
 
-          {/* Tabs - Mobile optimized horizontal scroll */}
+          {/* Tabs */}
           <div className="mt-4 -mx-4 px-4 overflow-x-auto">
             <div className="flex gap-1 min-w-max border-b">
               {["discussions", "members", "events", "businesses", ...(isAdmin ? ["admin"] : [])].map((tab) => (
@@ -450,6 +641,11 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
                   }`}
                 >
                   {tab}
+                  {tab === "events" && events.length > 0 && (
+                    <span className="ml-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                      {events.length}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -651,17 +847,165 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
           </div>
         )}
 
-        {/* EVENTS TAB */}
+        {/* EVENTS TAB - NOW WORKING! */}
         {activeTab === "events" && (
-          <div className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-xl font-semibold mb-4">Community Events</h2>
-            <div className="text-center py-12">
-              <div className="text-5xl mb-4">📅</div>
-              <p className="text-gray-600 mb-2">Events calendar coming soon!</p>
-              <p className="text-sm text-gray-500">
-                Members will be able to create events and share them with the community.
-              </p>
+          <div className="space-y-4">
+            {/* Event Filters */}
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setEventFilter("upcoming")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    eventFilter === "upcoming"
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  📅 Upcoming
+                </button>
+                <button
+                  onClick={() => setEventFilter("all")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    eventFilter === "all"
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  🗓️ All Events
+                </button>
+                <button
+                  onClick={() => setEventFilter("business")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    eventFilter === "business"
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  🏢 Business Events
+                </button>
+                <button
+                  onClick={() => setEventFilter("member")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    eventFilter === "member"
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  👥 Member Events
+                </button>
+              </div>
             </div>
+
+            {/* Events List */}
+            {eventsLoading ? (
+              <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
+                <div className="animate-spin text-4xl mb-4">⏳</div>
+                <p className="text-gray-600">Loading events...</p>
+              </div>
+            ) : filteredEvents.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
+                <div className="text-5xl mb-4">📅</div>
+                <p className="text-gray-600 mb-2">No events yet</p>
+                <p className="text-sm text-gray-500">
+                  {isMember 
+                    ? "Create an event and share it with this community!"
+                    : "Join the community to see and create events"}
+                </p>
+                {isMember && (
+                  <Link
+                    href="/calendar"
+                    className="inline-block mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
+                  >
+                    Create Event
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition"
+                  >
+                    {/* Event Image */}
+                    {event.image_path && (
+                      <div className="h-48 relative">
+                        <img
+                          src={event.image_path}
+                          alt={event.title}
+                          className="w-full h-full object-cover"
+                        />
+                        {event.business_name && (
+                          <div className="absolute top-3 right-3 bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                            🏢 {event.business_name}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Event Details */}
+                    <div className="p-4">
+                      <h3 className="font-semibold text-lg text-gray-800 mb-2">
+                        {event.title}
+                      </h3>
+
+                      <div className="space-y-2 text-sm text-gray-600 mb-4">
+                        <div className="flex items-center gap-2">
+                          <span>📅</span>
+                          <span>{new Date(event.start_time).toLocaleString()}</span>
+                        </div>
+                        {event.location && (
+                          <div className="flex items-center gap-2">
+                            <span>📍</span>
+                            <span className="truncate">{event.location}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <span>👤</span>
+                          <span>
+                            {event.business_name || event.creator_name || "Unknown"}
+                          </span>
+                        </div>
+                        {event.rsvp_count > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span>✓</span>
+                            <span>{event.rsvp_count} attending</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {event.description && (
+                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                          {event.description}
+                        </p>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/events/${event.id}`}
+                          className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-center text-sm font-medium"
+                        >
+                          View Details
+                        </Link>
+                        {userId && (
+                          <button
+                            onClick={() => handleRSVP(event.id, event.user_rsvp || false)}
+                            className={`flex-1 px-4 py-2 rounded-lg transition text-sm font-medium ${
+                              event.user_rsvp
+                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                : "bg-purple-600 text-white hover:bg-purple-700"
+                            }`}
+                          >
+                            {event.user_rsvp ? "✓ Going" : "RSVP"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -687,9 +1031,9 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
                     className="border rounded-xl p-4 hover:shadow-md transition"
                   >
                     <div className="flex items-start gap-3">
-                      {business.business_logo ? (
+                      {business.logo_url ? (
                         <img
-                          src={business.business_logo}
+                          src={business.logo_url}
                           alt=""
                           className="w-16 h-16 rounded-lg object-cover"
                         />
@@ -698,22 +1042,22 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
                       )}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-gray-800 mb-1">
-                          {business.business_name}
+                          {business.display_name}
                         </h3>
-                        {business.business_category && (
+                        {business.categories && business.categories.length > 0 && (
                           <p className="text-xs text-purple-600 mb-2">
-                            {business.business_category}
+                            {business.categories[0]}
                           </p>
                         )}
-                        {business.business_description && (
+                        {business.bio && (
                           <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                            {business.business_description}
+                            {business.bio}
                           </p>
                         )}
                         <div className="flex gap-2 flex-wrap">
-                          {business.contact_phone && (
+                          {business.phone && (
                             <a
-                              href={`tel:${business.contact_phone}`}
+                              href={`tel:${business.phone}`}
                               className="text-xs text-purple-600 hover:underline"
                             >
                               📞 Call
@@ -755,7 +1099,7 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
                   <div className="text-sm text-gray-600">Posts</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">0</div>
+                  <div className="text-2xl font-bold text-green-600">{events.length}</div>
                   <div className="text-sm text-gray-600">Events</div>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg">
