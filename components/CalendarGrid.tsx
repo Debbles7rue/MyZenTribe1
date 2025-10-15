@@ -285,9 +285,9 @@ const allEvents = useMemo(() => {
           justifyContent: 'center',
           cursor: 'pointer',
           minHeight: '20px',
-          maxHeight: '24px',
+          maxHeight: '32px',
           fontSize: '16px',
-          overflow: 'hidden',
+          overflow: 'visible',
         },
       };
     }
@@ -419,14 +419,14 @@ const allEvents = useMemo(() => {
         const moonPhase = getMoonPhaseFromResource(resource);
         if (moonPhase) {
           return (
-            <div className="flex items-center justify-center w-full h-full p-0" style={{ overflow: 'hidden', maxHeight: '24px' }}>
+            <div className="flex items-center justify-center w-full h-full p-0" style={{ overflow: 'visible' }}>
               <MoonPhaseIcon phase={moonPhase} />
             </div>
           );
         }
       }
       return (
-        <div className="flex items-center justify-center w-full h-full text-base" style={{ maxHeight: '24px' }}>
+        <div className="flex items-center justify-center w-full h-full text-base">
           {getMoonEmoji(resource.moonPhase)}
         </div>
       );
@@ -517,6 +517,14 @@ const allEvents = useMemo(() => {
       return holidayDateStr === cellDateStr;
     });
 
+    // FIXED: Calculate proper spacing for holiday banners
+    const bannerHeight = isMobile ? 18 : 23;
+    const gapHeight = 2;
+    const topPadding = 2;
+    const totalHolidayHeight = holidaysForDate.length > 0 
+      ? (holidaysForDate.length * bannerHeight) + ((holidaysForDate.length - 1) * gapHeight) + topPadding
+      : 0;
+
     return (
       <div className="rbc-date-cell">
         {/* Holiday Banners - at top (MONTH VIEW ONLY) */}
@@ -586,7 +594,7 @@ const allEvents = useMemo(() => {
           style={{ 
             position: 'relative',
             zIndex: 2,
-            marginTop: holidaysForDate.length > 0 ? `${holidaysForDate.length * (isMobile ? 16 : 20)}px` : '0',
+            marginTop: `${totalHolidayHeight}px`,
           }}
         >
           <a className="rbc-button-link" role="cell">
@@ -621,8 +629,6 @@ const allEvents = useMemo(() => {
       
       // FIXED: If clicking on month view cell, open day view for this date
       if (value && view === 'month') {
-        e.preventDefault();
-        e.stopPropagation();
         console.log('✅ Opening day view for:', value);
         setDate(value);
         setView('day');
@@ -631,13 +637,10 @@ const allEvents = useMemo(() => {
 
     return (
       <div 
-        className="rbc-day-bg-clickable" 
+        className="rbc-day-bg-wrapper" 
         onClick={handleCellClick}
         style={{ 
-          position: 'absolute',
-          inset: 0,
           cursor: view === 'month' ? 'pointer' : 'default',
-          zIndex: 0
         }}
       >
         {children}
@@ -839,13 +842,6 @@ const allEvents = useMemo(() => {
           position: relative !important;
         }
         
-        .custom-calendar .rbc-day-bg-clickable {
-          position: absolute;
-          inset: 0;
-          cursor: pointer;
-          z-index: 0;
-        }
-        
         .custom-calendar .rbc-date-cell {
           position: relative;
           z-index: 2;
@@ -930,31 +926,36 @@ const allEvents = useMemo(() => {
         
         .custom-calendar .rbc-toolbar-label {
           color: #1f2937;
-          font-weight: 600;
+          font-weight: 700;
+          font-size: 18px;
         }
         
         .custom-calendar .rbc-toolbar button {
-          border: 1px solid rgba(0,0,0,0.1);
-          background: rgba(255,255,255,0.9);
-          color: #374151;
-          border-radius: 6px;
-          padding: 6px 10px;
-          font-weight: 500;
+          border: 2px solid rgba(0,0,0,0.15);
+          background: rgba(255,255,255,0.95);
+          color: #1f2937;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-weight: 600;
+          font-size: 14px;
           transition: all 0.2s ease;
-          margin: 0 2px;
+          margin: 0 3px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
         
         .custom-calendar .rbc-toolbar button:hover:not(:disabled) {
           background: ${themeStyles.hover};
           border-color: ${themeStyles.accent};
           transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          box-shadow: 0 3px 6px rgba(0,0,0,0.12);
         }
         
         .custom-calendar .rbc-toolbar button.rbc-active {
           background: ${themeStyles.accent};
           color: white;
           border-color: ${themeStyles.accent};
+          font-weight: 700;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.15);
         }
         
         .custom-calendar .rbc-toolbar button:disabled {
@@ -1014,7 +1015,7 @@ const allEvents = useMemo(() => {
           
           .custom-calendar .rbc-toolbar-label {
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             margin: 0;
           }
           
@@ -1031,6 +1032,7 @@ const allEvents = useMemo(() => {
             min-width: auto;
             flex: 1;
             max-width: 80px;
+            font-weight: 600;
           }
           
           .custom-calendar .rbc-month-view {
