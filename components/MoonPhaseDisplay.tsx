@@ -179,11 +179,14 @@ const MoonPhaseDisplay: React.FC<MoonPhaseDisplayProps> = ({
         ${clickable ? 'cursor-pointer hover:scale-110 transition-transform duration-200' : ''}
         inline-flex items-center justify-center
         drop-shadow-sm
+        overflow-hidden
+        flex-shrink-0
       `}
       onClick={handleClick}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={label}
+      style={{ maxWidth: '100%', maxHeight: '100%' }}
     >
       {getMoonSVG(phase)}
     </div>
@@ -225,9 +228,13 @@ const MoonPhaseDisplay: React.FC<MoonPhaseDisplayProps> = ({
   return content;
 };
 
-// Export a simplified version for calendar grid cells
+// Export a simplified version for calendar grid cells - FIXED: Better containment
 export const MoonPhaseIcon: React.FC<{ phase: MoonPhaseType }> = ({ phase }) => {
-  return <MoonPhaseDisplay phase={phase} size="small" clickable={false} />;
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <MoonPhaseDisplay phase={phase} size="small" clickable={false} />
+    </div>
+  );
 };
 
 // Export helper function to get moon phase from resource
