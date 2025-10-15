@@ -221,7 +221,7 @@ export default function CalendarGrid({
     [filteredDbEvents]
   );
 
-  // FIXED: Separate holidays ONLY for month view date headers
+  // Separate holidays ONLY for month view date headers
   const { holidayEvents, nonHolidayEvents } = useMemo(() => {
     const holidays: UiEvent[] = [];
     const nonHolidays: UiEvent[] = [];
@@ -237,33 +237,24 @@ export default function CalendarGrid({
     return { holidayEvents: holidays, nonHolidayEvents: nonHolidays };
   }, [dbUiEvents]);
 
-// FIXED: Show holidays ONLY in month view as banners. In day/week/agenda, exclude holidays entirely
-const allEvents = useMemo(() => {
-  let events: UiEvent[];
-  
-  if (view === 'month') {
-    // Month view: holidays shown in header, regular events shown normally
-    events = [...nonHolidayEvents];
-  } else {
-    // Day/Week/Agenda view: show ONLY non-holiday events (exclude holidays entirely)
-    events = [...nonHolidayEvents];
-  }
-  
-  if (showMoon) {
-    events.push(...moonEvents);
-  }
-  
-  console.log('📊 Calendar Events:', {
-    view,
-    totalEvents: events.length,
-    nonHolidayCount: nonHolidayEvents.length,
-    holidayCount: holidayEvents.length,
-    moonCount: showMoon ? moonEvents.length : 0,
-    eventsList: events.map(e => ({ title: e.title, start: e.start, type: e.resource?.event_type }))
-  });
-  
-  return events;
-}, [view, nonHolidayEvents, holidayEvents, moonEvents, showMoon]);
+  // Show holidays ONLY in month view as banners. In day/week/agenda, exclude holidays entirely
+  const allEvents = useMemo(() => {
+    let events: UiEvent[];
+    
+    if (view === 'month') {
+      // Month view: holidays shown in header, regular events shown normally
+      events = [...nonHolidayEvents];
+    } else {
+      // Day/Week/Agenda view: show ONLY non-holiday events (exclude holidays entirely)
+      events = [...nonHolidayEvents];
+    }
+    
+    if (showMoon) {
+      events.push(...moonEvents);
+    }
+    
+    return events;
+  }, [view, nonHolidayEvents, holidayEvents, moonEvents, showMoon]);
 
   // Event styling based on type with pre/post event indicators
   const eventStyleGetter = (event: UiEvent): any => {
@@ -272,21 +263,22 @@ const allEvents = useMemo(() => {
     // Check if this event is selected in batch mode
     const isSelected = selectedBatchEvents?.has(resource?.id || event.id);
 
-    // Moon phase events - FIXED: Better containment
+    // Moon phase events - FIXED: Better containment with more space
     if (resource?.moonPhase) {
       return {
         style: {
           backgroundColor: 'transparent',
           border: 'none',
           color: '#1f2937',
-          padding: '2px',
+          padding: '4px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          minHeight: '20px',
-          maxHeight: '32px',
-          fontSize: '16px',
+          minHeight: '24px',
+          maxHeight: 'none',
+          height: 'auto',
+          fontSize: '20px',
           overflow: 'visible',
         },
       };
@@ -413,20 +405,20 @@ const allEvents = useMemo(() => {
   const EventComponent = ({ event }: EventProps<UiEvent>) => {
     const resource = event.resource as any;
     
-    // Handle moon phases - FIXED: Better rendering
+    // Handle moon phases - FIXED: Better rendering with proper space
     if (resource?.moonPhase) {
       if (MoonPhaseIcon && getMoonPhaseFromResource) {
         const moonPhase = getMoonPhaseFromResource(resource);
         if (moonPhase) {
           return (
-            <div className="flex items-center justify-center w-full h-full p-0" style={{ overflow: 'visible' }}>
+            <div className="flex items-center justify-center w-full h-full" style={{ padding: '4px', minHeight: '24px' }}>
               <MoonPhaseIcon phase={moonPhase} />
             </div>
           );
         }
       }
       return (
-        <div className="flex items-center justify-center w-full h-full text-base">
+        <div className="flex items-center justify-center w-full h-full" style={{ fontSize: '20px', padding: '4px', minHeight: '24px' }}>
           {getMoonEmoji(resource.moonPhase)}
         </div>
       );
@@ -508,7 +500,7 @@ const allEvents = useMemo(() => {
     );
   };
 
-// Custom Month Date Header component with clickable holiday banners (MONTH VIEW ONLY)
+  // Custom Month Date Header component with clickable holiday banners (MONTH VIEW ONLY)
   const MonthDateHeader = useCallback(({ date: cellDate, label }: any) => {
     // Find holidays for this date
     const cellDateStr = moment(cellDate).format('YYYY-MM-DD');
@@ -517,7 +509,7 @@ const allEvents = useMemo(() => {
       return holidayDateStr === cellDateStr;
     });
 
-    // FIXED: Calculate proper spacing for holiday banners
+    // Calculate proper spacing for holiday banners
     const bannerHeight = isMobile ? 18 : 23;
     const gapHeight = 2;
     const topPadding = 2;
@@ -605,31 +597,23 @@ const allEvents = useMemo(() => {
     );
   }, [holidayEvents, onSelectEvent, isMobile]);
 
-  // FIXED: Enhanced date cell wrapper with better click detection
+  // FIXED: Simplified date cell wrapper for proper click detection
   const DateCellWrapper = useCallback(({ children, value }: any) => {
     const handleCellClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       
-      console.log('🖱️ Cell click detected:', {
-        target: target.className,
-        view,
-        value
-      });
-      
-      // Don't intercept clicks on events or holiday banners
+      // Don't intercept clicks on events, holiday banners, or date links
       if (
         target.closest('.rbc-event') || 
         target.closest('.rbc-event-content') ||
         target.closest('.holiday-banner-link') ||
-        target.closest('.holiday-banners')
+        target.closest('.rbc-button-link')
       ) {
-        console.log('❌ Click was on event/holiday - ignoring');
         return;
       }
       
-      // FIXED: If clicking on month view cell, open day view for this date
+      // Open day view when clicking the cell in month view
       if (value && view === 'month') {
-        console.log('✅ Opening day view for:', value);
         setDate(value);
         setView('day');
       }
@@ -637,10 +621,11 @@ const allEvents = useMemo(() => {
 
     return (
       <div 
-        className="rbc-day-bg-wrapper" 
         onClick={handleCellClick}
         style={{ 
-          cursor: view === 'month' ? 'pointer' : 'default',
+          position: 'relative',
+          width: '100%',
+          height: '100%',
         }}
       >
         {children}
@@ -777,13 +762,11 @@ const allEvents = useMemo(() => {
           onNavigate={setDate}
           selectable={true}
           onSelectSlot={(slotInfo: any) => {
-            console.log('📅 CalendarGrid: Slot selected!', { slotInfo, view });
             if (onSelectSlot) {
               onSelectSlot(slotInfo);
             }
           }}
           onSelectEvent={(event: any) => {
-            console.log('📅 CalendarGrid: Event selected!', event);
             if (onSelectEvent) {
               onSelectEvent(event);
             }
@@ -838,16 +821,22 @@ const allEvents = useMemo(() => {
         }
         
         .custom-calendar .rbc-day-bg {
-          cursor: pointer !important;
           position: relative !important;
+          min-height: 100px;
+          background: white;
+          cursor: pointer;
+        }
+        
+        .custom-calendar .rbc-day-bg:hover {
+          background: ${themeStyles.hover} !important;
+          transition: background 0.2s ease;
         }
         
         .custom-calendar .rbc-date-cell {
           position: relative;
-          z-index: 2;
           color: #374151;
-          pointer-events: auto;
           padding-top: 2px;
+          min-height: 30px;
         }
         
         .holiday-banner-link {
@@ -897,8 +886,8 @@ const allEvents = useMemo(() => {
         .custom-calendar .rbc-event,
         .custom-calendar .rbc-event-content {
           position: relative;
-          z-index: 3;
           pointer-events: auto;
+          overflow: visible;
         }
         
         .custom-calendar .rbc-time-slot {
@@ -969,15 +958,6 @@ const allEvents = useMemo(() => {
           overflow: hidden;
         }
         
-        .custom-calendar .rbc-day-bg {
-          background: white;
-        }
-        
-        .custom-calendar .rbc-day-bg:hover {
-          background: ${themeStyles.hover} !important;
-          transition: background 0.2s ease;
-        }
-        
         .custom-calendar .rbc-slot-selection {
           background: ${themeStyles.selection};
           border: 2px dashed ${themeStyles.accent};
@@ -986,6 +966,15 @@ const allEvents = useMemo(() => {
         
         .custom-calendar .rbc-off-range-bg {
           background: rgba(156, 163, 175, 0.05);
+        }
+        
+        .custom-calendar .rbc-month-row {
+          min-height: 120px;
+          overflow: visible;
+        }
+        
+        .custom-calendar .rbc-row-content {
+          overflow: visible;
         }
         
         @media (hover: hover) {
@@ -1040,17 +1029,18 @@ const allEvents = useMemo(() => {
           }
           
           .custom-calendar .rbc-month-row {
-            min-height: 60px;
+            min-height: 80px;
           }
           
           .custom-calendar .rbc-date-cell {
             padding: 2px;
             font-size: 11px;
             font-weight: 500;
+            min-height: 28px;
           }
           
           .custom-calendar .rbc-day-bg {
-            min-height: 50px;
+            min-height: 70px;
           }
           
           .custom-calendar .rbc-event {
@@ -1100,7 +1090,9 @@ const allEvents = useMemo(() => {
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
-          padding: 0 !important;
+          padding: 4px !important;
+          overflow: visible !important;
+          height: auto !important;
         }
         
         .custom-calendar .rbc-event:focus {
