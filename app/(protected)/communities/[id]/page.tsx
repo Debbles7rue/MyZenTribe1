@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import CommunityEventCreator from "@/components/communities/CommunityEventCreator";
 
 interface Community {
   id: string;
@@ -107,6 +108,9 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
   
   // Event filters
   const [eventFilter, setEventFilter] = useState<"all" | "upcoming" | "business" | "member">("upcoming");
+  
+  // Event creator modal
+  const [showEventCreator, setShowEventCreator] = useState(false);
   
   // Modals
   const [showNewPost, setShowNewPost] = useState(false);
@@ -850,6 +854,22 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
         {/* EVENTS TAB - NOW WORKING! */}
         {activeTab === "events" && (
           <div className="space-y-4">
+            {/* Create Event Button - Members Only */}
+            {isMember && (
+              <div className="bg-white rounded-2xl shadow-sm p-4">
+                <button
+                  onClick={() => setShowEventCreator(true)}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <span className="text-xl">✨</span>
+                  <span>Create Community Event</span>
+                </button>
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  Create an event just for this community
+                </p>
+              </div>
+            )}
+
             {/* Event Filters */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <div className="flex flex-wrap gap-2">
@@ -908,17 +928,9 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
                 <p className="text-gray-600 mb-2">No events yet</p>
                 <p className="text-sm text-gray-500">
                   {isMember 
-                    ? "Create an event and share it with this community!"
+                    ? "Be the first to create a community event!"
                     : "Join the community to see and create events"}
                 </p>
-                {isMember && (
-                  <Link
-                    href="/calendar"
-                    className="inline-block mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
-                  >
-                    Create Event
-                  </Link>
-                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1150,6 +1162,21 @@ export default function CommunityDetailPage({ params }: { params: { id: string }
           </div>
         )}
       </div>
+
+      {/* UNIFIED EVENT CREATOR MODAL */}
+      {showEventCreator && userId && (
+        <UnifiedEventCreator
+          open={showEventCreator}
+          onClose={() => setShowEventCreator(false)}
+          userId={userId}
+          context="community"
+          communityId={params.id}
+          onSuccess={(event) => {
+            setShowEventCreator(false);
+            loadCommunityEvents(); // Reload the events list
+          }}
+        />
+      )}
 
       {/* NEW POST MODAL */}
       {showNewPost && (
