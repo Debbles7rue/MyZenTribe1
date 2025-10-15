@@ -2,31 +2,82 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [userId, setUserId] = useState<string | null | "loading">("loading");
   const [isAdmin, setIsAdmin] = useState(false);
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
+  
+  // Switch Hat feature
+  const [profileMode, setProfileMode] = useState<"personal" | "business">("personal");
+  const [hasBusinessProfile, setHasBusinessProfile] = useState(false);
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [showHatToggle, setShowHatToggle] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      setUserId(data.user?.id ?? null);
-      // Check is_app_admin in profiles table
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_app_admin')
-          .eq('id', data.user.id)
-          .single();
-        
-        setIsAdmin(!!profile?.is_app_admin);
-      }
-    });
+    checkUserAndBusiness();
   }, []);
+
+  async function checkUserAndBusiness() {
+    const { data } = await supabase.auth.getUser();
+    setUserId(data.user?.id ?? null);
+    
+    if (data.user) {
+      // Check is_app_admin
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_app_admin, profile_mode')
+        .eq('id', data.user.id)
+        .single();
+      
+      setIsAdmin(!!profile?.is_app_admin);
+      setProfileMode(profile?.profile_mode || "personal");
+
+      // Check if user has a business profile
+      const { data: businessProfile } = await supabase
+        .from('business_profiles')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .single();
+
+      if (businessProfile) {
+        setHasBusinessProfile(true);
+        setBusinessId(businessProfile.id);
+        setShowHatToggle(true);
+      }
+    }
+  }
+
+  // Switch between personal and business mode
+  async function switchHat(newMode: "personal" | "business") {
+    if (!userId || userId === "loading") return;
+
+    try {
+      // Update profile_mode in database
+      const { error } = await supabase
+        .from('profiles')
+        .update({ profile_mode: newMode })
+        .eq('id', userId);
+
+      if (!error) {
+        setProfileMode(newMode);
+        
+        // Redirect to appropriate page
+        if (newMode === "business") {
+          router.push('/business/dashboard');
+        } else {
+          router.push('/profile');
+        }
+      }
+    } catch (error) {
+      console.error('Error switching profile mode:', error);
+    }
+  }
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -85,6 +136,28 @@ export default function SiteHeader() {
             <span className="brand-zen">Zen</span>
             <span className="brand-tribe">Tribe</span>
           </Link>
+
+          {/* Switch Hat Toggle - Only show if user has business profile */}
+          {userId && userId !== "loading" && showHatToggle && (
+            <div className="hat-toggle-container">
+              <button
+                onClick={() => switchHat(profileMode === "personal" ? "business" : "personal")}
+                className="hat-toggle"
+                title={`Switch to ${profileMode === "personal" ? "Business" : "Personal"} Profile`}
+              >
+                <span className={`hat-option ${profileMode === "personal" ? "active" : ""}`}>
+                  👤
+                </span>
+                <span className="hat-divider">⇄</span>
+                <span className={`hat-option ${profileMode === "business" ? "active" : ""}`}>
+                  🏢
+                </span>
+              </button>
+              <div className="hat-label">
+                {profileMode === "personal" ? "Personal" : "Business"}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Loading State */}
@@ -139,12 +212,21 @@ export default function SiteHeader() {
                         </svg>
                         Personal Profile
                       </Link>
-                      <Link href="/business" className="menu-item">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M3 3h4v4H3V3zm6 0h4v4H9V3zM3 9h4v4H3V9zm6 0h4v4H9V9z"/>
-                        </svg>
-                        Business Profile
-                      </Link>
+                      {hasBusinessProfile ? (
+                        <Link href="/business/dashboard" className="menu-item">
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M3 3h4v4H3V3zm6 0h4v4H9V3zM3 9h4v4H3V9zm6 0h4v4H9V9z"/>
+                          </svg>
+                          Business Dashboard
+                        </Link>
+                      ) : (
+                        <Link href="/business/dashboard" className="menu-item">
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 2a1 1 0 011 1v4h4a1 1 0 110 2H9v4a1 1 0 11-2 0V9H3a1 1 0 110-2h4V3a1 1 0 011-1z"/>
+                          </svg>
+                          Create Business Profile
+                        </Link>
+                      )}
                     </div>
                   )}
                 </div>
@@ -286,11 +368,13 @@ export default function SiteHeader() {
           padding-bottom: 8px;
         }
 
-        /* Row 1: Brand Logo */
+        /* Row 1: Brand Logo + Hat Toggle */}
         .header-row-top {
           display: flex;
           justify-content: center;
           align-items: center;
+          gap: 12px;
+          position: relative;
         }
 
         .brand-logo {
@@ -323,7 +407,54 @@ export default function SiteHeader() {
           color: #1f2937;
         }
 
-        /* Row 2: Navigation */
+        /* Hat Toggle - Switch between Personal and Business */
+        .hat-toggle-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+        }
+
+        .hat-toggle {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          background: white;
+          border: 2px solid rgba(147, 51, 234, 0.2);
+          border-radius: 20px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .hat-toggle:hover {
+          border-color: rgba(147, 51, 234, 0.4);
+          box-shadow: 0 2px 8px rgba(147, 51, 234, 0.15);
+        }
+
+        .hat-option {
+          font-size: 16px;
+          opacity: 0.4;
+          transition: all 0.2s ease;
+        }
+
+        .hat-option.active {
+          opacity: 1;
+          transform: scale(1.2);
+        }
+
+        .hat-divider {
+          font-size: 12px;
+          color: #9333ea;
+        }
+
+        .hat-label {
+          font-size: 10px;
+          color: #6b7280;
+          font-weight: 500;
+        }
+
+        /* Row 2: Navigation */}
         .header-row-nav {
           display: flex;
           align-items: center;
@@ -331,7 +462,7 @@ export default function SiteHeader() {
           gap: 4px;
         }
 
-        /* Icon Navigation */
+        /* Icon Navigation */}
         .icon-nav {
           display: flex;
           align-items: center;
@@ -341,7 +472,7 @@ export default function SiteHeader() {
           flex-wrap: wrap;
         }
 
-        /* Navigation Icon Buttons - ICON ONLY */
+        /* Navigation Icon Buttons - ICON ONLY */}
         .nav-icon-btn {
           position: relative;
           display: flex;
@@ -395,12 +526,12 @@ export default function SiteHeader() {
           height: 16px;
         }
 
-        /* Labels always hidden for compact design */
+        /* Labels always hidden for compact design */}
         .nav-label {
           display: none;
         }
 
-        /* Profile Dropdown */
+        /* Profile Dropdown */}
         .profile-dropdown {
           position: relative;
         }
@@ -425,7 +556,7 @@ export default function SiteHeader() {
           top: calc(100% + 8px);
           left: 50%;
           transform: translateX(-50%);
-          min-width: 180px;
+          min-width: 200px;
           background: white;
           border-radius: 12px;
           box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
@@ -466,7 +597,7 @@ export default function SiteHeader() {
           opacity: 0.6;
         }
 
-        /* Header Actions */
+        /* Header Actions */}
         .header-actions {
           display: flex;
           align-items: center;
@@ -480,7 +611,7 @@ export default function SiteHeader() {
           flex-shrink: 0;
         }
 
-        /* Admin Button - Special styling */
+        /* Admin Button - Special styling */}
         .admin-btn {
           border-color: rgba(234, 179, 8, 0.2);
         }
@@ -498,13 +629,13 @@ export default function SiteHeader() {
           color: white;
         }
 
-        /* Safety Button */
+        /* Safety Button */}
         .safety-btn {
           min-width: 40px;
           height: 40px;
         }
 
-        /* Commitment Button - Purple heart theme */
+        /* Commitment Button - Purple heart theme */}
         .commitment-btn {
           min-width: 40px;
           height: 40px;
@@ -524,7 +655,7 @@ export default function SiteHeader() {
           color: white;
         }
 
-        /* Sign Out Button */
+        /* Sign Out Button */}
         .sign-out-btn {
           display: flex;
           align-items: center;
@@ -552,7 +683,7 @@ export default function SiteHeader() {
           display: none;
         }
 
-        /* Login Button */
+        /* Login Button */}
         .login-btn {
           display: flex;
           align-items: center;
@@ -587,7 +718,7 @@ export default function SiteHeader() {
           height: 80px;
         }
 
-        /* Tablet (600px+) - Still two rows but more spacing */
+        /* Tablet (600px+) - Still two rows but more spacing */}
         @media (min-width: 600px) {
           .header-container {
             padding: 0 12px;
@@ -637,7 +768,7 @@ export default function SiteHeader() {
           }
         }
 
-        /* Desktop (768px+) - Single row layout */
+        /* Desktop (768px+) - Single row layout */}
         @media (min-width: 768px) {
           .header-container {
             flex-direction: row;
@@ -702,7 +833,7 @@ export default function SiteHeader() {
           }
         }
 
-        /* Large Desktop (1024px+) */
+        /* Large Desktop (1024px+) */}
         @media (min-width: 1024px) {
           .header-container {
             padding: 0 20px;
