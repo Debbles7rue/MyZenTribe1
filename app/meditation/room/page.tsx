@@ -1,4 +1,4 @@
-// app/meditation/room/page.tsx - Clean Working Version
+// app/meditation/room/page.tsx - Updated Version
 "use client";
 
 import { useEffect, useState, useRef, Suspense } from 'react';
@@ -39,13 +39,12 @@ const MEDITATION_BACKGROUNDS = [
   },
 ];
 
-// Working meditation sounds
+// Working meditation sounds (Drum/Flute removed)
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: 'silent', description: 'Pure silence' },
   { name: 'Ocean Waves', file: 'ocean', description: 'Realistic wave sounds' },
   { name: 'Sacred Om', file: 'sacred', description: 'Om resonance 136Hz' },
   { name: 'Earth Resonance', file: 'earthhum', description: 'Deep grounding rumble' },
-  { name: 'Spirit Drum Journey', file: 'drumflute', description: 'Hypnotic drums & flute' },
 ];
 
 function MeditationRoomContent() {
@@ -149,97 +148,7 @@ function MeditationRoomContent() {
       return { noise, filter, gain };
     };
     
-    if (type === 'drumflute') {
-      // DEEP BASS DRUM - Slow heartbeat rhythm
-      const drumPattern = [0, 2, 4, 6, 8, 10, 12, 14];
-      drumPattern.forEach(time => {
-        const drumOsc = context.createOscillator();
-        const drumGain = context.createGain();
-        
-        drumOsc.frequency.value = 60;
-        drumOsc.type = 'sine';
-        
-        const startTime = context.currentTime + time;
-        
-        drumGain.gain.setValueAtTime(0, startTime);
-        drumGain.gain.linearRampToValueAtTime(0.6, startTime + 0.05);
-        drumGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
-        
-        drumOsc.connect(drumGain);
-        drumGain.connect(masterGain);
-        
-        drumOsc.start(startTime);
-        drumOsc.stop(startTime + 0.8);
-        
-        oscillators.push(drumOsc);
-        gains.push(drumGain);
-      });
-      
-      // HAND DRUM ACCENTS
-      const accentPattern = [1, 3, 5, 7, 9, 11, 13];
-      accentPattern.forEach(time => {
-        const accentOsc = context.createOscillator();
-        const accentGain = context.createGain();
-        
-        accentOsc.frequency.value = 180;
-        accentOsc.type = 'sine';
-        
-        const startTime = context.currentTime + time;
-        
-        accentGain.gain.setValueAtTime(0, startTime);
-        accentGain.gain.linearRampToValueAtTime(0.25, startTime + 0.03);
-        accentGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.4);
-        
-        accentOsc.connect(accentGain);
-        accentGain.connect(masterGain);
-        
-        accentOsc.start(startTime);
-        accentOsc.stop(startTime + 0.4);
-        
-        oscillators.push(accentOsc);
-        gains.push(accentGain);
-      });
-      
-      // ETHEREAL FLUTE MELODY
-      const fluteNotes = [293.66, 329.63, 392.00, 440.00, 523.25];
-      const melody = [0, 2, 1, 3, 2, 4, 3, 1, 0];
-      const noteDuration = 2.2;
-      
-      melody.forEach((noteIndex, i) => {
-        const fluteOsc = context.createOscillator();
-        const fluteGain = context.createGain();
-        
-        fluteOsc.frequency.value = fluteNotes[noteIndex];
-        fluteOsc.type = 'triangle';
-        
-        const startTime = context.currentTime + (i * 1.6) + 0.5;
-        
-        fluteGain.gain.setValueAtTime(0, startTime);
-        fluteGain.gain.linearRampToValueAtTime(0.15, startTime + 0.2);
-        fluteGain.gain.setValueAtTime(0.15, startTime + 1.4);
-        fluteGain.gain.linearRampToValueAtTime(0, startTime + noteDuration);
-        
-        const vibrato = context.createOscillator();
-        const vibratoGain = context.createGain();
-        vibrato.frequency.value = 4.5;
-        vibratoGain.gain.value = 4;
-        
-        vibrato.connect(vibratoGain);
-        vibratoGain.connect(fluteOsc.frequency);
-        
-        fluteOsc.connect(fluteGain);
-        fluteGain.connect(masterGain);
-        
-        vibrato.start(startTime);
-        vibrato.stop(startTime + noteDuration);
-        fluteOsc.start(startTime);
-        fluteOsc.stop(startTime + noteDuration);
-        
-        oscillators.push(fluteOsc);
-        oscillators.push(vibrato);
-        gains.push(fluteGain);
-      });
-    } else if (type === 'ocean') {
+    if (type === 'ocean') {
       // Ocean waves with filtered noise
       const ocean1 = createNoise(200, 0.35);
       const ocean2 = createNoise(400, 0.25);
