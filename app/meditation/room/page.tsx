@@ -1,11 +1,11 @@
-// app/meditation/room/page.tsx - Updated Prayer/Meditation Room with Working Audio
+// app/meditation/room/page.tsx - Clean Working Version
 "use client";
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-// Updated vibrant color backgrounds (removed sunset)
+// Vibrant color backgrounds
 const MEDITATION_BACKGROUNDS = [
   { 
     id: 'ocean', 
@@ -39,7 +39,7 @@ const MEDITATION_BACKGROUNDS = [
   },
 ];
 
-// Web Audio API ambient sounds - Working sounds + drumming/flute
+// Working meditation sounds
 const AMBIENT_SOUNDS = [
   { name: 'Silent', file: 'silent', description: 'Pure silence' },
   { name: 'Ocean Waves', file: 'ocean', description: 'Realistic wave sounds' },
@@ -100,13 +100,11 @@ function MeditationRoomContent() {
   };
 
   const createSoundscape = (type: string, context: AudioContext, masterGain: GainNode) => {
-    console.log('🎨 createSoundscape called with type:', type);
     const oscillators: OscillatorNode[] = [];
     const gains: GainNode[] = [];
     const nodes: AudioNode[] = [];
 
     const createOsc = (freq: number, type: OscillatorType = 'sine', vol: number = 0.1) => {
-      console.log('  📢 Creating oscillator:', freq, 'Hz, volume:', vol);
       const osc = context.createOscillator();
       const gain = context.createGain();
       osc.type = type;
@@ -116,17 +114,14 @@ function MeditationRoomContent() {
       gain.connect(masterGain);
       oscillators.push(osc);
       gains.push(gain);
-      console.log('  ✅ Oscillator created, total oscillators now:', oscillators.length);
       return { osc, gain };
     };
 
-    // Create noise buffer for nature sounds
     const createNoise = (filterFreq: number, vol: number = 0.3) => {
       const bufferSize = context.sampleRate * 2;
       const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
       const data = buffer.getChannelData(0);
       
-      // Generate white noise
       for (let i = 0; i < bufferSize; i++) {
         data[i] = Math.random() * 2 - 1;
       }
@@ -153,24 +148,19 @@ function MeditationRoomContent() {
       
       return { noise, filter, gain };
     };
-
-    console.log('🔍 BEFORE SWITCH STATEMENT, type is:', type, 'typeof:', typeof type);
     
     if (type === 'drumflute') {
-      console.log('🥁 Creating Spirit Drum Journey with rhythm and flute...');
-      
       // DEEP BASS DRUM - Slow heartbeat rhythm
-      const drumPattern = [0, 2, 4, 6, 8, 10, 12, 14]; // Every 2 seconds
+      const drumPattern = [0, 2, 4, 6, 8, 10, 12, 14];
       drumPattern.forEach(time => {
         const drumOsc = context.createOscillator();
         const drumGain = context.createGain();
         
-        drumOsc.frequency.value = 60; // Deep bass
+        drumOsc.frequency.value = 60;
         drumOsc.type = 'sine';
         
         const startTime = context.currentTime + time;
         
-        // Drum hit envelope (quick attack, decay)
         drumGain.gain.setValueAtTime(0, startTime);
         drumGain.gain.linearRampToValueAtTime(0.6, startTime + 0.05);
         drumGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
@@ -185,7 +175,7 @@ function MeditationRoomContent() {
         gains.push(drumGain);
       });
       
-      // HAND DRUM ACCENTS - Between bass hits
+      // HAND DRUM ACCENTS
       const accentPattern = [1, 3, 5, 7, 9, 11, 13];
       accentPattern.forEach(time => {
         const accentOsc = context.createOscillator();
@@ -210,32 +200,29 @@ function MeditationRoomContent() {
         gains.push(accentGain);
       });
       
-      // ETHEREAL FLUTE MELODY - Pentatonic scale floating over drums
-      // Notes: D, E, G, A, C (Native American inspired)
+      // ETHEREAL FLUTE MELODY
       const fluteNotes = [293.66, 329.63, 392.00, 440.00, 523.25];
-      const melody = [0, 2, 1, 3, 2, 4, 3, 1, 0]; // Pattern indices
-      const noteDuration = 2.2; // Longer notes for more overlap
+      const melody = [0, 2, 1, 3, 2, 4, 3, 1, 0];
+      const noteDuration = 2.2;
       
       melody.forEach((noteIndex, i) => {
         const fluteOsc = context.createOscillator();
         const fluteGain = context.createGain();
         
         fluteOsc.frequency.value = fluteNotes[noteIndex];
-        fluteOsc.type = 'triangle'; // Breathy flute sound
+        fluteOsc.type = 'triangle';
         
-        const startTime = context.currentTime + (i * 1.6) + 0.5; // Notes overlap now!
+        const startTime = context.currentTime + (i * 1.6) + 0.5;
         
-        // Smooth blending - quick attack, long sustain, gentle release
         fluteGain.gain.setValueAtTime(0, startTime);
-        fluteGain.gain.linearRampToValueAtTime(0.15, startTime + 0.2); // Quick attack
-        fluteGain.gain.setValueAtTime(0.15, startTime + 1.4); // Hold the note
-        fluteGain.gain.linearRampToValueAtTime(0, startTime + noteDuration); // Gentle fade while next note starts
+        fluteGain.gain.linearRampToValueAtTime(0.15, startTime + 0.2);
+        fluteGain.gain.setValueAtTime(0.15, startTime + 1.4);
+        fluteGain.gain.linearRampToValueAtTime(0, startTime + noteDuration);
         
-        // Add vibrato for organic feel
         const vibrato = context.createOscillator();
         const vibratoGain = context.createGain();
-        vibrato.frequency.value = 4.5; // Gentle vibrato
-        vibratoGain.gain.value = 4; // Subtle pitch variation
+        vibrato.frequency.value = 4.5;
+        vibratoGain.gain.value = 4;
         
         vibrato.connect(vibratoGain);
         vibratoGain.connect(fluteOsc.frequency);
@@ -252,113 +239,32 @@ function MeditationRoomContent() {
         oscillators.push(vibrato);
         gains.push(fluteGain);
       });
+    } else if (type === 'ocean') {
+      // Ocean waves with filtered noise
+      const ocean1 = createNoise(200, 0.35);
+      const ocean2 = createNoise(400, 0.25);
       
-      console.log('🥁 Spirit Drum Journey created with', oscillators.length, 'sound elements');
-    }
-
-    switch (type) {
-      case 'ocean':
-        // Ocean waves using filtered noise with slow modulation
-        const ocean1 = createNoise(200, 0.35);
-        const ocean2 = createNoise(400, 0.25);
-        
-        // Add wave-like modulation
-        const waveLFO = context.createOscillator();
-        waveLFO.frequency.value = 0.3;
-        const waveLFOGain = context.createGain();
-        waveLFOGain.gain.value = 100;
-        waveLFO.connect(waveLFOGain);
-        waveLFOGain.connect(ocean1.filter.frequency);
-        oscillators.push(waveLFO);
-        
-        // Deep ocean rumble
-        createOsc(55, 'sine', 0.06);
-        break;
-
-      case 'forest':
-        // Forest ambience with filtered noise for wind/rustling
-        createNoise(1000, 0.20); // Wind through trees
-        createNoise(3000, 0.15); // Rustling leaves
-        
-        // Bird-like chirps with modulated high frequencies
-        const bird1 = createOsc(2000, 'sine', 0.04);
-        const bird2 = createOsc(2400, 'sine', 0.03);
-        
-        // Gentle forest hum
-        createOsc(150, 'sine', 0.04);
-        break;
-
-      case 'sacred':
-        // Om-like resonance with harmonics (no noise)
-        createOsc(136.1, 'sine', 0.06);
-        createOsc(272.2, 'sine', 0.04);
-        createOsc(408.3, 'sine', 0.02);
-        createOsc(68, 'sine', 0.03);
-        break;
-
-      case 'deeppeace':
-        // Very low, grounding frequencies with subtle noise
-        createOsc(60, 'sine', 0.06);
-        createOsc(90, 'sine', 0.05);
-        createOsc(120, 'triangle', 0.03);
-        createNoise(100, 0.02); // Very low rumble
-        break;
-
-      case '432hz':
-        // 432 Hz healing frequency with harmonics
-        createOsc(432, 'sine', 0.05);
-        createOsc(216, 'sine', 0.04);
-        createOsc(864, 'sine', 0.02);
-        createOsc(108, 'sine', 0.03);
-        createNoise(800, 0.01); // Subtle texture
-        break;
-
-      case '528hz':
-        // 528 Hz love frequency with harmonics
-        createOsc(528, 'sine', 0.05);
-        createOsc(264, 'sine', 0.04);
-        createOsc(1056, 'sine', 0.02);
-        createOsc(132, 'sine', 0.03);
-        createNoise(1000, 0.01); // Subtle texture
-        break;
-
-      case 'celestial':
-        // High, ethereal frequencies with shimmer
-        createOsc(528, 'sine', 0.03);
-        createOsc(639, 'sine', 0.03);
-        createOsc(741, 'sine', 0.02);
-        createOsc(852, 'sine', 0.02);
-        createNoise(5000, 0.02); // High shimmer
-        break;
-
-      case 'earthhum':
-        // Very low earth resonance with rumble
-        createOsc(7.83, 'sine', 0.08);
-        createOsc(40, 'sine', 0.06);
-        createOsc(80, 'sine', 0.04);
-        createNoise(60, 0.03); // Deep rumble
-        break;
-
-      case 'starlight':
-        // Gentle, shimmering ambient (NOT emergency alert!)
-        createOsc(432, 'sine', 0.02); // Base healing freq
-        createOsc(528, 'sine', 0.015); // Love freq
-        createOsc(639, 'sine', 0.01); // Connection
-        createNoise(6000, 0.03); // Soft high shimmer
-        
-        // Very gentle high sparkle
-        const sparkle = createOsc(1200, 'sine', 0.008);
-        const sparkleLFO = context.createOscillator();
-        sparkleLFO.frequency.value = 0.5;
-        const sparkleLFOGain = context.createGain();
-        sparkleLFOGain.gain.value = 0.005;
-        sparkleLFO.connect(sparkleLFOGain);
-        sparkleLFOGain.connect(sparkle.gain.gain);
-        oscillators.push(sparkleLFO);
-        break;
-
-      default:
-        break;
+      const waveLFO = context.createOscillator();
+      waveLFO.frequency.value = 0.3;
+      const waveLFOGain = context.createGain();
+      waveLFOGain.gain.value = 100;
+      waveLFO.connect(waveLFOGain);
+      waveLFOGain.connect(ocean1.filter.frequency);
+      oscillators.push(waveLFO);
+      
+      createOsc(55, 'sine', 0.06);
+    } else if (type === 'sacred') {
+      // Om resonance with harmonics
+      createOsc(136.1, 'sine', 0.06);
+      createOsc(272.2, 'sine', 0.04);
+      createOsc(408.3, 'sine', 0.02);
+      createOsc(68, 'sine', 0.03);
+    } else if (type === 'earthhum') {
+      // Earth resonance with deep rumble
+      createOsc(7.83, 'sine', 0.20);
+      createOsc(40, 'sine', 0.16);
+      createOsc(80, 'sine', 0.12);
+      createNoise(60, 0.12);
     }
 
     return { oscillators, gains, nodes };
@@ -368,57 +274,41 @@ function MeditationRoomContent() {
     if (!selectedSound || selectedSound === 'silent') return;
     
     try {
-      console.log('🔊 Starting sound:', selectedSound);
       setIsLoading(true);
       setAudioError('');
       
-      // Stop any existing sound
       stopSound();
       
-      // Create audio context
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       audioContextRef.current = new AudioContext();
-      console.log('🔊 Audio context created, state:', audioContextRef.current.state);
       
-      // Create master gain for volume control
       const masterGain = audioContextRef.current.createGain();
       masterGain.gain.value = volume;
       masterGain.connect(audioContextRef.current.destination);
-      console.log('🔊 Master gain created, volume:', volume);
       
-      // Create the soundscape
       const { oscillators, gains, nodes } = createSoundscape(
         selectedSound, 
         audioContextRef.current, 
         masterGain
       );
       
-      console.log('🔊 Soundscape created. Oscillators:', oscillators.length, 'Nodes:', nodes.length);
-      
-      // Store references
       oscillatorsRef.current = oscillators;
       gainNodesRef.current = gains;
       gainNodesRef.current.push(masterGain);
       audioNodesRef.current = nodes;
       
-      // Start all oscillators and buffer sources
       const now = audioContextRef.current.currentTime;
-      console.log('🔊 Starting oscillators at time:', now);
-      oscillators.forEach((osc, i) => {
-        console.log(`🔊 Starting oscillator ${i}:`, osc.frequency.value, 'Hz');
-        osc.start(now);
-      });
+      oscillators.forEach(osc => osc.start(now));
       nodes.forEach(node => {
         if (node instanceof AudioBufferSourceNode) {
           node.start(now);
         }
       });
       
-      console.log('🔊 All oscillators started, audio should be playing!');
       setIsPlaying(true);
       setIsLoading(false);
     } catch (error: any) {
-      console.error('❌ Error playing audio:', error);
+      console.error('Error playing audio:', error);
       setAudioError(`Audio failed: ${error.message || 'Unknown error'}`);
       setIsPlaying(false);
       setIsLoading(false);
@@ -427,32 +317,20 @@ function MeditationRoomContent() {
 
   const stopSound = () => {
     try {
-      // Stop all oscillators
       oscillatorsRef.current.forEach(osc => {
-        try {
-          osc.stop();
-        } catch (e) {
-          // Already stopped
-        }
+        try { osc.stop(); } catch (e) {}
       });
       
-      // Stop all buffer sources (noise generators)
       audioNodesRef.current.forEach(node => {
         if (node instanceof AudioBufferSourceNode) {
-          try {
-            node.stop();
-          } catch (e) {
-            // Already stopped
-          }
+          try { node.stop(); } catch (e) {}
         }
       });
       
-      // Clear references
       oscillatorsRef.current = [];
       gainNodesRef.current = [];
       audioNodesRef.current = [];
       
-      // Close audio context
       if (audioContextRef.current) {
         audioContextRef.current.close();
         audioContextRef.current = null;
@@ -489,7 +367,6 @@ function MeditationRoomContent() {
 
   const changeVolume = (newVolume: number) => {
     setVolume(newVolume);
-    // Update master gain if audio is playing
     if (gainNodesRef.current.length > 0) {
       const masterGain = gainNodesRef.current[gainNodesRef.current.length - 1];
       masterGain.gain.value = newVolume;
@@ -504,7 +381,6 @@ function MeditationRoomContent() {
       await startSound();
     }
     
-    // Track session start in database
     if (currentUser) {
       try {
         await supabase
@@ -527,7 +403,6 @@ function MeditationRoomContent() {
       const minutes = Math.floor(sessionDuration / 60);
       const seconds = sessionDuration % 60;
       
-      // Update session end in database
       if (currentUser) {
         try {
           const { data } = await supabase
@@ -565,7 +440,6 @@ function MeditationRoomContent() {
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${currentBg.gradient} transition-all duration-1000`}>
-      {/* Header */}
       <div className="bg-black/20 backdrop-blur-sm text-white p-4">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
@@ -581,10 +455,8 @@ function MeditationRoomContent() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
-          {/* Timer Display */}
           {isActive && (
             <div className="text-center text-white mb-8">
               <div className="text-5xl md:text-6xl font-light mb-2">{formatTime(sessionDuration)}</div>
@@ -592,7 +464,6 @@ function MeditationRoomContent() {
             </div>
           )}
 
-          {/* Control Panel */}
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 text-white">
             {!isActive ? (
               <div className="text-center">
@@ -601,7 +472,6 @@ function MeditationRoomContent() {
                 </div>
                 <h2 className="text-2xl font-bold mb-4">Ready to Begin?</h2>
                 
-                {/* Background Selection */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium mb-2">Choose Your Sacred Space</label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -622,7 +492,6 @@ function MeditationRoomContent() {
                   </div>
                 </div>
 
-                {/* Sound Controls */}
                 <div className="mb-6 text-left">
                   <label className="flex items-center gap-3 mb-3">
                     <input
@@ -718,7 +587,6 @@ function MeditationRoomContent() {
             )}
           </div>
 
-          {/* Prayer/Meditation Tips */}
           <div className="mt-6 bg-white/10 backdrop-blur-md rounded-2xl p-6 text-white">
             <h3 className="font-semibold mb-3">Prayer & Meditation Tips</h3>
             <ul className="space-y-2 text-sm opacity-90">
