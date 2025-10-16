@@ -1,6 +1,4 @@
-// lib/notifications/send-notifications.ts
-// Complete file for sending all types of notifications
-
+// lib/notifications/send-notifications.ts - FIXED VERSION
 import { createClient } from '@/lib/supabase/client';
 
 const supabase = createClient();
@@ -15,7 +13,8 @@ export async function sendNotification({
   entityId,
   actorId,
   entityTable,
-  dueAt
+  dueAt,
+  metadata
 }: {
   userId: string;
   type: string;
@@ -26,13 +25,14 @@ export async function sendNotification({
   actorId?: string;
   entityTable?: string;
   dueAt?: string;
+  metadata?: any;
 }) {
   try {
     const { data, error } = await supabase
       .from('notifications')
       .insert({
         user_id: userId,
-        recipient_id: userId, // Your table has both user_id and recipient_id
+        recipient_id: userId,
         type,
         title,
         body: body || '',
@@ -42,6 +42,8 @@ export async function sendNotification({
         entity_table: entityTable,
         due_at: dueAt,
         is_read: false,
+        read_at: null,
+        metadata: metadata || null,
         created_at: new Date().toISOString()
       })
       .select()
@@ -49,10 +51,10 @@ export async function sendNotification({
 
     if (error) throw error;
     
-    console.log('Notification sent successfully:', data);
+    console.log('✅ Notification sent successfully:', { type, userId: userId.substring(0, 8) });
     return { success: true, data };
   } catch (error) {
-    console.error('Error sending notification:', error);
+    console.error('❌ Error sending notification:', error);
     return { success: false, error };
   }
 }
@@ -79,7 +81,6 @@ export async function sendCarpoolInvites({
   message?: string;
 }) {
   try {
-    // Create notifications for each invited user
     const notifications = invitedUserIds.map(userId => ({
       user_id: userId,
       recipient_id: userId,
@@ -91,6 +92,7 @@ export async function sendCarpoolInvites({
       entity_table: 'carpool_groups',
       actor_id: inviterUserId,
       is_read: false,
+      read_at: null,
       created_at: new Date().toISOString()
     }));
 
@@ -101,10 +103,10 @@ export async function sendCarpoolInvites({
 
     if (error) throw error;
     
-    console.log(`Sent ${notifications.length} carpool invites`);
+    console.log(`✅ Sent ${notifications.length} carpool invites`);
     return { success: true, data };
   } catch (error) {
-    console.error('Error sending carpool invites:', error);
+    console.error('❌ Error sending carpool invites:', error);
     return { success: false, error };
   }
 }
@@ -311,7 +313,7 @@ export async function sendPostReaction({
   reactorId: string;
   reactorName: string;
   postId: string;
-  reactionType: string; // like, love, laugh, etc.
+  reactionType: string;
   contentType?: 'post' | 'album';
 }) {
   const emoji = reactionType === 'like' ? '👍' : 
@@ -553,9 +555,13 @@ export async function deleteOldReadNotifications(userId: string, daysOld = 30) {
 
 // Mark multiple notifications as read
 export async function markNotificationsRead(notificationIds: string[]) {
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true, read_at: new Date().toISOString() })
+    .update({ 
+      is_read: true, 
+      read_at: now 
+    })
     .in('id', notificationIds);
     
   if (error) {
