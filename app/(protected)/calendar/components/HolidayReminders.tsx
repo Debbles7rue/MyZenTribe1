@@ -122,7 +122,6 @@ const getCurrentYearHolidays = (year: number) => {
     { name: "Yom Kippur", date: `${year}-10-12`, emoji: "📖", description: "Day of Atonement", category: 'international', color: '#8B5CF6' },
     { name: "Sukkot", date: `${year}-10-17`, emoji: "🌿", description: "Feast of Tabernacles", category: 'international', color: '#10B981' },
     { name: "Diwali", date: `${year}-11-01`, emoji: "🪔", description: "Festival of Lights", category: 'international', color: '#F59E0B' },
-    { name: "Day of the Dead", date: `${year}-11-02`, emoji: "💀", description: "Día de los Muertos", category: 'international', color: '#7C3AED' },
     { name: "Guy Fawkes Day", date: `${year}-11-05`, emoji: "🎆", description: "Bonfire Night (UK)", category: 'international', color: '#DC2626' },
     { name: "Remember Remember the 5th of November", date: `${year}-11-05`, emoji: "🔥", description: "Gunpowder Plot anniversary", category: 'international', color: '#EF4444' },
     { name: "Remembrance Day (Canada)", date: `${year}-11-11`, emoji: "🌺", description: "Honor veterans", category: 'international', color: '#DC2626' },
