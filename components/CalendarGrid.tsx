@@ -500,7 +500,7 @@ export default function CalendarGrid({
     );
   };
 
-  // Custom Month Date Header component with clickable holiday banners (MONTH VIEW ONLY)
+  // FIXED: Custom Month Date Header component with properly positioned holiday banners
   const MonthDateHeader = useCallback(({ date: cellDate, label }: any) => {
     // Find holidays for this date
     const cellDateStr = moment(cellDate).format('YYYY-MM-DD');
@@ -509,30 +509,22 @@ export default function CalendarGrid({
       return holidayDateStr === cellDateStr;
     });
 
-    // Calculate proper spacing for holiday banners
-    const bannerHeight = isMobile ? 18 : 23;
-    const gapHeight = 2;
-    const topPadding = 2;
-    const totalHolidayHeight = holidaysForDate.length > 0 
-      ? (holidaysForDate.length * bannerHeight) + ((holidaysForDate.length - 1) * gapHeight) + topPadding
-      : 0;
-
     return (
-      <div className="rbc-date-cell">
-        {/* Holiday Banners - at top (MONTH VIEW ONLY) */}
+      <div className="rbc-date-cell" style={{ position: 'relative' }}>
+        {/* Holiday Banners - absolutely positioned at top (MONTH VIEW ONLY) */}
         {holidaysForDate.length > 0 && (
           <div 
             className="holiday-banners"
             style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 1,
+              top: '2px',
+              left: '2px',
+              right: '2px',
+              zIndex: 2,
               display: 'flex',
               flexDirection: 'column',
-              gap: '1px',
-              padding: '2px',
+              gap: '2px',
+              pointerEvents: 'auto',
             }}
           >
             {holidaysForDate.map((holiday, idx) => (
@@ -581,38 +573,29 @@ export default function CalendarGrid({
           </div>
         )}
         
-        {/* Date number - below holidays */}
-        <div 
-          style={{ 
-            position: 'relative',
-            zIndex: 2,
-            marginTop: `${totalHolidayHeight}px`,
-          }}
-        >
-          <a className="rbc-button-link" role="cell">
-            {label}
-          </a>
-        </div>
+        {/* Date number - stays in natural position */}
+        <a className="rbc-button-link" role="cell">
+          {label}
+        </a>
       </div>
     );
   }, [holidayEvents, onSelectEvent, isMobile]);
 
-  // FIXED: Simplified date cell wrapper for proper click detection
+  // FIXED: Improved date cell wrapper for better click detection
   const DateCellWrapper = useCallback(({ children, value }: any) => {
     const handleCellClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       
-      // Don't intercept clicks on events, holiday banners, or date links
+      // Don't intercept clicks on events or holiday banners
       if (
         target.closest('.rbc-event') || 
         target.closest('.rbc-event-content') ||
-        target.closest('.holiday-banner-link') ||
-        target.closest('.rbc-button-link')
+        target.closest('.holiday-banner-link')
       ) {
         return;
       }
       
-      // Open day view when clicking the cell in month view
+      // Open day view when clicking anywhere in the cell in month view
       if (value && view === 'month') {
         setDate(value);
         setView('day');
@@ -626,6 +609,7 @@ export default function CalendarGrid({
           position: 'relative',
           width: '100%',
           height: '100%',
+          cursor: 'pointer',
         }}
       >
         {children}
@@ -800,7 +784,7 @@ export default function CalendarGrid({
             if (!isMobile) e.preventDefault();
           }}
           style={{
-            minHeight: isMobile ? 500 : 650,
+            minHeight: isMobile ? 500 : 750,
             fontFamily: 'system-ui, -apple-system, sans-serif',
             backgroundColor: 'rgba(255, 255, 255, 0.98)',
             borderRadius: '8px',
@@ -841,6 +825,7 @@ export default function CalendarGrid({
         
         .holiday-banner-link {
           position: relative;
+          z-index: 3;
         }
         
         .holiday-banner-link::after {
@@ -955,7 +940,7 @@ export default function CalendarGrid({
         .custom-calendar .rbc-month-view {
           background: white;
           border-radius: 8px;
-          overflow: hidden;
+          overflow: visible;
         }
         
         .custom-calendar .rbc-slot-selection {
