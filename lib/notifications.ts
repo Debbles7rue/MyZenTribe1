@@ -1,26 +1,29 @@
-// lib/notifications.ts
+// lib/notifications.ts - FIXED VERSION
 import { supabase } from "@/lib/supabaseClient";
 
 export type NotificationRow = {
   id: string;
   recipient_id: string;
-  type: string;              // e.g., 'friend.accepted','event.upcoming','todo.due','reminder.due','community.invited'
+  user_id: string;
+  type: string;
   title: string;
   body: string | null;
-  target_url: string | null; // deep link: '/calendar?focus=<id>', '/friends/<id>/edit?new=1', etc.
+  target_url: string | null;
   entity_table: string | null;
   entity_id: string | null;
   actor_id: string | null;
-  due_at: string | null;     // ISO
-  created_at: string;        // ISO
-  read_at: string | null;    // ISO
+  due_at: string | null;
+  created_at: string;
+  read_at: string | null;
+  is_read: boolean;
+  metadata: any | null;
 };
 
 export type ListOpts = {
   onlyUnread?: boolean;
-  type?: string;           // filter by type
-  pageSize?: number;       // default 20
-  before?: string | null;  // pagination cursor (created_at)
+  type?: string;
+  pageSize?: number;
+  before?: string | null;
 };
 
 export async function getUserId(): Promise<string | null> {
@@ -41,12 +44,19 @@ export async function listNotifications(opts: ListOpts = {}) {
     .order("created_at", { ascending: false })
     .limit(pageSize);
 
-  if (onlyUnread) q = q.is("read_at", null);
+  if (onlyUnread) q = q.eq("is_read", false);
   if (type) q = q.eq("type", type);
   if (before) q = q.lt("created_at", before);
 
   const { data, error } = await q;
-  return { rows: (data || []) as NotificationRow[], error: error?.message || null };
+  
+  if (error) {
+    console.error("Error fetching notifications:", error);
+    return { rows: [], error: error.message };
+  }
+  
+  console.log(`✅ Fetched ${data?.length || 0} notifications for user ${me.substring(0, 8)}`);
+  return { rows: (data || []) as NotificationRow[], error: null };
 }
 
 export async function unreadCount() {
@@ -60,38 +70,69 @@ export async function unreadCount() {
     .select("unread")
     .single();
 
-  if (!viewErr && viewData) return viewData.unread ?? 0;
+  if (!viewErr && viewData) {
+    console.log(`📬 Unread notifications (from view): ${viewData.unread ?? 0}`);
+    return viewData.unread ?? 0;
+  }
 
-  // Fallback
-  const { count } = await supabase
+  // Fallback to direct count
+  const { count, error } = await supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("recipient_id", me)
-    .is("read_at", null);
+    .eq("is_read", false);
 
+  if (error) {
+    console.error("Error fetching unread count:", error);
+    return 0;
+  }
+
+  console.log(`📬 Unread notifications (from count): ${count || 0}`);
   return count ?? 0;
 }
 
 export async function markRead(id: string) {
   const me = await getUserId();
   if (!me) return { ok: false, error: "Not signed in" };
+  
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from("notifications")
-    .update({ read_at: new Date().toISOString() })
+    .update({ 
+      read_at: now,
+      is_read: true 
+    })
     .eq("id", id)
     .eq("recipient_id", me);
-  return { ok: !error, error: error?.message || null };
+    
+  if (error) {
+    console.error("Error marking notification as read:", error);
+    return { ok: false, error: error.message };
+  }
+  
+  return { ok: true, error: null };
 }
 
 export async function markAllRead() {
   const me = await getUserId();
   if (!me) return { ok: false, error: "Not signed in" };
+  
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from("notifications")
-    .update({ read_at: new Date().toISOString() })
+    .update({ 
+      read_at: now,
+      is_read: true 
+    })
     .eq("recipient_id", me)
-    .is("read_at", null);
-  return { ok: !error, error: error?.message || null };
+    .eq("is_read", false);
+    
+  if (error) {
+    console.error("Error marking all notifications as read:", error);
+    return { ok: false, error: error.message };
+  }
+  
+  return { ok: true, error: null };
 }
 
 // Create a new notification
@@ -105,11 +146,12 @@ export async function createNotification(data: {
   entity_id?: string | null;
   actor_id?: string | null;
   due_at?: string | null;
+  metadata?: any;
 }) {
   const { error } = await supabase
     .from("notifications")
     .insert({
-      user_id: data.recipient_id,        // ADDED: Set user_id for RLS policies
+      user_id: data.recipient_id,
       recipient_id: data.recipient_id,
       type: data.type,
       title: data.title,
@@ -119,26 +161,50 @@ export async function createNotification(data: {
       entity_id: data.entity_id || null,
       actor_id: data.actor_id || null,
       due_at: data.due_at || null,
+      is_read: false,
+      read_at: null,
+      metadata: data.metadata || null,
     });
 
-  return { ok: !error, error: error?.message || null };
+  if (error) {
+    console.error("Error creating notification:", error);
+    return { ok: false, error: error.message };
+  }
+  
+  console.log(`✅ Created notification for user ${data.recipient_id.substring(0, 8)}`);
+  return { ok: true, error: null };
 }
 
-// Realtime subscription (INSERT/UPDATE/DELETE on your own notifications)
+// Realtime subscription
 export async function subscribeNotifications(
   onChange: (payload: { event: "INSERT" | "UPDATE" | "DELETE" }) => void
 ) {
   const me = await getUserId();
-  if (!me) return null;
+  if (!me) {
+    console.warn("⚠️ Cannot subscribe to notifications: user not signed in");
+    return null;
+  }
 
+  console.log(`🔔 Subscribing to notifications for user ${me.substring(0, 8)}`);
+  
   const channel = supabase
-    .channel("notifications-rt")
+    .channel(`notifications-rt-${me}`)
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${me}` },
-      () => onChange({ event: "INSERT" })
+      { 
+        event: "*", 
+        schema: "public", 
+        table: "notifications", 
+        filter: `recipient_id=eq.${me}` 
+      },
+      (payload) => {
+        console.log("🔔 Notification event received:", payload.eventType);
+        onChange({ event: payload.eventType as any });
+      }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.log("🔔 Subscription status:", status);
+    });
 
   return channel;
 }
