@@ -3,6 +3,20 @@ import { createClient } from '@/lib/supabase/client';
 
 const supabase = createClient();
 
+// Helper function to determine 'kind' from 'type'
+function getNotificationKind(type: string): string {
+  if (type.startsWith('friend.')) return 'friend';
+  if (type.startsWith('event.')) return 'event';
+  if (type.startsWith('community.')) return 'community';
+  if (type.startsWith('carpool.')) return 'event';
+  if (type.startsWith('system.')) return 'system';
+  if (type.startsWith('todo.') || type.startsWith('reminder.')) return 'warning';
+  if (type.startsWith('post.') || type.startsWith('album.') || type.startsWith('comment.')) return 'info';
+  if (type.startsWith('message.')) return 'info';
+  if (type.startsWith('gift.')) return 'success';
+  return 'info'; // default
+}
+
 // Main function to send any notification
 export async function sendNotification({
   userId,
@@ -28,12 +42,15 @@ export async function sendNotification({
   metadata?: any;
 }) {
   try {
+    const kind = getNotificationKind(type);
+    
     const { data, error } = await supabase
       .from('notifications')
       .insert({
         user_id: userId,
         recipient_id: userId,
         type,
+        kind,
         title,
         body: body || '',
         target_url: targetUrl,
@@ -51,7 +68,7 @@ export async function sendNotification({
 
     if (error) throw error;
     
-    console.log('✅ Notification sent successfully:', { type, userId: userId.substring(0, 8) });
+    console.log('✅ Notification sent successfully:', { type, kind, userId: userId.substring(0, 8) });
     return { success: true, data };
   } catch (error) {
     console.error('❌ Error sending notification:', error);
