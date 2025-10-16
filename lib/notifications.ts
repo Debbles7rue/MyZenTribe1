@@ -135,6 +135,20 @@ export async function markAllRead() {
   return { ok: true, error: null };
 }
 
+// Helper function to determine 'kind' from 'type'
+function getNotificationKind(type: string): string {
+  if (type.startsWith('friend.')) return 'friend';
+  if (type.startsWith('event.')) return 'event';
+  if (type.startsWith('community.')) return 'community';
+  if (type.startsWith('carpool.')) return 'event';
+  if (type.startsWith('system.')) return 'system';
+  if (type.startsWith('todo.') || type.startsWith('reminder.')) return 'warning';
+  if (type.startsWith('post.') || type.startsWith('album.') || type.startsWith('comment.')) return 'info';
+  if (type.startsWith('message.')) return 'info';
+  if (type.startsWith('gift.')) return 'success';
+  return 'info'; // default
+}
+
 // Create a new notification
 export async function createNotification(data: {
   recipient_id: string;
@@ -148,12 +162,15 @@ export async function createNotification(data: {
   due_at?: string | null;
   metadata?: any;
 }) {
+  const kind = getNotificationKind(data.type);
+  
   const { error } = await supabase
     .from("notifications")
     .insert({
       user_id: data.recipient_id,
       recipient_id: data.recipient_id,
       type: data.type,
+      kind: kind,
       title: data.title,
       body: data.body || null,
       target_url: data.target_url || null,
@@ -171,7 +188,7 @@ export async function createNotification(data: {
     return { ok: false, error: error.message };
   }
   
-  console.log(`✅ Created notification for user ${data.recipient_id.substring(0, 8)}`);
+  console.log(`✅ Created notification for user ${data.recipient_id.substring(0, 8)} (type: ${data.type}, kind: ${kind})`);
   return { ok: true, error: null };
 }
 
