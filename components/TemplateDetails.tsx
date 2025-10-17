@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/components/ToastProvider";
+import TemplateEditor from "./TemplateEditor";
 import type { DBEvent } from "@/lib/types";
 
 interface TemplateDetailsProps {
@@ -23,6 +24,7 @@ export default function TemplateDetails({
   const { showToast } = useToast();
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
 
   if (!event) return null;
 
@@ -256,10 +258,7 @@ export default function TemplateDetails({
                 {isCreator && (
                   <>
                     <button
-                      onClick={() => showToast({ 
-                        type: 'info', 
-                        message: '🚧 Template editing coming soon! For now, delete and recreate.' 
-                      })}
+                      onClick={() => setShowEditor(true)}
                       className="px-5 py-2.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 font-semibold transition-all shadow-sm hover:shadow-md"
                     >
                       ✏️ Edit Template
@@ -323,6 +322,20 @@ export default function TemplateDetails({
         <div 
           className="fixed inset-0 z-40" 
           onClick={() => setShowDeleteMenu(false)}
+        />
+      )}
+
+      {/* Template Editor Modal */}
+      {showEditor && (
+        <TemplateEditor
+          event={event}
+          onClose={() => setShowEditor(false)}
+          onSave={() => {
+            setShowEditor(false);
+            onClose();
+            if (onDelete) onDelete(event.id);
+          }}
+          currentUserId={currentUserId}
         />
       )}
 
