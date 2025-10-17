@@ -2,7 +2,6 @@
 const path = require("path");
 
 module.exports = {
-  output: 'standalone', // or 'export' depending on your setup
   reactStrictMode: true,
   // Keep builds moving while we stabilize types/lint (optional; remove later if you like)
   eslint: { ignoreDuringBuilds: true },
