@@ -436,10 +436,27 @@
   touch-action: manipulation;
 }
 
+.compactSinglePhoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;  /* ← CHANGE TO THIS */
+  transition: transform 0.3s ease;
+}
+
+.compactPhotoItem {
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  background: #f7fafc;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+  touch-action: manipulation;
+}
+
 .compactPhotoItem img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   transition: transform 0.3s ease;
 }
 
