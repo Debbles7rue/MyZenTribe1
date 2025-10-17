@@ -1,3 +1,4 @@
+/* components/PostCard/styles.module.css */
 /* PostCard Modular Styles - Enhanced Mobile Optimization */
 
 /* ======================
@@ -361,12 +362,12 @@
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   background: white;
-  min-height: 320px;
+  min-height: 280px;
 }
 
 .compactSinglePhoto {
   width: 100%;
-  height: 320px;
+  height: 280px;
   cursor: pointer;
   overflow: hidden;
   border-radius: 12px;
@@ -465,7 +466,7 @@
 }
 
 /* ======================
-   EXPANDED PHOTO GRID
+   EXPANDED PHOTO GRID - FIXED SIZING
    ====================== */
 
 .photoGridExpanded {
@@ -493,7 +494,8 @@
 .individualPhoto {
   width: 100%;
   height: auto;
-  max-height: 600px;
+  /* FIXED: Reduced from 600px to prevent oversized photos */
+  max-height: 450px;
   object-fit: contain;
   cursor: pointer;
   border-radius: 12px;
@@ -1094,8 +1096,9 @@
     padding: 0 20px 16px;
   }
   
+  /* FIXED: Reduced mobile expanded photo size */
   .individualPhoto {
-    max-height: 400px;
+    max-height: 350px;
   }
   
   .photoInteractionBar {
@@ -1134,17 +1137,19 @@
     width: auto;
   }
   
+  /* FIXED: Better compact photo sizes on mobile */
   .compactSinglePhoto {
-    height: 260px;
+    height: 240px;
   }
   
   .compactTwoPhotos,
+  .compactThreePhotos,
   .compactManyPhotos {
-    height: 220px;
+    height: 240px;
   }
   
   .photoGridContainerCompact {
-    min-height: 260px;
+    min-height: 240px;
   }
   
   /* Mobile lightbox adjustments */
@@ -1207,6 +1212,7 @@
     padding: 14px 16px;
   }
   
+  /* FIXED: Smaller mobile expanded photo size */
   .individualPhoto {
     max-height: 300px;
   }
@@ -1231,17 +1237,19 @@
     font-size: 13px;
   }
   
+  /* FIXED: Smaller compact photo sizes on small mobile */
   .compactSinglePhoto {
-    height: 220px;
+    height: 200px;
   }
   
   .compactTwoPhotos,
+  .compactThreePhotos,
   .compactManyPhotos {
     height: 200px;
   }
   
   .photoGridContainerCompact {
-    min-height: 220px;
+    min-height: 200px;
     margin: 8px 16px 12px;
   }
   
@@ -1285,8 +1293,9 @@
   }
   
   .compactTwoPhotos,
+  .compactThreePhotos,
   .compactManyPhotos {
-    height: 160px;
+    height: 180px;
   }
   
   .photoGridContainerCompact {
@@ -1295,7 +1304,7 @@
   }
   
   .individualPhoto {
-    max-height: 250px;
+    max-height: 260px;
   }
   
   .thumbnail {
