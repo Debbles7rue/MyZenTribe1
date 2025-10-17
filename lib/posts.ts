@@ -1,4 +1,4 @@
-// lib/posts.ts - FIXED: Shows only posts from friends in home feed
+// lib/posts.ts - FIXED: Shows only posts from friends in home feed + Wall Post Support
 import { supabase } from "@/lib/supabaseClient";
 
 export type MediaItem = {
@@ -31,6 +31,13 @@ export type Post = {
   like_count?: number;
   liked_by_me?: boolean;
   comment_count?: number;
+  // Wall post fields
+  posted_on_profile_id?: string | null;
+  posted_on_profile?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
 };
 
 export async function me() {
@@ -99,10 +106,18 @@ export async function listHomeFeed(limit = 20, before?: string) {
   const ids = posts.map((p: any) => p.id);
   const authorIds = [...new Set(posts.map((p: any) => p.user_id))];
 
+  // Get wall post profile IDs
+  const wallPostProfileIds = posts
+    .filter((p: any) => p.posted_on_profile_id)
+    .map((p: any) => p.posted_on_profile_id);
+  
+  // Combine all profile IDs we need to fetch
+  const allProfileIds = [...new Set([...authorIds, ...wallPostProfileIds])];
+
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, full_name, avatar_url")
-    .in("id", authorIds);
+    .in("id", allProfileIds);
 
   const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
 
@@ -218,13 +233,17 @@ export async function listHomeFeed(limit = 20, before?: string) {
       like_count: likeCountBy[p.id] ?? 0,
       liked_by_me: myLikeSet.has(p.id),
       comment_count: commentCountBy[p.id] ?? 0,
+      // Wall post data
+      posted_on_profile_id: p.posted_on_profile_id || null,
+      posted_on_profile: p.posted_on_profile_id ? profileMap[p.posted_on_profile_id] : null,
     };
   });
 
   console.log('Final posts with media:', rows.map(r => ({
     id: r.id,
     media_count: r.additional_media?.length || 0,
-    comment_count: r.comment_count
+    comment_count: r.comment_count,
+    is_wall_post: !!r.posted_on_profile_id
   })));
 
   return { rows, error: null };
