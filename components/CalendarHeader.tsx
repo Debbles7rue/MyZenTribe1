@@ -12,8 +12,8 @@ interface UserStats {
 }
 
 interface CalendarHeaderProps {
-  mode: "my" | "whats";
-  setMode: (mode: "my" | "whats") => void;
+  mode: "my" | "invites" | "whats";
+  setMode: (mode: "my" | "invites" | "whats") => void;
   showMoon: boolean;
   setShowMoon: (show: boolean) => void;
   isMobile: boolean;
@@ -36,10 +36,8 @@ interface CalendarHeaderProps {
   setGamificationEnabled: (enabled: boolean) => void;
   setShowCarpoolChat: (show: boolean) => void;
   setSelectedCarpoolEvent: (event: any) => void;
-  showListsSidebar: boolean;
-  setShowListsSidebar: (show: boolean) => void;
-  onListsClick: () => void;
   setShowTimeBlocking: (show: boolean) => void;
+  pendingInviteCount?: number;
 }
 
 export default function CalendarHeader({
@@ -67,10 +65,8 @@ export default function CalendarHeader({
   setGamificationEnabled,
   setShowCarpoolChat,
   setSelectedCarpoolEvent,
-  showListsSidebar,
-  setShowListsSidebar,
-  onListsClick,
-  setShowTimeBlocking
+  setShowTimeBlocking,
+  pendingInviteCount = 0
 }: CalendarHeaderProps) {
 
   // Enhanced handler functions with better error handling and debugging
@@ -120,20 +116,6 @@ export default function CalendarHeader({
     }
   };
 
-  const handleListsClick = () => {
-    console.log('Lists button clicked');
-    try {
-      if (onListsClick) {
-        onListsClick();
-        console.log('Lists click handler called');
-      } else {
-        console.error('onListsClick function not available');
-      }
-    } catch (error) {
-      console.error('Error in handleListsClick:', error);
-    }
-  };
-
   return (
     <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-30 transition-all duration-300">
       <div className="max-w-[1600px] mx-auto px-3 sm:px-6">
@@ -171,11 +153,11 @@ export default function CalendarHeader({
                 )}
               </div>
               
-              {/* Enhanced Mode Switcher - Mobile */}
-              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 max-w-xs mx-auto shadow-inner">
+              {/* Enhanced Mode Switcher - Mobile (THREE WAY TOGGLE) */}
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 max-w-full mx-auto shadow-inner">
                 <button
                   onClick={() => setMode("my")}
-                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
+                  className={`flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
                     mode === "my"
                       ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
                       : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
@@ -184,8 +166,23 @@ export default function CalendarHeader({
                   My Events
                 </button>
                 <button
+                  onClick={() => setMode("invites")}
+                  className={`relative flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
+                    mode === "invites"
+                      ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                >
+                  Invites
+                  {pendingInviteCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {pendingInviteCount}
+                    </span>
+                  )}
+                </button>
+                <button
                   onClick={() => setMode("whats")}
-                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
+                  className={`flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
                     mode === "whats"
                       ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
                       : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
@@ -241,11 +238,11 @@ export default function CalendarHeader({
                 )}
               </div>
 
-              {/* Enhanced Mode Switcher - Desktop */}
+              {/* Enhanced Mode Switcher - Desktop (THREE WAY TOGGLE) */}
               <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 shadow-inner">
                 <button
                   onClick={() => setMode("my")}
-                  className={`px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                     mode === "my"
                       ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
                       : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
@@ -254,8 +251,23 @@ export default function CalendarHeader({
                   My Calendar
                 </button>
                 <button
+                  onClick={() => setMode("invites")}
+                  className={`relative px-5 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    mode === "invites"
+                      ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                >
+                  Invites
+                  {pendingInviteCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {pendingInviteCount}
+                    </span>
+                  )}
+                </button>
+                <button
                   onClick={() => setMode("whats")}
-                  className={`px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                     mode === "whats"
                       ? "bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm"
                       : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
@@ -271,23 +283,6 @@ export default function CalendarHeader({
               
               {/* Primary Actions Group */}
               <div className="flex items-center gap-1 mr-3">
-                {/* Lists Sidebar Toggle */}
-                {mode === "my" && (
-                  <button
-                    onClick={handleListsClick}
-                    className={`p-2.5 rounded-lg transition-all duration-200 ${
-                      showListsSidebar 
-                        ? "bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400" 
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                    }`}
-                    title="Toggle lists sidebar"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                    </svg>
-                  </button>
-                )}
-
                 {/* Enhanced Voice Command with better visual feedback */}
                 <button
                   onClick={handleVoiceClick}
