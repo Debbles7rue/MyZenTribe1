@@ -712,6 +712,9 @@ export default function ProfilePage() {
           background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 20%, #f1f5f9 40%, #e0e7ff 60%, #f3e8ff 80%, #fdf4ff 100%);
           padding: 2rem 1rem;
           position: relative;
+          max-width: 900px;
+margin-left: auto;
+margin-right: auto;
         }
 
         .profile-page::before {
