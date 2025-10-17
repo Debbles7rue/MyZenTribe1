@@ -828,8 +828,6 @@ if ((event as any).event_type === 'template') {
   return <TemplateDetails event={event} onClose={onClose} onDelete={onDelete} currentUserId={currentUserId} />;
 }
 
-const isCreator = currentUserId && event.created_by === currentUserId;
-
   const isCreator = currentUserId && event.created_by === currentUserId;
   const eventType = (event as any).event_type;
   const isReminder = eventType === 'reminder';
