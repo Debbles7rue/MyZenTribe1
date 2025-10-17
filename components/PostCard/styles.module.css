@@ -1,4 +1,3 @@
-/* components/PostCard/styles.module.css */
 /* PostCard Modular Styles - Enhanced Mobile Optimization */
 
 /* ======================
@@ -353,7 +352,7 @@
 }
 
 /* ======================
-   PHOTO GRID STYLES - FIXED COMPACT SIZES
+   PHOTO GRID STYLES
    ====================== */
 
 .photoGridContainerCompact {
@@ -362,14 +361,12 @@
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   background: white;
-  /* FIXED: Reduced from 280px */
-  min-height: 220px;
+  min-height: 320px;
 }
 
 .compactSinglePhoto {
   width: 100%;
-  /* FIXED: Reduced from 280px */
-  height: 220px;
+  height: 320px;
   cursor: pointer;
   overflow: hidden;
   border-radius: 12px;
@@ -393,16 +390,14 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  /* FIXED: Reduced from 280px */
-  height: 220px;
+  height: 280px;
 }
 
 .compactThreePhotos {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  /* FIXED: Reduced from 280px */
-  height: 220px;
+  height: 280px;
 }
 
 .compactSideStack {
@@ -412,8 +407,7 @@
 }
 
 .compactManyPhotos {
-  /* FIXED: Reduced from 280px */
-  height: 220px;
+  height: 280px;
 }
 
 .compactTopRow {
@@ -471,7 +465,7 @@
 }
 
 /* ======================
-   EXPANDED PHOTO GRID - FIXED SIZING
+   EXPANDED PHOTO GRID
    ====================== */
 
 .photoGridExpanded {
@@ -499,8 +493,7 @@
 .individualPhoto {
   width: 100%;
   height: auto;
-  /* FIXED: Reduced from 600px to prevent oversized photos */
-  max-height: 450px;
+  max-height: 600px;
   object-fit: contain;
   cursor: pointer;
   border-radius: 12px;
@@ -1101,9 +1094,8 @@
     padding: 0 20px 16px;
   }
   
-  /* FIXED: Reduced mobile expanded photo size */
   .individualPhoto {
-    max-height: 350px;
+    max-height: 400px;
   }
   
   .photoInteractionBar {
@@ -1142,19 +1134,17 @@
     width: auto;
   }
   
-  /* FIXED: Better compact photo sizes on mobile */
   .compactSinglePhoto {
-    height: 180px;
+    height: 260px;
   }
   
   .compactTwoPhotos,
-  .compactThreePhotos,
   .compactManyPhotos {
-    height: 180px;
+    height: 220px;
   }
   
   .photoGridContainerCompact {
-    min-height: 180px;
+    min-height: 260px;
   }
   
   /* Mobile lightbox adjustments */
@@ -1217,7 +1207,6 @@
     padding: 14px 16px;
   }
   
-  /* FIXED: Smaller mobile expanded photo size */
   .individualPhoto {
     max-height: 300px;
   }
@@ -1242,19 +1231,17 @@
     font-size: 13px;
   }
   
-  /* FIXED: Smaller compact photo sizes on small mobile */
   .compactSinglePhoto {
-    height: 160px;
+    height: 220px;
   }
   
   .compactTwoPhotos,
-  .compactThreePhotos,
   .compactManyPhotos {
-    height: 160px;
+    height: 200px;
   }
   
   .photoGridContainerCompact {
-    min-height: 160px;
+    min-height: 220px;
     margin: 8px 16px 12px;
   }
   
@@ -1294,22 +1281,21 @@
   }
   
   .compactSinglePhoto {
-    height: 140px;
+    height: 180px;
   }
   
   .compactTwoPhotos,
-  .compactThreePhotos,
   .compactManyPhotos {
-    height: 140px;
+    height: 160px;
   }
   
   .photoGridContainerCompact {
-    min-height: 140px;
+    min-height: 180px;
     margin: 6px 12px 10px;
   }
   
   .individualPhoto {
-    max-height: 260px;
+    max-height: 250px;
   }
   
   .thumbnail {
