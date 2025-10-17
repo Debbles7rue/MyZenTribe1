@@ -1,4 +1,82 @@
-/* PostCard Modular Styles - Enhanced Mobile Optimization */
+/* PostCard Modular Styles - Enhanced with Wall Post Support + Mobile Optimization */
+
+/* ======================
+   WALL POST STYLES (NEW)
+   ====================== */
+
+/* Wall post visual indicator */
+.postCardCompact.wallPost,
+.postCardExpanded.wallPost {
+  border-left: 4px solid #8b5cf6;
+  background: linear-gradient(to right, rgba(139, 92, 246, 0.02), transparent);
+}
+
+/* Wall post banner - Compact mode */
+.wallPostBannerCompact {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+}
+
+/* Wall post banner - Expanded mode */
+.wallPostBanner {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+}
+
+.wallPostIcon {
+  font-size: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+}
+
+.wallPostText {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wallPostAuthor {
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.wallPostArrow {
+  margin: 0 2px;
+  color: rgba(255,255,255,0.8);
+  font-weight: 500;
+}
+
+.wallPostTarget {
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  text-decoration: underline;
+  text-decoration-color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wallPostTarget:hover {
+  text-decoration-color: white;
+  transform: translateY(-1px);
+}
 
 /* ======================
    COMPACT MODE STYLES
@@ -12,15 +90,14 @@
   cursor: pointer;
   transition: all 0.3s ease;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  /* Mobile touch optimization */
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
 }
 
 .postCardCompact:hover {
   border-color: #cbd5e0;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.15);
   transform: translateY(-2px);
 }
 
@@ -106,7 +183,7 @@
   border-radius: 16px;
   margin-bottom: 24px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
   max-width: 100%;
 }
 
@@ -116,7 +193,7 @@
   align-items: flex-start;
   padding: 20px 24px 16px;
   border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
+  background: linear-gradient(to bottom, #fafafa, #ffffff);
 }
 
 .authorInfo {
@@ -176,7 +253,6 @@
 
 .closeBtn,
 .menuBtn {
-  /* MOBILE OPTIMIZATION: Larger touch targets */
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -189,7 +265,6 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
   user-select: none;
@@ -239,7 +314,6 @@
 .menuItem {
   display: block;
   width: 100%;
-  /* MOBILE: Larger touch targets */
   padding: 16px 20px;
   background: none;
   border: none;
@@ -249,7 +323,6 @@
   color: #374151;
   transition: background 0.2s ease;
   font-weight: 500;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
 }
@@ -284,74 +357,6 @@
 }
 
 /* ======================
-   WALL POST STYLES
-   ====================== */
-
-.wallPost {
-  border-left: 4px solid #8b5cf6;
-  background: linear-gradient(to right, rgba(139, 92, 246, 0.03), transparent);
-}
-
-.wallPostBanner {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: white;
-  padding: 0.5rem 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border-radius: 0.75rem 0.75rem 0 0;
-  margin: -1.5rem -1.5rem 1rem -1.5rem;
-}
-
-.wallPostIcon {
-  font-size: 1.125rem;
-}
-
-.wallPostText {
-  font-size: 0.875rem;
-}
-
-.wallPostAuthor {
-  font-weight: 600;
-  color: inherit;
-}
-
-.wallPostArrow {
-  margin: 0 0.25rem;
-  color: #9ca3af;
-  font-weight: normal;
-}
-
-.wallPostTarget {
-  color: #8b5cf6;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.wallPostTarget:hover {
-  color: #7c3aed;
-  text-decoration: underline;
-}
-
-/* Wall post styling in compact mode */
-.postCardCompact.wallPost {
-  border-left: 3px solid #8b5cf6;
-}
-
-.postCardCompact.wallPost .compactName .wallPostTarget {
-  color: #8b5cf6;
-}
-
-.postCardCompact.wallPost .compactName .wallPostArrow {
-  margin: 0 0.25rem;
-  color: #9ca3af;
-}
-
-/* ======================
    PHOTO GRID STYLES
    ====================== */
 
@@ -370,7 +375,6 @@
   cursor: pointer;
   overflow: hidden;
   border-radius: 12px;
-  /* Mobile touch optimization */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
 }
@@ -378,7 +382,7 @@
 .compactSinglePhoto img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   transition: transform 0.3s ease;
 }
 
@@ -423,24 +427,6 @@
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   height: calc(50% - 2px);
-}
-
-.compactPhotoItem {
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-  background: #f7fafc;
-  border-radius: 8px;
-  /* Mobile touch optimization */
-  -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
-  touch-action: manipulation;
-}
-
-.compactSinglePhoto img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;  /* ← CHANGE TO THIS */
-  transition: transform 0.3s ease;
 }
 
 .compactPhotoItem {
@@ -517,7 +503,6 @@
   background: white;
   transition: transform 0.3s ease;
   display: block;
-  /* Mobile touch optimization */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
 }
@@ -539,7 +524,6 @@
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 24px;
-  /* MOBILE: Larger touch targets */
   padding: 14px 20px;
   min-height: 44px;
   cursor: pointer;
@@ -553,7 +537,6 @@
   gap: 6px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   flex: 1;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
   user-select: none;
@@ -598,7 +581,6 @@
 
 .actionBtn {
   flex: 1;
-  /* MOBILE: Larger touch targets */
   padding: 14px 16px;
   min-height: 48px;
   background: white;
@@ -614,7 +596,6 @@
   justify-content: center;
   gap: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
   user-select: none;
@@ -702,10 +683,8 @@
   font-weight: 600;
   text-decoration: underline;
   margin-top: 8px;
-  /* MOBILE: Larger touch target */
   padding: 12px 0;
   min-height: 44px;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
 }
@@ -721,7 +700,6 @@
 
 .commentInput {
   flex: 1;
-  /* MOBILE: Larger touch target */
   padding: 14px 16px;
   min-height: 48px;
   border: 1px solid #e2e8f0;
@@ -729,7 +707,6 @@
   font-size: 14px;
   background: white;
   transition: all 0.2s ease;
-  /* Mobile improvements */
   -webkit-appearance: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -741,7 +718,6 @@
 }
 
 .commentSubmit {
-  /* MOBILE: Larger touch target */
   padding: 14px 24px;
   min-height: 48px;
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
@@ -753,7 +729,6 @@
   font-weight: 600;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(139,92,246,0.3);
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
@@ -827,7 +802,6 @@
 
 .modalCancel,
 .modalDelete {
-  /* MOBILE: Larger touch targets */
   padding: 14px 24px;
   min-height: 48px;
   border: none;
@@ -837,7 +811,6 @@
   font-size: 14px;
   transition: all 0.3s ease;
   min-width: 120px;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
@@ -885,7 +858,6 @@
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  /* Mobile: Prevent scroll */
   overflow: hidden;
   touch-action: none;
 }
@@ -897,7 +869,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Mobile touch handling */
   touch-action: pan-x;
 }
 
@@ -905,7 +876,6 @@
   max-width: 90vw;
   max-height: 80vh;
   object-fit: contain;
-  /* Mobile: Disable image dragging */
   -webkit-user-drag: none;
   user-select: none;
   pointer-events: none;
@@ -915,7 +885,6 @@
   position: absolute;
   top: 20px;
   right: 20px;
-  /* MOBILE: Larger close button */
   width: 50px;
   height: 50px;
   border-radius: 50%;
@@ -928,7 +897,6 @@
   align-items: center;
   justify-content: center;
   z-index: 10;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -938,7 +906,6 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  /* MOBILE: Larger navigation buttons */
   width: 50px;
   height: 50px;
   border-radius: 50%;
@@ -952,7 +919,6 @@
   justify-content: center;
   z-index: 10;
   transition: opacity 0.2s;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -991,7 +957,6 @@
   transform: translateX(-50%);
   max-width: 90vw;
   overflow-x: auto;
-  /* Mobile: Better scrolling */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1008,7 +973,6 @@
 }
 
 .thumbnail {
-  /* MOBILE: Larger thumbnail touch targets */
   width: 70px;
   height: 70px;
   border: 2px solid transparent;
@@ -1020,7 +984,6 @@
   background: none;
   padding: 0;
   flex-shrink: 0;
-  /* Mobile touch improvements */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -1039,7 +1002,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Mobile: Disable image dragging */
   -webkit-user-drag: none;
   user-select: none;
 }
@@ -1049,7 +1011,6 @@
   bottom: 140px;
   left: 50%;
   transform: translateX(-50%);
-  /* Show on mobile only */
   display: block;
 }
 
@@ -1072,7 +1033,6 @@
    MOBILE RESPONSIVENESS
    ====================== */
 
-/* Tablet optimizations */
 @media (max-width: 768px) {
   .postCardCompact,
   .postCardExpanded {
@@ -1129,7 +1089,6 @@
     padding: 16px 20px;
   }
   
-  /* MOBILE: Stack action buttons vertically for better touch */
   .actionButtons {
     flex-direction: column;
     gap: 8px;
@@ -1139,7 +1098,6 @@
     padding: 14px 16px;
   }
   
-  /* MOBILE: Stack comment input vertically */
   .commentInputSection {
     flex-direction: column;
     align-items: stretch;
@@ -1164,7 +1122,6 @@
     min-height: 260px;
   }
   
-  /* Mobile lightbox adjustments */
   .lightboxClose,
   .lightboxPrev,
   .lightboxNext {
@@ -1195,19 +1152,17 @@
     display: block;
   }
   
-  /* Wall post mobile adjustments */
-  .wallPostBanner {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8125rem;
-    margin: -1rem -1rem 0.75rem -1rem;
+  .wallPostBanner,
+  .wallPostBannerCompact {
+    padding: 10px 16px;
+    font-size: 13px;
   }
   
   .wallPostIcon {
-    font-size: 1rem;
+    font-size: 16px;
   }
 }
 
-/* Small mobile optimizations */
 @media (max-width: 480px) {
   .authorAvatar {
     width: 40px;
@@ -1274,7 +1229,6 @@
     padding: 0 16px 14px;
   }
   
-  /* Extra small mobile: Smaller modal padding */
   .confirmModal {
     padding: 24px 20px;
   }
@@ -1288,9 +1242,18 @@
   .modalDelete {
     width: 100%;
   }
+  
+  .wallPostBanner,
+  .wallPostBannerCompact {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .wallPostIcon {
+    font-size: 14px;
+  }
 }
 
-/* Very small screens (320px) */
 @media (max-width: 360px) {
   .postCardCompact,
   .postCardExpanded {
@@ -1321,7 +1284,6 @@
   }
 }
 
-/* Landscape mobile optimizations */
 @media (max-height: 500px) and (orientation: landscape) {
   .lightboxImage {
     max-height: 70vh;
@@ -1340,7 +1302,6 @@
   }
 }
 
-/* High DPI displays */
 @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
   .authorAvatar,
   .compactAvatar,
@@ -1349,7 +1310,191 @@
   }
 }
 
-/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .postCardCompact,
+  .postCardExpanded,
+  .modalOverlay,
+  .lightboxOverlay,
+  .editModalContainer {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .postCardCompact *,
+  .postCardExpanded *,
+  .photoGridExpanded *,
+  .modalOverlay *,
+  .editModalContainer * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .swipeHint {
+    animation: none;
+  }
+}
+/* Wall post mobile adjustments */
+  .wallPostBanner,
+  .wallPostBannerCompact {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  
+  .wallPostIcon {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .authorAvatar {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .compactAvatar {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .postText {
+    font-size: 13px;
+    padding: 14px 16px;
+  }
+  
+  .individualPhoto {
+    max-height: 300px;
+  }
+  
+  .photoInteractBtn {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  
+  .actionBtn {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  
+  .commentInput {
+    font-size: 13px;
+    padding: 12px 14px;
+  }
+  
+  .commentSubmit {
+    padding: 12px 20px;
+    font-size: 13px;
+  }
+  
+  .compactSinglePhoto {
+    height: 220px;
+  }
+  
+  .compactTwoPhotos,
+  .compactManyPhotos {
+    height: 200px;
+  }
+  
+  .photoGridContainerCompact {
+    min-height: 220px;
+    margin: 8px 16px 12px;
+  }
+  
+  .postHeader {
+    padding: 14px 16px 10px;
+  }
+  
+  .postFooter {
+    padding: 14px 16px;
+  }
+  
+  .photoGridExpanded {
+    padding: 0 16px 14px;
+  }
+  
+  .confirmModal {
+    padding: 24px 20px;
+  }
+  
+  .modalButtons {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .modalCancel,
+  .modalDelete {
+    width: 100%;
+  }
+  
+  /* Wall post small mobile */
+  .wallPostBanner,
+  .wallPostBannerCompact {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .wallPostIcon {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .postCardCompact,
+  .postCardExpanded {
+    margin-bottom: 12px;
+  }
+  
+  .compactSinglePhoto {
+    height: 180px;
+  }
+  
+  .compactTwoPhotos,
+  .compactManyPhotos {
+    height: 160px;
+  }
+  
+  .photoGridContainerCompact {
+    min-height: 180px;
+    margin: 6px 12px 10px;
+  }
+  
+  .individualPhoto {
+    max-height: 250px;
+  }
+  
+  .thumbnail {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .lightboxImage {
+    max-height: 70vh;
+  }
+  
+  .lightboxCounter {
+    bottom: 60px;
+  }
+  
+  .lightboxThumbnails {
+    bottom: 10px;
+  }
+  
+  .mobileHints {
+    bottom: 80px;
+  }
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+  .authorAvatar,
+  .compactAvatar,
+  .commentAvatar {
+    border-width: 1px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .postCardCompact,
   .postCardExpanded,
