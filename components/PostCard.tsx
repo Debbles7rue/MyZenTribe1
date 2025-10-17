@@ -1,4 +1,4 @@
-// components/PostCard.tsx - Main Component with Modular Imports
+// components/PostCard.tsx - Main Component with Wall Post Banner Support
 "use client";
 
 import { useState, useEffect } from "react";
@@ -54,6 +54,11 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   const [comments, setComments] = useState<Comment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [showAllComments, setShowAllComments] = useState(false);
+  
+  // Wall post detection
+  const isWallPost = !!post.posted_on_profile_id;
+  const wallPostAuthorName = post.author?.full_name || 'Someone';
+  const wallPostTargetName = post.posted_on_profile?.full_name || 'User';
   
   useEffect(() => {
     if (currentUserId && post.co_creators) {
@@ -361,7 +366,22 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   // COMPACT MODE - Card preview
   if (!isExpanded) {
     return (
-      <div className={styles.postCardCompact} onClick={handleCardClick}>
+      <div 
+        className={`${styles.postCardCompact} ${isWallPost ? styles.wallPost : ''}`} 
+        onClick={handleCardClick}
+      >
+        {/* Wall Post Banner - Compact Mode */}
+        {isWallPost && (
+          <div className={styles.wallPostBannerCompact}>
+            <span className={styles.wallPostIcon}>✏️</span>
+            <span className={styles.wallPostText}>
+              <span className={styles.wallPostAuthor}>{wallPostAuthorName}</span>
+              <span className={styles.wallPostArrow}> → </span>
+              <span className={styles.wallPostTarget}>{wallPostTargetName}</span>
+            </span>
+          </div>
+        )}
+        
         <div className={styles.compactHeader}>
           <div className={styles.compactAuthor}>
             <img 
@@ -413,7 +433,19 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   // EXPANDED MODE - Full post with interactions
   return (
     <>
-      <div className={styles.postCardExpanded}>
+      <div className={`${styles.postCardExpanded} ${isWallPost ? styles.wallPost : ''}`}>
+        {/* Wall Post Banner - Expanded Mode */}
+        {isWallPost && (
+          <div className={styles.wallPostBanner}>
+            <span className={styles.wallPostIcon}>✏️</span>
+            <span className={styles.wallPostText}>
+              <span className={styles.wallPostAuthor}>{wallPostAuthorName}</span>
+              <span className={styles.wallPostArrow}> wrote on </span>
+              <span className={styles.wallPostTarget}>{wallPostTargetName}'s wall</span>
+            </span>
+          </div>
+        )}
+        
         <div className={styles.postHeader}>
           <div className={styles.authorInfo}>
             <img 
