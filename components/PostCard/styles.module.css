@@ -353,7 +353,7 @@
 }
 
 /* ======================
-   PHOTO GRID STYLES
+   PHOTO GRID STYLES - FIXED COMPACT SIZES
    ====================== */
 
 .photoGridContainerCompact {
@@ -362,12 +362,14 @@
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   background: white;
-  min-height: 280px;
+  /* FIXED: Reduced from 280px */
+  min-height: 220px;
 }
 
 .compactSinglePhoto {
   width: 100%;
-  height: 280px;
+  /* FIXED: Reduced from 280px */
+  height: 220px;
   cursor: pointer;
   overflow: hidden;
   border-radius: 12px;
@@ -391,14 +393,16 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  height: 280px;
+  /* FIXED: Reduced from 280px */
+  height: 220px;
 }
 
 .compactThreePhotos {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  height: 280px;
+  /* FIXED: Reduced from 280px */
+  height: 220px;
 }
 
 .compactSideStack {
@@ -408,7 +412,8 @@
 }
 
 .compactManyPhotos {
-  height: 280px;
+  /* FIXED: Reduced from 280px */
+  height: 220px;
 }
 
 .compactTopRow {
@@ -1139,17 +1144,17 @@
   
   /* FIXED: Better compact photo sizes on mobile */
   .compactSinglePhoto {
-    height: 240px;
+    height: 180px;
   }
   
   .compactTwoPhotos,
   .compactThreePhotos,
   .compactManyPhotos {
-    height: 240px;
+    height: 180px;
   }
   
   .photoGridContainerCompact {
-    min-height: 240px;
+    min-height: 180px;
   }
   
   /* Mobile lightbox adjustments */
@@ -1239,17 +1244,17 @@
   
   /* FIXED: Smaller compact photo sizes on small mobile */
   .compactSinglePhoto {
-    height: 200px;
+    height: 160px;
   }
   
   .compactTwoPhotos,
   .compactThreePhotos,
   .compactManyPhotos {
-    height: 200px;
+    height: 160px;
   }
   
   .photoGridContainerCompact {
-    min-height: 200px;
+    min-height: 160px;
     margin: 8px 16px 12px;
   }
   
@@ -1289,17 +1294,17 @@
   }
   
   .compactSinglePhoto {
-    height: 180px;
+    height: 140px;
   }
   
   .compactTwoPhotos,
   .compactThreePhotos,
   .compactManyPhotos {
-    height: 180px;
+    height: 140px;
   }
   
   .photoGridContainerCompact {
-    min-height: 180px;
+    min-height: 140px;
     margin: 6px 12px 10px;
   }
   
