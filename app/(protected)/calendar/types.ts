@@ -1,7 +1,7 @@
 // app/(protected)/calendar/types.ts
 import type { DBEvent, Visibility } from '@/lib/types';
 
-export type Mode = "my" | "whats";
+export type Mode = "my" | "invites" | "whats";
 export type CalendarTheme = "default" | "minimal" | "colorful" | "dark";
 
 export interface TodoReminder {
