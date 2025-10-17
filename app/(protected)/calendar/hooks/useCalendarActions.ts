@@ -306,18 +306,43 @@ export function useCalendarActions(props: UseCalendarActionsProps) {
   }, [me, draggedItem, showToast, loadCalendar, setDraggedItem, setDragType]);
 
   // Apply template
-  const handleApplyTemplate = useCallback(async (templateEvents: any[]) => {
-    try {
-      for (const event of templateEvents) {
-        const eventWithUser = { ...event, created_by: me };
+  // Find this function around line 336 and replace it:
+
+// Apply template - UPDATED for new SmartTemplates format
+const handleApplyTemplate = useCallback(async (templateData: any) => {
+  if (!me) {
+    showToast({ type: 'error', message: 'Please log in first' });
+    return;
+  }
+
+  try {
+    // Handle both old array format and new object format
+    const isArrayFormat = Array.isArray(templateData);
+    
+    if (isArrayFormat) {
+      // Old format: array of events with all data
+      for (const event of templateData) {
+        const eventWithUser = { 
+          ...event, 
+          created_by: me,
+          event_type: event.event_type || 'template' // Ensure template type is set
+        };
         await supabase.from('events').insert(eventWithUser);
       }
+      
       loadCalendar();
       showToast({ type: 'success', message: '✨ Template applied to calendar!' });
-    } catch (error) {
-      showToast({ type: 'error', message: 'Failed to apply template' });
+    } else {
+      // New format: object with { template, prepopulatedData, invitedFriends }
+      // This just opens the event creator, handled by SmartTemplates component
+      // No need to create events here - the form will handle it
+      console.log('Template passed to form creator:', templateData);
     }
-  }, [me, loadCalendar, showToast]);
+  } catch (error) {
+    console.error('Template application error:', error);
+    showToast({ type: 'error', message: 'Failed to apply template' });
+  }
+}, [me, loadCalendar, showToast]);
 
   // Toggle complete
   const handleToggleComplete = useCallback(async (item: TodoReminder) => {
