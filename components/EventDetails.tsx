@@ -1091,6 +1091,17 @@ export default function EventDetails({
             )}
           </div>
 
+          {/* Invite Friends Button - For all events */}
+{currentUserId && !isCreator && (
+  <button
+    onClick={() => setShowFriendSelector(true)}
+    className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 font-semibold transition-all shadow-sm hover:shadow-md flex items-center gap-2"
+  >
+    <span>👥</span>
+    <span>Invite Friends</span>
+  </button>
+)}
+          
           {/* Content */}
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
             <div className="p-6 space-y-6">
