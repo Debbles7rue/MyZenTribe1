@@ -1,6 +1,7 @@
 // File: components/EventDetails.tsx
 "use client";
 
+import TemplateEditor from "./TemplateEditor";
 import TemplateDetails from "./TemplateDetails";
 import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom";
@@ -822,11 +823,9 @@ export default function EventDetails({
   if (!event) return null;
 
 // NEW CODE - Route templates to TemplateDetails
-if ((event as any).event_type === 'template') {
-  // Import at top of file if needed, or use dynamic import
-  const TemplateDetails = require('./TemplateDetails').default;
-  return <TemplateDetails event={event} onClose={onClose} onDelete={onDelete} currentUserId={currentUserId} />;
-}
+  if ((event as any).event_type === 'template') {
+    return <TemplateDetails event={event} onClose={onClose} onDelete={onDelete} currentUserId={currentUserId} />;
+  }
 
   const isCreator = currentUserId && event.created_by === currentUserId;
   const eventType = (event as any).event_type;
