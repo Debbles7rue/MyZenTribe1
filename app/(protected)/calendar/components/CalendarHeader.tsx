@@ -20,8 +20,8 @@ interface ListItem {
 }
 
 interface CalendarHeaderProps {
-  mode: "my" | "whats";
-  setMode: (mode: "my" | "whats") => void;
+  mode: "my" | "invites" | "whats";
+  setMode: (mode: "my" | "invites" | "whats") => void;
   isMobile: boolean;
   setOpenCreate: (open: boolean) => void;
   // Lists data
