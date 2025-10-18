@@ -1,5 +1,6 @@
 // app/(protected)/calendar/components/CalendarModals.tsx
 
+import TemplateDetails from '@/components/TemplateDetails';
 import React, { useRef, useEffect, useState } from 'react';
 import UnifiedEventCreator from '@/components/events/UnifiedEventCreator';
 import EventDetails from '@/components/EventDetails';
@@ -373,17 +374,34 @@ export default function CalendarModals({
 
   return (
     <>
-      {/* Event Details Modal - FIXED: Changed isOwner to currentUserId + added celebration handler + ROUTING */}
-      <EventDetails 
-        event={detailsOpen ? (selectedFeedEvent || selected) : null} 
-        onClose={() => {
-          setDetailsOpen(false);
-        }}
-        onEdit={handleEditWithRouting}
-        currentUserId={me}
-        onOpenCarpool={onOpenCarpoolSettings}
-        onCelebrateHoliday={handleCelebrateHoliday}
-      />
+{/* Event Details Modal - Routes to TemplateDetails for templates */}
+      {detailsOpen && (selectedFeedEvent || selected) && (
+        (selectedFeedEvent || selected)?.event_type === 'template' ? (
+          <TemplateDetails
+            event={selectedFeedEvent || selected}
+            onClose={() => {
+              setDetailsOpen(false);
+            }}
+            onDelete={async (id: string) => {
+              // Reload calendar after deletion
+              if (loadCalendar) await loadCalendar();
+              setDetailsOpen(false);
+            }}
+            currentUserId={me}
+          />
+        ) : (
+          <EventDetails 
+            event={selectedFeedEvent || selected} 
+            onClose={() => {
+              setDetailsOpen(false);
+            }}
+            onEdit={handleEditWithRouting}
+            currentUserId={me}
+            onOpenCarpool={onOpenCarpoolSettings}
+            onCelebrateHoliday={handleCelebrateHoliday}
+          />
+        )
+      )}
 
       {/* Create Event Modal - Using UnifiedEventCreator */}
       <UnifiedEventCreator
