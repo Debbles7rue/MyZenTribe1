@@ -696,31 +696,15 @@ const handleShareWithFriends = async () => {
       created_at: new Date().toISOString()
     }));
 
-    await supabase
-      .from('notifications')
-      .insert(notifications);
-
-    showToast({ 
-      type: 'success', 
-      message: `🎉 Invited ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}!` 
-    });
-    
-    setShowFriendSelector(false);
-    setSelectedFriends([]);
-    setShowShareMenu(false);
-  } catch (error: any) {
-    console.error('Error inviting friends:', error);
-    showToast({ 
-      type: 'error', 
-      message: `Failed to send invites: ${error.message || 'Unknown error'}` 
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+   const handleShareWithFriends = async () => {
+    if (!event || !currentUserId || selectedFriends.length === 0) {
+      showToast({ type: 'warning', message: 'Please select at least one friend' });
+      return;
+    }
 
     setLoading(true);
     try {
+      // Get sender info
       const { data: userData } = await supabase
         .from('profiles')
         .select('full_name, avatar_url')
@@ -728,75 +712,66 @@ const handleShareWithFriends = async () => {
         .single();
 
       const senderName = userData?.full_name || 'A friend';
-      const holidayEmoji = event.title.match(/[\u{1F300}-\u{1F9FF}]/u)?.[0] || '🎉';
-      const holidayName = event.title.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
-      const eventDate = new Date(event.start_time).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      });
 
-      try {
-        const { error: rpcError } = await supabase.rpc('share_holiday_with_friends', {
-          p_friend_ids: selectedFriends,
-          p_event_id: event.id,
-          p_holiday_name: holidayName,
-          p_holiday_emoji: holidayEmoji,
-          p_holiday_date: eventDate,
-          p_sender_name: senderName,
-          p_sender_avatar: userData?.avatar_url || ''
+      // Create event_invites records for each friend
+      const invites = selectedFriends.map(friendId => ({
+        event_id: event.id,
+        invitee_id: friendId,
+        inviter_id: currentUserId,
+        status: 'pending'
+      }));
+
+      const { error: inviteError } = await supabase
+        .from('event_invites')
+        .insert(invites);
+
+      if (inviteError) {
+        console.error('Error creating invites:', inviteError);
+        showToast({ 
+          type: 'error', 
+          message: `Failed to send invites: ${inviteError.message}` 
         });
-
-        if (!rpcError) {
-          showToast({ 
-            type: 'success', 
-            message: `🎉 Shared with ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}!` 
-          });
-          setShowFriendSelector(false);
-          setSelectedFriends([]);
-          setShowShareMenu(false);
-          setLoading(false);
-          return;
-        }
-      } catch (rpcError) {
-        console.log('Database function not found, using direct insert');
+        return;
       }
 
+      // Also send notifications to friends
       const notifications = selectedFriends.map(friendId => ({
         user_id: friendId,
         recipient_id: friendId,
         actor_id: currentUserId,
-        type: 'holiday_share',
-        kind: 'celebration',
-        title: `${holidayEmoji} ${holidayName}!`,
-        body: `${senderName} wants to celebrate ${holidayName} with you!`,
+        type: 'event.invite',
+        kind: 'social',
+        title: `Event Invitation`,
+        body: `${senderName} invited you to "${event.title}"`,
         entity_table: 'events',
         entity_id: event.id,
-        metadata: {
-          holiday_name: holidayName,
-          holiday_emoji: holidayEmoji,
-          holiday_date: eventDate,
-          from_user_name: senderName,
-          from_user_avatar: userData?.avatar_url,
-          event_id: event.id
-        },
+        target_url: `/event/${event.id}`,
         is_read: false,
         created_at: new Date().toISOString()
       }));
 
-      const { error, data } = await supabase
+      await supabase
         .from('notifications')
-        .insert(notifications)
-        .select();
+        .insert(notifications);
 
-      if (error) {
-        console.error('Notification insert error:', error);
-        showToast({ 
-          type: 'error', 
-          message: `Failed to share: ${error.message}` 
-        });
-        return;
-      }
+      showToast({ 
+        type: 'success', 
+        message: `🎉 Invited ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}!` 
+      });
+      
+      setShowFriendSelector(false);
+      setSelectedFriends([]);
+      setShowShareMenu(false);
+    } catch (error: any) {
+      console.error('Error inviting friends:', error);
+      showToast({ 
+        type: 'error', 
+        message: `Failed to send invites: ${error.message || 'Unknown error'}` 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
       showToast({ 
         type: 'success', 
