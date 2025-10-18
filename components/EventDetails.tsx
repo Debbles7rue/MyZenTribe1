@@ -642,11 +642,82 @@ export default function EventDetails({
     }
   };
 
-  const handleShareWithFriends = async () => {
-    if (!event || !currentUserId || selectedFriends.length === 0) {
-      showToast({ type: 'warning', message: 'Please select at least one friend' });
+const handleShareWithFriends = async () => {
+  if (!event || !currentUserId || selectedFriends.length === 0) {
+    showToast({ type: 'warning', message: 'Please select at least one friend' });
+    return;
+  }
+
+  setLoading(true);
+  try {
+    // Get sender info
+    const { data: userData } = await supabase
+      .from('profiles')
+      .select('full_name, avatar_url')
+      .eq('id', currentUserId)
+      .single();
+
+    const senderName = userData?.full_name || 'A friend';
+
+    // Create event_invites records for each friend
+    const invites = selectedFriends.map(friendId => ({
+      event_id: event.id,
+      invitee_id: friendId,
+      inviter_id: currentUserId,
+      status: 'pending'
+    }));
+
+    const { error: inviteError } = await supabase
+      .from('event_invites')
+      .insert(invites);
+
+    if (inviteError) {
+      console.error('Error creating invites:', inviteError);
+      showToast({ 
+        type: 'error', 
+        message: `Failed to send invites: ${inviteError.message}` 
+      });
       return;
     }
+
+    // Also send notifications to friends
+    const notifications = selectedFriends.map(friendId => ({
+      user_id: friendId,
+      recipient_id: friendId,
+      actor_id: currentUserId,
+      type: 'event.invite',
+      kind: 'social',
+      title: `Event Invitation`,
+      body: `${senderName} invited you to "${event.title}"`,
+      entity_table: 'events',
+      entity_id: event.id,
+      target_url: `/event/${event.id}`,
+      is_read: false,
+      created_at: new Date().toISOString()
+    }));
+
+    await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    showToast({ 
+      type: 'success', 
+      message: `🎉 Invited ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}!` 
+    });
+    
+    setShowFriendSelector(false);
+    setSelectedFriends([]);
+    setShowShareMenu(false);
+  } catch (error: any) {
+    console.error('Error inviting friends:', error);
+    showToast({ 
+      type: 'error', 
+      message: `Failed to send invites: ${error.message || 'Unknown error'}` 
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
     setLoading(true);
     try {
