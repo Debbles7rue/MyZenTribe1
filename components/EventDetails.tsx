@@ -1,8 +1,6 @@
 // File: components/EventDetails.tsx
 "use client";
 
-import TemplateEditor from "./TemplateEditor";
-import TemplateDetails from "./TemplateDetails";
 import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -821,11 +819,6 @@ export default function EventDetails({
   };
 
   if (!event) return null;
-
-// NEW CODE - Route templates to TemplateDetails
-  if ((event as any).event_type === 'template') {
-    return <TemplateDetails event={event} onClose={onClose} onDelete={onDelete} currentUserId={currentUserId} />;
-  }
 
   const isCreator = currentUserId && event.created_by === currentUserId;
   const eventType = (event as any).event_type;
