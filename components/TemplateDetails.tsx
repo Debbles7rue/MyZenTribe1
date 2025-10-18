@@ -274,8 +274,7 @@ export default function TemplateDetails({
                       </button>
                       
                       {showDeleteMenu && (
-                        <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-10 min-w-[220px]">
-                          <button
+                        <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[220px]">
                             onClick={handleDeleteInstance}
                             disabled={deleting}
                             className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 border-b border-gray-200 dark:border-gray-700"
