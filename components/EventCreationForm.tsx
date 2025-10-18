@@ -14,6 +14,7 @@ interface EventFormData {
   reminderOption: 'none' | '10min' | '30min' | '1hour' | '1day';
   location?: string;
   event_type: string;
+  invitedFriends?: string[];  // ADD THIS LINE
 }
 
 interface EventCreationFormProps {
