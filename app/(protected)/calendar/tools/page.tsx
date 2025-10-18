@@ -483,7 +483,7 @@ export default function CalendarToolsPage() {
       repeatOption: 'none',
       customDays: [],
       reminderOption: 'none',
-      event_type: template.prepopulatedData.event_type || 'template'
+      event_type: 'template'
     });
 
     // Close templates modal and open event form
