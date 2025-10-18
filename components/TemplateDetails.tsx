@@ -110,12 +110,13 @@ export default function TemplateDetails({
       console.error("Error deleting all instances:", error);
       showToast({ type: 'error', message: 'Failed to delete all instances' });
     } finally {
-      setDeleting(false);
-      setShowDeleteMenu(false);
-    }
+   setDeleting(false);
+    setShowDeleteMenu(false);
+  }
+};  // ← This closes handleDeleteAllInstances
 
-  const modalContent = (
-    <div 
+const modalContent = (
+  <div
       className="fixed inset-0 z-50 overflow-y-auto"
       role="dialog"
       aria-modal="true"
