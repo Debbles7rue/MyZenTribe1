@@ -323,7 +323,7 @@ const TEMPLATES: Template[] = [
       title: 'Cooking Together',
       description: 'Prepare healthy meals together - share recipes, cooking tips, and enjoy good food',
       duration: 90,
-      event_type: 'personal'
+      event_type: 'template',
     }
   },
   {
