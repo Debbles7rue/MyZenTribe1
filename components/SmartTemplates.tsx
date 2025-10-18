@@ -390,7 +390,7 @@ export default function SmartTemplates({
         date: now.toISOString().split('T')[0],
         time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
         endTime: `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`,
-        event_type: template.prepopulatedData.event_type || 'personal',
+        event_type: template.prepopulatedData.event_type || 'template',
         invitedFriends: friendIds // Add friends to form
       }));
       
