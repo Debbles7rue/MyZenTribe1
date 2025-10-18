@@ -515,6 +515,217 @@ export default function PhotoOrganizerPage({ params }: { params: { id: string } 
           to { transform: rotate(360deg); }
         }
       `}</style>
+      <style jsx>{`
+        .loading-spinner {
+          width: 2rem;
+          height: 2rem;
+          border: 3px solid #e5e7eb;
+          border-top: 3px solid #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+          .max-w-7xl {
+            padding: 0.5rem;
+          }
+
+          /* Header */
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child {
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child h1 {
+            font-size: 1.5rem;
+            line-height: 1.3;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child .flex.justify-between {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child .flex.gap-2 {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child .flex.gap-2 label,
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child .flex.gap-2 button {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 14px;
+            text-align: center;
+            touch-action: manipulation;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child .flex.gap-4 {
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            font-size: 13px;
+          }
+
+          /* Groups Section */
+          .bg-white.rounded-xl.shadow-lg.p-6:nth-child(2) {
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:nth-child(2) h2 {
+            font-size: 1.125rem;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:nth-child(2) .flex.justify-between button {
+            padding: 0.75rem 1rem;
+            font-size: 13px;
+            touch-action: manipulation;
+          }
+
+          /* New Group Input */
+          .mb-4.flex.gap-2 {
+            flex-direction: column;
+          }
+
+          .mb-4.flex.gap-2 input {
+            font-size: 16px; /* Prevents iOS zoom */
+            padding: 0.875rem;
+          }
+
+          .mb-4.flex.gap-2 button {
+            padding: 0.875rem;
+            font-size: 14px;
+            touch-action: manipulation;
+          }
+
+          /* Group Chips */
+          .flex.flex-wrap.gap-2 button {
+            font-size: 13px;
+            padding: 0.75rem 1rem;
+            touch-action: manipulation;
+            white-space: nowrap;
+          }
+
+          /* Photos Grid */
+          .bg-white.rounded-xl.shadow-lg.p-6:last-child {
+            padding: 1rem;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:last-child h2 {
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+          }
+
+          .grid.grid-cols-2 {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+          }
+
+          /* Photo cards */
+          .relative.group.cursor-move {
+            touch-action: none;
+          }
+
+          .relative.group.cursor-move button {
+            font-size: 12px;
+            padding: 0.5rem 0.75rem;
+            touch-action: manipulation;
+          }
+
+          /* Badges */
+          .absolute.top-2.right-2 span,
+          .absolute.bottom-2.left-2 span {
+            font-size: 10px;
+            padding: 0.375rem 0.625rem;
+          }
+
+          /* Empty state */
+          .text-center.py-12 {
+            padding: 2rem 1rem;
+          }
+
+          .text-center.py-12 p:first-child {
+            font-size: 2rem;
+          }
+
+          .text-center.py-12 p {
+            font-size: 14px;
+          }
+        }
+
+        /* Small mobile screens */
+        @media (max-width: 480px) {
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child h1 {
+            font-size: 1.25rem;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child .flex.gap-4 {
+            font-size: 12px;
+          }
+
+          .bg-white.rounded-xl.shadow-lg.p-6:nth-child(2) h2 {
+            font-size: 1rem;
+          }
+
+          .flex.flex-wrap.gap-2 button {
+            font-size: 12px;
+            padding: 0.625rem 0.75rem;
+          }
+
+          .grid.grid-cols-2 {
+            gap: 0.5rem;
+          }
+
+          .relative.group.cursor-move button {
+            font-size: 11px;
+            padding: 0.375rem 0.625rem;
+          }
+        }
+
+        /* Tablet - 3 columns for photos */
+        @media (min-width: 640px) and (max-width: 1023px) {
+          .grid.grid-cols-2 {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        /* Landscape mobile orientation */
+        @media (max-width: 768px) and (orientation: landscape) {
+          .bg-white.rounded-xl.shadow-lg.p-6:first-child h1 {
+            font-size: 1.25rem;
+          }
+
+          .text-center.py-12 {
+            padding: 1.5rem 1rem;
+          }
+
+          .grid.grid-cols-2 {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        /* Better touch support for dragging */
+        @media (hover: none) and (pointer: coarse) {
+          .relative.group.cursor-move {
+            cursor: grab;
+          }
+
+          .relative.group.cursor-move:active {
+            cursor: grabbing;
+          }
+
+          .flex.flex-wrap.gap-2 button,
+          .mb-4.flex.gap-2 button {
+            min-height: 44px; /* iOS touch target size */
+          }
+        }
+      `}</style>
     </div>
   );
 }
