@@ -172,7 +172,7 @@ export default function TemplateDetails({
           </div>
 
           {/* Content */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 280px)' }}>
             <div className="p-6 space-y-6">
               
               {/* Description */}
