@@ -113,7 +113,6 @@ export default function TemplateDetails({
       setDeleting(false);
       setShowDeleteMenu(false);
     }
-  };
 
   const modalContent = (
     <div 
