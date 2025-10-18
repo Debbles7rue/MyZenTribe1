@@ -28,30 +28,31 @@ export default function TemplateDetails({
 
   if (!event) return null;
 
-  const isCreator = currentUserId && event.created_by === currentUserId;
+  // Ensure boolean
+  const isCreator = !!currentUserId && event.created_by === currentUserId;
 
   const formatDuration = (startTime: string, endTime: string): string => {
     try {
       const start = new Date(startTime);
       const end = new Date(endTime);
-      
+
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return 'Invalid time';
+        return "Invalid time";
       }
-      
+
       const minutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
-      
-      if (minutes < 0) return 'Invalid duration';
+
+      if (minutes < 0) return "Invalid duration";
       if (minutes < 60) return `${minutes} min`;
-      
+
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
-      
-      if (mins === 0) return `${hours} hr${hours !== 1 ? 's' : ''}`;
+
+      if (mins === 0) return `${hours} hr${hours !== 1 ? "s" : ""}`;
       return `${hours}h ${mins}m`;
     } catch (error) {
-      console.error('Error formatting duration:', error);
-      return 'N/A';
+      console.error("Error formatting duration:", error);
+      return "N/A";
     }
   };
 
@@ -72,12 +73,12 @@ export default function TemplateDetails({
 
       if (error) throw error;
 
-      showToast({ type: 'success', message: '🗑️ Template instance deleted' });
+      showToast({ type: "success", message: "🗑️ Template instance deleted" });
       if (onDelete) onDelete(event.id);
       onClose();
     } catch (error: any) {
       console.error("Error deleting instance:", error);
-      showToast({ type: 'error', message: 'Failed to delete' });
+      showToast({ type: "error", message: "Failed to delete" });
     } finally {
       setDeleting(false);
       setShowDeleteMenu(false);
@@ -103,27 +104,27 @@ export default function TemplateDetails({
 
       if (error) throw error;
 
-      showToast({ type: 'success', message: '🗑️ All instances deleted' });
-      if (onDelete) onDelete(event.id);
+      showToast({ type: "success", message: "🗑️ All instances deleted" });
+      if (onDelete && event.id) onDelete(event.id);
       onClose();
     } catch (error: any) {
       console.error("Error deleting all instances:", error);
-      showToast({ type: 'error', message: 'Failed to delete all instances' });
+      showToast({ type: "error", message: "Failed to delete all instances" });
     } finally {
-   setDeleting(false);
-    setShowDeleteMenu(false);
-  }
-};  // ← This closes handleDeleteAllInstances
+      setDeleting(false);
+      setShowDeleteMenu(false);
+    }
+  }; // ← This closes handleDeleteAllInstances
 
-const modalContent = (
-  <div
+  const modalContent = (
+    <div
       className="fixed inset-0 z-50 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-title"
     >
       <div className="flex items-center justify-center min-h-screen p-4">
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity animate-fadeIn"
           onClick={onClose}
           aria-hidden="true"
@@ -146,9 +147,10 @@ const modalContent = (
                 {event.start_time && (
                   <div className="flex flex-wrap items-center gap-3 text-sm opacity-90">
                     <span className="flex items-center gap-1">
-                      ⏰ {new Date(event.start_time).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                      ⏰{" "}
+                      {new Date(event.start_time).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit"
                       })}
                     </span>
                     {event.end_time && (
@@ -159,9 +161,9 @@ const modalContent = (
                   </div>
                 )}
               </div>
-              <button 
-                onClick={onClose} 
-                className="p-2 hover:bg-white/20 rounded-full transition-colors ml-4" 
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-white/20 rounded-full transition-colors ml-4"
                 aria-label="Close"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,9 +174,8 @@ const modalContent = (
           </div>
 
           {/* Content */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 280px)' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: "calc(90vh - 280px)" }}>
             <div className="p-6 space-y-6">
-              
               {/* Description */}
               {event.description && (
                 <div>
@@ -198,25 +199,29 @@ const modalContent = (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600 dark:text-gray-400 font-medium">Start Time:</span>
                     <span className="font-semibold text-gray-900 dark:text-gray-100">
-                      {event.start_time ? new Date(event.start_time).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) : 'Not set'}
+                      {event.start_time
+                        ? new Date(event.start_time).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })
+                        : "Not set"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600 dark:text-gray-400 font-medium">End Time:</span>
                     <span className="font-semibold text-gray-900 dark:text-gray-100">
-                      {event.end_time ? new Date(event.end_time).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) : 'Not set'}
+                      {event.end_time
+                        ? new Date(event.end_time).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })
+                        : "Not set"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
                     <span className="text-gray-600 dark:text-gray-400 font-medium">Duration:</span>
                     <span className="font-bold text-purple-600 dark:text-purple-400">
-                      {event.start_time && event.end_time ? formatDuration(event.start_time, event.end_time) : 'N/A'}
+                      {event.start_time && event.end_time ? formatDuration(event.start_time, event.end_time) : "N/A"}
                     </span>
                   </div>
                 </div>
@@ -243,7 +248,8 @@ const modalContent = (
                       This is a routine template
                     </p>
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      Edit this template to change the pattern for future instances, or delete specific occurrences individually.
+                      Edit this template to change the pattern for future instances, or delete specific occurrences
+                      individually.
                     </p>
                   </div>
                 </div>
@@ -263,25 +269,25 @@ const modalContent = (
                     >
                       ✏️ Edit Template
                     </button>
-                    
+
                     <div className="relative">
                       <button
                         onClick={() => setShowDeleteMenu(!showDeleteMenu)}
                         disabled={deleting}
                         className="px-5 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50"
                       >
-                        🗑️ Delete {showDeleteMenu ? '▼' : '▶'}
+                        🗑️ Delete {showDeleteMenu ? "▼" : "▶"}
                       </button>
-                      
+
                       {showDeleteMenu && (
                         <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[220px]">
+                          {/* FIX: add missing <button> opening tag */}
+                          <button
                             onClick={handleDeleteInstance}
                             disabled={deleting}
                             className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 border-b border-gray-200 dark:border-gray-700"
                           >
-                            <div className="font-medium text-gray-900 dark:text-gray-100">
-                              Delete This Instance
-                            </div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100">Delete This Instance</div>
                             <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                               Remove only this occurrence
                             </div>
@@ -291,9 +297,7 @@ const modalContent = (
                             disabled={deleting}
                             className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
                           >
-                            <div className="font-medium text-red-700 dark:text-red-300">
-                              Delete All Instances
-                            </div>
+                            <div className="font-medium text-red-700 dark:text-red-300">Delete All Instances</div>
                             <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                               Remove all occurrences of this routine
                             </div>
@@ -305,8 +309,8 @@ const modalContent = (
                 )}
               </div>
 
-              <button 
-                onClick={onClose} 
+              <button
+                onClick={onClose}
                 className="px-5 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors shadow-sm"
               >
                 Close
@@ -317,12 +321,7 @@ const modalContent = (
       </div>
 
       {/* Click outside delete menu to close */}
-      {showDeleteMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setShowDeleteMenu(false)}
-        />
-      )}
+      {showDeleteMenu && <div className="fixed inset-0 z-40" onClick={() => setShowDeleteMenu(false)} />}
 
       {/* Template Editor Modal */}
       {showEditor && (
@@ -332,7 +331,7 @@ const modalContent = (
           onSave={() => {
             setShowEditor(false);
             onClose();
-            if (onDelete) onDelete(event.id);
+            if (onDelete && event.id) onDelete(event.id);
           }}
           currentUserId={currentUserId}
         />
@@ -340,15 +339,29 @@ const modalContent = (
 
       <style jsx>{`
         @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
         }
         @keyframes slideUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
-        .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
-        .animate-slideUp { animation: slideUp 0.3s ease-out; }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
       `}</style>
     </div>
   );
