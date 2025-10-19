@@ -1,14 +1,22 @@
 /* PostCard Modular Styles - Enhanced with Wall Post Support + Mobile Optimization */
 
 /* ======================
-   WALL POST STYLES (NEW)
+   WALL POST STYLES (UPDATED WITH GRADIENT BORDER)
    ====================== */
 
-/* Wall post visual indicator */
+/* Wall post with purple gradient border - matching home feed aesthetic */
 .postCardCompact.wallPost,
 .postCardExpanded.wallPost {
-  border-left: 4px solid #8b5cf6;
-  background: linear-gradient(to right, rgba(139, 92, 246, 0.02), transparent);
+  border: 2px solid transparent;
+  background-image: linear-gradient(white, white), 
+                    linear-gradient(135deg, #c084fc, #a78bfa);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
+}
+
+.postCardCompact.wallPost:hover {
+  box-shadow: 0 8px 28px rgba(139, 92, 246, 0.25);
 }
 
 /* Wall post banner - Compact mode */
@@ -21,7 +29,7 @@
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: 16px 16px 0 0;
+  border-radius: 14px 14px 0 0;
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
 }
 
@@ -79,7 +87,7 @@
 }
 
 /* ======================
-   COMPACT MODE STYLES
+   COMPACT MODE STYLES (UPDATED WITH LAVENDER SHADOW)
    ====================== */
 
 .postCardCompact {
@@ -90,14 +98,16 @@
   cursor: pointer;
   transition: all 0.3s ease;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  /* Subtle lavender shadow for regular posts */
+  box-shadow: 0 2px 12px rgba(167, 139, 246, 0.12);
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
 }
 
 .postCardCompact:hover {
   border-color: #cbd5e0;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.15);
+  /* Enhanced lavender shadow on hover */
+  box-shadow: 0 8px 28px rgba(167, 139, 246, 0.2);
   transform: translateY(-2px);
 }
 
@@ -174,7 +184,7 @@
 }
 
 /* ======================
-   EXPANDED MODE STYLES
+   EXPANDED MODE STYLES (UPDATED WITH LAVENDER SHADOW)
    ====================== */
 
 .postCardExpanded {
@@ -183,7 +193,8 @@
   border-radius: 16px;
   margin-bottom: 24px;
   overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  /* Lavender shadow for regular posts */
+  box-shadow: 0 4px 24px rgba(167, 139, 246, 0.15);
   max-width: 100%;
 }
 
@@ -1243,190 +1254,6 @@
     width: 100%;
   }
   
-  .wallPostBanner,
-  .wallPostBannerCompact {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-  
-  .wallPostIcon {
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 360px) {
-  .postCardCompact,
-  .postCardExpanded {
-    margin-bottom: 12px;
-  }
-  
-  .compactSinglePhoto {
-    height: 180px;
-  }
-  
-  .compactTwoPhotos,
-  .compactManyPhotos {
-    height: 160px;
-  }
-  
-  .photoGridContainerCompact {
-    min-height: 180px;
-    margin: 6px 12px 10px;
-  }
-  
-  .individualPhoto {
-    max-height: 250px;
-  }
-  
-  .thumbnail {
-    width: 50px;
-    height: 50px;
-  }
-}
-
-@media (max-height: 500px) and (orientation: landscape) {
-  .lightboxImage {
-    max-height: 70vh;
-  }
-  
-  .lightboxCounter {
-    bottom: 60px;
-  }
-  
-  .lightboxThumbnails {
-    bottom: 10px;
-  }
-  
-  .mobileHints {
-    bottom: 80px;
-  }
-}
-
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
-  .authorAvatar,
-  .compactAvatar,
-  .commentAvatar {
-    border-width: 1px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .postCardCompact,
-  .postCardExpanded,
-  .modalOverlay,
-  .lightboxOverlay,
-  .editModalContainer {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  
-  .postCardCompact *,
-  .postCardExpanded *,
-  .photoGridExpanded *,
-  .modalOverlay *,
-  .editModalContainer * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  
-  .swipeHint {
-    animation: none;
-  }
-}
-/* Wall post mobile adjustments */
-  .wallPostBanner,
-  .wallPostBannerCompact {
-    padding: 10px 16px;
-    font-size: 13px;
-  }
-  
-  .wallPostIcon {
-    font-size: 16px;
-  }
-
-@media (max-width: 480px) {
-  .authorAvatar {
-    width: 40px;
-    height: 40px;
-  }
-  
-  .compactAvatar {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .postText {
-    font-size: 13px;
-    padding: 14px 16px;
-  }
-  
-  .individualPhoto {
-    max-height: 300px;
-  }
-  
-  .photoInteractBtn {
-    padding: 10px 12px;
-    font-size: 12px;
-  }
-  
-  .actionBtn {
-    padding: 12px 14px;
-    font-size: 13px;
-  }
-  
-  .commentInput {
-    font-size: 13px;
-    padding: 12px 14px;
-  }
-  
-  .commentSubmit {
-    padding: 12px 20px;
-    font-size: 13px;
-  }
-  
-  .compactSinglePhoto {
-    height: 220px;
-  }
-  
-  .compactTwoPhotos,
-  .compactManyPhotos {
-    height: 200px;
-  }
-  
-  .photoGridContainerCompact {
-    min-height: 220px;
-    margin: 8px 16px 12px;
-  }
-  
-  .postHeader {
-    padding: 14px 16px 10px;
-  }
-  
-  .postFooter {
-    padding: 14px 16px;
-  }
-  
-  .photoGridExpanded {
-    padding: 0 16px 14px;
-  }
-  
-  .confirmModal {
-    padding: 24px 20px;
-  }
-  
-  .modalButtons {
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .modalCancel,
-  .modalDelete {
-    width: 100%;
-  }
-  
-  /* Wall post small mobile */
   .wallPostBanner,
   .wallPostBannerCompact {
     padding: 8px 12px;
