@@ -1,4 +1,4 @@
-// components/HomeTutorial.tsx
+// components/HomeTutorial.tsx - UPDATED WITH SMALL POPUP
 "use client";
 
 import { useEffect, useState } from "react";
@@ -108,12 +108,13 @@ const TUTORIAL_STEPS = [
 export default function HomeTutorial() {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPrompt, setShowPrompt] = useState(false); // NEW: Prompt state
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) {
-      setOpen(true);
+      setShowPrompt(true); // CHANGED: Show prompt instead of full modal
     }
   }, []);
 
@@ -140,6 +141,71 @@ export default function HomeTutorial() {
   const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
   const step = TUTORIAL_STEPS[currentStep];
 
+  // Small Prompt Popup (shows first)
+  if (showPrompt) {
+    return (
+      <>
+        {/* Invisible backdrop - clicking anywhere dismisses */}
+        <div 
+          className="fixed inset-0 z-[999]" 
+          onClick={() => setShowPrompt(false)}
+        />
+        
+        {/* Small popup in bottom-right */}
+        <div className="fixed bottom-6 right-6 z-[1000] animate-slideIn">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-purple-300 p-5 max-w-xs">
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setShowPrompt(false);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem(STORAGE_KEY, "1");
+                }
+              }}
+              className="absolute top-2 right-2 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            
+            {/* Content */}
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-3xl">👋</span>
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg mb-1">
+                  New to this page?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Want a quick tour of the features?
+                </p>
+              </div>
+            </div>
+            
+            {/* Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPrompt(false);
+                  setOpen(true);
+                }}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
+              >
+                Yes, Show Me!
+              </button>
+              <button
+                onClick={() => setShowPrompt(false)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Full Tutorial Modal (shows when they click "Yes")
   if (!open) return null;
 
   return (
