@@ -67,20 +67,6 @@ const TUTORIAL_STEPS = [
   },
   {
     step: 5,
-    icon: "🎁",
-    title: "Send Digital Gifts",
-    description: "Brighten someone's day with a thoughtful surprise!",
-    highlight: false,
-    features: [
-      "Send digital gifts to friends for just $0.99",
-      "Perfect for birthdays, celebrations, or just because",
-      "Let friends know you're thinking of them",
-      "Spread joy with a simple, meaningful gesture"
-    ],
-    finalMessage: "Sometimes the smallest gestures create the biggest smiles. 💜"
-  },
-  {
-    step: 6,
     icon: "📸",
     title: "Create Photo Albums",
     description: "Preserve your most precious memories in beautiful, customizable albums.",
@@ -98,7 +84,7 @@ const TUTORIAL_STEPS = [
     }
   },
   {
-    step: 7,
+    step: 6,
     icon: "🌸",
     title: "Your Profile, Your Sanctuary",
     description: "This is your personal dashboard for wellness, gratitude, connection, and joy.",
