@@ -1,4 +1,4 @@
-// components/PostComposer.tsx - Complete with Co-creators AND Tagged Friends
+// components/PostComposer.tsx - UPDATED: Compact Collapsible Design
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -44,8 +44,31 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
   const [status, setStatus] = useState<StatusMessage | null>(null);
   const [showPrivacyOptions, setShowPrivacyOptions] = useState(false);
   
+  // NEW: Collapsed/Expanded state
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string>('/default-avatar.png');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Get current user avatar
+  useEffect(() => {
+    const getUserAvatar = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile?.avatar_url) {
+          setCurrentUserAvatar(profile.avatar_url);
+        }
+      }
+    };
+    getUserAvatar();
+  }, []);
 
   // Auto-dismiss status messages
   useEffect(() => {
@@ -57,11 +80,18 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
 
   // Auto-resize textarea
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && isExpanded) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
-  }, [body]);
+  }, [body, isExpanded]);
+
+  // Focus textarea when expanded
+  useEffect(() => {
+    if (isExpanded && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isExpanded]);
 
   async function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -213,6 +243,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       setShowCoCreators(false);
       setShowTaggedFriends(false);
       setShowPrivacyOptions(false);
+      setIsExpanded(false); // Collapse after posting
       setStatus({ type: 'success', message: 'Post shared successfully!' });
       
       // Call callback
@@ -230,6 +261,279 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
   const canPost = body.trim() || uploadedMedia.length > 0;
   const selectedPrivacy = PRIVACY_OPTIONS.find(opt => opt.value === privacy);
 
+  // COLLAPSED VIEW
+  if (!isExpanded) {
+    return (
+      <div className={`post-composer-collapsed ${className}`}>
+        {/* Status Messages */}
+        {status && (
+          <div className={`status-message ${status.type}`}>
+            <span className="status-icon">
+              {status.type === 'success' ? '✅' : status.type === 'error' ? '❌' : 'ℹ️'}
+            </span>
+            {status.message}
+          </div>
+        )}
+
+        <div className="collapsed-card">
+          {/* Click to expand */}
+          <div 
+            className="collapsed-input-area"
+            onClick={() => setIsExpanded(true)}
+          >
+            <img 
+              src={currentUserAvatar} 
+              alt="Your avatar"
+              className="collapsed-avatar"
+            />
+            <div className="collapsed-placeholder">
+              Share with friends...
+            </div>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="collapsed-actions">
+            <button
+              type="button"
+              className="quick-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(true);
+                setTimeout(() => fileInputRef.current?.click(), 100);
+              }}
+            >
+              <span className="action-icon">📷</span>
+              <span className="action-label">Photo/Video</span>
+            </button>
+            
+            <button
+              type="button"
+              className="quick-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(true);
+                setShowTaggedFriends(true);
+              }}
+            >
+              <span className="action-icon">🏷️</span>
+              <span className="action-label">Tag Friends</span>
+            </button>
+            
+            <button
+              type="button"
+              className="quick-action-btn privacy-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(true);
+                setShowPrivacyOptions(true);
+              }}
+            >
+              <span className="action-icon">{selectedPrivacy?.icon}</span>
+              <span className="action-label">{selectedPrivacy?.label}</span>
+            </button>
+          </div>
+        </div>
+
+        <style jsx>{`
+          .post-composer-collapsed {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+          }
+
+          .status-message {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            animation: slideIn 0.3s ease-out;
+          }
+
+          .status-message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+          }
+
+          .status-message.error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+          }
+
+          .status-message.info {
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+          }
+
+          @keyframes slideIn {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+
+          .collapsed-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid rgba(139,92,246,0.1);
+          }
+
+          .collapsed-input-area {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border-radius: 2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 0.75rem;
+            -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+            touch-action: manipulation;
+          }
+
+          .collapsed-input-area:hover {
+            background: #f3f4f6;
+            box-shadow: 0 0 0 2px rgba(139,92,246,0.1);
+          }
+
+          .collapsed-input-area:active {
+            transform: scale(0.99);
+          }
+
+          .collapsed-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #f8fafc;
+            flex-shrink: 0;
+          }
+
+          .collapsed-placeholder {
+            flex: 1;
+            color: #9ca3af;
+            font-size: 15px;
+            user-select: none;
+          }
+
+          .collapsed-actions {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+          }
+
+          .quick-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 0.5rem;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 14px;
+            color: #374151;
+            transition: all 0.2s ease;
+            min-height: 44px;
+            -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+            touch-action: manipulation;
+          }
+
+          .quick-action-btn:hover {
+            border-color: #8b5cf6;
+            background: rgba(139,92,246,0.02);
+            transform: translateY(-1px);
+          }
+
+          .quick-action-btn:active {
+            transform: translateY(0);
+          }
+
+          .action-icon {
+            font-size: 18px;
+          }
+
+          .action-label {
+            font-weight: 500;
+            white-space: nowrap;
+          }
+
+          /* Mobile Responsiveness */
+          @media (max-width: 640px) {
+            .collapsed-card {
+              padding: 0.875rem;
+            }
+
+            .collapsed-input-area {
+              padding: 0.625rem;
+            }
+
+            .collapsed-avatar {
+              width: 36px;
+              height: 36px;
+            }
+
+            .collapsed-placeholder {
+              font-size: 14px;
+            }
+
+            .quick-action-btn {
+              padding: 0.625rem 0.375rem;
+              font-size: 13px;
+            }
+
+            .action-icon {
+              font-size: 16px;
+            }
+
+            .action-label {
+              font-size: 12px;
+            }
+          }
+
+          @media (max-width: 480px) {
+            .collapsed-actions {
+              gap: 0.375rem;
+            }
+
+            .quick-action-btn {
+              flex-direction: column;
+              gap: 0.25rem;
+              padding: 0.5rem 0.25rem;
+            }
+
+            .action-icon {
+              font-size: 20px;
+            }
+
+            .action-label {
+              font-size: 10px;
+            }
+          }
+        `}</style>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleMediaSelect}
+          style={{ display: 'none' }}
+          disabled={uploadingMedia}
+        />
+      </div>
+    );
+  }
+
+  // EXPANDED VIEW (Original Full Composer - ALL FEATURES PRESERVED)
   return (
     <div className={`post-composer ${className}`}>
       {/* Status Messages */}
@@ -243,12 +547,53 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       )}
 
       <div className="composer-card">
+        {/* Header with Close Button */}
+        <div className="composer-header">
+          <h3>Create Post</h3>
+          <button 
+            className="close-btn"
+            onClick={() => {
+              if (body.trim() || uploadedMedia.length > 0) {
+                if (confirm("Discard this post?")) {
+                  setIsExpanded(false);
+                  setBody("");
+                  setUploadedMedia([]);
+                  setCoCreators([]);
+                  setTaggedFriends([]);
+                  setShowCoCreators(false);
+                  setShowTaggedFriends(false);
+                  setShowPrivacyOptions(false);
+                }
+              } else {
+                setIsExpanded(false);
+              }
+            }}
+            type="button"
+          >
+            ✕
+          </button>
+        </div>
+
         {/* Main Text Input */}
         <div className="text-section">
+          <div className="user-info">
+            <img 
+              src={currentUserAvatar} 
+              alt="Your avatar"
+              className="user-avatar"
+            />
+            <div className="privacy-display">
+              <span className="privacy-badge">
+                <span className="privacy-icon">{selectedPrivacy?.icon}</span>
+                {selectedPrivacy?.label}
+              </span>
+            </div>
+          </div>
+          
           <textarea
             ref={textareaRef}
             className="main-textarea"
-            placeholder="What's on your mind? Share your gratitude, intention, or moment..."
+            placeholder="Share with friends..."
             value={body}
             onChange={(e) => setBody(e.target.value)}
             maxLength={1000}
@@ -300,8 +645,18 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           <div className="collaborators-section">
             <div className="section-header">
               <h4>Add Co-creators</h4>
-              <p>Co-creators can add their own photos and videos to this post!</p>
+              <button 
+                className="section-close"
+                onClick={() => {
+                  setShowCoCreators(false);
+                  setCoCreators([]);
+                }}
+                type="button"
+              >
+                ✕
+              </button>
             </div>
+            <p className="section-description">Co-creators can add their own photos and videos to this post!</p>
             <SimpleFriendDropdown
               value={coCreators}
               onChange={setCoCreators}
@@ -323,8 +678,18 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           <div className="collaborators-section">
             <div className="section-header">
               <h4>Tag Friends</h4>
-              <p>Tagged friends will be notified and see this post on their feed.</p>
+              <button 
+                className="section-close"
+                onClick={() => {
+                  setShowTaggedFriends(false);
+                  setTaggedFriends([]);
+                }}
+                type="button"
+              >
+                ✕
+              </button>
             </div>
+            <p className="section-description">Tagged friends will be notified and see this post on their feed.</p>
             <SimpleFriendDropdown
               value={taggedFriends}
               onChange={setTaggedFriends}
@@ -346,6 +711,13 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           <div className="privacy-section">
             <div className="section-header">
               <h4>Who can see this post?</h4>
+              <button 
+                className="section-close"
+                onClick={() => setShowPrivacyOptions(false)}
+                type="button"
+              >
+                ✕
+              </button>
             </div>
             <div className="privacy-options">
               {PRIVACY_OPTIONS.map(option => (
@@ -388,7 +760,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingMedia}
             >
-              📷 Photos & Videos
+              <span>📷</span>
+              Photos & Videos
               {uploadedMedia.length > 0 && (
                 <span className="count-badge">{uploadedMedia.length}</span>
               )}
@@ -399,7 +772,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
               className="action-btn collaborators-btn"
               onClick={() => setShowCoCreators(!showCoCreators)}
             >
-              👥 Co-creators
+              <span>👥</span>
+              Co-creators
               {coCreators.length > 0 && (
                 <span className="count-badge">{coCreators.length}</span>
               )}
@@ -410,7 +784,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
               className="action-btn tag-btn"
               onClick={() => setShowTaggedFriends(!showTaggedFriends)}
             >
-              🏷️ Tag Friends
+              <span>🏷️</span>
+              Tag Friends
               {taggedFriends.length > 0 && (
                 <span className="count-badge">{taggedFriends.length}</span>
               )}
@@ -459,9 +834,20 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           width: 100%;
           max-width: 600px;
           margin: 0 auto;
+          animation: expandIn 0.3s ease-out;
         }
 
-        /* Status Messages */
+        @keyframes expandIn {
+          from { 
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to { 
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
         .status-message {
           display: flex;
           align-items: center;
@@ -496,372 +882,88 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           to { transform: translateY(0); opacity: 1; }
         }
 
-        /* Main Card */
         .composer-card {
           background: white;
           border-radius: 1rem;
           padding: 0;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          border: 1px solid rgba(139,92,246,0.1);
+          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+          border: 1px solid rgba(139,92,246,0.2);
           overflow: hidden;
         }
 
-        /* Text Section */
+        .composer-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1rem 1.5rem;
+          border-bottom: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+
+        .composer-header h3 {
+          margin: 0;
+          font-size: 1.125rem;
+          font-weight: 700;
+          color: #1a202c;
+        }
+
+        .close-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: #f3f4f6;
+          border: none;
+          cursor: pointer;
+          font-size: 18px;
+          color: #6b7280;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+          -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
+          touch-action: manipulation;
+        }
+
+        .close-btn:hover {
+          background: #e5e7eb;
+          color: #374151;
+          transform: scale(1.05);
+        }
+
+        .close-btn:active {
+          transform: scale(0.95);
+        }
+
         .text-section {
           padding: 1.5rem 1.5rem 1rem;
         }
 
-        .main-textarea {
-          width: 100%;
-          padding: 0;
-          border: none;
-          font-size: 1.1rem;
-          resize: none;
-          font-family: inherit;
-          background: transparent;
-          min-height: 60px;
-          overflow-y: hidden;
-        }
-
-        .main-textarea:focus {
-          outline: none;
-        }
-
-        .main-textarea::placeholder {
-          color: #9ca3af;
-        }
-
-        .char-count {
-          text-align: right;
-          font-size: 0.75rem;
-          color: #9ca3af;
-          margin-top: 0.5rem;
-        }
-
-        /* Media Preview */
-        .media-preview {
-          padding: 0 1.5rem 1rem;
-        }
-
-        .media-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        .user-info {
+          display: flex;
+          align-items: center;
           gap: 0.75rem;
           margin-bottom: 1rem;
         }
 
-        .media-item {
-          position: relative;
-          aspect-ratio: 1;
-          border-radius: 0.75rem;
-          overflow: hidden;
-          background: #f3f4f6;
-          border: 1px solid #e5e7eb;
-        }
-
-        .media-thumbnail {
-          width: 100%;
-          height: 100%;
+        .user-avatar {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
           object-fit: cover;
+          border: 2px solid #f8fafc;
         }
 
-        .video-preview {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-          padding: 0.5rem;
-          text-align: center;
-        }
-
-        .video-icon {
-          font-size: 1.5rem;
-          margin-bottom: 0.25rem;
-        }
-
-        .video-name {
-          font-size: 0.65rem;
-          color: #6b7280;
-          word-break: break-all;
-          line-height: 1.2;
-        }
-
-        .remove-media-btn {
-          position: absolute;
-          top: 0.375rem;
-          right: 0.375rem;
-          width: 1.5rem;
-          height: 1.5rem;
-          background: rgba(0,0,0,0.7);
-          color: white;
-          border: none;
-          border-radius: 50%;
-          cursor: pointer;
-          font-size: 0.75rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.2s;
-        }
-
-        .remove-media-btn:hover {
-          background: #dc2626;
-        }
-
-        .uploading-indicator {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          color: #6b7280;
-          font-size: 0.875rem;
-          padding: 0.5rem;
-          background: #f9fafb;
-          border-radius: 0.5rem;
-        }
-
-        .upload-spinner {
-          width: 1rem;
-          height: 1rem;
-          border: 2px solid #e5e7eb;
-          border-top: 2px solid #8b5cf6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        /* Expandable Sections */
-        .collaborators-section,
-        .privacy-section {
-          padding: 1rem 1.5rem;
-          border-top: 1px solid #f3f4f6;
-          background: #fafafa;
-        }
-
-        .section-header h4 {
-          margin: 0 0 0.25rem 0;
-          font-size: 1rem;
-          font-weight: 600;
-          color: #374151;
-        }
-
-        .section-header p {
-          margin: 0 0 1rem 0;
-          font-size: 0.875rem;
-          color: #6b7280;
-        }
-
-        .clear-btn {
-          background: none;
-          border: none;
-          color: #dc2626;
-          cursor: pointer;
-          font-size: 0.875rem;
-          text-decoration: underline;
-          margin-top: 0.75rem;
-          min-height: 44px;
-        }
-
-        /* Privacy Options */
-        .privacy-options {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          margin-bottom: 1rem;
-        }
-
-        .privacy-option {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .privacy-option:hover {
-          border-color: #8b5cf6;
-          background: rgba(139,92,246,0.02);
-        }
-
-        .option-content {
+        .privacy-display {
           flex: 1;
         }
 
-        .option-label {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-weight: 500;
-          color: #374151;
-          margin-bottom: 0.125rem;
-        }
-
-        .option-icon {
-          font-size: 1rem;
-        }
-
-        .option-description {
-          font-size: 0.75rem;
-          color: #6b7280;
-        }
-
-        .share-option {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          cursor: pointer;
-          font-size: 0.875rem;
-          color: #374151;
-        }
-
-        /* Action Bar */
-        .action-bar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1rem 1.5rem;
-          border-top: 1px solid #f3f4f6;
-          background: #fafafa;
-        }
-
-        .action-buttons {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .action-btn {
-          display: flex;
+        .privacy-badge {
+          display: inline-flex;
           align-items: center;
           gap: 0.375rem;
-          padding: 0.5rem 0.75rem;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.5rem;
-          cursor: pointer;
+          padding: 0.375rem 0.75rem;
+          background: #f3f4f6;
+          border-radius: 1rem;
           font-size: 0.875rem;
-          color: #374151;
-          transition: all 0.2s;
-          position: relative;
-          min-height: 44px;
-        }
-
-        .action-btn:hover {
-          border-color: #8b5cf6;
-          background: rgba(139,92,246,0.02);
-        }
-
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .count-badge {
-          background: #8b5cf6;
-          color: white;
-          font-size: 0.75rem;
-          padding: 0.125rem 0.375rem;
-          border-radius: 9999px;
-          margin-left: 0.25rem;
-          min-width: 1.25rem;
-          text-align: center;
-        }
-
-        .privacy-icon {
-          font-size: 1rem;
-        }
-
-        .post-btn {
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-          color: white;
-          border: none;
-          border-radius: 0.5rem;
-          font-weight: 600;
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          min-width: 80px;
-          min-height: 48px;
-          justify-content: center;
-        }
-
-        .post-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-        }
-
-        .post-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .btn-spinner {
-          display: inline-block;
-          animation: spin 1s linear infinite;
-        }
-
-        .file-input {
-          display: none;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        /* Mobile Responsiveness */
-        @media (max-width: 640px) {
-          .action-buttons {
-            gap: 0.375rem;
-          }
-
-          .action-btn {
-            font-size: 0.8125rem;
-            padding: 0.4375rem 0.625rem;
-          }
-
-          .media-grid {
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-          }
-
-          .privacy-options {
-            gap: 0.375rem;
-          }
-
-          .privacy-option {
-            padding: 0.625rem;
-          }
-
-          .option-description {
-            font-size: 0.6875rem;
-          }
-
-          .text-section {
-            padding: 1.25rem 1.25rem 1rem;
-          }
-
-          .main-textarea {
-            font-size: 16px;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .action-buttons {
-            width: 100%;
-          }
-
-          .action-btn {
-            flex: 1;
-            min-width: calc(50% - 0.25rem);
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
+          font-weight: 500;
+          color
