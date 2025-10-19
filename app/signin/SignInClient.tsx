@@ -12,7 +12,7 @@ export default function SignInClient() {
 
   // sanitize ?next so we only allow same-site, absolute-path redirects
   const rawNext = searchParams.get("next") || "";
-  const fallback = "/profile"; // change to "/calendar" if you prefer
+  const fallback = "/"; // home feed with posts
   const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : fallback;
 
   const [email, setEmail] = useState("");
