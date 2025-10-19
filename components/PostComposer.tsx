@@ -979,4 +979,343 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
           gap: 0.75rem;
-          margin-bottom:
+          margin-bottom: 1rem;
+        }
+
+        .media-item {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: 0.75rem;
+          overflow: hidden;
+          background: #f3f4f6;
+          border: 1px solid #e5e7eb;
+        }
+
+        .media-thumbnail {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .video-preview {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          padding: 0.5rem;
+          text-align: center;
+        }
+
+        .video-icon {
+          font-size: 1.5rem;
+          margin-bottom: 0.25rem;
+        }
+
+        .video-name {
+          font-size: 0.65rem;
+          color: #6b7280;
+          word-break: break-all;
+          line-height: 1.2;
+        }
+
+        .remove-media-btn {
+          position: absolute;
+          top: 0.375rem;
+          right: 0.375rem;
+          width: 1.5rem;
+          height: 1.5rem;
+          background: rgba(0,0,0,0.7);
+          color: white;
+          border: none;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 0.75rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .remove-media-btn:hover {
+          background: #dc2626;
+        }
+
+        .uploading-indicator {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #6b7280;
+          font-size: 0.875rem;
+          padding: 0.5rem;
+          background: #f9fafb;
+          border-radius: 0.5rem;
+        }
+
+        .upload-spinner {
+          width: 1rem;
+          height: 1rem;
+          border: 2px solid #e5e7eb;
+          border-top: 2px solid #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        .collaborators-section,
+        .privacy-section {
+          padding: 1rem 1.5rem;
+          border-top: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+
+        .section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.75rem;
+        }
+
+        .section-header h4 {
+          margin: 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .section-close {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: #e5e7eb;
+          border: none;
+          cursor: pointer;
+          font-size: 14px;
+          color: #6b7280;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .section-close:hover {
+          background: #d1d5db;
+        }
+
+        .section-description {
+          margin: 0 0 1rem 0;
+          font-size: 0.875rem;
+          color: #6b7280;
+        }
+
+        .clear-btn {
+          background: none;
+          border: none;
+          color: #dc2626;
+          cursor: pointer;
+          font-size: 0.875rem;
+          text-decoration: underline;
+          margin-top: 0.75rem;
+          min-height: 44px;
+        }
+
+        .privacy-options {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .privacy-option {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.75rem;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .privacy-option:hover {
+          border-color: #8b5cf6;
+          background: rgba(139,92,246,0.02);
+        }
+
+        .option-content {
+          flex: 1;
+        }
+
+        .option-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-weight: 500;
+          color: #374151;
+          margin-bottom: 0.125rem;
+        }
+
+        .option-icon {
+          font-size: 1rem;
+        }
+
+        .option-description {
+          font-size: 0.75rem;
+          color: #6b7280;
+        }
+
+        .share-option {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+        }
+
+        .action-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem 1.5rem;
+          border-top: 1px solid #f3f4f6;
+          background: #fafafa;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+
+        .action-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.375rem;
+          padding: 0.5rem 0.75rem;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+          color: #374151;
+          transition: all 0.2s;
+          position: relative;
+          min-height: 44px;
+        }
+
+        .action-btn:hover {
+          border-color: #8b5cf6;
+          background: rgba(139,92,246,0.02);
+        }
+
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .count-badge {
+          background: #8b5cf6;
+          color: white;
+          font-size: 0.75rem;
+          padding: 0.125rem 0.375rem;
+          border-radius: 9999px;
+          margin-left: 0.25rem;
+          min-width: 1.25rem;
+          text-align: center;
+        }
+
+        .privacy-icon {
+          font-size: 1rem;
+        }
+
+        .post-btn {
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+          border: none;
+          border-radius: 0.5rem;
+          font-weight: 600;
+          font-size: 0.875rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          min-width: 80px;
+          min-height: 48px;
+          justify-content: center;
+        }
+
+        .post-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+        }
+
+        .post-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .btn-spinner {
+          display: inline-block;
+          animation: spin 1s linear infinite;
+        }
+
+        .file-input {
+          display: none;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 640px) {
+          .action-buttons {
+            gap: 0.375rem;
+          }
+
+          .action-btn {
+            font-size: 0.8125rem;
+            padding: 0.4375rem 0.625rem;
+          }
+
+          .media-grid {
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+          }
+
+          .privacy-options {
+            gap: 0.375rem;
+          }
+
+          .privacy-option {
+            padding: 0.625rem;
+          }
+
+          .option-description {
+            font-size: 0.6875rem;
+          }
+
+          .text-section {
+            padding: 1.25rem 1.25rem 1rem;
+          }
+
+          .main-textarea {
+            font-size: 16px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .action-buttons {
+            width: 100%;
+          }
+
+          .action-btn {
+            flex: 1;
+            min-width: calc(50% - 0.25rem);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
