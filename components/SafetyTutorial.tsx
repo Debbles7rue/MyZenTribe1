@@ -1,4 +1,4 @@
-// components/SafetyTutorial.tsx
+// components/SafetyTutorial.tsx - UPDATED WITH SMALL POPUP
 "use client";
 
 import { useEffect, useState } from "react";
@@ -105,12 +105,13 @@ const TUTORIAL_STEPS = [
 export default function SafetyTutorial() {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) {
-      setOpen(true);
+      setShowPrompt(true);
     }
   }, []);
 
@@ -137,19 +138,75 @@ export default function SafetyTutorial() {
   const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
   const step = TUTORIAL_STEPS[currentStep];
 
+  // Small Prompt Popup (shows first)
+  if (showPrompt) {
+    return (
+      <>
+        <div 
+          className="fixed inset-0 z-[999]" 
+          onClick={() => setShowPrompt(false)}
+        />
+        
+        <div className="fixed bottom-6 right-6 z-[1000] animate-slideIn">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-300 p-5 max-w-xs">
+            <button
+              onClick={() => {
+                setShowPrompt(false);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem(STORAGE_KEY, "1");
+                }
+              }}
+              className="absolute top-2 right-2 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-3xl">👋</span>
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg mb-1">
+                  New to this page?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Want a quick tour of the features?
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPrompt(false);
+                  setOpen(true);
+                }}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-semibold hover:from-red-700 hover:to-rose-700 transition-all shadow-lg hover:shadow-xl"
+              >
+                Yes, Show Me!
+              </button>
+              <button
+                onClick={() => setShowPrompt(false)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
         onClick={() => close(true)}
       />
       
-      {/* Modal Panel */}
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header with progress */}
         <div className={`${step.highlight ? 'bg-gradient-to-br from-red-600 to-rose-600' : 'bg-gradient-to-br from-red-500 to-pink-600'} p-6 text-white relative`}>
           <button
             onClick={() => close(true)}
@@ -169,7 +226,6 @@ export default function SafetyTutorial() {
             </div>
           </div>
           
-          {/* Progress bar */}
           <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
             <div 
               className="h-full bg-white rounded-full transition-all duration-300"
@@ -178,13 +234,11 @@ export default function SafetyTutorial() {
           </div>
         </div>
 
-        {/* Body */}
         <div className="p-6 max-h-[60vh] overflow-y-auto">
           <p className="text-gray-700 text-base leading-relaxed mb-6">
             {step.description}
           </p>
 
-          {/* Feature List */}
           {step.features && (
             <ul className="space-y-3 mb-6">
               {step.features.map((feature, idx) => (
@@ -196,7 +250,6 @@ export default function SafetyTutorial() {
             </ul>
           )}
 
-          {/* Safety Note (Step 1) */}
           {step.safetyNote && (
             <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border-2 border-amber-200">
               <div className="flex items-start gap-3">
@@ -209,7 +262,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* Setup Steps (Step 2) */}
           {step.setupSteps && (
             <div className="space-y-3 mb-6">
               <div className="text-sm font-semibold text-gray-700 mb-2">Setup Process:</div>
@@ -225,7 +277,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* Guidelines (Step 4) */}
           {step.guidelines && (
             <div className="space-y-3 mb-6">
               {step.guidelines.map((guideline, idx) => (
@@ -240,7 +291,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* SOS Scenarios (Step 5) */}
           {step.sosScenarios && (
             <div className="space-y-4 mb-6">
               {step.sosScenarios.map((scenario, idx) => (
@@ -260,7 +310,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* Emergency Steps (Step 5) */}
           {step.emergencySteps && (
             <div className="space-y-3 mb-6">
               <div className="text-sm font-semibold text-gray-700 mb-2">Emergency Protocol:</div>
@@ -276,7 +325,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* Testing Note (Step 6) */}
           {step.testingNote && (
             <div className="mb-6 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-4 border-2 border-cyan-200">
               <div className="flex items-start gap-3">
@@ -289,7 +337,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* Pro Tip */}
           {step.tip && (
             <div className="mb-6 bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
               <div className="flex items-start gap-2">
@@ -302,7 +349,6 @@ export default function SafetyTutorial() {
             </div>
           )}
 
-          {/* Final Message */}
           {step.finalMessage && (
             <div className="p-4 bg-gradient-to-r from-red-100 to-pink-100 rounded-xl border border-red-200">
               <p className="text-red-900 font-medium text-center italic">
@@ -312,67 +358,6 @@ export default function SafetyTutorial() {
           )}
         </div>
 
-        {/* Footer Navigation */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center justify-between gap-4">
-            {/* Step Indicators */}
-            <div className="flex gap-2">
-              {TUTORIAL_STEPS.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentStep(idx)}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    idx === currentStep 
-                      ? 'bg-red-600 w-6' 
-                      : idx < currentStep 
-                        ? 'bg-red-300' 
-                        : 'bg-gray-300'
-                  }`}
-                  aria-label={`Go to step ${idx + 1}`}
-                />
-              ))}
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="flex gap-2">
-              {!isFirstStep && (
-                <button
-                  onClick={goPrev}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
-                >
-                  Back
-                </button>
-              )}
-              
-              {!isLastStep ? (
-                <button
-                  onClick={goNext}
-                  className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-                >
-                  Next
-                </button>
-              ) : (
-                <button
-                  onClick={() => close(true)}
-                  className="px-6 py-2 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg hover:from-red-700 hover:to-rose-700 transition-all font-semibold shadow-lg"
-                >
-                  Stay Safe 🛡️
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Skip Tutorial Link */}
-          <div className="text-center mt-3">
-            <button
-              onClick={() => close(false)}
-              className="text-xs text-gray-500 hover:text-gray-700 underline"
-            >
-              Remind me later
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+            <div className="flex
