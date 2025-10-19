@@ -1,4 +1,4 @@
-// components/ProfileTutorial.tsx
+// components/ProfileTutorial.tsx - UPDATED WITH SMALL POPUP
 "use client";
 
 import { useEffect, useState } from "react";
@@ -67,6 +67,20 @@ const TUTORIAL_STEPS = [
   },
   {
     step: 5,
+    icon: "🎁",
+    title: "Send Digital Gifts",
+    description: "Brighten someone's day with a thoughtful surprise!",
+    highlight: false,
+    features: [
+      "Send digital gifts to friends for just $0.99",
+      "Perfect for birthdays, celebrations, or just because",
+      "Let friends know you're thinking of them",
+      "Spread joy with a simple, meaningful gesture"
+    ],
+    finalMessage: "Sometimes the smallest gestures create the biggest smiles. 💜"
+  },
+  {
+    step: 6,
     icon: "📸",
     title: "Create Photo Albums",
     description: "Preserve your most precious memories in beautiful, customizable albums.",
@@ -84,7 +98,7 @@ const TUTORIAL_STEPS = [
     }
   },
   {
-    step: 6,
+    step: 7,
     icon: "🌸",
     title: "Your Profile, Your Sanctuary",
     description: "This is your personal dashboard for wellness, gratitude, connection, and joy.",
@@ -102,12 +116,13 @@ const TUTORIAL_STEPS = [
 export default function ProfileTutorial() {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) {
-      setOpen(true);
+      setShowPrompt(true);
     }
   }, []);
 
@@ -134,19 +149,75 @@ export default function ProfileTutorial() {
   const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
   const step = TUTORIAL_STEPS[currentStep];
 
+  // Small Prompt Popup (shows first)
+  if (showPrompt) {
+    return (
+      <>
+        <div 
+          className="fixed inset-0 z-[999]" 
+          onClick={() => setShowPrompt(false)}
+        />
+        
+        <div className="fixed bottom-6 right-6 z-[1000] animate-slideIn">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-purple-300 p-5 max-w-xs">
+            <button
+              onClick={() => {
+                setShowPrompt(false);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem(STORAGE_KEY, "1");
+                }
+              }}
+              className="absolute top-2 right-2 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-3xl">👋</span>
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg mb-1">
+                  New to this page?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Want a quick tour of the features?
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPrompt(false);
+                  setOpen(true);
+                }}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
+              >
+                Yes, Show Me!
+              </button>
+              <button
+                onClick={() => setShowPrompt(false)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
         onClick={() => close(true)}
       />
       
-      {/* Modal Panel */}
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header with progress */}
         <div className={`${step.highlight ? 'bg-gradient-to-br from-purple-600 to-pink-600' : 'bg-gradient-to-br from-purple-500 to-purple-700'} p-6 text-white relative`}>
           <button
             onClick={() => close(true)}
@@ -166,7 +237,6 @@ export default function ProfileTutorial() {
             </div>
           </div>
           
-          {/* Progress bar */}
           <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
             <div 
               className="h-full bg-white rounded-full transition-all duration-300"
@@ -175,13 +245,11 @@ export default function ProfileTutorial() {
           </div>
         </div>
 
-        {/* Body */}
         <div className="p-6 max-h-[60vh] overflow-y-auto">
           <p className="text-gray-700 text-base leading-relaxed mb-6">
             {step.description}
           </p>
 
-          {/* Feature List */}
           {step.features && (
             <ul className="space-y-3">
               {step.features.map((feature, idx) => (
@@ -193,7 +261,6 @@ export default function ProfileTutorial() {
             </ul>
           )}
 
-          {/* Special Note (Gratitude Journal) */}
           {step.specialNote && (
             <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border-2 border-purple-200">
               <div className="flex items-start gap-3">
@@ -206,7 +273,6 @@ export default function ProfileTutorial() {
             </div>
           )}
 
-          {/* Comparison Note (Albums) */}
           {step.comparisonNote && (
             <div className="mt-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border-2 border-amber-200">
               <div className="flex items-start gap-3">
@@ -219,7 +285,6 @@ export default function ProfileTutorial() {
             </div>
           )}
 
-          {/* Pro Tip */}
           {step.tip && (
             <div className="mt-6 bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
               <div className="flex items-start gap-2">
@@ -232,7 +297,6 @@ export default function ProfileTutorial() {
             </div>
           )}
 
-          {/* Final Message */}
           {step.finalMessage && (
             <div className="mt-6 p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl border border-purple-200">
               <p className="text-purple-900 font-medium text-center italic">
@@ -242,10 +306,8 @@ export default function ProfileTutorial() {
           )}
         </div>
 
-        {/* Footer Navigation */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center justify-between gap-4">
-            {/* Step Indicators */}
             <div className="flex gap-2">
               {TUTORIAL_STEPS.map((_, idx) => (
                 <button
@@ -263,7 +325,6 @@ export default function ProfileTutorial() {
               ))}
             </div>
 
-            {/* Navigation Buttons */}
             <div className="flex gap-2">
               {!isFirstStep && (
                 <button
@@ -292,7 +353,6 @@ export default function ProfileTutorial() {
             </div>
           </div>
 
-          {/* Skip Tutorial Link */}
           <div className="text-center mt-3">
             <button
               onClick={() => close(false)}
