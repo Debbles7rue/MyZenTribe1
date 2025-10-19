@@ -455,6 +455,7 @@ export default function CreateAlbumPage() {
           onOpenStickerPicker={() => setShowStickerPicker(true)}
           onOpenDecorationPicker={() => setShowDecorationPicker(true)}
           onOpenBackgroundPicker={() => setShowBackgroundPicker(true)}
+          onOpenPhotoOrganizer={undefined}
           onTemplateChange={applyTemplate}
           showDeletePage={false}
         />
