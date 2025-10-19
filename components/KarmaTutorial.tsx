@@ -1,4 +1,4 @@
-// components/KarmaTutorial.tsx
+// components/KarmaTutorial.tsx - UPDATED WITH SMALL POPUP
 "use client";
 
 import { useEffect, useState } from "react";
@@ -69,12 +69,13 @@ const TUTORIAL_STEPS = [
 export default function KarmaTutorial() {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) {
-      setOpen(true);
+      setShowPrompt(true);
     }
   }, []);
 
@@ -101,19 +102,75 @@ export default function KarmaTutorial() {
   const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
   const step = TUTORIAL_STEPS[currentStep];
 
+  // Small Prompt Popup (shows first)
+  if (showPrompt) {
+    return (
+      <>
+        <div 
+          className="fixed inset-0 z-[999]" 
+          onClick={() => setShowPrompt(false)}
+        />
+        
+        <div className="fixed bottom-6 right-6 z-[1000] animate-slideIn">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-emerald-300 p-5 max-w-xs">
+            <button
+              onClick={() => {
+                setShowPrompt(false);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem(STORAGE_KEY, "1");
+                }
+              }}
+              className="absolute top-2 right-2 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-3xl">👋</span>
+              <div>
+                <h3 className="font-bold text-gray-800 text-lg mb-1">
+                  New to this page?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Want a quick tour of the features?
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPrompt(false);
+                  setOpen(true);
+                }}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl"
+              >
+                Yes, Show Me!
+              </button>
+              <button
+                onClick={() => setShowPrompt(false)}
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
         onClick={() => close(true)}
       />
       
-      {/* Modal Panel */}
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header with progress */}
         <div className={`${step.highlight ? 'bg-gradient-to-br from-emerald-600 to-teal-600' : 'bg-gradient-to-br from-emerald-500 to-green-600'} p-6 text-white relative`}>
           <button
             onClick={() => close(true)}
@@ -133,7 +190,6 @@ export default function KarmaTutorial() {
             </div>
           </div>
           
-          {/* Progress bar */}
           <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
             <div 
               className="h-full bg-white rounded-full transition-all duration-300"
@@ -142,13 +198,11 @@ export default function KarmaTutorial() {
           </div>
         </div>
 
-        {/* Body */}
         <div className="p-6 max-h-[60vh] overflow-y-auto">
           <p className="text-gray-700 text-base leading-relaxed mb-6">
             {step.description}
           </p>
 
-          {/* Feature List */}
           {step.features && (
             <ul className="space-y-3 mb-6">
               {step.features.map((feature, idx) => (
@@ -160,7 +214,6 @@ export default function KarmaTutorial() {
             </ul>
           )}
 
-          {/* Refuge Note (Step 1) */}
           {step.refugeNote && (
             <div className="mb-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
               <div className="flex items-start gap-3">
@@ -173,7 +226,6 @@ export default function KarmaTutorial() {
             </div>
           )}
 
-          {/* Challenge Examples (Step 3) */}
           {step.challengeExamples && (
             <div className="space-y-3 mb-6">
               <div className="text-sm font-semibold text-gray-700 mb-2">Example Challenges:</div>
@@ -189,7 +241,6 @@ export default function KarmaTutorial() {
             </div>
           )}
 
-          {/* Karma Note (Step 4) */}
           {step.karmaNote && (
             <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border-2 border-amber-200">
               <div className="flex items-start gap-3">
@@ -202,7 +253,6 @@ export default function KarmaTutorial() {
             </div>
           )}
 
-          {/* Pro Tip */}
           {step.tip && (
             <div className="mb-6 bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
               <div className="flex items-start gap-2">
@@ -215,7 +265,6 @@ export default function KarmaTutorial() {
             </div>
           )}
 
-          {/* Final Message */}
           {step.finalMessage && (
             <div className="p-4 bg-gradient-to-r from-emerald-100 to-teal-100 rounded-xl border border-emerald-200">
               <p className="text-emerald-900 font-medium text-center italic">
@@ -225,10 +274,8 @@ export default function KarmaTutorial() {
           )}
         </div>
 
-        {/* Footer Navigation */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center justify-between gap-4">
-            {/* Step Indicators */}
             <div className="flex gap-2">
               {TUTORIAL_STEPS.map((_, idx) => (
                 <button
@@ -246,7 +293,6 @@ export default function KarmaTutorial() {
               ))}
             </div>
 
-            {/* Navigation Buttons */}
             <div className="flex gap-2">
               {!isFirstStep && (
                 <button
@@ -275,7 +321,6 @@ export default function KarmaTutorial() {
             </div>
           </div>
 
-          {/* Skip Tutorial Link */}
           <div className="text-center mt-3">
             <button
               onClick={() => close(false)}
