@@ -69,12 +69,13 @@ const TUTORIAL_STEPS = [
 export default function BusinessViewerTutorial() {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const seen = localStorage.getItem(STORAGE_KEY);
     if (!seen) {
-      setOpen(true);
+      setShowPrompt(true);
     }
   }, []);
 
