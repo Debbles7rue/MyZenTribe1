@@ -113,44 +113,45 @@ export default function HomeFeed() {
         <SOSFloatingButton />
       </div>
 
-      {/* Fixed Bottom Navigation Bar - Shows on both mobile and desktop */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
-        <div className="max-w-2xl mx-auto px-2 sm:px-4 py-2">
-          <div className="grid grid-cols-4 gap-1">
-            <a 
-              href="/notifications" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all relative"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🔔</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Alerts</span>
-            </a>
-            <a 
-              href="/contact" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-purple-50 rounded-lg transition-all"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">📧</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Contact</span>
-            </a>
-            <a 
-              href="/suggestions" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-green-50 rounded-lg transition-all"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💡</span>
-              <span className="text-xs text-gray-600 group-hover:text-green-700">Suggest</span>
-            </a>
-            <a 
-              href="/donate" 
-              className="group flex flex-col items-center justify-center py-2 px-1 text-center hover:bg-blue-50 rounded-lg transition-all"
-            >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💝</span>
-              <span className="text-xs text-gray-600 group-hover:text-blue-700">Donate</span>
-            </a>
-          </div>
-        </div>
-        
-        {/* Subtle gradient decoration */}
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
-      </div>
+    {/* Fixed Bottom Navigation Bar - LEFT-ALIGNED to avoid SOS button */}
+<div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+  <div className="max-w-2xl mx-auto px-2 sm:px-4 py-2">
+    {/* Changed from grid to flex with left alignment */}
+    <div className="flex gap-1 justify-start max-w-md">
+      <a 
+        href="/notifications" 
+        className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-purple-50 rounded-lg transition-all"
+      >
+        <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🔔</span>
+        <span className="text-xs text-gray-600 group-hover:text-purple-700">Alerts</span>
+      </a>
+      <a 
+        href="/contact" 
+        className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-purple-50 rounded-lg transition-all"
+      >
+        <span className="text-xl mb-1 group-hover:scale-110 transition-transform">📧</span>
+        <span className="text-xs text-gray-600 group-hover:text-purple-700">Contact</span>
+      </a>
+      <a 
+        href="/suggestions" 
+        className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-green-50 rounded-lg transition-all"
+      >
+        <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💡</span>
+        <span className="text-xs text-gray-600 group-hover:text-green-700">Suggest</span>
+      </a>
+      <a 
+        href="/donate" 
+        className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-blue-50 rounded-lg transition-all"
+      >
+        <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💝</span>
+        <span className="text-xs text-gray-600 group-hover:text-blue-700">Donate</span>
+      </a>
+    </div>
+  </div>
+  
+  {/* Subtle gradient decoration */}
+  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
+</div>
     </>
   );
 }
