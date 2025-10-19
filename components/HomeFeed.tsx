@@ -1,4 +1,4 @@
-// components/HomeFeed.tsx
+// components/HomeFeed.tsx - UPDATED BOTTOM BAR
 "use client";
 
 import { useEffect, useState } from "react";
@@ -61,7 +61,7 @@ export default function HomeFeed() {
           {/* Main Feed Column */}
           <div className="flex-1 max-w-2xl mx-auto lg:mx-0">
             
-            {/* Welcome Banner - Original Full Message */}
+            {/* Welcome Banner */}
             <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">🕊️</span>
@@ -236,43 +236,69 @@ export default function HomeFeed() {
         <SOSFloatingButton />
       </div>
 
-      {/* Fixed Bottom Navigation Bar */}
+      {/* Fixed Bottom Navigation Bar - NOW WITH 5 ITEMS */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
         <div className="max-w-2xl mx-auto px-2 sm:px-4 py-2">
-          <div className="flex gap-1 justify-start max-w-md">
+          <div className="flex gap-1 justify-start overflow-x-auto scrollbar-hide">
+            {/* Safety */}
             <a 
-              href="/notifications" 
-              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-purple-50 rounded-lg transition-all"
+              href="/safety" 
+              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
             >
-              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🔔</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Alerts</span>
+              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">🛡️</span>
+              <span className="text-xs text-gray-600 group-hover:text-red-700 whitespace-nowrap">Safety</span>
             </a>
+
+            {/* Commitment */}
+            <a 
+              href="/commitment" 
+              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-purple-50 rounded-lg transition-all flex-shrink-0"
+            >
+              <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💜</span>
+              <span className="text-xs text-gray-600 group-hover:text-purple-700 whitespace-nowrap">Commitment</span>
+            </a>
+
+            {/* Contact */}
             <a 
               href="/contact" 
-              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-purple-50 rounded-lg transition-all"
+              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-purple-50 rounded-lg transition-all flex-shrink-0"
             >
               <span className="text-xl mb-1 group-hover:scale-110 transition-transform">📧</span>
-              <span className="text-xs text-gray-600 group-hover:text-purple-700">Contact</span>
+              <span className="text-xs text-gray-600 group-hover:text-purple-700 whitespace-nowrap">Contact</span>
             </a>
+
+            {/* Suggest */}
             <a 
               href="/suggestions" 
-              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-green-50 rounded-lg transition-all"
+              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-green-50 rounded-lg transition-all flex-shrink-0"
             >
               <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💡</span>
-              <span className="text-xs text-gray-600 group-hover:text-green-700">Suggest</span>
+              <span className="text-xs text-gray-600 group-hover:text-green-700 whitespace-nowrap">Suggest</span>
             </a>
+
+            {/* Donate */}
             <a 
               href="/donate" 
-              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-blue-50 rounded-lg transition-all"
+              className="group flex flex-col items-center justify-center py-2 px-3 text-center hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
             >
               <span className="text-xl mb-1 group-hover:scale-110 transition-transform">💝</span>
-              <span className="text-xs text-gray-600 group-hover:text-blue-700">Donate</span>
+              <span className="text-xs text-gray-600 group-hover:text-blue-700 whitespace-nowrap">Donate</span>
             </a>
           </div>
         </div>
         
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300"></div>
       </div>
+
+      <style jsx>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </>
   );
 }
