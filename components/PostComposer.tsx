@@ -101,7 +101,7 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     const validFiles = files.filter(file => {
       const isImage = file.type.startsWith('image/');
       const isVideo = file.type.startsWith('video/');
-      const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB limit
+      const isValidSize = file.size <= 50 * 1024 * 1024;
       
       if (!isImage && !isVideo) {
         setStatus({ type: 'error', message: `${file.name}: Please select images or videos only` });
@@ -118,7 +118,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
 
     if (validFiles.length === 0) return;
 
-    // Check total file limit
     const totalFiles = uploadedMedia.length + validFiles.length;
     if (totalFiles > 10) {
       setStatus({ type: 'error', message: 'Maximum 10 files per post' });
@@ -141,15 +140,10 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       
       for (let i = 0; i < validFiles.length; i++) {
         const file = validFiles[i];
-        
-        // Create preview URL
         const previewUrl = URL.createObjectURL(file);
-        
-        // Create unique filename
         const fileExt = file.name.split('.').pop() || 'jpg';
         const fileName = `${user.id}/post-${timestamp}-${i}.${fileExt}`;
         
-        // Upload to post-media bucket
         const { data, error } = await supabase.storage
           .from('post-media')
           .upload(fileName, file, {
@@ -165,7 +159,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         }
 
         if (data) {
-          // Get public URL
           const { data: { publicUrl } } = supabase.storage
             .from('post-media')
             .getPublicUrl(fileName);
@@ -209,9 +202,8 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
     setStatus({ type: 'info', message: 'Creating your post...' });
     
     try {
-      // Prepare media array
       const mediaItems = uploadedMedia.map(m => ({
-        url: m.storagePath,  // Use storage path for database
+        url: m.storagePath,
         type: m.type
       }));
 
@@ -228,14 +220,12 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         return;
       }
       
-      // Clean up preview URLs
       uploadedMedia.forEach(m => {
         if (m.preview.startsWith('blob:')) {
           URL.revokeObjectURL(m.preview);
         }
       });
       
-      // Reset form
       setBody("");
       setUploadedMedia([]);
       setCoCreators([]);
@@ -243,10 +233,9 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       setShowCoCreators(false);
       setShowTaggedFriends(false);
       setShowPrivacyOptions(false);
-      setIsExpanded(false); // Collapse after posting
+      setIsExpanded(false);
       setStatus({ type: 'success', message: 'Post shared successfully!' });
       
-      // Call callback
       if (onPostCreated) {
         setTimeout(() => onPostCreated(), 500);
       }
@@ -265,7 +254,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
   if (!isExpanded) {
     return (
       <div className={`post-composer-collapsed ${className}`}>
-        {/* Status Messages */}
         {status && (
           <div className={`status-message ${status.type}`}>
             <span className="status-icon">
@@ -276,7 +264,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
         )}
 
         <div className="collapsed-card">
-          {/* Click to expand */}
           <div 
             className="collapsed-input-area"
             onClick={() => setIsExpanded(true)}
@@ -291,7 +278,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
             </div>
           </div>
 
-          {/* Quick Action Buttons */}
           <div className="collapsed-actions">
             <button
               type="button"
@@ -333,6 +319,16 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
             </button>
           </div>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleMediaSelect}
+          style={{ display: 'none' }}
+          disabled={uploadingMedia}
+        />
 
         <style jsx>{`
           .post-composer-collapsed {
@@ -465,7 +461,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
             white-space: nowrap;
           }
 
-          /* Mobile Responsiveness */
           @media (max-width: 640px) {
             .collapsed-card {
               padding: 0.875rem;
@@ -518,25 +513,13 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
             }
           }
         `}</style>
-
-        {/* Hidden file input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/*,video/*"
-          onChange={handleMediaSelect}
-          style={{ display: 'none' }}
-          disabled={uploadingMedia}
-        />
       </div>
     );
   }
 
-  // EXPANDED VIEW (Original Full Composer - ALL FEATURES PRESERVED)
+  // EXPANDED VIEW
   return (
     <div className={`post-composer ${className}`}>
-      {/* Status Messages */}
       {status && (
         <div className={`status-message ${status.type}`}>
           <span className="status-icon">
@@ -547,7 +530,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
       )}
 
       <div className="composer-card">
-        {/* Header with Close Button */}
         <div className="composer-header">
           <h3>Create Post</h3>
           <button 
@@ -574,7 +556,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           </button>
         </div>
 
-        {/* Main Text Input */}
         <div className="text-section">
           <div className="user-info">
             <img 
@@ -602,7 +583,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           <div className="char-count">{body.length}/1000</div>
         </div>
 
-        {/* Media Preview Grid */}
         {uploadedMedia.length > 0 && (
           <div className="media-preview">
             <div className="media-grid">
@@ -640,7 +620,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           </div>
         )}
 
-        {/* Co-creators Section */}
         {showCoCreators && (
           <div className="collaborators-section">
             <div className="section-header">
@@ -673,7 +652,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           </div>
         )}
 
-        {/* Tagged Friends Section */}
         {showTaggedFriends && (
           <div className="collaborators-section">
             <div className="section-header">
@@ -706,7 +684,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           </div>
         )}
 
-        {/* Privacy Options */}
         {showPrivacyOptions && (
           <div className="privacy-section">
             <div className="section-header">
@@ -751,7 +728,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           </div>
         )}
 
-        {/* Action Bar */}
         <div className="action-bar">
           <div className="action-buttons">
             <button
@@ -817,7 +793,6 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           </button>
         </div>
 
-        {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
@@ -966,4 +941,42 @@ export default function PostComposer({ onPostCreated, className = "" }: PostComp
           border-radius: 1rem;
           font-size: 0.875rem;
           font-weight: 500;
-          color
+          color: #374151;
+        }
+
+        .main-textarea {
+          width: 100%;
+          padding: 0;
+          border: none;
+          font-size: 1.1rem;
+          resize: none;
+          font-family: inherit;
+          background: transparent;
+          min-height: 60px;
+          overflow-y: hidden;
+        }
+
+        .main-textarea:focus {
+          outline: none;
+        }
+
+        .main-textarea::placeholder {
+          color: #9ca3af;
+        }
+
+        .char-count {
+          text-align: right;
+          font-size: 0.75rem;
+          color: #9ca3af;
+          margin-top: 0.5rem;
+        }
+
+        .media-preview {
+          padding: 0 1.5rem 1rem;
+        }
+
+        .media-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+          gap: 0.75rem;
+          margin-bottom:
