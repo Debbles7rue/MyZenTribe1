@@ -1,4 +1,4 @@
-// components/SafetyTutorial.tsx - UPDATED WITH SMALL POPUP
+// components/SafetyTutorial.tsx - COMPLETE FIXED VERSION
 "use client";
 
 import { useEffect, useState } from "react";
@@ -360,4 +360,61 @@ export default function SafetyTutorial() {
 
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex
+            <div className="flex gap-2">
+              {TUTORIAL_STEPS.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentStep(idx)}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    idx === currentStep 
+                      ? 'bg-red-600 w-6' 
+                      : idx < currentStep 
+                        ? 'bg-red-300' 
+                        : 'bg-gray-300'
+                  }`}
+                  aria-label={`Go to step ${idx + 1}`}
+                />
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              {!isFirstStep && (
+                <button
+                  onClick={goPrev}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                >
+                  Back
+                </button>
+              )}
+              
+              {!isLastStep ? (
+                <button
+                  onClick={goNext}
+                  className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  onClick={() => close(true)}
+                  className="px-6 py-2 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-lg hover:from-red-700 hover:to-rose-700 transition-all font-semibold shadow-lg"
+                >
+                  Stay Safe 🛡️
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="text-center mt-3">
+            <button
+              onClick={() => close(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              Remind me later
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
