@@ -1,3 +1,4 @@
+// app/signup/page.tsx - REPLACE ENTIRE FILE
 "use client";
 
 import { useEffect, useState } from "react";
@@ -46,7 +47,7 @@ export default function SignUpPage() {
     // If email confirmations are enabled, there's no session yet.
     if (!data.session) {
       setInfo(
-        "Check your email to confirm your address. After confirming, you’ll be redirected to your profile."
+        "Check your email to confirm your address. After confirming, you'll be redirected to your profile."
       );
       return;
     }
