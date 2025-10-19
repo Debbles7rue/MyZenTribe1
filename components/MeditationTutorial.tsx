@@ -117,6 +117,7 @@ export default function MeditationTutorial() {
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
   const step = TUTORIAL_STEPS[currentStep];
+  const [showPrompt, setShowPrompt] = useState(false);
 
   if (!open) return null;
 
