@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { TEMPLATES } from './constants/scrapbookAssets';
 
 type Props = {
+  albumId?: string; // ADD THIS LINE
   currentTemplate: string;
   uploading: boolean;
   canDeletePage: boolean;
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export default function StickySidebarToolbar({
+  albumId, // ADD THIS LINE
   currentTemplate,
   uploading,
   canDeletePage,
@@ -134,6 +136,16 @@ export default function StickySidebarToolbar({
                 >
                   🎨 Background
                 </button>
+
+                {/* ADD THE ORGANIZE PHOTOS BUTTON HERE */}
+{albumId && (
+  <button
+    onClick={() => window.location.href = `/albums/${albumId}/organize`}
+    className="w-full px-3 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+  >
+    📦 Organize Photos
+  </button>
+)}
 
                 {/* Divider */}
                 <div className="border-t border-gray-200 my-3"></div>
@@ -307,6 +319,18 @@ export default function StickySidebarToolbar({
                   >
                     🎨 Background
                   </button>
+                  {/* ADD THE ORGANIZE PHOTOS BUTTON HERE */}
+{albumId && (
+  <button
+    onClick={() => {
+      window.location.href = `/albums/${albumId}/organize`;
+      setIsMobileDrawerOpen(false);
+    }}
+    className="w-full px-4 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl active:opacity-80 transition-opacity text-base font-medium shadow-md"
+  >
+    📦 Organize Photos
+  </button>
+)}
 
                   {/* Divider */}
                   <div className="border-t border-gray-200 my-4"></div>
