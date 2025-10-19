@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { TEMPLATES } from './constants/scrapbookAssets';
 
 type Props = {
-  albumId?: string; // ADD THIS LINE
+  albumId?: string;
   currentTemplate: string;
   uploading: boolean;
   canDeletePage: boolean;
@@ -16,6 +16,7 @@ type Props = {
   onOpenStickerPicker: () => void;
   onOpenDecorationPicker: () => void;
   onOpenBackgroundPicker: () => void;
+  onOpenPhotoOrganizer?: () => void; // ADD THIS
   onTemplateChange: (template: string) => void;
   onDeletePage?: () => void;
   showDeletePage?: boolean;
@@ -138,9 +139,10 @@ export default function StickySidebarToolbar({
                 </button>
 
                 {/* ADD THE ORGANIZE PHOTOS BUTTON HERE */}
+{/* Organize Photos Button */}
 {albumId && (
   <button
-    onClick={() => window.location.href = `/albums/${albumId}/organize`}
+    onClick={onOpenPhotoOrganizer}  // Changed from navigation
     className="w-full px-3 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
   >
     📦 Organize Photos
