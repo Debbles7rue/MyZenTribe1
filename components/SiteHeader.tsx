@@ -1,10 +1,11 @@
-// components/SiteHeader.tsx
+// components/SiteHeader.tsx - UPDATED WITH NOTIFICATION BELL
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function SiteHeader() {
   const pathname = usePathname();
@@ -209,35 +210,8 @@ export default function SiteHeader() {
               </nav>
 
               <div className="header-actions">
-                {/* Safety */}
-                <Link 
-                  href="/safety" 
-                  className={`nav-icon-btn safety-btn ${pathname?.startsWith("/safety") ? "active" : ""}`}
-                  aria-label="Safety"
-                  title="Safety"
-                >
-                  <span className="nav-icon">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
-                    </svg>
-                  </span>
-                  <span className="nav-label">Safety</span>
-                </Link>
-
-                {/* Commitment */}
-                <Link 
-                  href="/commitment" 
-                  className={`nav-icon-btn commitment-btn ${pathname?.startsWith("/commitment") ? "active" : ""}`}
-                  aria-label="Our Commitment"
-                  title="Our Commitment"
-                >
-                  <span className="nav-icon">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
-                    </svg>
-                  </span>
-                  <span className="nav-label">Commitment</span>
-                </Link>
+                {/* Notification Bell - NEW! */}
+                <NotificationBell />
                 
                 {/* Sign Out */}
                 <button className="sign-out-btn" onClick={signOut} aria-label="Sign Out" title="Sign Out">
@@ -286,7 +260,6 @@ export default function SiteHeader() {
           padding-bottom: 8px;
         }
 
-        /* Row 1: Brand Logo */
         .header-row-top {
           display: flex;
           justify-content: center;
@@ -323,7 +296,6 @@ export default function SiteHeader() {
           color: #1f2937;
         }
 
-        /* Row 2: Navigation */
         .header-row-nav {
           display: flex;
           align-items: center;
@@ -331,7 +303,6 @@ export default function SiteHeader() {
           gap: 4px;
         }
 
-        /* Icon Navigation */
         .icon-nav {
           display: flex;
           align-items: center;
@@ -341,7 +312,6 @@ export default function SiteHeader() {
           flex-wrap: wrap;
         }
 
-        /* Navigation Icon Buttons - ICON ONLY */
         .nav-icon-btn {
           position: relative;
           display: flex;
@@ -395,12 +365,10 @@ export default function SiteHeader() {
           height: 16px;
         }
 
-        /* Labels always hidden for compact design */
         .nav-label {
           display: none;
         }
 
-        /* Profile Dropdown */
         .profile-dropdown {
           position: relative;
         }
@@ -466,7 +434,6 @@ export default function SiteHeader() {
           opacity: 0.6;
         }
 
-        /* Header Actions */
         .header-actions {
           display: flex;
           align-items: center;
@@ -480,7 +447,6 @@ export default function SiteHeader() {
           flex-shrink: 0;
         }
 
-        /* Admin Button - Special styling */
         .admin-btn {
           border-color: rgba(234, 179, 8, 0.2);
         }
@@ -498,33 +464,6 @@ export default function SiteHeader() {
           color: white;
         }
 
-        /* Safety Button */
-        .safety-btn {
-          min-width: 40px;
-          height: 40px;
-        }
-
-        /* Commitment Button - Purple heart theme */
-        .commitment-btn {
-          min-width: 40px;
-          height: 40px;
-          border-color: rgba(168, 85, 247, 0.2);
-        }
-
-        .commitment-btn:hover {
-          background: linear-gradient(135deg, #faf5ff, #f3e8ff);
-          border-color: rgba(168, 85, 247, 0.3);
-          color: #a855f7;
-          box-shadow: 0 2px 8px rgba(168, 85, 247, 0.15);
-        }
-
-        .commitment-btn.active {
-          background: linear-gradient(135deg, #a855f7, #c084fc);
-          border-color: #a855f7;
-          color: white;
-        }
-
-        /* Sign Out Button */
         .sign-out-btn {
           display: flex;
           align-items: center;
@@ -552,7 +491,6 @@ export default function SiteHeader() {
           display: none;
         }
 
-        /* Login Button */
         .login-btn {
           display: flex;
           align-items: center;
@@ -587,7 +525,6 @@ export default function SiteHeader() {
           height: 80px;
         }
 
-        /* Tablet (600px+) - Still two rows but more spacing */
         @media (min-width: 600px) {
           .header-container {
             padding: 0 12px;
@@ -624,9 +561,7 @@ export default function SiteHeader() {
             gap: 4px;
           }
 
-          .admin-btn,
-          .safety-btn,
-          .commitment-btn {
+          .admin-btn {
             min-width: 44px;
             height: 44px;
           }
@@ -637,7 +572,6 @@ export default function SiteHeader() {
           }
         }
 
-        /* Desktop (768px+) - Single row layout */
         @media (min-width: 768px) {
           .header-container {
             flex-direction: row;
@@ -683,9 +617,7 @@ export default function SiteHeader() {
             height: 20px;
           }
 
-          .admin-btn,
-          .safety-btn,
-          .commitment-btn {
+          .admin-btn {
             padding: 10px;
             height: 48px;
             min-width: 48px;
@@ -702,7 +634,6 @@ export default function SiteHeader() {
           }
         }
 
-        /* Large Desktop (1024px+) */
         @media (min-width: 1024px) {
           .header-container {
             padding: 0 20px;
@@ -724,9 +655,7 @@ export default function SiteHeader() {
             padding: 12px;
           }
 
-          .admin-btn,
-          .safety-btn,
-          .commitment-btn {
+          .admin-btn {
             min-width: 52px;
             height: 52px;
           }
