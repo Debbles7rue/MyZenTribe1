@@ -61,13 +61,18 @@ export default function HomeFeed() {
           {/* Main Feed Column */}
           <div className="flex-1 max-w-2xl mx-auto lg:mx-0">
             
-            {/* Compact Welcome Banner */}
-            <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 mb-4 border border-purple-200">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🕊️</span>
-                <p className="text-sm text-purple-700">
-                  <span className="font-semibold">Your peaceful sanctuary.</span> Share joy, gratitude, and uplifting moments—free from negativity. 💜
-                </p>
+            {/* Welcome Banner - Original Full Message */}
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 mb-5 border border-purple-200">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🕊️</span>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-purple-900 mb-1">Welcome to Your Peaceful Space</h3>
+                  <p className="text-sm text-purple-700">
+                    This is a sanctuary free from political discourse and divisive content. 
+                    We're bombarded with terrible news everywhere else—here we celebrate only good news and positive moments. 
+                    Share your joy, gratitude, and uplifting experiences with your tribe. 💜
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -138,7 +143,7 @@ export default function HomeFeed() {
 
           {/* Desktop Sidebar - Hidden on Mobile/Tablet */}
           <div className="hidden lg:block w-80 flex-shrink-0">
-            <div className="sticky top-4 space-y-4">
+            <div className="sticky top-4 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-purple-200 scrollbar-track-transparent">
               
               {/* Daily Intention Widget */}
               <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 border border-purple-200">
