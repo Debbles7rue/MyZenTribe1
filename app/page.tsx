@@ -1,26 +1,24 @@
-// app/page.tsx - REPLACE ENTIRE FILE
+// app/page.tsx - FIXED VERSION - REPLACE ENTIRE FILE
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
+import HomeFeed from "@/components/HomeFeed";
 
 export default function LandingPage() {
-  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [checking, setChecking] = useState(true);
 
-  // If already logged in, go to their home feed
+  // Check if user is logged in
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        router.replace("/");
-      } else {
-        setChecking(false);
-      }
+      setUser(data.user);
+      setChecking(false);
     });
-  }, [router]);
+  }, []);
 
+  // Loading state
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100">
@@ -29,6 +27,12 @@ export default function LandingPage() {
     );
   }
 
+  // If logged in, show HomeFeed
+  if (user) {
+    return <HomeFeed />;
+  }
+
+  // If NOT logged in, show landing page
   return (
     <main className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100">
       {/* Hero Section */}
