@@ -444,6 +444,7 @@ export default function CreateAlbumPage() {
       <div className="flex album-layout">
         {/* Sticky Sidebar Toolbar */}
         <StickySidebarToolbar
+          albumId={undefined}
           currentTemplate={pages[currentPageIndex]?.template || 'freeform'}
           uploading={uploading}
           canDeletePage={pages.length > 1}
