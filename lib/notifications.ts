@@ -110,6 +110,7 @@ export async function markRead(id: string) {
     return { ok: false, error: error.message };
   }
   
+  console.log(`✓ Marked notification ${id.substring(0, 8)} as read`);
   return { ok: true, error: null };
 }
 
@@ -132,6 +133,7 @@ export async function markAllRead() {
     return { ok: false, error: error.message };
   }
   
+  console.log(`✓ Marked all notifications as read for user ${me.substring(0, 8)}`);
   return { ok: true, error: null };
 }
 
