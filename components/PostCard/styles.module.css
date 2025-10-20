@@ -1,27 +1,27 @@
 /* PostCard Modular Styles - Enhanced with Wall Post Support + Mobile Optimization */
 
 /* ======================
-   WALL POST STYLES (BLUE BORDER FOR PERSONAL POSTS)
+   WALL POST STYLES (UPDATED WITH GRADIENT BORDER)
    ====================== */
 
-/* 🔵 Wall post with BLUE gradient border - for personal/direct posts */
+/* Wall post with purple gradient border - matching home feed aesthetic */
 .postCardCompact.wallPost,
 .postCardExpanded.wallPost {
   border: 2px solid transparent;
   background-image: linear-gradient(white, white), 
-                    linear-gradient(135deg, #60a5fa, #3b82f6);
+                    linear-gradient(135deg, #c084fc, #a78bfa);
   background-origin: border-box;
   background-clip: padding-box, border-box;
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
 }
 
 .postCardCompact.wallPost:hover {
-  box-shadow: 0 8px 28px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 8px 28px rgba(139, 92, 246, 0.25);
 }
 
-/* Wall post banner - Compact mode - BLUE */
+/* Wall post banner - Compact mode */
 .wallPostBannerCompact {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: white;
   padding: 8px 16px;
   display: flex;
@@ -30,12 +30,12 @@
   font-size: 13px;
   font-weight: 600;
   border-radius: 14px 14px 0 0;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
 }
 
-/* Wall post banner - Expanded mode - BLUE */
+/* Wall post banner - Expanded mode */
 .wallPostBanner {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: white;
   padding: 12px 20px;
   display: flex;
@@ -43,7 +43,7 @@
   gap: 10px;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
 }
 
 .wallPostIcon {
@@ -87,29 +87,26 @@
 }
 
 /* ======================
-   COMPACT MODE STYLES (LAVENDER BORDER FOR GENERAL POSTS)
+   COMPACT MODE STYLES (UPDATED WITH LAVENDER SHADOW)
    ====================== */
 
 .postCardCompact {
   background: white;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
   margin-bottom: 24px;
   cursor: pointer;
   transition: all 0.3s ease;
   overflow: hidden;
+  /* Subtle lavender shadow for regular posts */
+  box-shadow: 0 2px 12px rgba(167, 139, 246, 0.12);
   -webkit-tap-highlight-color: rgba(139, 92, 246, 0.1);
   touch-action: manipulation;
-  
-  /* 💜 LAVENDER border and shadow for general posts */
-  border: 2px solid transparent;
-  background-image: linear-gradient(white, white), 
-                    linear-gradient(135deg, #c084fc, #a78bfa);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  box-shadow: 0 2px 12px rgba(167, 139, 246, 0.12);
 }
 
 .postCardCompact:hover {
+  border-color: #cbd5e0;
+  /* Enhanced lavender shadow on hover */
   box-shadow: 0 8px 28px rgba(167, 139, 246, 0.2);
   transform: translateY(-2px);
 }
@@ -187,23 +184,18 @@
 }
 
 /* ======================
-   EXPANDED MODE STYLES (LAVENDER BORDER FOR GENERAL POSTS)
+   EXPANDED MODE STYLES (UPDATED WITH LAVENDER SHADOW)
    ====================== */
 
 .postCardExpanded {
   background: white;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
   margin-bottom: 24px;
   overflow: hidden;
-  max-width: 100%;
-  
-  /* 💜 LAVENDER border and shadow for general posts */
-  border: 2px solid transparent;
-  background-image: linear-gradient(white, white), 
-                    linear-gradient(135deg, #c084fc, #a78bfa);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  /* Lavender shadow for regular posts */
   box-shadow: 0 4px 24px rgba(167, 139, 246, 0.15);
+  max-width: 100%;
 }
 
 .postHeader {
