@@ -1,370 +1,594 @@
-// components/PostsFeed.tsx - Updated to use PostCard component with Wall Post Support
+// components/PostCard.tsx - Main Component with Wall Post Banner Support
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+import { Post, toggleLike, addComment, deletePost } from "@/lib/posts";
 import { supabase } from "@/lib/supabaseClient";
-import PostCard from "@/components/PostCard";
-import { Post } from "@/lib/posts";
+import { createNotification } from "@/lib/notifications";
+import PhotoGrid from "./PostCard/PhotoGrid";
+import PostLightbox from "./PostCard/PostLightbox";
+import IndividualPhotoModal from "./PostCard/IndividualPhotoModal";
+import EditPostModal from "./PostCard/EditPostModal";
+import DeleteConfirmModal from "./PostCard/DeleteConfirmModal";
+import PostInteractions from "./PostCard/PostInteractions";
+import styles from "./PostCard/styles.module.css";
 
-interface PostsFeedProps {
-  userId: string;
-  viewerUserId?: string | null;
-  maxPosts?: number;
+interface PostCardProps {
+  post: Post;
+  onChanged?: () => void;
+  currentUserId?: string;
 }
 
-export default function PostsFeed({ 
-  userId, 
-  viewerUserId, 
-  maxPosts = 20 
-}: PostsFeedProps) {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [viewerRelationship, setViewerRelationship] = useState<'friend' | 'none'>('none');
+interface Comment {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  author?: {
+    full_name: string;
+    avatar_url: string;
+  };
+}
 
+export default function PostCard({ post, onChanged, currentUserId }: PostCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [lightboxStartIndex, setLightboxStartIndex] = useState(0);
+  const [showEditMenu, setShowEditMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<{url: string; type: 'image' | 'video'; id?: string} | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCoCreator, setIsCoCreator] = useState(false);
+  const [processedMedia, setProcessedMedia] = useState<Array<{url: string; type: 'image' | 'video'; id?: string}>>([]);
+  
+  // Like, Comment, Share states
+  const [isLiking, setIsLiking] = useState(false);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [isCommenting, setIsCommenting] = useState(false);
+  const [localLikeCount, setLocalLikeCount] = useState(post.like_count || 0);
+  const [localLikedByMe, setLocalLikedByMe] = useState(post.liked_by_me || false);
+  
+  // Comment loading and display
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [showAllComments, setShowAllComments] = useState(false);
+  
+  // Wall post detection
+  const isWallPost = !!post.posted_on_profile_id;
+  const wallPostAuthorName = post.author?.full_name || 'Someone';
+  const wallPostTargetName = post.posted_on_profile?.full_name || 'User';
+  
   useEffect(() => {
-    if (userId && viewerUserId) {
-      checkViewerRelationship();
-    } else {
-      loadUserPosts();
+    if (currentUserId && post.co_creators) {
+      setIsCoCreator(post.co_creators.includes(currentUserId));
     }
-  }, [userId, viewerUserId]);
-
-  async function checkViewerRelationship() {
-    if (!viewerUserId || !userId) {
-      setViewerRelationship('none');
-      loadUserPosts();
-      return;
-    }
-
-    try {
-      // Check if viewer is friends with the profile owner
-      const { data: friendships } = await supabase
-        .from("friendships")
-        .select("status")
-        .or(`and(user_id.eq.${viewerUserId},friend_id.eq.${userId}),and(user_id.eq.${userId},friend_id.eq.${viewerUserId})`)
-        .eq('status', 'accepted');
-
-      setViewerRelationship(friendships && friendships.length > 0 ? 'friend' : 'none');
-    } catch (err) {
-      console.error('Error checking viewer relationship:', err);
-      setViewerRelationship('none');
-    }
-    
-    loadUserPosts();
-  }
-
-  async function loadUserPosts() {
-    setLoading(true);
-    setError(null);
+  }, [currentUserId, post.co_creators]);
+  
+  // Media processing with IDs for individual interactions
+  useEffect(() => {
+    const processed = [];
     
     try {
-      // Get posts for this user - including wall posts and posted_on_profile_id
-      let query = supabase
-        .from('posts')
-        .select('*, posted_on_profile_id')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(maxPosts);
-
-      const { data: postsData, error: postsError } = await query;
+      if (post.image_url) {
+        processed.push({ 
+          url: post.image_url, 
+          type: 'image' as const,
+          id: `${post.id}_main_image`
+        });
+      }
+      if (post.video_url) {
+        processed.push({ 
+          url: post.video_url, 
+          type: 'video' as const,
+          id: `${post.id}_main_video`
+        });
+      }
       
-      if (postsError) {
-        console.error('Posts query error:', postsError);
-        setError('Failed to load posts');
+      if (post.additional_media && Array.isArray(post.additional_media)) {
+        post.additional_media.forEach((item, index) => {
+          if (item && item.url && item.type) {
+            const isDuplicate = (item.type === 'image' && item.url === post.image_url) ||
+                              (item.type === 'video' && item.url === post.video_url);
+            if (!isDuplicate) {
+              processed.push({ 
+                url: item.url, 
+                type: item.type,
+                id: `${post.id}_media_${index}`
+              });
+            }
+          }
+        });
+      }
+      
+      setProcessedMedia(processed);
+    } catch (error) {
+      console.error('Error processing media:', error);
+      setProcessedMedia([]);
+    }
+  }, [post.image_url, post.video_url, post.additional_media]);
+  
+  // FIXED: Changed from !inner to LEFT JOIN for better compatibility with RLS policies
+  const loadComments = async () => {
+    if (loadingComments) return;
+    setLoadingComments(true);
+    
+    try {
+      // First, get all comments for this post
+      const { data: commentsData, error: commentsError } = await supabase
+        .from("post_comments")
+        .select("id, body, created_at, user_id")
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: true });
+      
+      if (commentsError) {
+        console.error('Error loading comments:', commentsError);
+        setLoadingComments(false);
         return;
       }
-
-      if (!postsData || postsData.length === 0) {
-        setPosts([]);
+      
+      if (!commentsData || commentsData.length === 0) {
+        setComments([]);
+        setLoadingComments(false);
         return;
       }
-
-      // Filter posts based on privacy settings
-      const visiblePosts = postsData.filter(post => {
-        // If viewer is the post owner, show all posts
-        if (viewerUserId === post.user_id) {
-          return true;
-        }
-        
-        // Public posts are visible to everyone
-        if (post.visibility === 'public') {
-          return true;
-        }
-        
-        // Friends posts are visible to friends
-        if (post.visibility === 'friends' && viewerRelationship === 'friend') {
-          return true;
-        }
-        
-        // Private posts are only visible to owner (already checked above)
-        return false;
-      });
-
-      // Get author profiles for all visible posts
-      const authorIds = [...new Set(visiblePosts.map(p => p.user_id))];
-      const { data: profiles } = await supabase
+      
+      // Then, fetch profile data separately for each unique user_id
+      const userIds = [...new Set(commentsData.map(c => c.user_id))];
+      const { data: profilesData } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
-        .in("id", authorIds);
-
-      // 🔥 NEW: Get wall post target profiles (posted_on_profile_id)
-      const wallPostTargetIds = [...new Set(
-        visiblePosts
-          .filter(p => p.posted_on_profile_id)
-          .map(p => p.posted_on_profile_id)
-      )];
+        .in("id", userIds);
       
-      let wallPostProfiles: any[] = [];
-      if (wallPostTargetIds.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url")
-          .in("id", wallPostTargetIds);
-        wallPostProfiles = data || [];
-      }
-
-      // Get co-creator info if they exist
-      const coCreatorIds = visiblePosts
-        .filter((p: any) => p.co_creators && p.co_creators.length > 0)
-        .flatMap((p: any) => p.co_creators);
-      
-      let coCreatorProfiles: any[] = [];
-      if (coCreatorIds.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url")
-          .in("id", coCreatorIds);
-        coCreatorProfiles = data || [];
-      }
-      
-      const coCreatorMap = Object.fromEntries(
-        coCreatorProfiles.map((p: any) => [p.id, p])
-      );
-
-      const wallPostProfileMap = Object.fromEntries(
-        wallPostProfiles.map((p: any) => [p.id, p])
-      );
-
-      // Get likes and comments for these posts
-      const postIds = visiblePosts.map(p => p.id);
-      
-      let likeCountBy: Record<string, number> = {};
-      let myLikeSet = new Set<string>();
-      let commentCountBy: Record<string, number> = {};
-
-      try {
-        // Get all likes for these posts
-        const { data: likeCounts } = await supabase
-          .from("post_likes")
-          .select("post_id")
-          .in("post_id", postIds);
-
-        // Get my likes
-        if (viewerUserId) {
-          const { data: myLikes } = await supabase
-            .from("post_likes")
-            .select("post_id")
-            .eq("user_id", viewerUserId)
-            .in("post_id", postIds);
-
-          if (myLikes) {
-            myLikeSet = new Set(myLikes.map((r: any) => r.post_id));
-          }
-        }
-
-        // Get all comments for these posts
-        const { data: commentCounts } = await supabase
-          .from("post_comments")
-          .select("post_id")
-          .in("post_id", postIds);
-
-        // Count likes per post
-        if (likeCounts) {
-          likeCounts.forEach((like: any) => {
-            likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
+      // Create a map of user profiles
+      const profilesMap = new Map();
+      if (profilesData) {
+        profilesData.forEach(profile => {
+          profilesMap.set(profile.id, {
+            full_name: profile.full_name || 'User',
+            avatar_url: profile.avatar_url || '/default-avatar.png'
           });
-        }
-        
-        // Count comments per post
-        if (commentCounts) {
-          commentCounts.forEach((comment: any) => {
-            commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
-          });
-        }
-      } catch (e) {
-        console.log("Error fetching likes/comments:", e);
+        });
       }
-
-      // Get additional media from post_media table
-      let mediaByPost: Record<string, Array<{url: string; type: 'image' | 'video'}>> = {};
       
-      try {
-        const { data: allMediaRows, error: mediaError } = await supabase
-          .from("post_media")
-          .select("post_id, storage_path, type")
-          .in("post_id", postIds)
-          .order("sort_order", { ascending: true });
-        
-        if (!mediaError && allMediaRows) {
-          // Group media by post_id
-          for (const media of allMediaRows) {
-            if (!mediaByPost[media.post_id]) {
-              mediaByPost[media.post_id] = [];
-            }
-            
-            // Get public URL from storage path
-            const { data } = supabase.storage
-              .from('post-media')
-              .getPublicUrl(media.storage_path);
-            
-            mediaByPost[media.post_id].push({
-              url: data.publicUrl,
-              type: media.type as 'image' | 'video'
-            });
-          }
+      // Combine comments with their profile data
+      const formattedComments = commentsData.map((comment) => ({
+        id: comment.id,
+        body: comment.body,
+        created_at: comment.created_at,
+        user_id: comment.user_id,
+        author: profilesMap.get(comment.user_id) || {
+          full_name: 'User',
+          avatar_url: '/default-avatar.png'
         }
-      } catch (e) {
-        console.log("Error fetching media:", e);
-      }
-
-      // Format posts for PostCard component
-      const formattedPosts: Post[] = visiblePosts.map((p: any) => {
-        const author = profiles?.find(profile => profile.id === p.user_id);
-        const postMedia = mediaByPost[p.id] || [];
-        
-        return {
-          id: p.id,
-          user_id: p.user_id,
-          body: p.body,
-          image_url: p.image_url || null,
-          video_url: p.video_url || null,
-          privacy: p.visibility || 'public',
-          created_at: p.created_at,
-          allow_share: p.allow_share ?? true,
-          co_creators: p.co_creators || null,
-          author: author || null,
-          additional_media: postMedia,
-          co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
-          like_count: likeCountBy[p.id] ?? 0,
-          liked_by_me: myLikeSet.has(p.id),
-          comment_count: commentCountBy[p.id] ?? 0,
-          // 🔥 NEW: Include wall post data
-          posted_on_profile_id: p.posted_on_profile_id || null,
-          posted_on_profile: p.posted_on_profile_id ? wallPostProfileMap[p.posted_on_profile_id] : null,
-        };
-      });
-
-      setPosts(formattedPosts);
-    } catch (err) {
-      console.error('Error loading posts:', err);
-      setError('Failed to load posts');
+      }));
+      
+      setComments(formattedComments);
+    } catch (error) {
+      console.error('Error loading comments:', error);
     } finally {
-      setLoading(false);
+      setLoadingComments(false);
     }
-  }
+  };
+  
+  useEffect(() => {
+    if (isExpanded && post.comment_count > 0 && comments.length === 0 && !loadingComments) {
+      loadComments();
+    }
+  }, [isExpanded, post.comment_count]);
+  
+  const handleLike = async () => {
+    if (isLiking || !currentUserId) return;
+    setIsLiking(true);
+    
+    try {
+      const result = await toggleLike(post.id);
+      if (result.ok) {
+        setLocalLikedByMe(!localLikedByMe);
+        setLocalLikeCount(localLikedByMe ? localLikeCount - 1 : localLikeCount + 1);
+      }
+    } catch (error) {
+      console.error("Error liking post:", error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
 
-  if (loading) {
-    return (
-      <div className="posts-loading">
-        <div className="loading-spinner"></div>
-        <span>Loading posts...</span>
-        <style jsx>{`
-          .posts-loading {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            padding: 3rem 1rem;
-          }
-          .loading-spinner {
-            width: 1.5rem;
-            height: 1.5rem;
-            border: 2px solid #e5e7eb;
-            border-top: 2px solid #8b5cf6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
-  }
+  const handleComment = async () => {
+    if (!commentText.trim() || isCommenting || !currentUserId) return;
+    setIsCommenting(true);
+    
+    console.log('🔔 Comment being added by:', currentUserId);
+    console.log('🔔 Post owner is:', post.user_id);
+    
+    try {
+      const result = await addComment(post.id, commentText.trim());
+      if (result.ok) {
+        setCommentText("");
+        await loadComments();
+        
+        // Send notification to post owner (if not commenting on own post)
+        if (post.user_id && post.user_id !== currentUserId) {
+          console.log('🔔 Should send notification! Post owner is different from commenter');
+          try {
+            // Get commenter's name
+            const { data: commenterProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', currentUserId)
+              .single();
 
-  if (error) {
-    return (
-      <div className="posts-error">
-        <div className="error-icon">⚠️</div>
-        <p className="error-text">Unable to load posts</p>
-        <button onClick={() => loadUserPosts()} className="retry-btn">
-          Try Again
-        </button>
-        <style jsx>{`
-          .posts-error {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 3rem 1rem;
-            text-align: center;
-          }
-          .error-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-          .error-text { font-size: 1.125rem; font-weight: 600; color: #4b5563; margin: 0 0 1rem 0; }
-          .retry-btn { padding: 0.5rem 1rem; background: #8b5cf6; color: white; border: none; border-radius: 0.5rem; cursor: pointer; }
-          .retry-btn:hover { background: #7c3aed; }
-        `}</style>
-      </div>
-    );
-  }
+            const commenterName = commenterProfile?.full_name || 'Someone';
+            console.log('🔔 Commenter name:', commenterName);
 
-  if (posts.length === 0) {
-    return (
-      <div className="posts-empty">
-        <div className="empty-icon">📝</div>
-        <p className="empty-text">No posts yet</p>
-        <p className="empty-subtext">Posts will appear here when shared</p>
-        <style jsx>{`
-          .posts-empty {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 3rem 1rem;
-            text-align: center;
+            console.log('🔔 Calling createNotification...');
+            const notifResult = await createNotification({
+              recipient_id: post.user_id,
+              type: 'post.comment',
+              title: 'New Comment',
+              body: `${commenterName} commented on your post`,
+              target_url: `/post/${post.id}`,
+              entity_table: 'posts',
+              entity_id: post.id,
+              actor_id: currentUserId
+            });
+            console.log('🔔 Notification result:', notifResult);
+          } catch (notifError) {
+            console.error('❌ Error sending comment notification:', notifError);
+            // Don't fail the comment if notification fails
           }
-          .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-          .empty-text { font-size: 1.125rem; font-weight: 600; color: #4b5563; margin: 0 0 0.5rem 0; }
-          .empty-subtext { color: #9ca3af; margin: 0; }
-        `}</style>
-      </div>
-    );
-  }
+        } else {
+          console.log('🔔 NOT sending notification - same user or no post owner');
+        }
 
-  return (
-    <div className="posts-feed">
-      <div className="posts-list">
-        {posts.map((post) => (
-          <PostCard 
-            key={post.id} 
-            post={post} 
-            onChanged={loadUserPosts}
-            currentUserId={viewerUserId || undefined}
-          />
-        ))}
-      </div>
-      
-      <style jsx>{`
-        .posts-feed {
-          width: 100%;
+        // Send notifications to co-creators (if they exist and aren't the commenter)
+        if (post.co_creators && post.co_creators.length > 0) {
+          try {
+            // Get commenter's name
+            const { data: commenterProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', currentUserId)
+              .single();
+
+            const commenterName = commenterProfile?.full_name || 'Someone';
+
+            // Send to each co-creator (except the commenter)
+            const notificationPromises = post.co_creators
+              .filter(coCreatorId => coCreatorId !== currentUserId)
+              .map(coCreatorId => 
+                createNotification({
+                  recipient_id: coCreatorId,
+                  type: 'post.comment',
+                  title: 'New Comment',
+                  body: `${commenterName} commented on a post you co-created`,
+                  target_url: `/post/${post.id}`,
+                  entity_table: 'posts',
+                  entity_id: post.id,
+                  actor_id: currentUserId
+                })
+              );
+
+            await Promise.all(notificationPromises);
+          } catch (notifError) {
+            console.error('Error sending co-creator notifications:', notifError);
+            // Don't fail the comment if notifications fail
+          }
         }
         
-        .posts-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
+        if (onChanged) {
+          setTimeout(() => onChanged(), 100);
         }
-      `}</style>
-    </div>
+      } else {
+        alert("Failed to add comment: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      alert("Failed to add comment");
+    } finally {
+      setIsCommenting(false);
+    }
+  };
+
+  const handleShare = () => {
+    const postUrl = `${window.location.origin}/post/${post.id}`;
+    navigator.clipboard.writeText(postUrl);
+    alert("Post link copied to clipboard!");
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Delete this post? This cannot be undone.")) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      const result = await deletePost(post.id);
+      if (result.ok) {
+        setShowDeleteConfirm(false);
+        setTimeout(() => {
+          if (onChanged) onChanged();
+        }, 100);
+      } else {
+        alert(result.error || "Failed to delete post");
+      }
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      alert("Failed to delete post");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+  
+  const handlePhotoClick = (index: number) => {
+    if (isExpanded && processedMedia && processedMedia.length > 0) {
+      setLightboxStartIndex(index);
+      setShowLightbox(true);
+    }
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, a, .menu-btn, .action-btn, .photo-interact-btn')) {
+      return;
+    }
+    setIsExpanded(!isExpanded);
+  };
+
+  const handleIndividualPhotoClick = (photo: {url: string; type: 'image' | 'video'; id?: string}) => {
+    setSelectedPhoto(photo);
+  };
+
+  const handleToggleCommentInput = () => {
+    setShowCommentInput(!showCommentInput);
+    if (!showCommentInput && comments.length === 0 && post.comment_count > 0) {
+      loadComments();
+    }
+  };
+  
+  const canEdit = currentUserId === post.user_id || isCoCreator;
+  const canDelete = currentUserId === post.user_id;
+  
+  const getDisplayName = () => {
+    let name = post.author?.full_name || 'User';
+    if (post.co_creators && post.co_creators.length > 0) {
+      const coCreatorNames = post.co_creators_info?.map(c => c.full_name).filter(Boolean) || [];
+      if (coCreatorNames.length > 0) {
+        name += ` with ${coCreatorNames.join(', ')}`;
+      }
+    }
+    return name;
+  };
+  
+  const displayedComments = showAllComments ? comments : comments.slice(0, 3);
+
+  // COMPACT MODE - Card preview
+  if (!isExpanded) {
+    return (
+      <div 
+        className={`${styles.postCardCompact} ${isWallPost ? styles.wallPost : ''}`} 
+        onClick={handleCardClick}
+      >
+        {/* Wall Post Banner - Compact Mode */}
+        {isWallPost && (
+          <div className={styles.wallPostBannerCompact}>
+            <span className={styles.wallPostIcon}>✏️</span>
+            <span className={styles.wallPostText}>
+              <span className={styles.wallPostAuthor}>{wallPostAuthorName}</span>
+              <span className={styles.wallPostArrow}> → </span>
+              <span className={styles.wallPostTarget}>{wallPostTargetName}</span>
+            </span>
+          </div>
+        )}
+        
+        <div className={styles.compactHeader}>
+          <div className={styles.compactAuthor}>
+            <img 
+              src={post.author?.avatar_url || '/default-avatar.png'} 
+              alt=""
+              className={styles.compactAvatar}
+            />
+            <div className={styles.compactAuthorInfo}>
+              <div className={styles.compactName}>{getDisplayName()}</div>
+              <div className={styles.compactMeta}>
+                <span className={styles.compactTime}>
+                  {new Date(post.created_at).toLocaleDateString()}
+                </span>
+                {post.privacy && (
+                  <span className={styles.privacyIcon}>
+                    {post.privacy === 'public' ? '🌍' : '🔒'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {post.body && (
+          <div className={styles.compactText}>
+            {post.body.length > 150 ? `${post.body.substring(0, 150)}...` : post.body}
+          </div>
+        )}
+        
+        {processedMedia.length > 0 && (
+          <PhotoGrid 
+            media={processedMedia} 
+            onPhotoClick={() => {}}
+            isCompact={true}
+          />
+        )}
+        
+        <div className={styles.compactFooter}>
+          <div className={styles.compactStats}>
+            {localLikeCount > 0 && <span className={styles.statItem}>❤️ {localLikeCount}</span>}
+            {post.comment_count > 0 && <span className={styles.statItem}>💬 {post.comment_count}</span>}
+            {processedMedia.length > 0 && <span className={styles.statItem}>📷 {processedMedia.length}</span>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // EXPANDED MODE - Full post with interactions
+  return (
+    <>
+      <div className={`${styles.postCardExpanded} ${isWallPost ? styles.wallPost : ''}`}>
+        {/* Wall Post Banner - Expanded Mode */}
+        {isWallPost && (
+          <div className={styles.wallPostBanner}>
+            <span className={styles.wallPostIcon}>✏️</span>
+            <span className={styles.wallPostText}>
+              <span className={styles.wallPostAuthor}>{wallPostAuthorName}</span>
+              <span className={styles.wallPostArrow}> wrote on </span>
+              <span className={styles.wallPostTarget}>{wallPostTargetName}'s wall</span>
+            </span>
+          </div>
+        )}
+        
+        <div className={styles.postHeader}>
+          <div className={styles.authorInfo}>
+            <img 
+              src={post.author?.avatar_url || '/default-avatar.png'} 
+              alt=""
+              className={styles.authorAvatar}
+            />
+            <div className={styles.authorDetails}>
+              <div className={styles.authorName}>{getDisplayName()}</div>
+              <div className={styles.postMeta}>
+                <span className={styles.postTime}>
+                  {new Date(post.created_at).toLocaleDateString()}
+                </span>
+                {post.privacy && (
+                  <span className={styles.postPrivacy}>
+                    {post.privacy === 'public' ? '🌍' : '🔒'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className={styles.headerActions}>
+            <button 
+              className={styles.closeBtn}
+              onClick={() => setIsExpanded(false)}
+              title="Close post"
+            >
+              ×
+            </button>
+            
+            {canEdit && (
+              <div className={styles.postActions}>
+                <button 
+                  className={styles.menuBtn}
+                  onClick={() => setShowEditMenu(!showEditMenu)}
+                  title="Post options"
+                >
+                  ⋯
+                </button>
+                {showEditMenu && (
+                  <div className={styles.menuDropdown}>
+                    {isCoCreator && !canDelete && (
+                      <>
+                        <button className={styles.menuItem} onClick={() => {
+                          setShowEditModal(true);
+                          setShowEditMenu(false);
+                        }}>📷 Add Photos</button>
+                        <button className={styles.menuItem}>🏷️ Remove Tag</button>
+                      </>
+                    )}
+                    {canDelete && (
+                      <>
+                        <button className={styles.menuItem} onClick={() => {
+                          setShowEditModal(true);
+                          setShowEditMenu(false);
+                        }}>✏️ Edit Post</button>
+                        <button className={`${styles.menuItem} ${styles.danger}`} onClick={() => {
+                          setShowDeleteConfirm(true);
+                          setShowEditMenu(false);
+                        }}>🗑️ Delete Post</button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className={styles.postContent}>
+          {post.body && <p className={styles.postText}>{post.body}</p>}
+          
+          {processedMedia && processedMedia.length > 0 && (
+            <PhotoGrid 
+              media={processedMedia} 
+              onPhotoClick={handlePhotoClick}
+              isCompact={false}
+              onIndividualPhotoClick={handleIndividualPhotoClick}
+              onLike={handleLike}
+              currentUserId={currentUserId}
+              onToggleCommentInput={handleToggleCommentInput}
+              showCommentInput={showCommentInput}
+            />
+          )}
+        </div>
+        
+        <PostInteractions
+          post={post}
+          localLikeCount={localLikeCount}
+          localLikedByMe={localLikedByMe}
+          isLiking={isLiking}
+          currentUserId={currentUserId}
+          comments={displayedComments}
+          showAllComments={showAllComments}
+          showCommentInput={showCommentInput}
+          commentText={commentText}
+          isCommenting={isCommenting}
+          onLike={handleLike}
+          onComment={handleComment}
+          onShare={handleShare}
+          onToggleCommentInput={handleToggleCommentInput}
+          onCommentTextChange={setCommentText}
+          onShowAllComments={() => setShowAllComments(true)}
+          allCommentsCount={comments.length}
+        />
+      </div>
+      
+      {/* Modals */}
+      {selectedPhoto && (
+        <IndividualPhotoModal 
+          photo={selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+        />
+      )}
+      
+      {showDeleteConfirm && (
+        <DeleteConfirmModal
+          isDeleting={isDeleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+
+      {showEditModal && (
+        <EditPostModal
+          post={post}
+          currentMedia={processedMedia}
+          onClose={() => setShowEditModal(false)}
+          onSave={() => {
+            setShowEditModal(false);
+            if (onChanged) onChanged();
+          }}
+        />
+      )}
+      
+      {showLightbox && processedMedia && processedMedia.length > 0 && (
+        <PostLightbox
+          media={processedMedia}
+          startIndex={lightboxStartIndex}
+          onClose={() => setShowLightbox(false)}
+        />
+      )}
+    </>
   );
 }
