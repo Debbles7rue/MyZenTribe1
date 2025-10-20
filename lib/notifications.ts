@@ -1,4 +1,4 @@
-// lib/notifications.ts - FIXED VERSION
+// lib/notifications.ts - FIXED VERSION (Gifts Removed)
 import { supabase } from "@/lib/supabaseClient";
 
 export type NotificationRow = {
@@ -147,7 +147,6 @@ function getNotificationKind(type: string): string {
   if (type.startsWith('todo.') || type.startsWith('reminder.')) return 'warning';
   if (type.startsWith('post.') || type.startsWith('album.') || type.startsWith('comment.')) return 'info';
   if (type.startsWith('message.')) return 'info';
-  if (type.startsWith('gift.')) return 'success';
   return 'info'; // default
 }
 
