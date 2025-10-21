@@ -583,7 +583,7 @@ export default function PublicProfilePage() {
       )}
 
       {/* Unified Posts and Events Feed */}
-      {(canViewFriendContent || profile.visibility === 'public') && (
+      {(canViewFriendContent || profile.visibility === 'public' || currentUserId === profileId) && (
         <div className="unified-feed">
           {/* Posts Feed - Displayed as continuous feed */}
           <div className="posts-feed-section">
