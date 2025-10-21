@@ -1,4 +1,4 @@
-// components/PostsFeed.tsx - Updated to use PostCard component
+// components/PostsFeed.tsx - Updated to use PostCard component with Wall Post Support
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -54,15 +54,16 @@ export default function PostsFeed({
     loadUserPosts();
   }
 
-  async function loadUserPosts() {
-    setLoading(true);
-    setError(null);
+async function loadUserPosts() {
+  setLoading(true);
+  setError(null);
+  console.log('🔍 PostsFeed Debug:', { userId, viewerUserId, maxPosts });
     
     try {
-      // Get posts for this user
+      // Get posts for this user - including wall posts and posted_on_profile_id
       let query = supabase
         .from('posts')
-        .select('*')
+        .select('*, posted_on_profile_id')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(maxPosts);
@@ -108,6 +109,22 @@ export default function PostsFeed({
         .select("id, full_name, avatar_url")
         .in("id", authorIds);
 
+      // 🔥 NEW: Get wall post target profiles (posted_on_profile_id)
+      const wallPostTargetIds = [...new Set(
+        visiblePosts
+          .filter(p => p.posted_on_profile_id)
+          .map(p => p.posted_on_profile_id)
+      )];
+      
+      let wallPostProfiles: any[] = [];
+      if (wallPostTargetIds.length > 0) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url")
+          .in("id", wallPostTargetIds);
+        wallPostProfiles = data || [];
+      }
+
       // Get co-creator info if they exist
       const coCreatorIds = visiblePosts
         .filter((p: any) => p.co_creators && p.co_creators.length > 0)
@@ -124,6 +141,10 @@ export default function PostsFeed({
       
       const coCreatorMap = Object.fromEntries(
         coCreatorProfiles.map((p: any) => [p.id, p])
+      );
+
+      const wallPostProfileMap = Object.fromEntries(
+        wallPostProfiles.map((p: any) => [p.id, p])
       );
 
       // Get likes and comments for these posts
@@ -229,6 +250,9 @@ export default function PostsFeed({
           like_count: likeCountBy[p.id] ?? 0,
           liked_by_me: myLikeSet.has(p.id),
           comment_count: commentCountBy[p.id] ?? 0,
+          // 🔥 NEW: Include wall post data
+          posted_on_profile_id: p.posted_on_profile_id || null,
+          posted_on_profile: p.posted_on_profile_id ? wallPostProfileMap[p.posted_on_profile_id] : null,
         };
       });
 
