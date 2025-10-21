@@ -54,9 +54,10 @@ export default function PostsFeed({
     loadUserPosts();
   }
 
-  async function loadUserPosts() {
-    setLoading(true);
-    setError(null);
+async function loadUserPosts() {
+  setLoading(true);
+  setError(null);
+  console.log('🔍 PostsFeed Debug:', { userId, viewerUserId, maxPosts });
     
     try {
       // Get posts for this user - including wall posts and posted_on_profile_id
