@@ -67,47 +67,35 @@ export default function PostCard({ post, onChanged, currentUserId }: PostCardPro
   }, [currentUserId, post.co_creators]);
   
   // Media processing with IDs for individual interactions
-  useEffect(() => {
-    const processed = [];
-    
-    try {
+useEffect(() => {
+  const processed = [];
+  
+  try {
+    // FIXED: Use additional_media as PRIMARY source of truth
+    if (post.additional_media && Array.isArray(post.additional_media) && post.additional_media.length > 0) {
+      // We have media in post_media table - use that exclusively
+      post.additional_media.forEach(item => {
+        if (item && item.url && item.type) {
+          processed.push({ url: item.url, type: item.type });
+        }
+      });
+    } else {
+      // Fallback: only use image_url/video_url if there's NO additional_media
+      // This is for old posts that don't have data in post_media table yet
       if (post.image_url) {
-        processed.push({ 
-          url: post.image_url, 
-          type: 'image' as const,
-          id: `${post.id}_main_image`
-        });
+        processed.push({ url: post.image_url, type: 'image' as const });
       }
       if (post.video_url) {
-        processed.push({ 
-          url: post.video_url, 
-          type: 'video' as const,
-          id: `${post.id}_main_video`
-        });
+        processed.push({ url: post.video_url, type: 'video' as const });
       }
-      
-      if (post.additional_media && Array.isArray(post.additional_media)) {
-        post.additional_media.forEach((item, index) => {
-          if (item && item.url && item.type) {
-            const isDuplicate = (item.type === 'image' && item.url === post.image_url) ||
-                              (item.type === 'video' && item.url === post.video_url);
-            if (!isDuplicate) {
-              processed.push({ 
-                url: item.url, 
-                type: item.type,
-                id: `${post.id}_media_${index}`
-              });
-            }
-          }
-        });
-      }
-      
-      setProcessedMedia(processed);
-    } catch (error) {
-      console.error('Error processing media:', error);
-      setProcessedMedia([]);
     }
-  }, [post.image_url, post.video_url, post.additional_media]);
+    
+    setProcessedMedia(processed);
+  } catch (error) {
+    console.error('Error processing media:', error);
+    setProcessedMedia([]);
+  }
+}, [post.image_url, post.video_url, post.additional_media]);
   
   // FIXED: Changed from !inner to LEFT JOIN for better compatibility with RLS policies
   const loadComments = async () => {
