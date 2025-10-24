@@ -1,16 +1,23 @@
-// components/PostsFeed.tsx - Updated to use PostCard component with Wall Post Support
+// components/PostsFeed.tsx - FIXED to match HomeFeed logic
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/lib/supabaseClient";
 import PostCard from "@/components/PostCard";
-import { Post } from "@/lib/posts";
+import { Post, me } from "@/lib/posts";
 
 interface PostsFeedProps {
   userId: string;
   viewerUserId?: string | null;
   maxPosts?: number;
 }
+
+// This matches the MediaItem type from lib/posts.ts
+type MediaItem = {
+  url: string;
+  type: 'image' | 'video';
+  id?: string;
+};
 
 export default function PostsFeed({ 
   userId, 
@@ -38,7 +45,6 @@ export default function PostsFeed({
     }
 
     try {
-      // Check if viewer is friends with the profile owner
       const { data: friendships } = await supabase
         .from("friendships")
         .select("status")
@@ -54,21 +60,19 @@ export default function PostsFeed({
     loadUserPosts();
   }
 
-async function loadUserPosts() {
-  setLoading(true);
-  setError(null);
-  console.log('🔍 PostsFeed Debug:', { userId, viewerUserId, maxPosts });
+  // 🔥 FIXED: This now uses THE EXACT SAME LOGIC as listHomeFeed() in lib/posts.ts
+  async function loadUserPosts() {
+    setLoading(true);
+    setError(null);
     
     try {
-      // Get posts for this user - including wall posts and posted_on_profile_id
-      let query = supabase
+      // Get posts for this user
+      const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('*, posted_on_profile_id')
+        .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(maxPosts);
-
-      const { data: postsData, error: postsError } = await query;
       
       if (postsError) {
         console.error('Posts query error:', postsError);
@@ -83,49 +87,31 @@ async function loadUserPosts() {
 
       // Filter posts based on privacy settings
       const visiblePosts = postsData.filter(post => {
-        // If viewer is the post owner, show all posts
-        if (viewerUserId === post.user_id) {
-          return true;
-        }
-        
-        // Public posts are visible to everyone
-        if (post.visibility === 'public') {
-          return true;
-        }
-        
-        // Friends posts are visible to friends
-        if (post.visibility === 'friends' && viewerRelationship === 'friend') {
-          return true;
-        }
-        
-        // Private posts are only visible to owner (already checked above)
+        if (viewerUserId === post.user_id) return true;
+        if (post.visibility === 'public') return true;
+        if (post.visibility === 'friends' && viewerRelationship === 'friend') return true;
         return false;
       });
 
-      // Get author profiles for all visible posts
-      const authorIds = [...new Set(visiblePosts.map(p => p.user_id))];
+      const ids = visiblePosts.map((p: any) => p.id);
+      const authorIds = [...new Set(visiblePosts.map((p: any) => p.user_id))];
+
+      // Get wall post profile IDs
+      const wallPostProfileIds = visiblePosts
+        .filter((p: any) => p.posted_on_profile_id)
+        .map((p: any) => p.posted_on_profile_id);
+      
+      const allProfileIds = [...new Set([...authorIds, ...wallPostProfileIds])];
+
+      // Get profiles
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, avatar_url")
-        .in("id", authorIds);
+        .in("id", allProfileIds);
 
-      // 🔥 NEW: Get wall post target profiles (posted_on_profile_id)
-      const wallPostTargetIds = [...new Set(
-        visiblePosts
-          .filter(p => p.posted_on_profile_id)
-          .map(p => p.posted_on_profile_id)
-      )];
-      
-      let wallPostProfiles: any[] = [];
-      if (wallPostTargetIds.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url")
-          .in("id", wallPostTargetIds);
-        wallPostProfiles = data || [];
-      }
+      const profileMap = Object.fromEntries((profiles || []).map((p: any) => [p.id, p]));
 
-      // Get co-creator info if they exist
+      // Get co-creators
       const coCreatorIds = visiblePosts
         .filter((p: any) => p.co_creators && p.co_creators.length > 0)
         .flatMap((p: any) => p.co_creators);
@@ -144,50 +130,43 @@ async function loadUserPosts() {
       );
 
       const wallPostProfileMap = Object.fromEntries(
-        wallPostProfiles.map((p: any) => [p.id, p])
+        (profiles || []).filter((p: any) => wallPostProfileIds.includes(p.id)).map((p: any) => [p.id, p])
       );
 
-      // Get likes and comments for these posts
-      const postIds = visiblePosts.map(p => p.id);
-      
+      // Get likes and comments
       let likeCountBy: Record<string, number> = {};
       let myLikeSet = new Set<string>();
       let commentCountBy: Record<string, number> = {};
 
       try {
-        // Get all likes for these posts
         const { data: likeCounts } = await supabase
           .from("post_likes")
           .select("post_id")
-          .in("post_id", postIds);
+          .in("post_id", ids);
 
-        // Get my likes
         if (viewerUserId) {
           const { data: myLikes } = await supabase
             .from("post_likes")
             .select("post_id")
             .eq("user_id", viewerUserId)
-            .in("post_id", postIds);
+            .in("post_id", ids);
 
           if (myLikes) {
             myLikeSet = new Set(myLikes.map((r: any) => r.post_id));
           }
         }
 
-        // Get all comments for these posts
         const { data: commentCounts } = await supabase
           .from("post_comments")
           .select("post_id")
-          .in("post_id", postIds);
+          .in("post_id", ids);
 
-        // Count likes per post
         if (likeCounts) {
           likeCounts.forEach((like: any) => {
             likeCountBy[like.post_id] = (likeCountBy[like.post_id] || 0) + 1;
           });
         }
         
-        // Count comments per post
         if (commentCounts) {
           commentCounts.forEach((comment: any) => {
             commentCountBy[comment.post_id] = (commentCountBy[comment.post_id] || 0) + 1;
@@ -197,42 +176,47 @@ async function loadUserPosts() {
         console.log("Error fetching likes/comments:", e);
       }
 
-      // Get additional media from post_media table
-      let mediaByPost: Record<string, Array<{url: string; type: 'image' | 'video'}>> = {};
+      // 🔥 CRITICAL FIX: Get additional media from post_media table
+      // This is THE EXACT SAME CODE as listHomeFeed() in lib/posts.ts
+      let mediaByPost: Record<string, MediaItem[]> = {};
       
       try {
         const { data: allMediaRows, error: mediaError } = await supabase
           .from("post_media")
-          .select("post_id, storage_path, type")
-          .in("post_id", postIds)
+          .select("id, post_id, storage_path, type")
+          .in("post_id", ids)
           .order("sort_order", { ascending: true });
         
         if (!mediaError && allMediaRows) {
-          // Group media by post_id
           for (const media of allMediaRows) {
             if (!mediaByPost[media.post_id]) {
               mediaByPost[media.post_id] = [];
             }
             
-            // Get public URL from storage path
             const { data } = supabase.storage
               .from('post-media')
               .getPublicUrl(media.storage_path);
             
             mediaByPost[media.post_id].push({
               url: data.publicUrl,
-              type: media.type as 'image' | 'video'
+              type: media.type as 'image' | 'video',
+              id: media.id
             });
           }
+          
+          console.log(`📸 PostsFeed: Found media for ${Object.keys(mediaByPost).length} posts`);
         }
       } catch (e) {
         console.log("Error fetching media:", e);
       }
 
-      // Format posts for PostCard component
+      // Format posts - EXACTLY like listHomeFeed()
       const formattedPosts: Post[] = visiblePosts.map((p: any) => {
-        const author = profiles?.find(profile => profile.id === p.user_id);
         const postMedia = mediaByPost[p.id] || [];
+        
+        if (postMedia.length > 0) {
+          console.log(`📸 Post ${p.id.substring(0,8)} has ${postMedia.length} media items`);
+        }
         
         return {
           id: p.id,
@@ -240,17 +224,16 @@ async function loadUserPosts() {
           body: p.body,
           image_url: p.image_url || null,
           video_url: p.video_url || null,
-          privacy: p.visibility || 'public',
+          privacy: p.visibility || p.privacy || 'public',
           created_at: p.created_at,
           allow_share: p.allow_share ?? true,
           co_creators: p.co_creators || null,
-          author: author || null,
-          additional_media: postMedia,
+          author: profileMap[p.user_id] || null,
+          additional_media: postMedia,  // 🔥 THIS IS THE KEY!
           co_creators_info: p.co_creators?.map((id: string) => coCreatorMap[id]).filter(Boolean) || [],
           like_count: likeCountBy[p.id] ?? 0,
           liked_by_me: myLikeSet.has(p.id),
           comment_count: commentCountBy[p.id] ?? 0,
-          // 🔥 NEW: Include wall post data
           posted_on_profile_id: p.posted_on_profile_id || null,
           posted_on_profile: p.posted_on_profile_id ? wallPostProfileMap[p.posted_on_profile_id] : null,
         };
