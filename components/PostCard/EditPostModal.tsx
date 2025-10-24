@@ -156,15 +156,36 @@ export default function EditPostModal({
         }
       }
 
-      // Remove marked media
+    // Remove marked media
       if (mediaToRemove.length > 0 && isPostOwner) {
         for (const mediaUrl of mediaToRemove) {
           try {
-            await supabase
-              .from('post_media')
-              .delete()
-              .eq('post_id', post.id)
-              .eq('url', mediaUrl);
+            // Extract storage path from the public URL
+            // URL format: https://[project].supabase.co/storage/v1/object/public/post-media/[storage_path]
+            const urlParts = mediaUrl.split('/post-media/');
+            const storagePath = urlParts.length > 1 ? urlParts[1] : null;
+            
+            if (storagePath) {
+              // Delete from post_media table using storage_path
+              const { error: dbError } = await supabase
+                .from('post_media')
+                .delete()
+                .eq('post_id', post.id)
+                .eq('storage_path', storagePath);
+              
+              if (dbError) {
+                console.error('Error deleting from post_media:', dbError);
+              }
+              
+              // Also delete the actual file from storage
+              const { error: storageError } = await supabase.storage
+                .from('post-media')
+                .remove([storagePath]);
+                
+              if (storageError) {
+                console.error('Error deleting from storage:', storageError);
+              }
+            }
           } catch (error) {
             console.error('Error removing media:', error);
           }
