@@ -692,30 +692,28 @@ async function acceptFriendRequest(userId: string) {
             <h3 className="text-lg font-semibold text-gray-700 mb-2">
               Find People & Businesses
             </h3>
-            <p className="text-gray-500">
+           <p className="text-gray-500">
               Use the search above to find friends or businesses to connect with
             </p>
           </div>
         )}
       </div>
-      </div>
-        )}
-      </div>
-
-      {/* Friend Questionnaire Modal */}
-      {showQuestionnaire && questionnaireData && (
-        <FriendQuestionnaire
-          isOpen={showQuestionnaire}
-          onClose={() => {
-            setShowQuestionnaire(false);
-            setQuestionnaireData(null);
-          }}
-          friendshipId={questionnaireData.friendshipId}
-          friendId={questionnaireData.friendId}
-          friendName={questionnaireData.friendName}
-          isNewFriend={true}
-        />
-      )}
     </div>
-  );
+
+    {/* Friend Questionnaire Modal */}
+    {showQuestionnaire && questionnaireData && (
+      <FriendQuestionnaire
+        isOpen={showQuestionnaire}
+        onClose={() => {
+          setShowQuestionnaire(false);
+          setQuestionnaireData(null);
+        }}
+        friendshipId={questionnaireData.friendshipId}
+        friendId={questionnaireData.friendId}
+        friendName={questionnaireData.friendName}
+        isNewFriend={true}
+      />
+    )}
+  </div>
+);
 }
