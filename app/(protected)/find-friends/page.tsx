@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { createNotification } from "@/lib/notifications";
+import FriendQuestionnaire from "@/components/FriendQuestionnaire";
 
 interface User {
   id: string;
@@ -48,6 +49,12 @@ export default function FindFriendsPage() {
   const [followStatuses, setFollowStatuses] = useState<FollowStatus>({});
   const [hasSearched, setHasSearched] = useState(false);
   const [searchFilter, setSearchFilter] = useState<'all' | 'people' | 'businesses'>('all');
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [questionnaireData, setQuestionnaireData] = useState<{
+    friendId: string;
+    friendName: string;
+    friendshipId?: string;
+  } | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -257,7 +264,7 @@ export default function FindFriendsPage() {
     }
   }
 
-  async function acceptFriendRequest(userId: string) {
+async function acceptFriendRequest(userId: string) {
     if (!currentUserId) return;
 
     console.log('Accepting friend request from:', userId);
@@ -272,15 +279,21 @@ export default function FindFriendsPage() {
 
       if (updateError) throw updateError;
 
-      // Create friendship
-      const { error: friendshipError } = await supabase
+      // Create friendship and get the ID back
+      const { data: newFriendship, error: friendshipError } = await supabase
         .from('friendships')
         .insert({
           user_id: currentUserId,
           friend_id: userId
-        });
+        })
+        .select()
+        .single();
 
       if (!friendshipError || friendshipError.code === '23505') {
+        // Get friend's name from search results
+        const friendResult = searchResults.find(r => r.type === 'user' && r.id === userId) as User | undefined;
+        const friendName = friendResult?.full_name || 'your new friend';
+
         // Get accepter's profile for notification
         const { data: accepterProfile } = await supabase
           .from('profiles')
@@ -305,7 +318,14 @@ export default function FindFriendsPage() {
           ...prev,
           [userId]: 'friend'
         }));
-        alert('Friend request accepted!');
+
+        // Show the questionnaire modal
+        setQuestionnaireData({
+          friendId: userId,
+          friendName: friendName,
+          friendshipId: newFriendship?.id
+        });
+        setShowQuestionnaire(true);
       }
     } catch (error) {
       console.error('Error accepting friend request:', error);
@@ -678,6 +698,24 @@ export default function FindFriendsPage() {
           </div>
         )}
       </div>
+      </div>
+        )}
+      </div>
+
+      {/* Friend Questionnaire Modal */}
+      {showQuestionnaire && questionnaireData && (
+        <FriendQuestionnaire
+          isOpen={showQuestionnaire}
+          onClose={() => {
+            setShowQuestionnaire(false);
+            setQuestionnaireData(null);
+          }}
+          friendshipId={questionnaireData.friendshipId}
+          friendId={questionnaireData.friendId}
+          friendName={questionnaireData.friendName}
+          isNewFriend={true}
+        />
+      )}
     </div>
   );
 }
