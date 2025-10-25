@@ -129,7 +129,7 @@ export default function FriendRequestsPage() {
     }
   }
 
-  async function acceptRequest(requestId: string, fromUserId: string) {
+async function acceptRequest(requestId: string, fromUserId: string) {
     if (!currentUserId) return;
     
     try {
@@ -143,15 +143,21 @@ export default function FriendRequestsPage() {
 
       if (updateError) throw updateError;
 
-      // Create friendship
-      const { error: friendshipError } = await supabase
+      // Create friendship and get the ID back
+      const { data: newFriendship, error: friendshipError } = await supabase
         .from('friendships')
         .insert({
           user_id: currentUserId,
           friend_id: fromUserId
-        });
+        })
+        .select()
+        .single();
 
       if (!friendshipError || friendshipError.code === '23505') {
+        // Get friend's name from the request we already have
+        const friendRequest = receivedRequests.find(r => r.id === requestId);
+        const friendName = friendRequest?.from_profile?.full_name || 'your new friend';
+
         // Get accepter's profile for notification
         const { data: accepterProfile } = await supabase
           .from('profiles')
@@ -174,6 +180,14 @@ export default function FriendRequestsPage() {
 
         // Success or duplicate (already friends)
         setReceivedRequests(prev => prev.filter(r => r.id !== requestId));
+
+        // Show the questionnaire modal
+        setQuestionnaireData({
+          friendId: fromUserId,
+          friendName: friendName,
+          friendshipId: newFriendship?.id
+        });
+        setShowQuestionnaire(true);
       }
     } catch (error) {
       console.error('Error accepting request:', error);
