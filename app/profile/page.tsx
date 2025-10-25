@@ -109,8 +109,8 @@ const LazyProfileCandleWidget = React.lazy(() =>
   }))
 );
 
-const LazyPhotosFeed = React.lazy(() => 
-  import("@/components/PhotosFeed").catch(() => ({
+const LazyPostsFeed = React.lazy(() =>
+  import("@/components/PostsFeed").catch(() => ({
     default: () => null
   }))
 );
