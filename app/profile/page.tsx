@@ -699,7 +699,7 @@ export default function ProfilePage() {
       {/* Photos Feed */}
       {componentsReady && userId && (
         <Suspense fallback={null}>
-          <LazyPhotosFeed userId={userId} />
+          <LazyPostsFeed userId={userId} viewerUserId={userId} />
         </Suspense>
       )}
 
