@@ -24,7 +24,8 @@ export default function FriendQuestionnaire({
   isNewFriend = true,
 }: Props) {
   const router = useRouter();
-  const [category, setCategory] = useState<"Friend" | "Acquaintance" | "Restricted">("Friend");
+const [category, setCategory] = useState<"Friend" | "Acquaintance" | "Restricted">("Friend");
+  const [nickname, setNickname] = useState("");  // ← ADD THIS LINE
   const [howWeMet, setHowWeMet] = useState("");
   const [notes, setNotes] = useState("");
   const [safeToCarpool, setSafeToCarpool] = useState(false);
