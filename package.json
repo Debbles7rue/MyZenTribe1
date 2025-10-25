@@ -1,7 +1,9 @@
 {
   "name": "myzentribe",
   "version": "0.1.0",
+  "description": "MyZenTribe - Your social wellness community",
   "private": true,
+  ...
   "engines": {
     "node": "20.x"
   },
