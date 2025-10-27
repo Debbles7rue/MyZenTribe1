@@ -1,4 +1,4 @@
-// app/(protected)/friends/page.tsx
+S// app/(protected)/friends/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -155,7 +155,6 @@ const [editingFriend, setEditingFriend] = useState<{ friendId: string; friendNam
         </div>
       </div>
     );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
