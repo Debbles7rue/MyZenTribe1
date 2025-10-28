@@ -62,7 +62,7 @@ const [editingFriend, setEditingFriend] = useState<{ friendId: string; friendNam
     } catch (err) {
       console.error('Error loading request counts:', err);
     }
-  }
+  }  // This closes the loadPendingRequestsCount function
 
   async function loadFriends() {
     try {
