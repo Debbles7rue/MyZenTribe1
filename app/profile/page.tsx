@@ -646,7 +646,7 @@ export default function ProfilePage() {
               className="composer-wrapper"
             />
           </div>
-
+SS
           {/* Album Creator Button */}
           <div className="card">
             <Link 
@@ -674,18 +674,19 @@ export default function ProfilePage() {
                 <div className="loading-spinner"></div>
                 <span>Loading your posts...</span>
               </div>
-            ) : userPosts.length > 0 ? (
-              <div className="posts-feed">
-                {userPosts.map((post) => (
-                  <PostCard 
-                    key={post.id} 
-                    post={post} 
-                    onChanged={loadUserPosts}
-                    currentUserId={userId}
-                  />
-                ))}
-              </div>
-            ) : (
+          
+          ) : userPosts.length > 0 ? (
+  <div className="space-y-4">
+    {userPosts.map((post) => (
+      <PostCard 
+        key={post.id} 
+        post={post} 
+        onChanged={loadUserPosts}
+        currentUserId={userId}
+      />
+    ))}
+  </div>
+) : (
               <div className="empty-posts">
                 <div className="empty-icon">📝</div>
                 <p className="empty-text">No posts yet</p>
