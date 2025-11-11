@@ -698,11 +698,14 @@ SS
       )}
 
       {/* Photos Feed */}
-      {componentsReady && userId && (
-        <Suspense fallback={null}>
-          <LazyPostsFeed userId={userId} viewerUserId={userId} />
-        </Suspense>
-      )}
+{componentsReady && userId && (
+  <div className="card">
+    <h3 className="section-title">Friends' Posts</h3>
+    <Suspense fallback={null}>
+      <LazyPostsFeed userId={userId} viewerUserId={userId} />
+    </Suspense>
+  </div>
+)}
 
       <style jsx>{`
         .profile-page {
