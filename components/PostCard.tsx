@@ -429,9 +429,19 @@ useEffect(() => {
   }
   
   // EXPANDED MODE - Full post with interactions
-  return (
-    <>
-      <div className={`${styles.postCardExpanded} ${isWallPost ? styles.wallPost : ''}`}>
+ return (
+  <>
+    <div 
+      className={`${styles.postCardExpanded} ${isWallPost ? styles.wallPost : ''}`}
+      style={{
+        background: 'white',
+        border: '1px solid #e2e8f0',
+        borderRadius: '16px',
+        marginBottom: '24px',
+        overflow: 'hidden',
+        boxShadow: '0 4px 24px rgba(167, 139, 246, 0.15)'
+      }}
+    >
         {/* Wall Post Banner - Expanded Mode */}
         {isWallPost && (
           <div className={styles.wallPostBanner}>
