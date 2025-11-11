@@ -354,9 +354,19 @@ useEffect(() => {
   // COMPACT MODE - Card preview
   if (!isExpanded) {
     return (
-      <div 
-        className={`${styles.postCardCompact} ${isWallPost ? styles.wallPost : ''}`} 
-        onClick={handleCardClick}
+  <div 
+    className={`${styles.postCardCompact} ${isWallPost ? styles.wallPost : ''}`} 
+    onClick={handleCardClick}
+    style={{
+      background: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '16px',
+      marginBottom: '24px',
+      cursor: 'pointer',
+      boxShadow: '0 2px 12px rgba(167, 139, 246, 0.12)',
+      overflow: 'hidden'
+    }}
+  >
       >
         {/* Wall Post Banner - Compact Mode */}
         {isWallPost && (
