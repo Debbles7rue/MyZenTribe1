@@ -327,7 +327,7 @@ export default function PostsFeed({
 
   return (
     <div className="posts-feed">
-      <div className="posts-list">
+      <div className="space-y-4"> 
         {posts.map((post) => (
           <PostCard 
             key={post.id} 
