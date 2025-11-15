@@ -17,16 +17,15 @@ export default function HomeFeed() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [intentionExpanded, setIntentionExpanded] = useState(false);
 
-  // Placeholder data - connect to real data later
-  const [upcomingEvents] = useState(3);
-  const [eventInvites] = useState(2);
-  const [friendRequests] = useState(5);
-  const [unreadMessages] = useState(3);
-  const [suggestedFriends] = useState([
-    { id: 1, name: "Sarah M.", mutualFriends: 12 },
-    { id: 2, name: "Mike K.", mutualFriends: 8 },
-    { id: 3, name: "Jen L.", mutualFriends: 15 },
-  ]);
+const [intentionExpanded, setIntentionExpanded] = useState(false);
+
+  // Real data from Supabase - no more hardcoded!
+  const [upcomingEvents, setUpcomingEvents] = useState(0);
+  const [eventInvites, setEventInvites] = useState(0);
+  const [friendRequests, setFriendRequests] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [suggestedFriends, setSuggestedFriends] = useState<SuggestedFriend[]>([]);
+  const [sidebarLoading, setSidebarLoading] = useState(true);
 
   async function load() {
     console.log("🔄 Refreshing posts...");
@@ -51,9 +50,31 @@ export default function HomeFeed() {
     setLoading(false);
   }
 
-  useEffect(() => { 
-    console.log("🚀 HomeFeed mounted, loading initial posts");
-    load(); 
+  async function loadSidebarData() {
+    console.log("🔄 Loading sidebar data...");
+    setSidebarLoading(true);
+    
+    try {
+      const data = await loadAllSidebarData();
+      
+      setFriendRequests(data.friendRequests);
+      setUnreadMessages(data.unreadMessages);
+      setUpcomingEvents(data.upcomingEvents);
+      setEventInvites(data.eventInvites);
+      setSuggestedFriends(data.suggestedFriends);
+      
+      console.log("✅ Sidebar data loaded:", data);
+    } catch (error) {
+      console.error("Error loading sidebar data:", error);
+    } finally {
+      setSidebarLoading(false);
+    }
+  }
+
+    useEffect(() => { 
+    console.log("🚀 HomeFeed mounted, loading initial data");
+    load();
+    loadSidebarData();
   }, []);
 
   return (
@@ -165,21 +186,28 @@ export default function HomeFeed() {
                 <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                   <span>🎉</span> Events
                 </h3>
-                <div className="space-y-2">
-                  {upcomingEvents > 0 && (
-                    <a href="/events" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
-                      📅 {upcomingEvents} events coming up this week
-                    </a>
-                  )}
-                  {eventInvites > 0 && (
-                    <a href="/events/invites" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
-                      📨 You have {eventInvites} event invites - Respond?
-                    </a>
-                  )}
-                  {upcomingEvents === 0 && eventInvites === 0 && (
-                    <p className="text-sm text-gray-500">No upcoming events</p>
-                  )}
-                </div>
+                {sidebarLoading ? (
+                  <div className="animate-pulse space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {upcomingEvents > 0 && (
+                      <a href="/events" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
+                        📅 {upcomingEvents} event{upcomingEvents !== 1 ? 's' : ''} coming up this week
+                      </a>
+                    )}
+                    {eventInvites > 0 && (
+                      <a href="/events" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
+                        📨 You have {eventInvites} event invite{eventInvites !== 1 ? 's' : ''} - Respond?
+                      </a>
+                    )}
+                    {upcomingEvents === 0 && eventInvites === 0 && (
+                      <p className="text-sm text-gray-500">No upcoming events</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Friend Requests Widget */}
