@@ -211,51 +211,95 @@ const [intentionExpanded, setIntentionExpanded] = useState(false);
               </div>
 
               {/* Friend Requests Widget */}
-              {friendRequests > 0 && (
+              {(sidebarLoading || friendRequests > 0) && (
                 <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                     <span>👥</span> Friend Requests
                   </h3>
-                  <a href="/friends/requests" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
-                    {friendRequests} pending friend requests
-                  </a>
+                  {sidebarLoading ? (
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    </div>
+                  ) : (
+                    <a href="/friend-requests" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
+                      {friendRequests} pending friend request{friendRequests !== 1 ? 's' : ''}
+                    </a>
+                  )}
                 </div>
               )}
 
-              {/* Messages Widget */}
-              {unreadMessages > 0 && (
+             {/* Messages Widget */}
+              {(sidebarLoading || unreadMessages > 0) && (
                 <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                     <span>💬</span> Messages
                   </h3>
-                  <a href="/messages" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
-                    {unreadMessages} unread messages
-                  </a>
+                  {sidebarLoading ? (
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                  ) : (
+                    <a href="/messages" className="block text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 p-2 rounded-lg transition-colors">
+                      {unreadMessages} unread message{unreadMessages !== 1 ? 's' : ''}
+                    </a>
+                  )}
                 </div>
               )}
 
               {/* Suggested Connections Widget */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <span>🤝</span> Suggested Connections
-                </h3>
-                <div className="space-y-2">
-                  {suggestedFriends.map((friend) => (
-                    <div key={friend.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">{friend.name}</p>
-                        <p className="text-xs text-gray-500">{friend.mutualFriends} mutual friends</p>
-                      </div>
-                      <button className="text-xs bg-purple-600 text-white px-3 py-1 rounded-full hover:bg-purple-700 transition-colors">
-                        Connect
-                      </button>
+              {(sidebarLoading || suggestedFriends.length > 0) && (
+                <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <span>🤝</span> Suggested Connections
+                  </h3>
+                  {sidebarLoading ? (
+                    <div className="animate-pulse space-y-2">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="flex items-center justify-between p-2">
+                          <div className="flex-1">
+                            <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
+                            <div className="h-3 bg-gray-200 rounded w-20"></div>
+                          </div>
+                          <div className="h-6 bg-gray-200 rounded w-16"></div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  <a href="/friends/suggestions" className="block text-xs text-purple-600 hover:underline text-center mt-2">
-                    See all suggestions
-                  </a>
+                  ) : (
+                    <div className="space-y-2">
+                      {suggestedFriends.map((friend) => (
+                        <div key={friend.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {friend.avatar_url ? (
+                              <img 
+                                src={friend.avatar_url} 
+                                alt={friend.name}
+                                className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                                {friend.name.charAt(0)}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-800 truncate">{friend.name}</p>
+                              <p className="text-xs text-gray-500">{friend.mutualFriends} mutual friend{friend.mutualFriends !== 1 ? 's' : ''}</p>
+                            </div>
+                          </div>
+                          
+                            href={`/profile/${friend.id}`}
+                            className="text-xs bg-purple-600 text-white px-3 py-1 rounded-full hover:bg-purple-700 transition-colors flex-shrink-0 ml-2"
+                          >
+                            View
+                          </a>
+                        </div>
+                      ))}
+                      <a href="/find-friends" className="block text-xs text-purple-600 hover:underline text-center mt-2">
+                        See all suggestions
+                      </a>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
             </div>
           </div>
