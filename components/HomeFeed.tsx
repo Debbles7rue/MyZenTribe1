@@ -6,6 +6,10 @@ import { listHomeFeed, Post, me } from "@/lib/posts";
 import PostCard from "@/components/PostCard";
 import SOSFloatingButton from "@/components/SOSFloatingButton";
 import PostComposer from "@/components/PostComposer";
+import { 
+  loadAllSidebarData, 
+  SuggestedFriend 
+} from "@/lib/sidebarQueries";
 
 export default function HomeFeed() {
   const [rows, setRows] = useState<Post[]>([]);
