@@ -17,8 +17,6 @@ export default function HomeFeed() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [intentionExpanded, setIntentionExpanded] = useState(false);
 
-const [intentionExpanded, setIntentionExpanded] = useState(false);
-
   // Real data from Supabase - no more hardcoded!
   const [upcomingEvents, setUpcomingEvents] = useState(0);
   const [eventInvites, setEventInvites] = useState(0);
